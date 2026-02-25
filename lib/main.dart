@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 
 import 'bindings/initial_binding.dart';
 import 'config/constant.dart';
+import 'config/theme.dart';
 import 'routing/router.dart';
 import 'routing/routes.dart';
 
@@ -17,17 +18,8 @@ class MuxAgentApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: AppConstants.appName,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.system,
       initialBinding: InitialBinding(),
       initialRoute: Routes.home,

@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 
 import '../data/repositories/auth_repository.dart';
+import '../data/repositories/event_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
 import '../data/repositories/session_manager.dart';
 import '../data/repositories/ws_session_repository.dart';
@@ -23,7 +24,10 @@ class InitialBinding extends Bindings {
       () => TokenService(crypto: Get.find<CryptoService>()),
       fenix: true,
     );
-    Get.lazyPut<SessionManager>(() => SessionManager(), fenix: true);
+    Get.lazyPut<SessionManager>(
+      () => SessionManager(rpcTimeout: const Duration(minutes: 5)),
+      fenix: true,
+    );
     Get.lazyPut<RelayWsClient>(
       () => RelayWsClient(
         crypto: Get.find<CryptoService>(),
@@ -47,6 +51,10 @@ class InitialBinding extends Bindings {
         crypto: Get.find<CryptoService>(),
         machines: Get.find<PairedMachineRepository>(),
       ),
+      fenix: true,
+    );
+    Get.lazyPut<EventRepository>(
+      () => EventRepository(wsRepo: Get.find<WsSessionRepository>()),
       fenix: true,
     );
   }

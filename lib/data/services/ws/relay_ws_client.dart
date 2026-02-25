@@ -74,6 +74,7 @@ class RelayWsClient {
     );
 
     _registeredCompleter = Completer<void>();
+    debugPrint('[WS] sending register as client to $wsUrl');
     _ws.sendJson(
       WsRegister(
         type: WsMessageType.register.value,
@@ -82,6 +83,7 @@ class RelayWsClient {
       ).toJson(),
     );
     await _registeredCompleter!.future;
+    debugPrint('[WS] registered successfully');
   }
 
   Future<void> startSession({required PairedMachine machine}) async {
@@ -121,6 +123,7 @@ class RelayWsClient {
         'muxagent-session-init-v1|${machine.machineId}|$clientEphemeralPubB64';
     final signature = await _crypto.signMessage(sessionInitMessage, masterKey);
 
+    debugPrint('[WS] sending session_init for ${machine.machineId}');
     _ws.sendJson(
       WsSessionInit(
         type: WsMessageType.sessionInit.value,
@@ -131,6 +134,7 @@ class RelayWsClient {
       ).toJson(),
     );
     await sessionCompleter.future;
+    debugPrint('[WS] session established for ${machine.machineId}');
   }
 
   Future<void> endSession(String machineId) async {
@@ -222,6 +226,7 @@ class RelayWsClient {
           return;
         case WsMessageType.error:
           final error = WsErrorMessage.fromJson(msg);
+          debugPrint('[WS] error from relay: ${error.error}');
           if (_registeredCompleter != null) {
             _registeredCompleter?.completeError(error.error);
             _sessions.endAll(error.error);

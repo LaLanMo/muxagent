@@ -60,6 +60,12 @@ dependencies:
   json_annotation: ^4.9.0
   freezed_annotation: ^2.4.0
 
+  # Google Fonts
+  google_fonts: ^6.0.0
+
+  # Markdown rendering for assistant messages
+  gpt_markdown: ^1.1.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

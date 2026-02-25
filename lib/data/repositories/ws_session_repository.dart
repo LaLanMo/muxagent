@@ -20,6 +20,9 @@ class WsSessionRepository {
     _eventSub = _relay.events.listen(_handleEvent);
   }
 
+  /// Raw WS event stream for EventRepository to consume.
+  Stream<WsEvent> get events => _relay.events;
+
   Stream<Set<String>> get activeSessions => _sessions.activeSessions;
 
   Set<String> get activeSessionIds => _sessions.activeSessionIds;

@@ -74,7 +74,7 @@ class AuthViewModel extends GetxController {
   }
 
   void cancel() {
-    Get.offAllNamed(Routes.home);
+    Get.until((route) => route.isFirst);
   }
 
   void done() {

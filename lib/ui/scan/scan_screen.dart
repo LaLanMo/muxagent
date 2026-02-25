@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../config/theme.dart';
 import 'scan_viewmodel.dart';
 
 class ScanScreen extends GetView<ScanViewModel> {
@@ -10,8 +12,18 @@ class ScanScreen extends GetView<ScanViewModel> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF111111),
       appBar: AppBar(
-        title: const Text('Scan QR Code'),
+        backgroundColor: const Color(0xFF111111),
+        foregroundColor: Colors.white,
+        title: Text(
+          'Scan QR Code',
+          style: GoogleFonts.newsreader(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.flash_on),
@@ -29,13 +41,13 @@ class ScanScreen extends GetView<ScanViewModel> {
             controller: controller.scannerController,
             onDetect: controller.onDetect,
           ),
-          // Overlay with scanning frame
+          // Scanning frame overlay
           Center(
             child: Container(
               width: 280,
               height: 280,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.white, width: 2),
+                border: Border.all(color: AppTheme.primary, width: 3),
                 borderRadius: BorderRadius.circular(16),
               ),
             ),
@@ -47,17 +59,14 @@ class ScanScreen extends GetView<ScanViewModel> {
             right: 0,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: const Text(
+              child: Text(
                 'Point camera at the QR code displayed on your CLI',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: GoogleFonts.inter(
                   color: Colors.white,
                   fontSize: 16,
-                  shadows: [
-                    Shadow(
-                      blurRadius: 4,
-                      color: Colors.black,
-                    ),
+                  shadows: const [
+                    Shadow(blurRadius: 4, color: Colors.black),
                   ],
                 ),
               ),
@@ -75,15 +84,15 @@ class ScanScreen extends GetView<ScanViewModel> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: Colors.red.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(8),
+                  color: AppTheme.warning.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         error,
-                        style: const TextStyle(color: Colors.white),
+                        style: GoogleFonts.inter(color: Colors.white),
                       ),
                     ),
                     IconButton(
@@ -102,7 +111,7 @@ class ScanScreen extends GetView<ScanViewModel> {
             return Container(
               color: Colors.black54,
               child: const Center(
-                child: CircularProgressIndicator(),
+                child: CircularProgressIndicator(color: AppTheme.primary),
               ),
             );
           }),

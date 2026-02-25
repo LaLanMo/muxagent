@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../config/theme.dart';
 import 'auth_viewmodel.dart';
 
 class AuthScreen extends GetView<AuthViewModel> {
@@ -10,7 +12,13 @@ class AuthScreen extends GetView<AuthViewModel> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Authorize Device'),
+        title: Text(
+          'Authorize Device',
+          style: GoogleFonts.newsreader(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: controller.cancel,
@@ -38,13 +46,19 @@ class AuthScreen extends GetView<AuthViewModel> {
   }
 
   Widget _buildChecking() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Checking request...'),
+          const CircularProgressIndicator(color: AppTheme.primary),
+          const SizedBox(height: 16),
+          Text(
+            'Checking request...',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: AppTheme.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -57,18 +71,34 @@ class AuthScreen extends GetView<AuthViewModel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.computer, size: 80, color: Colors.blue),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.computer,
+                size: 40,
+                color: AppTheme.primary,
+              ),
+            ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'New Device',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: GoogleFonts.newsreader(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.border),
               ),
               child: Column(
                 children: [
@@ -80,34 +110,29 @@ class AuthScreen extends GetView<AuthViewModel> {
               ),
             ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Do you want to authorize this device to connect?',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16),
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+              ),
             ),
             const SizedBox(height: 32),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                OutlinedButton(
-                  onPressed: controller.cancel,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: controller.cancel,
+                    child: const Text('Deny'),
                   ),
-                  child: const Text('Deny'),
                 ),
-                ElevatedButton(
-                  onPressed: controller.approve,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 32,
-                      vertical: 16,
-                    ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: controller.approve,
+                    child: const Text('Approve'),
                   ),
-                  child: const Text('Approve'),
                 ),
               ],
             ),
@@ -118,13 +143,19 @@ class AuthScreen extends GetView<AuthViewModel> {
   }
 
   Widget _buildApproving() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(),
-          SizedBox(height: 16),
-          Text('Approving...'),
+          const CircularProgressIndicator(color: AppTheme.primary),
+          const SizedBox(height: 16),
+          Text(
+            'Approving...',
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: AppTheme.textSecondary,
+            ),
+          ),
         ],
       ),
     );
@@ -135,24 +166,42 @@ class AuthScreen extends GetView<AuthViewModel> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.check_circle, size: 80, color: Colors.green),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: const BoxDecoration(
+              color: AppTheme.successBg,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.check_circle,
+              size: 40,
+              color: AppTheme.successText,
+            ),
+          ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Device Authorized',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: GoogleFonts.newsreader(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'The device can now connect to the relay',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: AppTheme.textSecondary,
+            ),
           ),
           const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: controller.done,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ElevatedButton(
+              onPressed: controller.done,
+              child: const Text('Done'),
             ),
-            child: const Text('Done'),
           ),
         ],
       ),
@@ -164,21 +213,42 @@ class AuthScreen extends GetView<AuthViewModel> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.timer_off, size: 80, color: Colors.orange),
+          Container(
+            width: 80,
+            height: 80,
+            decoration: BoxDecoration(
+              color: AppTheme.warningBg,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.timer_off,
+              size: 40,
+              color: AppTheme.warning,
+            ),
+          ),
           const SizedBox(height: 24),
-          const Text(
+          Text(
             'Request Expired',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            style: GoogleFonts.newsreader(
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 16),
-          const Text(
+          Text(
             'Please scan a new QR code from the CLI',
-            style: TextStyle(fontSize: 16, color: Colors.grey),
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: AppTheme.textSecondary,
+            ),
           ),
           const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: controller.cancel,
-            child: const Text('Go Back'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32),
+            child: ElevatedButton(
+              onPressed: controller.cancel,
+              child: const Text('Go Back'),
+            ),
           ),
         ],
       ),
@@ -192,29 +262,51 @@ class AuthScreen extends GetView<AuthViewModel> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 80, color: Colors.red),
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline,
+                size: 40,
+                color: AppTheme.warning,
+              ),
+            ),
             const SizedBox(height: 24),
-            const Text(
+            Text(
               'Error',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              style: GoogleFonts.newsreader(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
               controller.errorMessage.value ?? 'Unknown error',
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                color: AppTheme.textSecondary,
+              ),
             ),
             const SizedBox(height: 32),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                OutlinedButton(
-                  onPressed: controller.cancel,
-                  child: const Text('Cancel'),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: controller.cancel,
+                    child: const Text('Cancel'),
+                  ),
                 ),
-                ElevatedButton(
-                  onPressed: controller.retry,
-                  child: const Text('Retry'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: controller.retry,
+                    child: const Text('Retry'),
+                  ),
                 ),
               ],
             ),
@@ -228,8 +320,20 @@ class AuthScreen extends GetView<AuthViewModel> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: const TextStyle(color: Colors.grey)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            color: AppTheme.textSecondary,
+          ),
+        ),
+        Text(
+          value,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
