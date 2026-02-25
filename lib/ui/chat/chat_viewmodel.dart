@@ -17,6 +17,7 @@ class ChatViewModel extends GetxController {
 
   late final String machineId;
   late final String sessionId;
+  late final String cwd;
   late final ChatState chatState;
 
   final messages = <Message>[].obs;
@@ -31,9 +32,14 @@ class ChatViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    final args = Get.arguments as Map<String, String>;
-    machineId = args['machineId']!;
-    sessionId = args['sessionId']!;
+    final args = Get.arguments as Map<String, dynamic>;
+    machineId = args['machineId'] as String;
+    sessionId = args['sessionId'] as String;
+    cwd = args['cwd'] as String? ?? '';
+    sessionTitle.value = args['sessionTitle'] as String? ?? '';
+    if (sessionTitle.value.isEmpty) {
+      sessionTitle.value = _eventRepo.sessionById(sessionId)?.title ?? '';
+    }
     chatState = ChatState(sessionId: sessionId);
 
     _subscribeEvents();
@@ -48,10 +54,13 @@ class ChatViewModel extends GetxController {
 
   Future<void> _loadSession() async {
     try {
+      if (cwd.isEmpty) {
+        throw Exception('missing cwd for session.load');
+      }
       await _wsRepo.callRpc(
         machineId: machineId,
         method: 'session.load',
-        params: {'sessionId': sessionId},
+        params: {'sessionId': sessionId, 'cwd': cwd},
       );
     } catch (e) {
       debugPrint('Failed to load session: $e');
@@ -143,15 +152,18 @@ class ChatViewModel extends GetxController {
 
     // Fire-and-forget: the prompt RPC blocks until the agent finishes,
     // but the UI is event-driven (messageDelta, runFinished, etc.).
-    _wsRepo.callRpc(
-      machineId: machineId,
-      method: 'session.prompt',
-      params: {'sessionId': sessionId, 'text': trimmed},
-    ).then((_) {
-      // Prompt completed; status is updated via events.
-    }).catchError((e) {
-      debugPrint('Prompt RPC error (non-fatal): $e');
-    });
+    _wsRepo
+        .callRpc(
+          machineId: machineId,
+          method: 'session.prompt',
+          params: {'sessionId': sessionId, 'text': trimmed},
+        )
+        .then((_) {
+          // Prompt completed; status is updated via events.
+        })
+        .catchError((e) {
+          debugPrint('Prompt RPC error (non-fatal): $e');
+        });
   }
 
   Future<void> replyApproval(String requestId, String optionId) async {

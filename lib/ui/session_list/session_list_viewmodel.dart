@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
@@ -55,7 +56,9 @@ class SessionListViewModel extends GetxController {
       if (!_wsRepo.hasSession(machine.machineId)) {
         await _connectMachine(machine);
       }
+      await _refreshSessionsForMachine(machine);
     }
+    _syncSessions();
   }
 
   void _syncSessions() {
@@ -90,19 +93,78 @@ class SessionListViewModel extends GetxController {
     }
   }
 
+  Future<void> _refreshSessionsForMachine(PairedMachine machine) async {
+    if (!_wsRepo.hasSession(machine.machineId)) {
+      return;
+    }
+    try {
+      final rawSessions = await _wsRepo.listSessions(
+        machineId: machine.machineId,
+      );
+      final parsed = rawSessions
+          .map((item) => _parseSessionSummary(item, machine.machineId))
+          .whereType<AgentSession>()
+          .toList();
+      _eventRepo.syncSessionsFromList(
+        machineId: machine.machineId,
+        sessionList: parsed,
+      );
+    } catch (e) {
+      debugPrint('[SessionList] session.list ${machine.machineId} failed: $e');
+    }
+  }
+
+  AgentSession? _parseSessionSummary(
+    Map<String, dynamic> item,
+    String machineId,
+  ) {
+    final sessionId = item['sessionId'] as String?;
+    if (sessionId == null || sessionId.isEmpty) {
+      return null;
+    }
+
+    final updatedAtRaw = item['updatedAt'] as String?;
+    final updatedAt = updatedAtRaw != null
+        ? DateTime.tryParse(updatedAtRaw)
+        : null;
+    final now = DateTime.now();
+    final cwd = item['cwd'] as String? ?? '';
+
+    return AgentSession(
+      id: sessionId,
+      title: item['title'] as String? ?? '',
+      status: SessionStatus.idle,
+      createdAt: updatedAt ?? now,
+      updatedAt: updatedAt ?? now,
+      metadata: {'machineId': machineId, 'cwd': cwd},
+    );
+  }
+
   Future<void> connectMachine(PairedMachine machine) async {
     await _connectMachine(machine);
+    await _refreshSessionsForMachine(machine);
+    _syncSessions();
   }
 
   bool isMachineConnected(String machineId) {
     return activeSessionIds.contains(machineId);
   }
 
-  void navigateToChat(String sessionId, String machineId) {
-    Get.toNamed(Routes.chat, arguments: {
-      'sessionId': sessionId,
-      'machineId': machineId,
-    });
+  void navigateToChat(
+    String sessionId,
+    String machineId,
+    String cwd,
+    String title,
+  ) {
+    Get.toNamed(
+      Routes.chat,
+      arguments: {
+        'sessionId': sessionId,
+        'machineId': machineId,
+        'cwd': cwd,
+        'sessionTitle': title,
+      },
+    );
   }
 
   void navigateToNewSession() {

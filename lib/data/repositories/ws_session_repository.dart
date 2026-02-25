@@ -58,6 +58,36 @@ class WsSessionRepository {
     return _relay.callRpc(machineId: machineId, method: method, params: params);
   }
 
+  Future<List<Map<String, dynamic>>> listSessions({
+    required String machineId,
+  }) async {
+    final response = await callRpc(
+      machineId: machineId,
+      method: 'session.list',
+      params: const {},
+    );
+
+    final error = response['error'];
+    if (error is String && error.isNotEmpty) {
+      throw Exception(error);
+    }
+
+    final result = response['result'];
+    if (result is! Map) {
+      return const [];
+    }
+
+    final rawSessions = result['sessions'];
+    if (rawSessions is! List) {
+      return const [];
+    }
+
+    return rawSessions
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+  }
+
   Future<void> close() => _relay.close();
 
   void dispose() {

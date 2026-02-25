@@ -6,6 +6,7 @@ import 'session.dart';
 class MessagePartEvent {
   final String partId;
   final String messageId;
+  final MessageRole? role;
   final String delta;
   final String partType;
   final String fullText;
@@ -13,6 +14,7 @@ class MessagePartEvent {
   MessagePartEvent({
     required this.partId,
     required this.messageId,
+    this.role,
     this.delta = '',
     this.partType = '',
     this.fullText = '',
@@ -22,6 +24,9 @@ class MessagePartEvent {
     return MessagePartEvent(
       partId: json['partId'] as String? ?? '',
       messageId: json['messageId'] as String? ?? '',
+      role: json['role'] != null
+          ? MessageRole.fromValue(json['role'] as String)
+          : null,
       delta: json['delta'] as String? ?? '',
       partType: json['partType'] as String? ?? '',
       fullText: json['fullText'] as String? ?? '',
@@ -88,15 +93,21 @@ class ContentBlock {
   final String? data;
   final String? uri;
 
-  ContentBlock({required this.type, this.text, this.mimeType, this.data, this.uri});
+  ContentBlock({
+    required this.type,
+    this.text,
+    this.mimeType,
+    this.data,
+    this.uri,
+  });
 
   Map<String, dynamic> toJson() => {
-        'type': type,
-        if (text != null) 'text': text,
-        if (mimeType != null) 'mimeType': mimeType,
-        if (data != null) 'data': data,
-        if (uri != null) 'uri': uri,
-      };
+    'type': type,
+    if (text != null) 'text': text,
+    if (mimeType != null) 'mimeType': mimeType,
+    if (data != null) 'data': data,
+    if (uri != null) 'uri': uri,
+  };
 }
 
 class AgentEvent {
@@ -150,9 +161,7 @@ class AgentEvent {
           ? ToolEvent.fromJson(json['tool'] as Map<String, dynamic>)
           : null,
       approval: json['approval'] != null
-          ? ApprovalRequest.fromJson(
-              json['approval'] as Map<String, dynamic>,
-            )
+          ? ApprovalRequest.fromJson(json['approval'] as Map<String, dynamic>)
           : null,
       session: json['session'] != null
           ? AgentSession.fromJson(json['session'] as Map<String, dynamic>)

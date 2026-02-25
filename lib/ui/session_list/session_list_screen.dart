@@ -91,10 +91,12 @@ class SessionListScreen extends GetView<SessionListViewModel> {
 
     return Column(
       children: controller.sessions
-          .map((session) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _buildSessionCard(session),
-              ))
+          .map(
+            (session) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _buildSessionCard(session),
+            ),
+          )
           .toList(),
     );
   }
@@ -102,9 +104,11 @@ class SessionListScreen extends GetView<SessionListViewModel> {
   Widget _buildSessionCard(AgentSession session) {
     // Try to find the machine for this session from metadata
     final machineId = session.metadata?['machineId'] as String? ?? '';
+    final cwd = session.metadata?['cwd'] as String? ?? '';
 
     return GestureDetector(
-      onTap: () => controller.navigateToChat(session.id, machineId),
+      onTap: () =>
+          controller.navigateToChat(session.id, machineId, cwd, session.title),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(16),
@@ -138,11 +142,7 @@ class SessionListScreen extends GetView<SessionListViewModel> {
             Row(
               children: [
                 if (machineId.isNotEmpty) ...[
-                  Icon(
-                    Icons.computer,
-                    size: 12,
-                    color: AppTheme.textSecondary,
-                  ),
+                  Icon(Icons.computer, size: 12, color: AppTheme.textSecondary),
                   const SizedBox(width: 4),
                   Text(
                     _machineDisplayName(machineId),
@@ -153,11 +153,7 @@ class SessionListScreen extends GetView<SessionListViewModel> {
                   ),
                   const SizedBox(width: 12),
                 ],
-                Icon(
-                  Icons.access_time,
-                  size: 12,
-                  color: AppTheme.textTertiary,
-                ),
+                Icon(Icons.access_time, size: 12, color: AppTheme.textTertiary),
                 const SizedBox(width: 4),
                 Text(
                   _formatTimestamp(session.updatedAt),
@@ -211,17 +207,20 @@ class SessionListScreen extends GetView<SessionListViewModel> {
 
     return Column(
       children: controller.machines
-          .map((machine) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _buildMachineCard(machine),
-              ))
+          .map(
+            (machine) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _buildMachineCard(machine),
+            ),
+          )
           .toList(),
     );
   }
 
   Widget _buildMachineCard(dynamic machine) {
-    final isConnected =
-        controller.isMachineConnected(machine.machineId as String);
+    final isConnected = controller.isMachineConnected(
+      machine.machineId as String,
+    );
     final hostname = machine.hostname as String?;
     final machineId = machine.machineId as String;
 
@@ -277,11 +276,7 @@ class SessionListScreen extends GetView<SessionListViewModel> {
                 ],
               ),
             ),
-            Icon(
-              Icons.chevron_right,
-              color: AppTheme.textTertiary,
-              size: 20,
-            ),
+            Icon(Icons.chevron_right, color: AppTheme.textTertiary, size: 20),
           ],
         ),
       ),

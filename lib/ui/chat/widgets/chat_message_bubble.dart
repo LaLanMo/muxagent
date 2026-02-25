@@ -64,7 +64,7 @@ class ChatMessageBubble extends StatelessWidget {
               color: AppTheme.textPrimary,
               height: 1.5,
             ),
-            codeBuilder: (code, language) => Padding(
+            codeBuilder: (context, name, code, closed) => Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: CodeBlock(text: code),
             ),

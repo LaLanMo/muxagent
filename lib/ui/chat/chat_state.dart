@@ -27,24 +27,33 @@ class ChatState {
   ChatState({required this.sessionId});
 
   void applyDelta(MessagePartEvent delta) {
+    if (delta.messageId.isEmpty || delta.role == null) {
+      return;
+    }
+
+    final messageId = delta.messageId;
+    final partId = delta.partId.isEmpty
+        ? 'part-${DateTime.now().microsecondsSinceEpoch}'
+        : delta.partId;
+
     // Get or create message
-    var msg = messages[delta.messageId];
+    var msg = messages[messageId];
     if (msg == null) {
       msg = Message(
-        id: delta.messageId,
+        id: messageId,
         sessionId: sessionId,
-        role: MessageRole.agent,
+        role: delta.role!,
         parts: [],
         createdAt: DateTime.now(),
       );
-      messages[delta.messageId] = msg;
-      if (!messageOrder.contains(delta.messageId)) {
-        messageOrder.add(delta.messageId);
+      messages[messageId] = msg;
+      if (!messageOrder.contains(messageId)) {
+        messageOrder.add(messageId);
       }
     }
 
     // Find or create part
-    var pending = _pendingParts[delta.partId];
+    var pending = _pendingParts[partId];
     if (pending == null) {
       // New part
       final part = MessagePart(
@@ -55,11 +64,11 @@ class ChatState {
       );
       msg.parts.add(part);
       pending = _PendingPart(
-        messageId: delta.messageId,
+        messageId: messageId,
         partIndex: msg.parts.length - 1,
         partType: delta.partType,
       );
-      _pendingParts[delta.partId] = pending;
+      _pendingParts[partId] = pending;
     } else {
       // Update existing part
       final part = msg.parts[pending.partIndex];
@@ -103,7 +112,9 @@ class ChatState {
     }
 
     // Also update in message parts if present
-    final messageId = event.messageId;
+    final messageId = event.messageId.isEmpty
+        ? 'tool-${event.callId}'
+        : event.messageId;
     final msg = messages[messageId];
     if (msg != null) {
       // Find or create tool part in message
