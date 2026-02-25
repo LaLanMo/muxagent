@@ -1,0 +1,15 @@
+{
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "muxagent",
+    "password": "muxagent",
+    "dbname": "muxagent",
+    "sslmode": "disable"
+  },
+  "relay": {
+    "public_base_url": "http://localhost:8080",
+    "listen_addr": ":8080",
+    "signing_private_key": ""
+  }
+}
