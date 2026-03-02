@@ -5,7 +5,6 @@ import 'package:muxagent/data/services/ws/models/ws_models.dart';
 import '../../domain/paired_machine.dart';
 import '../services/ws/relay_ws_client.dart';
 import 'session_manager.dart';
-import '../../utils/snackbar_util.dart';
 
 class WsSessionRepository {
   final RelayWsClient _relay;
@@ -22,6 +21,8 @@ class WsSessionRepository {
 
   /// Raw WS event stream for EventRepository to consume.
   Stream<WsEvent> get events => _relay.events;
+
+  Stream<WsMachineStatus> get machineStatus => _relay.machineStatus;
 
   Stream<Set<String>> get activeSessions => _sessions.activeSessions;
 
@@ -54,38 +55,29 @@ class WsSessionRepository {
     required String machineId,
     required String method,
     Map<String, dynamic>? params,
-  }) {
-    return _relay.callRpc(machineId: machineId, method: method, params: params);
-  }
-
-  Future<List<Map<String, dynamic>>> listSessions({
-    required String machineId,
   }) async {
-    final response = await callRpc(
+    final payload = await _relay.callRpc(
       machineId: machineId,
-      method: 'session.list',
-      params: const {},
+      method: method,
+      params: params,
     );
 
-    final error = response['error'];
-    if (error is String && error.isNotEmpty) {
+    final error = payload['error'] as String?;
+    if (error != null && error.isNotEmpty) {
       throw Exception(error);
     }
 
-    final result = response['result'];
-    if (result is! Map) {
-      return const [];
+    final result = payload['result'];
+    if (result == null) {
+      return <String, dynamic>{};
     }
-
-    final rawSessions = result['sessions'];
-    if (rawSessions is! List) {
-      return const [];
+    if (result is Map<String, dynamic>) {
+      return result;
     }
-
-    return rawSessions
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
+    if (result is Map) {
+      return Map<String, dynamic>.from(result);
+    }
+    throw Exception('invalid rpc result for $method');
   }
 
   Future<void> close() => _relay.close();
@@ -95,11 +87,6 @@ class WsSessionRepository {
   }
 
   void _handleEvent(WsEvent event) {
-    if (event.type == 'echo') {
-      final payload = event.payload;
-      final from = payload['from']?.toString() ?? 'daemon';
-      final message = payload['message']?.toString() ?? '';
-      SnackbarUtil.showInfo('Echo from $from', message);
-    }
+    // echo events are debug-only; repo layer should not trigger UI
   }
 }

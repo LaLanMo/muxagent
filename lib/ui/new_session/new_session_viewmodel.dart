@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../data/local/session_database.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
+import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
 
 class NewSessionViewModel extends GetxController {
@@ -18,35 +22,119 @@ class NewSessionViewModel extends GetxController {
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
   final isLoading = false.obs;
+  final activeSessionIds = <String>{}.obs;
+  final uiEffect = Rxn<UiEffect>();
 
   final cwdController = TextEditingController();
   final promptController = TextEditingController();
 
+  final recentCwds = <RecentCwd>[].obs;
+  final filteredCwds = <RecentCwd>[].obs;
+  final isCwdDropdownOpen = false.obs;
+  final cwdFocusNode = FocusNode();
+
+  StreamSubscription<Set<String>>? _sessionSub;
+
   @override
   void onInit() {
     super.onInit();
+    _subscribeToActiveSessions();
     _loadMachines();
+
+    cwdFocusNode.addListener(() {
+      if (cwdFocusNode.hasFocus) {
+        if (filteredCwds.isNotEmpty) {
+          isCwdDropdownOpen.value = true;
+        }
+      } else {
+        // Delay so tap on dropdown row registers before closing
+        Future.delayed(const Duration(milliseconds: 150), () {
+          isCwdDropdownOpen.value = false;
+        });
+      }
+    });
+
+    cwdController.addListener(_filterCwds);
+
+    ever(selectedMachine, (_) => _loadRecentCwds());
   }
 
   @override
   void onClose() {
+    _sessionSub?.cancel();
+    cwdFocusNode.dispose();
     cwdController.dispose();
     promptController.dispose();
     super.onClose();
+  }
+
+  void _subscribeToActiveSessions() {
+    activeSessionIds
+      ..clear()
+      ..addAll(_wsRepo.activeSessionIds);
+    _sessionSub = _wsRepo.activeSessions.listen((ids) {
+      activeSessionIds
+        ..clear()
+        ..addAll(ids);
+      // Clear selection if selected machine went offline
+      final sel = selectedMachine.value;
+      if (sel != null && !ids.contains(sel.machineId)) {
+        selectedMachine.value = null;
+      }
+    });
+  }
+
+  bool isMachineConnected(String machineId) {
+    return activeSessionIds.contains(machineId);
   }
 
   Future<void> _loadMachines() async {
     final list = await _machineRepo.listMachines();
     machines.value = list;
 
-    // Auto-select first machine if only one
-    if (list.length == 1) {
-      selectedMachine.value = list.first;
+    // Auto-select first online machine if only one is online
+    final onlineMachines = list
+        .where((m) => isMachineConnected(m.machineId))
+        .toList();
+    if (onlineMachines.length == 1) {
+      selectedMachine.value = onlineMachines.first;
     }
+
+    _loadRecentCwds();
   }
 
   void selectMachine(PairedMachine machine) {
+    if (!isMachineConnected(machine.machineId)) return;
     selectedMachine.value = machine;
+  }
+
+  Future<void> _loadRecentCwds() async {
+    final machineId = selectedMachine.value?.machineId;
+    final list = await SessionDatabase.recentCwds(machineId: machineId);
+    recentCwds.value = list;
+    _filterCwds();
+  }
+
+  void _filterCwds() {
+    final query = cwdController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      filteredCwds.value = List.of(recentCwds);
+    } else {
+      filteredCwds.value = recentCwds
+          .where((c) => c.path.toLowerCase().contains(query))
+          .toList();
+    }
+    if (cwdFocusNode.hasFocus && filteredCwds.isNotEmpty) {
+      isCwdDropdownOpen.value = true;
+    } else if (filteredCwds.isEmpty) {
+      isCwdDropdownOpen.value = false;
+    }
+  }
+
+  void selectCwd(RecentCwd cwd) {
+    cwdController.text = cwd.path;
+    isCwdDropdownOpen.value = false;
+    cwdFocusNode.unfocus();
   }
 
   Future<void> startSession() async {
@@ -67,8 +155,10 @@ class NewSessionViewModel extends GetxController {
       if (cwd.isEmpty) {
         throw Exception('Working directory is required');
       }
-      if (!cwd.startsWith('/')) {
-        throw Exception('Working directory must be an absolute path');
+      if (!cwd.startsWith('/') && !cwd.startsWith('~')) {
+        throw Exception(
+          'Working directory must be an absolute path or start with ~',
+        );
       }
       final createParams = <String, dynamic>{'cwd': cwd};
 
@@ -78,7 +168,7 @@ class NewSessionViewModel extends GetxController {
         params: createParams,
       );
 
-      final sessionId = createResult['result']?['sessionId'] as String?;
+      final sessionId = createResult['sessionId'] as String?;
       if (sessionId == null || sessionId.isEmpty) {
         throw Exception('Failed to create session: no sessionId returned');
       }
@@ -95,80 +185,22 @@ class NewSessionViewModel extends GetxController {
         ),
       );
 
-      await _refreshSessionsForMachine(machine);
-      final sessionTitle = _eventRepo.sessionById(sessionId)?.title ?? '';
-
-      // Send initial prompt if provided
+      // Navigate to chat immediately — don't wait for prompt to finish.
       final prompt = promptController.text.trim();
-      if (prompt.isNotEmpty) {
-        await _wsRepo.callRpc(
-          machineId: machine.machineId,
-          method: 'session.prompt',
-          params: {'sessionId': sessionId, 'text': prompt},
-        );
-      }
-
-      // Navigate to chat
       Get.offNamed(
         Routes.chat,
         arguments: {
           'sessionId': sessionId,
           'machineId': machine.machineId,
           'cwd': cwd,
-          'sessionTitle': sessionTitle,
+          'sessionTitle': '',
+          if (prompt.isNotEmpty) 'initialPrompt': prompt,
         },
       );
     } catch (e) {
-      Get.snackbar('Error', e.toString(), snackPosition: SnackPosition.BOTTOM);
+      uiEffect.value = ShowToast(e.toString());
     } finally {
       isLoading.value = false;
     }
-  }
-
-  Future<void> _refreshSessionsForMachine(PairedMachine machine) async {
-    if (!_wsRepo.hasSession(machine.machineId)) {
-      return;
-    }
-    try {
-      final rawSessions = await _wsRepo.listSessions(
-        machineId: machine.machineId,
-      );
-      final parsed = rawSessions
-          .map((item) => _parseSessionSummary(item, machine.machineId))
-          .whereType<AgentSession>()
-          .toList();
-      _eventRepo.syncSessionsFromList(
-        machineId: machine.machineId,
-        sessionList: parsed,
-      );
-    } catch (e) {
-      debugPrint('[NewSession] session.list ${machine.machineId} failed: $e');
-    }
-  }
-
-  AgentSession? _parseSessionSummary(
-    Map<String, dynamic> item,
-    String machineId,
-  ) {
-    final sessionId = item['sessionId'] as String?;
-    if (sessionId == null || sessionId.isEmpty) {
-      return null;
-    }
-
-    final updatedAtRaw = item['updatedAt'] as String?;
-    final updatedAt = updatedAtRaw != null
-        ? DateTime.tryParse(updatedAtRaw)
-        : null;
-    final now = DateTime.now();
-    final cwd = item['cwd'] as String? ?? '';
-
-    return AgentSession(
-      id: sessionId,
-      title: item['title'] as String? ?? '',
-      status: SessionStatus.idle,
-      createdAt: updatedAt ?? now,
-      updatedAt: updatedAt ?? now,
-      metadata: {'machineId': machineId, 'cwd': cwd},
-    );
   }
 }

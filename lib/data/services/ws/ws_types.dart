@@ -9,7 +9,9 @@ enum WsMessageType {
   rpc('rpc'),
   response('response'),
   event('event'),
-  error('error');
+  error('error'),
+  machineOnline('machine-online'),
+  machineOffline('machine-offline');
 
   const WsMessageType(this.value);
   final String value;

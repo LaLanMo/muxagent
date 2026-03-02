@@ -3,17 +3,20 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/auth_request.dart';
-import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/services/local/crypto_service.dart';
+import '../../domain/paired_machine.dart';
+import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
+import 'main_shell_viewmodel.dart';
 
-class SettingsViewModel extends GetxController {
+class SettingsTabViewModel extends GetxController {
   final CryptoService _crypto = Get.find<CryptoService>();
-  final PairedMachineRepository _machineRepo =
-      Get.find<PairedMachineRepository>();
 
   final hasMasterKey = false.obs;
-  final machineCount = 0.obs;
+  final connectingMachines = <String>{}.obs;
+  final uiEffect = Rxn<UiEffect>();
+
+  MainShellViewModel get shell => Get.find<MainShellViewModel>();
 
   @override
   void onInit() {
@@ -23,18 +26,32 @@ class SettingsViewModel extends GetxController {
 
   Future<void> _load() async {
     hasMasterKey.value = await _crypto.hasMasterKey();
-    final machines = await _machineRepo.listMachines();
-    machineCount.value = machines.length;
   }
 
   void navigateToScan() {
     Get.toNamed(Routes.scan);
   }
 
+  Future<void> connectMachine(PairedMachine machine) async {
+    if (connectingMachines.contains(machine.machineId)) return;
+    connectingMachines.add(machine.machineId);
+    try {
+      await shell.connectMachine(machine);
+      if (shell.isMachineConnected(machine.machineId)) {
+        uiEffect.value = ShowToast('Connected to ${machine.hostname ?? 'machine'}');
+      } else {
+        uiEffect.value = ShowToast('Failed to connect');
+      }
+    } catch (e) {
+      uiEffect.value = ShowToast('Connection failed: $e');
+    } finally {
+      connectingMachines.remove(machine.machineId);
+    }
+  }
+
   void showPasteUrlDialog() async {
     final textController = TextEditingController();
 
-    // Auto-fill from clipboard if it contains a muxagent URL
     try {
       final clipData = await Clipboard.getData(Clipboard.kTextPlain);
       if (clipData?.text != null &&
@@ -66,12 +83,12 @@ class SettingsViewModel extends GetxController {
               final url = textController.text.trim();
               if (url.isEmpty) return;
               if (!url.toLowerCase().startsWith('muxagent://auth')) {
-                Get.snackbar('Error', 'Invalid URL format');
+                uiEffect.value = ShowToast('Invalid URL format');
                 return;
               }
               final authRequest = AuthRequest.fromQrUrl(url);
               if (!authRequest.isValid) {
-                Get.snackbar('Error', 'Missing id or relay parameter');
+                uiEffect.value = ShowToast('Missing id or relay parameter');
                 return;
               }
               Get.back();

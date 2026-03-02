@@ -1,8 +1,13 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
+
+import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/session.dart';
+import '../local/session_database.dart';
 import '../services/ws/models/ws_models.dart';
 import 'ws_session_repository.dart';
 
@@ -10,15 +15,35 @@ class EventRepository {
   final WsSessionRepository _wsRepo;
   late final StreamSubscription<WsEvent> _sub;
   final _eventController = StreamController<AgentEvent>.broadcast();
+  final _sessionsChangedController = StreamController<void>.broadcast();
 
   /// Lightweight session metadata for list display.
   final Map<String, AgentSession> sessions = {};
+
+  /// Pending approval requests, keyed by requestId.
+  final pendingApprovals = <String, ApprovalRequest>{}.obs;
+
+  /// Last seen event sequence number (for resync after reconnect).
+  int _lastSeq = 0;
 
   EventRepository({required WsSessionRepository wsRepo}) : _wsRepo = wsRepo {
     _sub = _wsRepo.events.listen(_onWsEvent);
   }
 
   Stream<AgentEvent> get events => _eventController.stream;
+
+  /// Emits only when session metadata changes (status, runFinished, runFailed, register).
+  Stream<void> get sessionsChanged => _sessionsChangedController.stream;
+
+  int get lastSeq => _lastSeq;
+
+  /// Load all sessions from SQLite into memory. Call once at startup.
+  Future<void> init() async {
+    final rows = await SessionDatabase.loadAll();
+    for (final s in rows) {
+      sessions[s.id] = s;
+    }
+  }
 
   void _onWsEvent(WsEvent wsEvent) {
     final payload = wsEvent.payload;
@@ -30,10 +55,37 @@ class EventRepository {
     final event = AgentEvent.fromJson(payload, machineId);
     if (event.type == null) return;
 
+    // Track sequence number for resync
+    if (event.seq > _lastSeq) {
+      _lastSeq = event.seq;
+    }
+
+    _processEvent(event);
+  }
+
+  void _processEvent(AgentEvent event) {
     // Update lightweight session metadata
     _updateSessionMeta(event);
 
+    // Track pending approvals
+    _updateApprovals(event);
+
     _eventController.add(event);
+  }
+
+  void _updateApprovals(AgentEvent event) {
+    switch (event.type) {
+      case EventType.approvalRequested:
+        if (event.approval != null) {
+          pendingApprovals[event.approval!.id] = event.approval!;
+        }
+      case EventType.approvalReplied:
+        if (event.approval != null) {
+          pendingApprovals.remove(event.approval!.id);
+        }
+      default:
+        break;
+    }
   }
 
   void _updateSessionMeta(AgentEvent event) {
@@ -57,13 +109,76 @@ class EventRepository {
           }
           incoming.metadata = mergedMetadata.isEmpty ? null : mergedMetadata;
           sessions[sessionId] = incoming;
+
+          // Persist title, status, model changes
+          final dbFields = <String, dynamic>{
+            'updated_at': incoming.updatedAt.toIso8601String(),
+          };
+          if (incoming.title.isNotEmpty) {
+            dbFields['title'] = incoming.title;
+          }
+          dbFields['status'] = incoming.status.value;
+          if (incoming.model != null) {
+            dbFields['model'] = incoming.model;
+          }
+          SessionDatabase.updateFields(sessionId, dbFields);
+
+          _sessionsChangedController.add(null);
         }
       case EventType.runFinished:
       case EventType.runFailed:
         final existing = sessions[sessionId];
         if (existing != null) {
-          existing.status = SessionStatus.done;
           existing.updatedAt = event.at;
+          existing.status = event.type == EventType.runFinished
+              ? SessionStatus.done
+              : SessionStatus.error;
+
+          // Persist status + cost
+          final dbFields = <String, dynamic>{
+            'updated_at': event.at.toIso8601String(),
+            'status': existing.status.value,
+          };
+          if (existing.cost != null) {
+            dbFields['cost_input_tokens'] = existing.cost!.inputTokens;
+            dbFields['cost_output_tokens'] = existing.cost!.outputTokens;
+            dbFields['cost_cache_read'] = existing.cost!.cacheRead;
+            dbFields['cost_cache_write'] = existing.cost!.cacheWrite;
+            dbFields['cost_total_usd'] = existing.cost!.totalUsd;
+          }
+          SessionDatabase.updateFields(sessionId, dbFields);
+
+          _sessionsChangedController.add(null);
+
+          if (event.type == EventType.runFinished &&
+              existing.title.isEmpty &&
+              event.machineId.isNotEmpty) {
+            unawaited(
+              backfillMissingTitles(event.machineId, sessionIds: [sessionId]),
+            );
+          }
+        }
+      case EventType.approvalRequested:
+        final existing = sessions[sessionId];
+        if (existing != null) {
+          existing.status = SessionStatus.waitingApproval;
+          existing.updatedAt = event.at;
+          SessionDatabase.updateFields(sessionId, {
+            'status': SessionStatus.waitingApproval.value,
+            'updated_at': event.at.toIso8601String(),
+          });
+          _sessionsChangedController.add(null);
+        }
+      case EventType.approvalReplied:
+        final existing = sessions[sessionId];
+        if (existing != null) {
+          existing.status = SessionStatus.running;
+          existing.updatedAt = event.at;
+          SessionDatabase.updateFields(sessionId, {
+            'status': SessionStatus.running.value,
+            'updated_at': event.at.toIso8601String(),
+          });
+          _sessionsChangedController.add(null);
         }
       case EventType.messageDelta:
       case EventType.messageFinal:
@@ -71,7 +186,7 @@ class EventRepository {
       case EventType.toolUpdated:
       case EventType.toolCompleted:
       case EventType.toolFailed:
-        // Touch updatedAt
+        // Touch updatedAt in memory only — no SQLite write for streaming events
         final existing = sessions[sessionId];
         if (existing != null) {
           existing.updatedAt = event.at;
@@ -81,59 +196,219 @@ class EventRepository {
     }
   }
 
+  /// Resync missed events after reconnect. Call after session re-init.
+  Future<void> resync(String machineId) async {
+    if (_lastSeq == 0) return; // No events seen yet, nothing to resync
+
+    try {
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'events.resync',
+        params: {'lastSeq': _lastSeq},
+      );
+
+      final events = result['events'] as List<dynamic>? ?? [];
+      for (final eventJson in events) {
+        if (eventJson is Map<String, dynamic>) {
+          final event = AgentEvent.fromJson(eventJson, machineId);
+          if (event.type == null) continue;
+          if (event.seq > _lastSeq) {
+            _lastSeq = event.seq;
+          }
+          _processEvent(event);
+        }
+      }
+
+      final complete = result['complete'] as bool? ?? true;
+      if (!complete) {
+        // Gap too large — event buffer overflowed.
+        // Affected sessions should be fully reloaded via session.load.
+        debugPrint(
+          '[EventRepo] resync incomplete — some events may have been lost',
+        );
+      }
+    } catch (e) {
+      debugPrint('[EventRepo] resync failed: $e');
+    }
+  }
+
+  /// Fetch pending approvals from daemon via RPC (fallback for ring buffer overflow).
+  Future<void> fetchPendingApprovals(String machineId) async {
+    try {
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'approvals.pending',
+        params: {},
+      );
+      final list = result['approvals'] as List<dynamic>? ?? [];
+      for (final json in list) {
+        final approval = ApprovalRequest.fromJson(json as Map<String, dynamic>);
+        pendingApprovals[approval.id] = approval;
+        // Also update session status
+        final session = sessions[approval.sessionId];
+        if (session != null &&
+            session.status != SessionStatus.waitingApproval) {
+          session.status = SessionStatus.waitingApproval;
+          SessionDatabase.updateFields(approval.sessionId, {
+            'status': 'waiting_approval',
+          });
+        }
+      }
+      if (list.isNotEmpty) {
+        _sessionsChangedController.add(null);
+      }
+    } catch (e) {
+      debugPrint('[EventRepo] fetchPendingApprovals failed: $e');
+    }
+  }
+
+  /// Resolve missing session titles via daemon-side opencode.db lookup.
+  Future<void> backfillMissingTitles(
+    String machineId, {
+    List<String>? sessionIds,
+  }) async {
+    try {
+      final targetIds =
+          sessionIds ??
+          sessions.values
+              .where((s) {
+                final sameMachine =
+                    (s.metadata?['machineId'] as String? ?? '') == machineId;
+                return sameMachine && s.title.isEmpty;
+              })
+              .map((s) => s.id)
+              .toList();
+      if (targetIds.isEmpty) {
+        return;
+      }
+
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'session.resolve',
+        params: {'sessionIds': targetIds},
+      );
+      final list = result['sessions'] as List<dynamic>? ?? [];
+      var changed = false;
+
+      for (final item in list) {
+        if (item is! Map) continue;
+        final json = Map<String, dynamic>.from(item);
+
+        final sessionId = json['sessionId'] as String? ?? '';
+        if (sessionId.isEmpty) continue;
+
+        final title = json['title'] as String? ?? '';
+        final sessionCwd = json['cwd'] as String? ?? '';
+        final updatedAt = _parseRpcTime(json['updatedAt']) ?? DateTime.now();
+        final existing = sessions[sessionId];
+
+        if (existing == null) {
+          final session = AgentSession(
+            id: sessionId,
+            title: title,
+            status: SessionStatus.idle,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+            metadata: {'machineId': machineId, 'cwd': sessionCwd},
+          );
+          sessions[sessionId] = session;
+          await SessionDatabase.insertSession(session);
+          changed = true;
+          continue;
+        }
+
+        var dirty = false;
+        if (title.isNotEmpty && existing.title != title) {
+          existing.title = title;
+          dirty = true;
+        }
+        if (updatedAt.isAfter(existing.updatedAt)) {
+          existing.updatedAt = updatedAt;
+          dirty = true;
+        }
+
+        final metadata = <String, dynamic>{...?existing.metadata};
+        if (metadata['machineId'] != machineId) {
+          metadata['machineId'] = machineId;
+          dirty = true;
+        }
+        if (sessionCwd.isNotEmpty && metadata['cwd'] != sessionCwd) {
+          metadata['cwd'] = sessionCwd;
+          dirty = true;
+        }
+        existing.metadata = metadata;
+
+        if (!dirty) continue;
+
+        final persistedCwd = existing.metadata?['cwd'] as String? ?? '';
+        final dbFields = <String, dynamic>{
+          'machine_id': machineId,
+          'cwd': persistedCwd,
+          'updated_at': existing.updatedAt.toIso8601String(),
+        };
+        if (existing.title.isNotEmpty) {
+          dbFields['title'] = existing.title;
+        }
+        await SessionDatabase.updateFields(sessionId, dbFields);
+        changed = true;
+      }
+
+      if (changed) {
+        _sessionsChangedController.add(null);
+      }
+    } catch (e) {
+      debugPrint('[EventRepo] backfillMissingTitles failed: $e');
+    }
+  }
+
+  /// Reply to a pending approval. Shared by ChatVM and ActiveTabVM.
+  Future<void> replyApproval({
+    required String machineId,
+    required String sessionId,
+    required String requestId,
+    required String optionId,
+  }) async {
+    await _wsRepo.callRpc(
+      machineId: machineId,
+      method: 'approval.reply',
+      params: {
+        'sessionId': sessionId,
+        'requestId': requestId,
+        'optionId': optionId,
+      },
+    );
+  }
+
   /// Register a session created via RPC (before any events arrive).
   void registerSession(AgentSession session) {
     sessions[session.id] = session;
+    SessionDatabase.insertSession(session);
+    _sessionsChangedController.add(null);
   }
 
   AgentSession? sessionById(String sessionId) => sessions[sessionId];
 
-  /// Replace per-machine cached session metadata with ACP session.list truth.
-  void syncSessionsFromList({
-    required String machineId,
-    required List<AgentSession> sessionList,
-  }) {
-    final keepIds = <String>{};
-
-    for (final incoming in sessionList) {
-      keepIds.add(incoming.id);
-      final existing = sessions[incoming.id];
-
-      final mergedMetadata = <String, dynamic>{};
-      if (existing?.metadata != null) {
-        mergedMetadata.addAll(existing!.metadata!);
-      }
-      if (incoming.metadata != null) {
-        mergedMetadata.addAll(incoming.metadata!);
-      }
-      mergedMetadata['machineId'] = machineId;
-
-      sessions[incoming.id] = AgentSession(
-        id: incoming.id,
-        title: incoming.title,
-        status: existing?.status ?? incoming.status,
-        model: existing?.model ?? incoming.model,
-        cost: existing?.cost ?? incoming.cost,
-        createdAt: existing?.createdAt ?? incoming.createdAt,
-        updatedAt: incoming.updatedAt,
-        metadata: mergedMetadata,
-      );
-    }
-
-    final staleIds = <String>[];
-    sessions.forEach((sessionId, session) {
-      final sessionMachineId = session.metadata?['machineId'] as String?;
-      if (sessionMachineId == machineId && !keepIds.contains(sessionId)) {
-        staleIds.add(sessionId);
-      }
-    });
-    for (final sessionId in staleIds) {
-      sessions.remove(sessionId);
+  /// Update a session's status from the UI (e.g. optimistic "running" on send).
+  void setSessionStatus(String sessionId, SessionStatus status) {
+    final existing = sessions[sessionId];
+    if (existing != null && existing.status != status) {
+      existing.status = status;
+      SessionDatabase.updateFields(sessionId, {'status': status.value});
+      _sessionsChangedController.add(null);
     }
   }
 
   void dispose() {
     _sub.cancel();
     _eventController.close();
+    _sessionsChangedController.close();
+  }
+
+  DateTime? _parseRpcTime(Object? value) {
+    final raw = value as String?;
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(raw);
   }
 }

@@ -33,15 +33,10 @@ class StatusIndicator extends StatelessWidget {
       case SessionStatus.error:
         return const StatusIndicator(
           label: 'Error',
-          color: AppTheme.warning,
-          backgroundColor: AppTheme.warningBg,
+          color: AppTheme.errorText,
+          backgroundColor: AppTheme.errorBg,
         );
       case SessionStatus.done:
-        return StatusIndicator(
-          label: 'Done',
-          color: AppTheme.textSecondary,
-          backgroundColor: AppTheme.idleBg,
-        );
       case SessionStatus.idle:
         return StatusIndicator(
           label: 'Idle',
@@ -62,7 +57,7 @@ class StatusIndicator extends StatelessWidget {
       case ToolStatus.inProgress:
         return const StatusIndicator(
           label: 'Running',
-          color: AppTheme.activeGreen,
+          color: AppTheme.successText,
           backgroundColor: AppTheme.successBg,
         );
       case ToolStatus.completed:
@@ -86,7 +81,7 @@ class StatusIndicator extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: backgroundColor ?? color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

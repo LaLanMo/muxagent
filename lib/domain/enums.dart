@@ -94,18 +94,62 @@ enum PartType {
   }
 }
 
-enum ConnectionState {
+enum ToolKind {
+  execute('execute'),
+  fetch('fetch'),
+  edit('edit'),
+  search('search'),
+  read('read'),
+  other('other');
+
+  const ToolKind(this.value);
+  final String value;
+
+  static ToolKind fromValue(String? raw) {
+    if (raw == null) return ToolKind.other;
+    for (final k in ToolKind.values) {
+      if (k.value == raw) return k;
+    }
+    return ToolKind.other;
+  }
+}
+
+enum PermOptionKind {
+  allowOnce('allow_once'),
+  allowAlways('allow_always'),
+  rejectOnce('reject_once'),
+  rejectAlways('reject_always');
+
+  const PermOptionKind(this.value);
+  final String value;
+
+  static PermOptionKind fromValue(String raw) {
+    for (final k in PermOptionKind.values) {
+      if (k.value == raw) return k;
+    }
+    return PermOptionKind.rejectOnce;
+  }
+
+  bool get isAllow =>
+      this == PermOptionKind.allowOnce || this == PermOptionKind.allowAlways;
+  bool get isReject =>
+      this == PermOptionKind.rejectOnce || this == PermOptionKind.rejectAlways;
+  bool get isAlways =>
+      this == PermOptionKind.allowAlways || this == PermOptionKind.rejectAlways;
+}
+
+enum ConnState {
   connected('connected'),
   disconnected('disconnected'),
   reconnecting('reconnecting');
 
-  const ConnectionState(this.value);
+  const ConnState(this.value);
   final String value;
 
-  static ConnectionState fromValue(String raw) {
-    for (final c in ConnectionState.values) {
+  static ConnState fromValue(String raw) {
+    for (final c in ConnState.values) {
       if (c.value == raw) return c;
     }
-    return ConnectionState.disconnected;
+    return ConnState.disconnected;
   }
 }

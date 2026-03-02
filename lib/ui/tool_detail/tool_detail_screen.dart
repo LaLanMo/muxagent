@@ -84,14 +84,6 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
               ),
               const SizedBox(height: 20),
             ],
-
-            // Details
-            _buildSectionLabel('DETAILS'),
-            const SizedBox(height: 8),
-            _buildDetailRow('Tool ID', tool.id),
-            _buildDetailRow('Status', tool.status.value),
-            if (tool.metadata != null)
-              _buildDetailRow('Metadata', _jsonEncoder.convert(tool.metadata)),
           ],
         ),
       ),
@@ -106,38 +98,6 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
         fontWeight: FontWeight.w600,
         letterSpacing: 2,
         color: AppTheme.textSecondary,
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: SelectableText(
-              value,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

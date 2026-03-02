@@ -3,36 +3,43 @@ import 'package:flutter/services.dart';
 
 import '../../../config/fonts.dart';
 import '../../../config/theme.dart';
+import '../../../utils/app_toast.dart';
 
 class CodeBlock extends StatelessWidget {
   final String text;
-  final Color backgroundColor;
-  final Color textColor;
+  final Color? backgroundColor;
+  final Color? textColor;
   final bool showCopyButton;
 
   const CodeBlock({
     super.key,
     required this.text,
-    this.backgroundColor = AppTheme.codeBg,
-    this.textColor = const Color(0xFFE0E0E0),
+    this.backgroundColor,
+    this.textColor,
     this.showCopyButton = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bgColor = backgroundColor ?? const Color(0xFF282C34);
+    final fgColor = textColor ?? const Color(0xFFE0E0E0);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: bgColor,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Stack(
         children: [
           Padding(
             padding: const EdgeInsets.all(12),
-            child: SelectableText(
-              text,
-              style: AppFonts.code(fontSize: 13, color: textColor),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SelectableText(
+                text,
+                style: AppFonts.code(fontSize: 13, color: fgColor),
+              ),
             ),
           ),
           if (showCopyButton)
@@ -43,16 +50,11 @@ class CodeBlock extends StatelessWidget {
                 icon: Icon(
                   Icons.copy_rounded,
                   size: 16,
-                  color: textColor.withValues(alpha: 0.5),
+                  color: fgColor.withValues(alpha: 0.6),
                 ),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: text));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Copied to clipboard'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
+                  AppToast.show('Copied to clipboard');
                 },
                 splashRadius: 16,
                 padding: EdgeInsets.zero,

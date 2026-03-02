@@ -65,6 +65,7 @@ _$WsSessionInitImpl _$$WsSessionInitImplFromJson(Map<String, dynamic> json) =>
       machineToken: json['machine_token'] as String,
       clientEphemeralPub: json['client_ephemeral_pub'] as String,
       signature: json['signature'] as String,
+      force: json['force'] as bool? ?? false,
     );
 
 Map<String, dynamic> _$$WsSessionInitImplToJson(_$WsSessionInitImpl instance) =>
@@ -74,6 +75,7 @@ Map<String, dynamic> _$$WsSessionInitImplToJson(_$WsSessionInitImpl instance) =>
       'machine_token': instance.machineToken,
       'client_ephemeral_pub': instance.clientEphemeralPub,
       'signature': instance.signature,
+      'force': instance.force,
     };
 
 _$WsSessionAckImpl _$$WsSessionAckImplFromJson(Map<String, dynamic> json) =>
@@ -130,6 +132,22 @@ _$WsErrorMessageImpl _$$WsErrorMessageImplFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$$WsErrorMessageImplToJson(
   _$WsErrorMessageImpl instance,
 ) => <String, dynamic>{'type': instance.type, 'error': instance.error};
+
+_$WsMachineStatusImpl _$$WsMachineStatusImplFromJson(
+  Map<String, dynamic> json,
+) => _$WsMachineStatusImpl(
+  type: json['type'] as String,
+  machineId: json['machine_id'] as String,
+  hostname: json['hostname'] as String,
+);
+
+Map<String, dynamic> _$$WsMachineStatusImplToJson(
+  _$WsMachineStatusImpl instance,
+) => <String, dynamic>{
+  'type': instance.type,
+  'machine_id': instance.machineId,
+  'hostname': instance.hostname,
+};
 
 _$WsEventImpl _$$WsEventImplFromJson(Map<String, dynamic> json) =>
     _$WsEventImpl(

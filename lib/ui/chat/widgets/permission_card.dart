@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/fonts.dart';
 import '../../../config/theme.dart';
 import '../../../domain/approval.dart';
-import 'code_block.dart';
+import '../../../domain/enums.dart';
 
 class PermissionCard extends StatelessWidget {
   final ApprovalRequest approval;
@@ -20,10 +21,12 @@ class PermissionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       decoration: BoxDecoration(
-        color: AppTheme.warningCardBg,
-        border: Border.all(color: AppTheme.warning, width: 1.5),
+        color: Colors.white,
+        border: const Border(
+          left: BorderSide(color: AppTheme.warning, width: 3),
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -32,55 +35,60 @@ class PermissionCard extends StatelessWidget {
           // Header
           Row(
             children: [
-              const Icon(Icons.warning_amber_rounded,
-                  color: AppTheme.warning, size: 20),
+              const Icon(LucideIcons.shieldAlert,
+                  color: AppTheme.warning, size: 16),
               const SizedBox(width: 8),
               Text(
                 'Permission Required',
                 style: GoogleFonts.inter(
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: AppTheme.warning,
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
 
-          // Tool name + kind
+          // Description
           Text(
-            approval.toolName,
-            style: AppFonts.codeLabel(color: AppTheme.textPrimary),
+            'Agent wants to use ${approval.title}',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              color: AppTheme.textSecondary,
+            ),
           ),
-          if (approval.kind != null && approval.kind!.isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              approval.kind!,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: AppTheme.textSecondary,
+
+          // Command preview
+          if (_commandText != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding:
+                  const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              decoration: BoxDecoration(
+                color: AppTheme.codeBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                _commandText!,
+                style: AppFonts.code(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: const Color(0xFFE0E2E6),
+                ),
               ),
             ),
           ],
 
-          // Command preview
-          if (_commandText != null) ...[
-            const SizedBox(height: 10),
-            CodeBlock(
-              text: _commandText!,
-              backgroundColor: const Color(0xFF1A1A1A),
-              showCopyButton: false,
-            ),
-          ],
-
-          // Option buttons
+          // Action buttons: 3 equal columns
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: approval.options.map((option) {
-              return _buildOptionButton(option);
-            }).toList(),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              children: _buildActionButtons(),
+            ),
           ),
         ],
       ),
@@ -95,68 +103,96 @@ class PermissionCard extends StatelessWidget {
     return null;
   }
 
-  Widget _buildOptionButton(PermOption option) {
-    final name = option.name.toLowerCase();
+  List<Widget> _buildActionButtons() {
+    // Find Allow, Always, and Deny options
+    Widget? allowButton;
+    Widget? alwaysButton;
+    Widget? denyButton;
 
-    // "Allow" variants get teal filled
-    if (name == 'allow' || name == 'yes') {
-      return ElevatedButton(
-        onPressed: () => onReply(option.optionId),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.primary,
-          foregroundColor: Colors.white,
-          minimumSize: const Size(0, 36),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          textStyle: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        child: Text(option.name),
-      );
+    for (final option in approval.options) {
+      switch (option.kind) {
+        case PermOptionKind.allowOnce:
+          allowButton = _buildAllowButton(option);
+        case PermOptionKind.allowAlways:
+          alwaysButton = _buildTextButton(option, AppTheme.textTertiary);
+        case PermOptionKind.rejectOnce:
+        case PermOptionKind.rejectAlways:
+          denyButton = _buildTextButton(option, AppTheme.textSecondary);
+      }
     }
 
-    // "Deny" variants get outlined with warning color
-    if (name == 'deny' || name == 'reject' || name == 'no') {
-      return OutlinedButton(
-        onPressed: () => onReply(option.optionId),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppTheme.warning,
-          side: const BorderSide(color: AppTheme.warning),
-          minimumSize: const Size(0, 36),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          textStyle: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        child: Text(option.name),
-      );
+    // Fall back to showing all options as equal columns if no match
+    if (allowButton == null && alwaysButton == null && denyButton == null) {
+      return approval.options.map((option) {
+        return Expanded(
+          child: _buildTextButton(option, AppTheme.textSecondary),
+        );
+      }).toList();
     }
 
-    // Everything else gets outlined neutral
-    return OutlinedButton(
-      onPressed: () => onReply(option.optionId),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppTheme.textPrimary,
-        side: const BorderSide(color: AppTheme.border),
-        minimumSize: const Size(0, 36),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        shape: RoundedRectangleBorder(
+    final buttons = <Widget>[];
+    if (allowButton != null) {
+      buttons.add(Expanded(child: allowButton));
+    }
+    if (alwaysButton != null) {
+      if (buttons.isNotEmpty) buttons.add(const SizedBox(width: 12));
+      buttons.add(Expanded(child: alwaysButton));
+    }
+    if (denyButton != null) {
+      if (buttons.isNotEmpty) buttons.add(const SizedBox(width: 12));
+      buttons.add(Expanded(child: denyButton));
+    }
+
+    return buttons;
+  }
+
+  Widget _buildAllowButton(PermOption option) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        debugPrint('[PermCard] tapped Allow: ${option.optionId}');
+        onReply(option.optionId);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: AppTheme.textPrimary, width: 1.5),
           borderRadius: BorderRadius.circular(8),
         ),
-        textStyle: GoogleFonts.inter(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
+        alignment: Alignment.center,
+        child: Text(
+          option.name,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
         ),
       ),
-      child: Text(option.name),
+    );
+  }
+
+  Widget _buildTextButton(PermOption option, Color color) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        debugPrint('[PermCard] tapped ${option.name}: ${option.optionId}');
+        onReply(option.optionId);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        child: Text(
+          option.name,
+          style: GoogleFonts.inter(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+          textAlign: TextAlign.center,
+        ),
+      ),
     );
   }
 }

@@ -14,7 +14,7 @@ class AuthScreen extends GetView<AuthViewModel> {
       appBar: AppBar(
         title: Text(
           'Authorize Device',
-          style: GoogleFonts.newsreader(
+          style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -87,7 +87,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             const SizedBox(height: 24),
             Text(
               'New Device',
-              style: GoogleFonts.newsreader(
+              style: GoogleFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
@@ -182,7 +182,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 24),
           Text(
             'Device Authorized',
-            style: GoogleFonts.newsreader(
+            style: GoogleFonts.inter(
               fontSize: 24,
               fontWeight: FontWeight.w700,
             ),
@@ -229,7 +229,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 24),
           Text(
             'Request Expired',
-            style: GoogleFonts.newsreader(
+            style: GoogleFonts.inter(
               fontSize: 24,
               fontWeight: FontWeight.w700,
             ),
@@ -278,7 +278,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             const SizedBox(height: 24),
             Text(
               'Error',
-              style: GoogleFonts.newsreader(
+              style: GoogleFonts.inter(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),

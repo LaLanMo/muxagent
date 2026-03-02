@@ -1,6 +1,8 @@
+import 'enums.dart';
+
 class PermOption {
   final String optionId;
-  final String kind;
+  final PermOptionKind kind;
   final String name;
 
   PermOption({
@@ -12,14 +14,14 @@ class PermOption {
   factory PermOption.fromJson(Map<String, dynamic> json) {
     return PermOption(
       optionId: json['optionId'] as String,
-      kind: json['kind'] as String,
+      kind: PermOptionKind.fromValue(json['kind'] as String? ?? ''),
       name: json['name'] as String,
     );
   }
 
   Map<String, dynamic> toJson() => {
         'optionId': optionId,
-        'kind': kind,
+        'kind': kind.value,
         'name': name,
       };
 }
@@ -27,6 +29,7 @@ class PermOption {
 class ApprovalRequest {
   final String id;
   final String sessionId;
+  final String? toolCallId;
   final String toolName;
   final String title;
   final String? kind;
@@ -37,6 +40,7 @@ class ApprovalRequest {
   ApprovalRequest({
     required this.id,
     required this.sessionId,
+    this.toolCallId,
     required this.toolName,
     required this.title,
     this.kind,
@@ -49,6 +53,7 @@ class ApprovalRequest {
     return ApprovalRequest(
       id: json['id'] as String,
       sessionId: json['sessionId'] as String,
+      toolCallId: json['toolCallId'] as String?,
       toolName: json['toolName'] as String,
       title: json['title'] as String,
       kind: json['kind'] as String?,
@@ -64,6 +69,7 @@ class ApprovalRequest {
   Map<String, dynamic> toJson() => {
         'id': id,
         'sessionId': sessionId,
+        if (toolCallId != null) 'toolCallId': toolCallId,
         'toolName': toolName,
         'title': title,
         if (kind != null) 'kind': kind,

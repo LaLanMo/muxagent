@@ -20,7 +20,7 @@ class ChatMessageBubble extends StatelessWidget {
     if (isUser) {
       return _buildUserBubble();
     }
-    return _buildAgentBubble();
+    return _buildAgentText();
   }
 
   Widget _buildUserBubble() {
@@ -28,46 +28,38 @@ class ChatMessageBubble extends StatelessWidget {
       alignment: Alignment.centerRight,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 300),
-        padding: const EdgeInsets.all(12),
-        decoration: const BoxDecoration(
-          color: AppTheme.primary,
-          borderRadius: BorderRadius.only(
-            topLeft: Radius.circular(12),
-            topRight: Radius.circular(12),
-            bottomLeft: Radius.circular(12),
-            bottomRight: Radius.circular(2),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(16),
         ),
         child: SelectableText(
           text,
           style: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.w400,
-            color: Colors.white,
+            color: AppTheme.textPrimary,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildAgentBubble() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        child: SelectionArea(
-          child: GptMarkdown(
-            text,
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              fontWeight: FontWeight.w400,
-              color: AppTheme.textPrimary,
-              height: 1.5,
-            ),
-            codeBuilder: (context, name, code, closed) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: CodeBlock(text: code),
-            ),
+  Widget _buildAgentText() {
+    return SizedBox(
+      width: double.infinity,
+      child: SelectionArea(
+        child: GptMarkdown(
+          text,
+          style: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w400,
+            color: AppTheme.textPrimary,
+            height: 1.5,
+          ),
+          codeBuilder: (context, name, code, closed) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: CodeBlock(text: code),
           ),
         ),
       ),

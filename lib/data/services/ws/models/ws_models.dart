@@ -57,6 +57,7 @@ class WsSessionInit with _$WsSessionInit {
     @JsonKey(name: 'machine_token') required String machineToken,
     @JsonKey(name: 'client_ephemeral_pub') required String clientEphemeralPub,
     required String signature,
+    @Default(false) bool force,
   }) = _WsSessionInit;
 
   factory WsSessionInit.fromJson(Map<String, dynamic> json) =>
@@ -108,6 +109,18 @@ class WsErrorMessage with _$WsErrorMessage {
 
   factory WsErrorMessage.fromJson(Map<String, dynamic> json) =>
       _$WsErrorMessageFromJson(json);
+}
+
+@freezed
+class WsMachineStatus with _$WsMachineStatus {
+  const factory WsMachineStatus({
+    required String type,
+    @JsonKey(name: 'machine_id') required String machineId,
+    required String hostname,
+  }) = _WsMachineStatus;
+
+  factory WsMachineStatus.fromJson(Map<String, dynamic> json) =>
+      _$WsMachineStatusFromJson(json);
 }
 
 @freezed

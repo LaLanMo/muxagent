@@ -3,24 +3,25 @@ import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
   // Brand colors
-  static const primary = Color(0xFF0D6E6E);
+  static const primary = Color(0xFF1D1D1F);
   static const background = Color(0xFFFAFAFA);
   static const surface = Color(0xFFFFFFFF);
-  static const textPrimary = Color(0xFF1A1A1A);
-  static const textSecondary = Color(0xFF666666);
-  static const textTertiary = Color(0xFFAAAAAA);
-  static const border = Color(0xFFE5E5E5);
-  static const inputFill = Color(0xFFF0F0F0);
-  static const codeBg = Color(0xFF2A2A2A);
+  static const textPrimary = Color(0xFF1D1D1F);
+  static const textSecondary = Color(0xFF6B6F76);
+  static const textTertiary = Color(0xFF808690);
+  static const border = Color(0xFFE5E7EB);
+  static const inputFill = Color(0xFFEDEEF1);
+  static const codeBg = Color(0xFF1D1D1F);
 
   // Status colors
-  static const warning = Color(0xFFE07B54);
-  static const warningBg = Color(0xFFFFF3E0);
-  static const warningCardBg = Color(0xFFFFFBF5);
-  static const successBg = Color(0xFFE8F5E9);
-  static const successText = Color(0xFF2E7D32);
-  static const activeGreen = Color(0xFF8BC34A);
-  static const idleBg = Color(0xFFF0F0F0);
+  static const warning = Color(0xFFE8B730);
+  static const warningBg = Color(0xFFFFF8E1);
+  static const successBg = Color(0xFFECFDF5);
+  static const successText = Color(0xFF4CB782);
+  static const idleBg = Color(0xFFF5F5F5);
+  static const errorText = Color(0xFFE5484D);
+  static const errorBg = Color(0xFFFDE8E8);
+  static const failedRed = Color(0xFFEF4444);
 
   static ThemeData light() {
     final textTheme = _textTheme();
@@ -34,7 +35,7 @@ class AppTheme {
         onSurface: textPrimary,
         secondary: primary,
         onSecondary: Colors.white,
-        error: warning,
+        error: errorText,
         outline: border,
       ),
       scaffoldBackgroundColor: background,
@@ -45,9 +46,9 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: GoogleFonts.newsreader(
+        titleTextStyle: GoogleFonts.inter(
           fontSize: 22,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
       ),
@@ -134,7 +135,7 @@ class AppTheme {
         onSurface: Colors.white,
         secondary: primary,
         onSecondary: Colors.white,
-        error: warning,
+        error: errorText,
         outline: const Color(0xFF333333),
       ),
       scaffoldBackgroundColor: const Color(0xFF111111),
@@ -145,9 +146,9 @@ class AppTheme {
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        titleTextStyle: GoogleFonts.newsreader(
+        titleTextStyle: GoogleFonts.inter(
           fontSize: 22,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: Colors.white,
         ),
       ),
@@ -222,24 +223,24 @@ class AppTheme {
     final color = dark ? Colors.white : textPrimary;
     final secondary = dark ? const Color(0xFF888888) : textSecondary;
     return TextTheme(
-      headlineLarge: GoogleFonts.newsreader(
+      headlineLarge: GoogleFonts.inter(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: color,
       ),
-      headlineMedium: GoogleFonts.newsreader(
+      headlineMedium: GoogleFonts.inter(
         fontSize: 22,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
         color: color,
       ),
-      headlineSmall: GoogleFonts.newsreader(
+      headlineSmall: GoogleFonts.inter(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      titleLarge: GoogleFonts.newsreader(
+      titleLarge: GoogleFonts.inter(
         fontSize: 18,
-        fontWeight: FontWeight.w500,
+        fontWeight: FontWeight.w600,
         color: color,
       ),
       titleMedium: GoogleFonts.inter(

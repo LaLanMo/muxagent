@@ -39,6 +39,7 @@ class ToolEvent {
   final String messageId;
   final String callId;
   final String name;
+  final String? kind;
   final String? title;
   final ToolStatus status;
   final Map<String, dynamic>? input;
@@ -50,6 +51,7 @@ class ToolEvent {
     required this.messageId,
     required this.callId,
     required this.name,
+    this.kind,
     this.title,
     required this.status,
     this.input,
@@ -63,6 +65,7 @@ class ToolEvent {
       messageId: json['messageId'] as String? ?? '',
       callId: json['callId'] as String? ?? '',
       name: json['name'] as String? ?? '',
+      kind: json['kind'] as String?,
       title: json['title'] as String?,
       status: ToolStatus.fromValue(json['status'] as String? ?? 'pending'),
       input: json['input'] as Map<String, dynamic>?,

@@ -18,7 +18,7 @@ class ScanScreen extends GetView<ScanViewModel> {
         foregroundColor: Colors.white,
         title: Text(
           'Scan QR Code',
-          style: GoogleFonts.newsreader(
+          style: GoogleFonts.inter(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,

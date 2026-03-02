@@ -836,6 +836,7 @@ mixin _$WsSessionInit {
   @JsonKey(name: 'client_ephemeral_pub')
   String get clientEphemeralPub => throw _privateConstructorUsedError;
   String get signature => throw _privateConstructorUsedError;
+  bool get force => throw _privateConstructorUsedError;
 
   /// Serializes this WsSessionInit to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -860,6 +861,7 @@ abstract class $WsSessionInitCopyWith<$Res> {
     @JsonKey(name: 'machine_token') String machineToken,
     @JsonKey(name: 'client_ephemeral_pub') String clientEphemeralPub,
     String signature,
+    bool force,
   });
 }
 
@@ -883,6 +885,7 @@ class _$WsSessionInitCopyWithImpl<$Res, $Val extends WsSessionInit>
     Object? machineToken = null,
     Object? clientEphemeralPub = null,
     Object? signature = null,
+    Object? force = null,
   }) {
     return _then(
       _value.copyWith(
@@ -906,6 +909,10 @@ class _$WsSessionInitCopyWithImpl<$Res, $Val extends WsSessionInit>
                 ? _value.signature
                 : signature // ignore: cast_nullable_to_non_nullable
                       as String,
+            force: null == force
+                ? _value.force
+                : force // ignore: cast_nullable_to_non_nullable
+                      as bool,
           )
           as $Val,
     );
@@ -927,6 +934,7 @@ abstract class _$$WsSessionInitImplCopyWith<$Res>
     @JsonKey(name: 'machine_token') String machineToken,
     @JsonKey(name: 'client_ephemeral_pub') String clientEphemeralPub,
     String signature,
+    bool force,
   });
 }
 
@@ -949,6 +957,7 @@ class __$$WsSessionInitImplCopyWithImpl<$Res>
     Object? machineToken = null,
     Object? clientEphemeralPub = null,
     Object? signature = null,
+    Object? force = null,
   }) {
     return _then(
       _$WsSessionInitImpl(
@@ -972,6 +981,10 @@ class __$$WsSessionInitImplCopyWithImpl<$Res>
             ? _value.signature
             : signature // ignore: cast_nullable_to_non_nullable
                   as String,
+        force: null == force
+            ? _value.force
+            : force // ignore: cast_nullable_to_non_nullable
+                  as bool,
       ),
     );
   }
@@ -986,6 +999,7 @@ class _$WsSessionInitImpl implements _WsSessionInit {
     @JsonKey(name: 'machine_token') required this.machineToken,
     @JsonKey(name: 'client_ephemeral_pub') required this.clientEphemeralPub,
     required this.signature,
+    this.force = false,
   });
 
   factory _$WsSessionInitImpl.fromJson(Map<String, dynamic> json) =>
@@ -1004,10 +1018,13 @@ class _$WsSessionInitImpl implements _WsSessionInit {
   final String clientEphemeralPub;
   @override
   final String signature;
+  @override
+  @JsonKey()
+  final bool force;
 
   @override
   String toString() {
-    return 'WsSessionInit(type: $type, machineId: $machineId, machineToken: $machineToken, clientEphemeralPub: $clientEphemeralPub, signature: $signature)';
+    return 'WsSessionInit(type: $type, machineId: $machineId, machineToken: $machineToken, clientEphemeralPub: $clientEphemeralPub, signature: $signature, force: $force)';
   }
 
   @override
@@ -1023,7 +1040,8 @@ class _$WsSessionInitImpl implements _WsSessionInit {
             (identical(other.clientEphemeralPub, clientEphemeralPub) ||
                 other.clientEphemeralPub == clientEphemeralPub) &&
             (identical(other.signature, signature) ||
-                other.signature == signature));
+                other.signature == signature) &&
+            (identical(other.force, force) || other.force == force));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -1035,6 +1053,7 @@ class _$WsSessionInitImpl implements _WsSessionInit {
     machineToken,
     clientEphemeralPub,
     signature,
+    force,
   );
 
   /// Create a copy of WsSessionInit
@@ -1059,6 +1078,7 @@ abstract class _WsSessionInit implements WsSessionInit {
     @JsonKey(name: 'client_ephemeral_pub')
     required final String clientEphemeralPub,
     required final String signature,
+    final bool force,
   }) = _$WsSessionInitImpl;
 
   factory _WsSessionInit.fromJson(Map<String, dynamic> json) =
@@ -1077,6 +1097,8 @@ abstract class _WsSessionInit implements WsSessionInit {
   String get clientEphemeralPub;
   @override
   String get signature;
+  @override
+  bool get force;
 
   /// Create a copy of WsSessionInit
   /// with the given fields replaced by the non-null parameter values.
@@ -1918,6 +1940,217 @@ abstract class _WsErrorMessage implements WsErrorMessage {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$WsErrorMessageImplCopyWith<_$WsErrorMessageImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+WsMachineStatus _$WsMachineStatusFromJson(Map<String, dynamic> json) {
+  return _WsMachineStatus.fromJson(json);
+}
+
+/// @nodoc
+mixin _$WsMachineStatus {
+  String get type => throw _privateConstructorUsedError;
+  @JsonKey(name: 'machine_id')
+  String get machineId => throw _privateConstructorUsedError;
+  String get hostname => throw _privateConstructorUsedError;
+
+  /// Serializes this WsMachineStatus to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of WsMachineStatus
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $WsMachineStatusCopyWith<WsMachineStatus> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $WsMachineStatusCopyWith<$Res> {
+  factory $WsMachineStatusCopyWith(
+    WsMachineStatus value,
+    $Res Function(WsMachineStatus) then,
+  ) = _$WsMachineStatusCopyWithImpl<$Res, WsMachineStatus>;
+  @useResult
+  $Res call({
+    String type,
+    @JsonKey(name: 'machine_id') String machineId,
+    String hostname,
+  });
+}
+
+/// @nodoc
+class _$WsMachineStatusCopyWithImpl<$Res, $Val extends WsMachineStatus>
+    implements $WsMachineStatusCopyWith<$Res> {
+  _$WsMachineStatusCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of WsMachineStatus
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? type = null,
+    Object? machineId = null,
+    Object? hostname = null,
+  }) {
+    return _then(
+      _value.copyWith(
+            type: null == type
+                ? _value.type
+                : type // ignore: cast_nullable_to_non_nullable
+                      as String,
+            machineId: null == machineId
+                ? _value.machineId
+                : machineId // ignore: cast_nullable_to_non_nullable
+                      as String,
+            hostname: null == hostname
+                ? _value.hostname
+                : hostname // ignore: cast_nullable_to_non_nullable
+                      as String,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$WsMachineStatusImplCopyWith<$Res>
+    implements $WsMachineStatusCopyWith<$Res> {
+  factory _$$WsMachineStatusImplCopyWith(
+    _$WsMachineStatusImpl value,
+    $Res Function(_$WsMachineStatusImpl) then,
+  ) = __$$WsMachineStatusImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    String type,
+    @JsonKey(name: 'machine_id') String machineId,
+    String hostname,
+  });
+}
+
+/// @nodoc
+class __$$WsMachineStatusImplCopyWithImpl<$Res>
+    extends _$WsMachineStatusCopyWithImpl<$Res, _$WsMachineStatusImpl>
+    implements _$$WsMachineStatusImplCopyWith<$Res> {
+  __$$WsMachineStatusImplCopyWithImpl(
+    _$WsMachineStatusImpl _value,
+    $Res Function(_$WsMachineStatusImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of WsMachineStatus
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? type = null,
+    Object? machineId = null,
+    Object? hostname = null,
+  }) {
+    return _then(
+      _$WsMachineStatusImpl(
+        type: null == type
+            ? _value.type
+            : type // ignore: cast_nullable_to_non_nullable
+                  as String,
+        machineId: null == machineId
+            ? _value.machineId
+            : machineId // ignore: cast_nullable_to_non_nullable
+                  as String,
+        hostname: null == hostname
+            ? _value.hostname
+            : hostname // ignore: cast_nullable_to_non_nullable
+                  as String,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$WsMachineStatusImpl implements _WsMachineStatus {
+  const _$WsMachineStatusImpl({
+    required this.type,
+    @JsonKey(name: 'machine_id') required this.machineId,
+    required this.hostname,
+  });
+
+  factory _$WsMachineStatusImpl.fromJson(Map<String, dynamic> json) =>
+      _$$WsMachineStatusImplFromJson(json);
+
+  @override
+  final String type;
+  @override
+  @JsonKey(name: 'machine_id')
+  final String machineId;
+  @override
+  final String hostname;
+
+  @override
+  String toString() {
+    return 'WsMachineStatus(type: $type, machineId: $machineId, hostname: $hostname)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$WsMachineStatusImpl &&
+            (identical(other.type, type) || other.type == type) &&
+            (identical(other.machineId, machineId) ||
+                other.machineId == machineId) &&
+            (identical(other.hostname, hostname) ||
+                other.hostname == hostname));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, type, machineId, hostname);
+
+  /// Create a copy of WsMachineStatus
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$WsMachineStatusImplCopyWith<_$WsMachineStatusImpl> get copyWith =>
+      __$$WsMachineStatusImplCopyWithImpl<_$WsMachineStatusImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$WsMachineStatusImplToJson(this);
+  }
+}
+
+abstract class _WsMachineStatus implements WsMachineStatus {
+  const factory _WsMachineStatus({
+    required final String type,
+    @JsonKey(name: 'machine_id') required final String machineId,
+    required final String hostname,
+  }) = _$WsMachineStatusImpl;
+
+  factory _WsMachineStatus.fromJson(Map<String, dynamic> json) =
+      _$WsMachineStatusImpl.fromJson;
+
+  @override
+  String get type;
+  @override
+  @JsonKey(name: 'machine_id')
+  String get machineId;
+  @override
+  String get hostname;
+
+  /// Create a copy of WsMachineStatus
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$WsMachineStatusImplCopyWith<_$WsMachineStatusImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

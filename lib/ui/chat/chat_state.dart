@@ -2,6 +2,7 @@ import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/message.dart';
+import '../../domain/plan_entry.dart';
 import '../../domain/tool_activity.dart';
 
 class _PendingPart {
@@ -22,6 +23,7 @@ class ChatState {
   final messageOrder = <String>[];
   final tools = <String, ToolActivity>{};
   final approvals = <String, ApprovalRequest>{};
+  var planEntries = <PlanEntry>[];
   final _pendingParts = <String, _PendingPart>{};
 
   ChatState({required this.sessionId});
@@ -96,6 +98,7 @@ class ChatState {
       tool = ToolActivity(
         id: event.callId,
         name: event.name,
+        kind: event.kind,
         status: event.status,
         title: event.title,
         input: event.input,
@@ -105,6 +108,7 @@ class ChatState {
       tools[event.callId] = tool;
     } else {
       tool.status = event.status;
+      if (event.kind != null) tool.kind = event.kind;
       if (event.output != null) tool.output = event.output;
       if (event.error != null) tool.error = event.error;
       if (event.title != null) tool.title = event.title;
@@ -151,6 +155,10 @@ class ChatState {
 
   void resolveApproval(String id) {
     approvals.remove(id);
+  }
+
+  void updatePlan(List<PlanEntry> entries) {
+    planEntries = entries;
   }
 
   List<Message> get orderedMessages {

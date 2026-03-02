@@ -27,6 +27,7 @@ class RelayWsClient {
   Completer<void>? _registeredCompleter;
   final _events = StreamController<WsEvent>.broadcast();
   final _errors = StreamController<WsErrorMessage>.broadcast();
+  final _machineStatus = StreamController<WsMachineStatus>.broadcast();
 
   final Map<String, PairedMachine> _machines = {};
   MasterKey? _masterKey;
@@ -41,6 +42,7 @@ class RelayWsClient {
 
   Stream<WsEvent> get events => _events.stream;
   Stream<WsErrorMessage> get errors => _errors.stream;
+  Stream<WsMachineStatus> get machineStatus => _machineStatus.stream;
 
   bool get isConnected => _ws.isConnected;
 
@@ -131,6 +133,7 @@ class RelayWsClient {
         machineToken: machineToken,
         clientEphemeralPub: clientEphemeralPubB64,
         signature: signature,
+        force: true,
       ).toJson(),
     );
     await sessionCompleter.future;
@@ -189,6 +192,7 @@ class RelayWsClient {
     _sessions.endAll(null);
     await _events.close();
     await _errors.close();
+    await _machineStatus.close();
   }
 
   void _handleMessage(String raw) async {
@@ -223,6 +227,10 @@ class RelayWsClient {
           return;
         case WsMessageType.rpc:
           await _handleRpc(WsEncryptedMessage.fromJson(msg));
+          return;
+        case WsMessageType.machineOnline:
+        case WsMessageType.machineOffline:
+          _machineStatus.add(WsMachineStatus.fromJson(msg));
           return;
         case WsMessageType.error:
           final error = WsErrorMessage.fromJson(msg);

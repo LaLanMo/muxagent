@@ -7,5 +7,4 @@ abstract class Routes {
   static const toolDetail = '/tool-detail';
   static const permissionDetail = '/permission-detail';
   static const newSession = '/new-session';
-  static const settings = '/settings';
 }

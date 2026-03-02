@@ -2,20 +2,18 @@ import 'package:get/get.dart';
 
 import '../bindings/auth_binding.dart';
 import '../bindings/chat_binding.dart';
+import '../bindings/main_shell_binding.dart';
 import '../bindings/new_session_binding.dart';
 import '../bindings/permission_detail_binding.dart';
 import '../bindings/scan_binding.dart';
-import '../bindings/session_list_binding.dart';
-import '../bindings/settings_binding.dart';
 import '../bindings/tool_detail_binding.dart';
 import '../bindings/welcome_binding.dart';
 import '../ui/auth/auth_screen.dart';
 import '../ui/chat/chat_screen.dart';
+import '../ui/main/main_shell.dart';
 import '../ui/new_session/new_session_screen.dart';
 import '../ui/permission_detail/permission_detail_screen.dart';
 import '../ui/scan/scan_screen.dart';
-import '../ui/session_list/session_list_screen.dart';
-import '../ui/settings/settings_screen.dart';
 import '../ui/tool_detail/tool_detail_screen.dart';
 import '../ui/welcome/welcome_screen.dart';
 import 'routes.dart';
@@ -24,8 +22,8 @@ class AppRouter {
   static final pages = [
     GetPage(
       name: Routes.home,
-      page: () => const SessionListScreen(),
-      binding: SessionListBinding(),
+      page: () => const MainShell(),
+      binding: MainShellBinding(),
     ),
     GetPage(
       name: Routes.welcome,
@@ -61,11 +59,6 @@ class AppRouter {
       name: Routes.newSession,
       page: () => const NewSessionScreen(),
       binding: NewSessionBinding(),
-    ),
-    GetPage(
-      name: Routes.settings,
-      page: () => const SettingsScreen(),
-      binding: SettingsBinding(),
     ),
   ];
 }

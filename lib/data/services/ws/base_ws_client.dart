@@ -30,8 +30,14 @@ class BaseWsClient {
           onMessage(data);
         }
       },
-      onError: onError,
-      onDone: onDone,
+      onError: (error) {
+        _clearConnection();
+        onError?.call(error);
+      },
+      onDone: () {
+        _clearConnection();
+        onDone?.call();
+      },
     );
   }
 
@@ -54,6 +60,10 @@ class BaseWsClient {
   Future<void> close() async {
     await _subscription?.cancel();
     await _socket?.close();
+    _clearConnection();
+  }
+
+  void _clearConnection() {
     _subscription = null;
     _socket = null;
   }

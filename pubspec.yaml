@@ -63,8 +63,16 @@ dependencies:
   # Google Fonts
   google_fonts: ^6.0.0
 
+  # Lucide icons (Linear-style)
+  lucide_icons: ^0.257.0
+
   # Markdown rendering for assistant messages
   gpt_markdown: ^1.1.5
+
+  # Local SQLite storage
+  sqflite: ^2.3.0
+  path: ^1.9.0
+  flutter_highlight: ^0.7.0
 
 dev_dependencies:
   flutter_test:
