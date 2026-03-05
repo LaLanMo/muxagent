@@ -15,6 +15,8 @@ const (
 	WSTypeResponse          WSType = "response"
 	WSTypeEvent             WSType = "event"
 	WSTypeError             WSType = "error"
+	WSTypeMachineOnline     WSType = "machine-online"
+	WSTypeMachineOffline    WSType = "machine-offline"
 )
 
 // WSRole defines the registering WebSocket client role.

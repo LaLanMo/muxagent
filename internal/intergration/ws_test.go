@@ -93,6 +93,7 @@ type wsSessionInit struct {
 	MachineToken       string `json:"machine_token"`
 	ClientEphemeralPub string `json:"client_ephemeral_pub"`
 	Signature          string `json:"signature"`
+	Force              bool   `json:"force,omitempty"`
 }
 
 type wsSessionAck struct {
@@ -338,4 +339,129 @@ func TestWS_MachineBusy(t *testing.T) {
 	wsRead(t, secondClient, &errMsg)
 	require.Equal(t, string(service.WSTypeError), errMsg.Type)
 	require.Equal(t, service.ErrMachineBusy.Error(), errMsg.Error)
+}
+
+func TestWS_ForceSessionReplace(t *testing.T) {
+	srv := newWSTestServer(t)
+
+	masterID, masterSignPub, _, masterSignPriv := seedMasterIdentity(t, srv.db, 1, "head")
+	fingerprint := crypto.HashKeyFingerprint(masterSignPub)
+
+	machineID := uuid.New()
+	machineSignPub, machineSignPriv := generateEd25519Keypair(t)
+	machineEncPub, _ := generateX25519Keypair(t)
+	seedMachine(t, srv.db, machineID, masterID, machineSignPub, machineEncPub)
+
+	expiresAt := time.Now().Add(5 * time.Minute).Unix()
+	connectToken := buildToken(service.TokenPrefixConnect, []string{masterID.String(), fingerprint, strconv.FormatInt(expiresAt, 10)}, masterSignPriv)
+	machineToken := buildToken(service.TokenPrefixMachine, []string{masterID.String(), machineID.String(), fingerprint, strconv.FormatInt(expiresAt, 10)}, masterSignPriv)
+
+	wsEndpoint := wsURL(srv.server.URL)
+
+	// Register machine
+	machineConn := wsDial(t, wsEndpoint)
+	require.NoError(t, machineConn.WriteJSON(wsRegister{
+		Type:      string(service.WSTypeRegister),
+		Role:      string(service.WSRoleMachine),
+		MachineID: machineID.String(),
+		Hostname:  "host",
+	}))
+	var challenge wsChallenge
+	wsRead(t, machineConn, &challenge)
+	msg := crypto.BuildMachineAuthMessage(machineID.String(), challenge.Nonce)
+	sig := ed25519.Sign(machineSignPriv, []byte(msg))
+	require.NoError(t, machineConn.WriteJSON(wsChallengeResponse{
+		Type:      string(service.WSTypeChallengeResponse),
+		Signature: base64.StdEncoding.EncodeToString(sig),
+	}))
+	wsRead(t, machineConn, &wsRegistered{})
+
+	// Client A establishes active session
+	clientA := wsDial(t, wsEndpoint)
+	require.NoError(t, clientA.WriteJSON(wsRegister{
+		Type:         string(service.WSTypeRegister),
+		Role:         string(service.WSRoleClient),
+		ConnectToken: connectToken,
+	}))
+	wsRead(t, clientA, &wsRegistered{})
+
+	clientEphemeralA := "client-ephemeral-a"
+	initPayloadA := crypto.BuildSessionInitMessage(machineID.String(), clientEphemeralA)
+	initSigA := ed25519.Sign(masterSignPriv, []byte(initPayloadA))
+	require.NoError(t, clientA.WriteJSON(wsSessionInit{
+		Type:               string(service.WSTypeSessionInit),
+		MachineID:          machineID.String(),
+		MachineToken:       machineToken,
+		ClientEphemeralPub: clientEphemeralA,
+		Signature:          base64.StdEncoding.EncodeToString(initSigA),
+	}))
+	wsRead(t, machineConn, &wsSessionInit{})
+
+	machineEphemeral := "machine-ephemeral"
+	ackPayload := crypto.BuildSessionAckMessage(machineID.String(), machineEphemeral)
+	ackSig := ed25519.Sign(machineSignPriv, []byte(ackPayload))
+	require.NoError(t, machineConn.WriteJSON(wsSessionAck{
+		Type:                string(service.WSTypeSessionAck),
+		MachineID:           machineID.String(),
+		MachineEphemeralPub: machineEphemeral,
+		Signature:           base64.StdEncoding.EncodeToString(ackSig),
+	}))
+	wsRead(t, clientA, &wsSessionAck{})
+
+	// Client B force-replaces the session
+	clientB := wsDial(t, wsEndpoint)
+	require.NoError(t, clientB.WriteJSON(wsRegister{
+		Type:         string(service.WSTypeRegister),
+		Role:         string(service.WSRoleClient),
+		ConnectToken: connectToken,
+	}))
+	wsRead(t, clientB, &wsRegistered{})
+
+	clientEphemeralB := "client-ephemeral-b"
+	initPayloadB := crypto.BuildSessionInitMessage(machineID.String(), clientEphemeralB)
+	initSigB := ed25519.Sign(masterSignPriv, []byte(initPayloadB))
+	require.NoError(t, clientB.WriteJSON(wsSessionInit{
+		Type:               string(service.WSTypeSessionInit),
+		MachineID:          machineID.String(),
+		MachineToken:       machineToken,
+		ClientEphemeralPub: clientEphemeralB,
+		Signature:          base64.StdEncoding.EncodeToString(initSigB),
+		Force:              true,
+	}))
+
+	// Machine receives the new session_init from client B
+	var initReceived wsSessionInit
+	wsRead(t, machineConn, &initReceived)
+	assert.Equal(t, string(service.WSTypeSessionInit), initReceived.Type)
+	assert.Equal(t, clientEphemeralB, initReceived.ClientEphemeralPub)
+
+	// Machine acks the new session
+	machineEphemeral2 := "machine-ephemeral-2"
+	ackPayload2 := crypto.BuildSessionAckMessage(machineID.String(), machineEphemeral2)
+	ackSig2 := ed25519.Sign(machineSignPriv, []byte(ackPayload2))
+	require.NoError(t, machineConn.WriteJSON(wsSessionAck{
+		Type:                string(service.WSTypeSessionAck),
+		MachineID:           machineID.String(),
+		MachineEphemeralPub: machineEphemeral2,
+		Signature:           base64.StdEncoding.EncodeToString(ackSig2),
+	}))
+
+	// Client B receives the ack (messages route to new client)
+	var ackReceived wsSessionAck
+	wsRead(t, clientB, &ackReceived)
+	assert.Equal(t, string(service.WSTypeSessionAck), ackReceived.Type)
+	assert.Equal(t, machineEphemeral2, ackReceived.MachineEphemeralPub)
+
+	// Client B can send RPC through the session
+	rpcPayload := wsEncrypted{
+		Type:       string(service.WSTypeRPC),
+		MachineID:  machineID.String(),
+		MsgID:      "msg-force",
+		Nonce:      "nonce",
+		Ciphertext: "cipher",
+	}
+	require.NoError(t, clientB.WriteJSON(rpcPayload))
+	var rpcReceived wsEncrypted
+	wsRead(t, machineConn, &rpcReceived)
+	assert.Equal(t, rpcPayload, rpcReceived)
 }

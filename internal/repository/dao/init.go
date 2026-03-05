@@ -10,5 +10,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&Machine{},
 		&AuthRequest{},
 		&KeyringUpdate{},
+		&DeviceToken{},
 	)
 }

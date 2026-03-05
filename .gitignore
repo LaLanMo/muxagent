@@ -1,0 +1,4 @@
+.idea/
+muxagent-relay
+config/*
+!config/example.json

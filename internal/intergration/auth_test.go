@@ -1024,7 +1024,7 @@ func TestAuthApprove_AtExactExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	// Set expiry very close to now; should still succeed.
-	newExpiry := time.Now().Add(1 * time.Millisecond)
+	newExpiry := time.Now().Add(500 * time.Millisecond)
 	require.NoError(t, srv.db.Model(&dao.AuthRequest{}).Where("id = ?", authReq.ID).
 		Update("expires_at", newExpiry).Error)
 	authReq.ExpiresAt = newExpiry

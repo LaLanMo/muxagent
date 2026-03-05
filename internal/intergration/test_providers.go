@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 
+	"firebase.google.com/go/v4/messaging"
 	"github.com/LaLanMo/muxagent-relay/internal/api"
 	"github.com/LaLanMo/muxagent-relay/internal/ioc"
 	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
@@ -48,6 +49,10 @@ func initTestRelaySigningKey() (*ioc.RelaySigningKey, error) {
 
 func initTestAuthHandler(auth service.AuthService) *api.AuthHandler {
 	return api.NewAuthHandler(auth, "https://relay.test")
+}
+
+func initTestNilFCMClient() *messaging.Client {
+	return nil
 }
 
 func initTestRouter(authHandler *api.AuthHandler, keyringHandler *api.KeyringHandler, wsHandler *api.WSHandler) *gin.Engine {

@@ -49,7 +49,7 @@ func TestSessionRegistry_BeginSession(t *testing.T) {
 			if tt.seedEntry != nil {
 				reg.machineToClient[machineID] = *tt.seedEntry
 			}
-			err := reg.BeginSession(machineID, clientID)
+			err := reg.BeginSession(machineID, clientID, false)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -130,6 +130,26 @@ func TestSessionRegistry_ActivateAndGet(t *testing.T) {
 			assert.Equal(t, tt.getClientOK, ok)
 		})
 	}
+}
+
+func TestSessionRegistry_BeginSession_ForceReplace(t *testing.T) {
+	machineID := uuid.New()
+	oldClient := uuid.New()
+	newClient := uuid.New()
+
+	reg := NewSessionRegistry()
+	require.NoError(t, reg.BeginSession(machineID, oldClient, false))
+	require.NoError(t, reg.ActivateSession(machineID))
+
+	// Without force: busy
+	require.ErrorIs(t, reg.BeginSession(machineID, newClient, false), ErrMachineBusy)
+
+	// With force: replaces
+	require.NoError(t, reg.BeginSession(machineID, newClient, true))
+	entry, ok := reg.machineToClient[machineID]
+	require.True(t, ok)
+	assert.Equal(t, newClient, entry.clientID)
+	assert.Equal(t, sessionStatePending, entry.state)
 }
 
 func TestSessionRegistry_EndSessionsForClient(t *testing.T) {

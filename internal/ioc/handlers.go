@@ -3,6 +3,7 @@ package ioc
 import (
 	"github.com/LaLanMo/muxagent-relay/internal/api"
 	"github.com/LaLanMo/muxagent-relay/internal/config"
+	"github.com/LaLanMo/muxagent-relay/internal/repository"
 	"github.com/LaLanMo/muxagent-relay/internal/service"
 )
 
@@ -16,4 +17,8 @@ func InitKeyringHandler(keyring service.KeyringService) *api.KeyringHandler {
 
 func InitWSHandler(ws service.WSService) *api.WSHandler {
 	return api.NewWSHandler(ws)
+}
+
+func InitDeviceHandler(tokenService service.TokenService, deviceTokens repository.DeviceTokenRepository) *api.DeviceHandler {
+	return api.NewDeviceHandler(tokenService, deviceTokens)
 }

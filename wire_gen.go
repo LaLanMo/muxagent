@@ -43,28 +43,34 @@ func InitApp(cfg *config.Config) (*App, error) {
 	authHandler := ioc.InitAuthHandler(authService, cfg)
 	keyringService := service.NewKeyringService(masterIdentityRepository, masterKeyRepository, keyringUpdateRepository, txRunner)
 	keyringHandler := ioc.InitKeyringHandler(keyringService)
+	tokenService := service.NewTokenService(masterKeyRepository)
 	wsHub := service.NewWSHub()
 	sessionRegistry := service.NewSessionRegistry()
-	tokenService := service.NewTokenService(masterKeyRepository)
-	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry)
+	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
+	deviceTokenRepository := repository.NewDeviceTokenRepository(deviceTokenDAO)
+	app := ioc.InitFirebaseApp(cfg)
+	client := ioc.InitFCMClient(app)
+	pushService := service.NewPushService(deviceTokenRepository, wsHub, client)
+	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService)
 	wsHandler := ioc.InitWSHandler(wsService)
-	engine := ioc.SetupRouter(authHandler, keyringHandler, wsHandler)
+	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
+	engine := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler)
 	v := ioc.InitAuthCleanup(authService)
-	app := &App{
+	mainApp := &App{
 		Router:      engine,
 		AuthCleanup: v,
 	}
-	return app, nil
+	return mainApp, nil
 }
 
 // wire.go:
 
-var daoSet = wire.NewSet(dao.NewGormAuthRequestDAO, dao.NewGormMasterIdentityDAO, dao.NewGormMasterKeyDAO, dao.NewGormMachineDAO, dao.NewGormKeyringUpdateDAO)
+var daoSet = wire.NewSet(dao.NewGormAuthRequestDAO, dao.NewGormMasterIdentityDAO, dao.NewGormMasterKeyDAO, dao.NewGormMachineDAO, dao.NewGormKeyringUpdateDAO, dao.NewGormDeviceTokenDAO)
 
-var repositorySet = wire.NewSet(repository.NewAuthRequestRepository, repository.NewMasterIdentityRepository, repository.NewMasterKeyRepository, repository.NewMachineRepository, repository.NewKeyringUpdateRepository, repository.NewTxRunner)
+var repositorySet = wire.NewSet(repository.NewAuthRequestRepository, repository.NewMasterIdentityRepository, repository.NewMasterKeyRepository, repository.NewMachineRepository, repository.NewKeyringUpdateRepository, repository.NewDeviceTokenRepository, repository.NewTxRunner)
 
-var serviceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService)
+var serviceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, service.NewPushService)
 
-var handlerSet = wire.NewSet(ioc.InitAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler)
+var handlerSet = wire.NewSet(ioc.InitAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler, ioc.InitDeviceHandler)
 
 var routerSet = wire.NewSet(ioc.SetupRouter)

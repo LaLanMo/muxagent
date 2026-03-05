@@ -21,6 +21,9 @@ type Config struct {
 		ListenAddr        string `mapstructure:"listen_addr"`
 		SigningPrivateKey string `mapstructure:"signing_private_key"`
 	} `mapstructure:"relay"`
+	Firebase struct {
+		CredentialsFile string `mapstructure:"credentials_file"`
+	} `mapstructure:"firebase"`
 }
 
 func Load() (*Config, error) {

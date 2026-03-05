@@ -29,6 +29,7 @@ func (h *WSHandler) HandleWS(c *gin.Context) {
 	if err != nil {
 		return
 	}
+	conn.SetReadLimit(5 * 1024 * 1024) // 5MB for image payloads
 	defer conn.Close()
 	h.ws.HandleConnection(c.Request.Context(), conn)
 }

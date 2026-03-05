@@ -113,7 +113,7 @@ func TestWSService_RegisterMachineAndClient(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil))
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -198,7 +198,7 @@ func TestWSService_SessionInitAckRouting(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry())
+	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil))
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -325,7 +325,7 @@ func TestWSService_RejectRPCWithoutActiveSession(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil))
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)

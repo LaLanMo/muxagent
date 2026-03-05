@@ -36,6 +36,7 @@ var testDaoSet = wire.NewSet(
 	dao.NewGormMasterKeyDAO,
 	dao.NewGormMachineDAO,
 	dao.NewGormKeyringUpdateDAO,
+	dao.NewGormDeviceTokenDAO,
 )
 
 var testRepositorySet = wire.NewSet(
@@ -44,6 +45,7 @@ var testRepositorySet = wire.NewSet(
 	repository.NewMasterKeyRepository,
 	repository.NewMachineRepository,
 	repository.NewKeyringUpdateRepository,
+	repository.NewDeviceTokenRepository,
 	repository.NewTxRunner,
 )
 
@@ -54,6 +56,8 @@ var testServiceSet = wire.NewSet(
 	service.NewWSService,
 	service.NewAuthService,
 	service.NewKeyringService,
+	initTestNilFCMClient,
+	service.NewPushService,
 )
 
 var testHandlerSet = wire.NewSet(

@@ -18,6 +18,8 @@ func InitApp(cfg *config.Config) (*App, error) {
 		ioc.RelaySignPrivate,
 		ioc.RelaySignPublic,
 		ioc.InitAuthCleanup,
+		ioc.InitFirebaseApp,
+		ioc.InitFCMClient,
 
 		daoSet,
 		repositorySet,
@@ -36,6 +38,7 @@ var daoSet = wire.NewSet(
 	dao.NewGormMasterKeyDAO,
 	dao.NewGormMachineDAO,
 	dao.NewGormKeyringUpdateDAO,
+	dao.NewGormDeviceTokenDAO,
 )
 
 var repositorySet = wire.NewSet(
@@ -44,6 +47,7 @@ var repositorySet = wire.NewSet(
 	repository.NewMasterKeyRepository,
 	repository.NewMachineRepository,
 	repository.NewKeyringUpdateRepository,
+	repository.NewDeviceTokenRepository,
 	repository.NewTxRunner,
 )
 
@@ -54,12 +58,14 @@ var serviceSet = wire.NewSet(
 	service.NewWSService,
 	service.NewAuthService,
 	service.NewKeyringService,
+	service.NewPushService,
 )
 
 var handlerSet = wire.NewSet(
 	ioc.InitAuthHandler,
 	ioc.InitKeyringHandler,
 	ioc.InitWSHandler,
+	ioc.InitDeviceHandler,
 )
 
 var routerSet = wire.NewSet(

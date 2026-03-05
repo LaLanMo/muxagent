@@ -20,12 +20,12 @@ func NewSessionRegistry() *SessionRegistry {
 	}
 }
 
-func (r *SessionRegistry) BeginSession(machineID uuid.UUID, clientID uuid.UUID) error {
+func (r *SessionRegistry) BeginSession(machineID uuid.UUID, clientID uuid.UUID, force bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	entry, exists := r.machineToClient[machineID]
 	if exists {
-		if r.isExpired(entry) {
+		if r.isExpired(entry) || force {
 			delete(r.machineToClient, machineID)
 		} else {
 			return ErrMachineBusy

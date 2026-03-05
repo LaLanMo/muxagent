@@ -14,6 +14,12 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+const (
+	pingInterval = 15 * time.Second
+	pongTimeout  = 10 * time.Second
+	writeWait    = 5 * time.Second
+)
+
 type WSService interface {
 	HandleConnection(ctx context.Context, conn *websocket.Conn)
 }
@@ -24,6 +30,7 @@ type wsServiceImpl struct {
 	tokenService TokenService
 	hub          *WSHub
 	sessions     *SessionRegistry
+	pushService  PushService
 }
 
 func NewWSService(
@@ -32,6 +39,7 @@ func NewWSService(
 	tokenService TokenService,
 	hub *WSHub,
 	sessions *SessionRegistry,
+	pushService PushService,
 ) WSService {
 	return &wsServiceImpl{
 		machines:     machines,
@@ -39,6 +47,7 @@ func NewWSService(
 		tokenService: tokenService,
 		hub:          hub,
 		sessions:     sessions,
+		pushService:  pushService,
 	}
 }
 
@@ -76,6 +85,7 @@ type sessionInitMessage struct {
 	MachineToken       string `json:"machine_token"`
 	ClientEphemeralPub string `json:"client_ephemeral_pub"`
 	Signature          string `json:"signature"`
+	Force              bool   `json:"force,omitempty"`
 }
 
 type sessionAckMessage struct {
@@ -90,12 +100,17 @@ type sessionEndMessage struct {
 	MachineID string `json:"machine_id"`
 }
 
+type eventHint struct {
+	Event string `json:"event"`
+}
+
 type encryptedMessage struct {
-	Type       WSType `json:"type"`
-	MachineID  string `json:"machine_id"`
-	MsgID      string `json:"msg_id"`
-	Nonce      string `json:"nonce"`
-	Ciphertext string `json:"ciphertext"`
+	Type       WSType     `json:"type"`
+	MachineID  string     `json:"machine_id"`
+	MsgID      string     `json:"msg_id"`
+	Nonce      string     `json:"nonce"`
+	Ciphertext string     `json:"ciphertext"`
+	Hint       *eventHint `json:"hint,omitempty"`
 }
 
 type errorMessage struct {
@@ -103,7 +118,15 @@ type errorMessage struct {
 	Error string `json:"error"`
 }
 
+type machineStatusMessage struct {
+	Type      WSType `json:"type"`
+	MachineID string `json:"machine_id"`
+	Hostname  string `json:"hostname"`
+}
+
 func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Conn) {
+	lc := &lockedConn{conn: conn}
+
 	var role WSRole
 	var clientID uuid.UUID
 	var clientClaims ConnectTokenClaims
@@ -115,6 +138,37 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 	var pendingMachineSignPub []byte
 	var pendingHostname string
 
+	// --- Heartbeat setup ---
+	// Set pong handler + initial read deadline before entering the read loop.
+	// During registration the peer's default pong handler replies automatically,
+	// so starting early is harmless and keeps the code simple.
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(pingInterval + pongTimeout))
+	})
+	_ = conn.SetReadDeadline(time.Now().Add(pingInterval + pongTimeout))
+
+	// Ping ticker — WriteControl is explicitly concurrency-safe in gorilla,
+	// so it bypasses lockedConn intentionally.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		ticker := time.NewTicker(pingInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(
+					websocket.PingMessage, nil,
+					time.Now().Add(writeWait),
+				); err != nil {
+					return
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+
 	defer func() {
 		switch role {
 		case WSRoleClient:
@@ -124,6 +178,17 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			}
 		case WSRoleMachine:
 			if machineID != uuid.Nil {
+				if mc, ok := s.hub.GetMachine(machineID); ok {
+					s.notifyMachineStatus(mc.MasterID, machineID, mc.Hostname, false)
+				}
+				if cID, ok := s.sessions.GetSessionClient(machineID); ok {
+					if cc, ok := s.hub.GetClient(cID); ok {
+						_ = cc.conn.WriteJSON(sessionEndMessage{
+							Type:      WSTypeSessionEnd,
+							MachineID: machineID.String(),
+						})
+					}
+				}
 				s.hub.UnregisterMachine(machineID)
 				s.sessions.EndSession(machineID)
 			}
@@ -138,14 +203,14 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 
 		var envelope wsEnvelope
 		if err := json.Unmarshal(raw, &envelope); err != nil {
-			if sendWSError(conn, "invalid JSON") != nil {
+			if sendWSError(lc, "invalid JSON") != nil {
 				return
 			}
 			continue
 		}
 
 		if envelope.Type == "" {
-			if sendWSError(conn, "invalid message type") != nil {
+			if sendWSError(lc, "invalid message type") != nil {
 				return
 			}
 			continue
@@ -153,7 +218,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 
 		if role == "" {
 			if envelope.Type != WSTypeRegister && envelope.Type != WSTypeChallengeResponse {
-				if sendWSError(conn, "registration required") != nil {
+				if sendWSError(lc, "registration required") != nil {
 					return
 				}
 				continue
@@ -163,20 +228,20 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 		switch envelope.Type {
 		case WSTypeRegister:
 			if role != "" {
-				if sendWSError(conn, "already registered") != nil {
+				if sendWSError(lc, "already registered") != nil {
 					return
 				}
 				continue
 			}
 			var msg registerMessage
 			if err := json.Unmarshal(raw, &msg); err != nil {
-				if sendWSError(conn, "invalid register message") != nil {
+				if sendWSError(lc, "invalid register message") != nil {
 					return
 				}
 				continue
 			}
 			if msg.Type != WSTypeRegister {
-				if sendWSError(conn, "invalid register type") != nil {
+				if sendWSError(lc, "invalid register type") != nil {
 					return
 				}
 				continue
@@ -184,14 +249,14 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			switch msg.Role {
 			case WSRoleMachine:
 				if msg.MachineID == "" {
-					if sendWSError(conn, "machine_id required") != nil {
+					if sendWSError(lc, "machine_id required") != nil {
 						return
 					}
 					continue
 				}
 				parsedID, err := uuid.Parse(msg.MachineID)
 				if err != nil {
-					if sendWSError(conn, "invalid machine_id") != nil {
+					if sendWSError(lc, "invalid machine_id") != nil {
 						return
 					}
 					continue
@@ -200,18 +265,18 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				if err != nil {
 					switch {
 					case errors.Is(err, repository.ErrMachineNotFound):
-						if sendWSError(conn, ErrUnknownMachine.Error()) != nil {
+						if sendWSError(lc, ErrUnknownMachine.Error()) != nil {
 							return
 						}
 					default:
-						if sendWSError(conn, "unknown machine") != nil {
+						if sendWSError(lc, "unknown machine") != nil {
 							return
 						}
 					}
 					continue
 				}
 				if machine.RevokedAt != nil {
-					if sendWSError(conn, ErrMachineRevoked.Error()) != nil {
+					if sendWSError(lc, ErrMachineRevoked.Error()) != nil {
 						return
 					}
 					continue
@@ -219,7 +284,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 
 				nonce := make([]byte, 32)
 				if _, err := rand.Read(nonce); err != nil {
-					if sendWSError(conn, "failed to generate challenge") != nil {
+					if sendWSError(lc, "failed to generate challenge") != nil {
 						return
 					}
 					continue
@@ -229,7 +294,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				pendingMachineMasterID = machine.MasterID
 				pendingMachineSignPub = machine.MachineSignPub
 				pendingHostname = msg.Hostname
-				if err := conn.WriteJSON(challengeMessage{
+				if err := lc.WriteJSON(challengeMessage{
 					Type:  WSTypeChallenge,
 					Nonce: base64.StdEncoding.EncodeToString(nonce),
 				}); err != nil {
@@ -237,14 +302,14 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				}
 			case WSRoleClient:
 				if msg.ConnectToken == "" {
-					if sendWSError(conn, "connect_token required") != nil {
+					if sendWSError(lc, "connect_token required") != nil {
 						return
 					}
 					continue
 				}
 				claims, err := s.tokenService.VerifyConnectToken(ctx, msg.ConnectToken)
 				if err != nil {
-					if sendWSError(conn, err.Error()) != nil {
+					if sendWSError(lc, err.Error()) != nil {
 						return
 					}
 					continue
@@ -252,8 +317,8 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				clientID = uuid.New()
 				role = WSRoleClient
 				clientClaims = claims
-				s.hub.RegisterClient(clientID, claims.MasterID, claims.MasterSignKeyFingerprint, conn)
-				if err := conn.WriteJSON(registeredMessage{
+				s.hub.RegisterClient(clientID, claims.MasterID, claims.MasterSignKeyFingerprint, lc)
+				if err := lc.WriteJSON(registeredMessage{
 					Type:     WSTypeRegistered,
 					MasterID: claims.MasterID.String(),
 				}); err != nil {
@@ -261,40 +326,40 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 					return
 				}
 			default:
-				if sendWSError(conn, "invalid role") != nil {
+				if sendWSError(lc, "invalid role") != nil {
 					return
 				}
 			}
 
 		case WSTypeChallengeResponse:
 			if pendingNonce == nil || pendingMachineID == uuid.Nil {
-				if sendWSError(conn, "no pending challenge") != nil {
+				if sendWSError(lc, "no pending challenge") != nil {
 					return
 				}
 				continue
 			}
 			var msg challengeResponseMessage
 			if err := json.Unmarshal(raw, &msg); err != nil {
-				if sendWSError(conn, "invalid challenge response") != nil {
+				if sendWSError(lc, "invalid challenge response") != nil {
 					return
 				}
 				continue
 			}
 			if msg.Type != WSTypeChallengeResponse {
-				if sendWSError(conn, "invalid challenge response type") != nil {
+				if sendWSError(lc, "invalid challenge response type") != nil {
 					return
 				}
 				continue
 			}
 			if msg.Signature == "" {
-				if sendWSError(conn, "signature required") != nil {
+				if sendWSError(lc, "signature required") != nil {
 					return
 				}
 				continue
 			}
 			sigBytes, err := base64.StdEncoding.DecodeString(msg.Signature)
 			if err != nil {
-				if sendWSError(conn, "invalid signature") != nil {
+				if sendWSError(lc, "invalid signature") != nil {
 					return
 				}
 				continue
@@ -302,14 +367,14 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			nonceB64 := base64.StdEncoding.EncodeToString(pendingNonce)
 			signedMsg := crypto.BuildMachineAuthMessage(pendingMachineID.String(), nonceB64)
 			if !crypto.VerifySignature(pendingMachineSignPub, []byte(signedMsg), sigBytes) {
-				if sendWSError(conn, "invalid signature") != nil {
+				if sendWSError(lc, "invalid signature") != nil {
 					return
 				}
 				continue
 			}
 
 			if err := s.machines.UpdateLastSeenAndHostname(ctx, pendingMachineID, time.Now(), pendingHostname); err != nil {
-				if sendWSError(conn, "failed to register machine") != nil {
+				if sendWSError(lc, "failed to register machine") != nil {
 					return
 				}
 				return
@@ -317,12 +382,13 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 
 			role = WSRoleMachine
 			machineID = pendingMachineID
-			s.hub.RegisterMachine(machineID, pendingMachineMasterID, pendingHostname, conn)
+			s.hub.RegisterMachine(machineID, pendingMachineMasterID, pendingHostname, lc)
+			s.notifyMachineStatus(pendingMachineMasterID, machineID, pendingHostname, true)
 
 			pendingNonce = nil
 			pendingMachineID = uuid.Nil
 			pendingMachineSignPub = nil
-			if err := conn.WriteJSON(registeredMessage{
+			if err := lc.WriteJSON(registeredMessage{
 				Type:      WSTypeRegistered,
 				MachineID: machineID.String(),
 			}); err != nil {
@@ -332,78 +398,78 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 
 		case WSTypeSessionInit:
 			if role != WSRoleClient {
-				if sendWSError(conn, "client role required") != nil {
+				if sendWSError(lc, "client role required") != nil {
 					return
 				}
 				continue
 			}
 			var msg sessionInitMessage
 			if err := json.Unmarshal(raw, &msg); err != nil {
-				if sendWSError(conn, "invalid session-init") != nil {
+				if sendWSError(lc, "invalid session-init") != nil {
 					return
 				}
 				continue
 			}
 			if msg.Type != WSTypeSessionInit {
-				if sendWSError(conn, "invalid session-init type") != nil {
+				if sendWSError(lc, "invalid session-init type") != nil {
 					return
 				}
 				continue
 			}
 			if err := s.handleSessionInit(ctx, clientID, clientClaims, msg, raw); err != nil {
-				if sendWSError(conn, err.Error()) != nil {
+				if sendWSError(lc, err.Error()) != nil {
 					return
 				}
 			}
 
 		case WSTypeSessionAck:
 			if role != WSRoleMachine {
-				if sendWSError(conn, "machine role required") != nil {
+				if sendWSError(lc, "machine role required") != nil {
 					return
 				}
 				continue
 			}
 			var msg sessionAckMessage
 			if err := json.Unmarshal(raw, &msg); err != nil {
-				if sendWSError(conn, "invalid session-ack") != nil {
+				if sendWSError(lc, "invalid session-ack") != nil {
 					return
 				}
 				continue
 			}
 			if msg.Type != WSTypeSessionAck {
-				if sendWSError(conn, "invalid session-ack type") != nil {
+				if sendWSError(lc, "invalid session-ack type") != nil {
 					return
 				}
 				continue
 			}
 			if err := s.handleSessionAck(ctx, machineID, msg, raw); err != nil {
-				if sendWSError(conn, err.Error()) != nil {
+				if sendWSError(lc, err.Error()) != nil {
 					return
 				}
 			}
 
 		case WSTypeSessionEnd:
 			if role != WSRoleClient {
-				if sendWSError(conn, "client role required") != nil {
+				if sendWSError(lc, "client role required") != nil {
 					return
 				}
 				continue
 			}
 			var msg sessionEndMessage
 			if err := json.Unmarshal(raw, &msg); err != nil {
-				if sendWSError(conn, "invalid session-end") != nil {
+				if sendWSError(lc, "invalid session-end") != nil {
 					return
 				}
 				continue
 			}
 			if msg.Type != WSTypeSessionEnd {
-				if sendWSError(conn, "invalid session-end type") != nil {
+				if sendWSError(lc, "invalid session-end type") != nil {
 					return
 				}
 				continue
 			}
 			if err := s.handleSessionEnd(ctx, clientID, msg, raw); err != nil {
-				if sendWSError(conn, err.Error()) != nil {
+				if sendWSError(lc, err.Error()) != nil {
 					return
 				}
 			}
@@ -412,18 +478,18 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			switch role {
 			case WSRoleClient:
 				if err := s.forwardClientMessage(raw, clientID); err != nil {
-					if sendWSError(conn, err.Error()) != nil {
+					if sendWSError(lc, err.Error()) != nil {
 						return
 					}
 				}
 			case WSRoleMachine:
 				if err := s.forwardMachineMessage(raw, machineID); err != nil {
-					if sendWSError(conn, err.Error()) != nil {
+					if sendWSError(lc, err.Error()) != nil {
 						return
 					}
 				}
 			default:
-				if sendWSError(conn, "registration required") != nil {
+				if sendWSError(lc, "registration required") != nil {
 					return
 				}
 			}
@@ -431,7 +497,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 		case WSTypeError:
 			continue
 		default:
-			if sendWSError(conn, "unknown message type") != nil {
+			if sendWSError(lc, "unknown message type") != nil {
 				return
 			}
 		}
@@ -479,7 +545,7 @@ func (s *wsServiceImpl) handleSessionInit(ctx context.Context, clientID uuid.UUI
 		return ErrInvalidSessionInit
 	}
 
-	if err := s.sessions.BeginSession(machineID, clientID); err != nil {
+	if err := s.sessions.BeginSession(machineID, clientID, msg.Force); err != nil {
 		return err
 	}
 	machineConn, ok := s.hub.GetMachine(machineID)
@@ -582,15 +648,48 @@ func (s *wsServiceImpl) forwardMachineMessage(raw json.RawMessage, machineID uui
 	clientConn, ok := s.hub.GetClient(clientID)
 	if !ok {
 		s.sessions.EndSession(machineID)
+		s.tryPushNotification(raw, machineID)
 		return ErrUnauthorizedSession
 	}
 	if err := clientConn.conn.WriteMessage(websocket.TextMessage, raw); err != nil {
 		s.sessions.EndSession(machineID)
+		s.tryPushNotification(raw, machineID)
 		return ErrUnauthorizedSession
 	}
 	return nil
 }
 
-func sendWSError(conn *websocket.Conn, message string) error {
+func (s *wsServiceImpl) tryPushNotification(raw json.RawMessage, machineID uuid.UUID) {
+	var msg encryptedMessage
+	if err := json.Unmarshal(raw, &msg); err != nil {
+		return
+	}
+	if msg.Hint == nil {
+		return
+	}
+	mc, ok := s.hub.GetMachine(machineID)
+	if !ok {
+		return
+	}
+	go s.pushService.SendPushIfOffline(context.Background(), mc.MasterID, EventHint{Event: msg.Hint.Event})
+}
+
+func (s *wsServiceImpl) notifyMachineStatus(masterID, machineID uuid.UUID, hostname string, online bool) {
+	msgType := WSTypeMachineOffline
+	if online {
+		msgType = WSTypeMachineOnline
+	}
+	msg := machineStatusMessage{
+		Type:      msgType,
+		MachineID: machineID.String(),
+		Hostname:  hostname,
+	}
+	clients := s.hub.GetClientsByMasterID(masterID)
+	for _, c := range clients {
+		_ = c.conn.WriteJSON(msg)
+	}
+}
+
+func sendWSError(conn *lockedConn, message string) error {
 	return conn.WriteJSON(errorMessage{Type: WSTypeError, Error: message})
 }

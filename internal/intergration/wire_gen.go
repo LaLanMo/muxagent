@@ -43,10 +43,14 @@ func InitTestContainer() (*testContainer, error) {
 	authHandler := initTestAuthHandler(authService)
 	keyringService := service.NewKeyringService(masterIdentityRepository, masterKeyRepository, keyringUpdateRepository, txRunner)
 	keyringHandler := ioc.InitKeyringHandler(keyringService)
+	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
+	deviceTokenRepository := repository.NewDeviceTokenRepository(deviceTokenDAO)
 	wsHub := service.NewWSHub()
 	sessionRegistry := service.NewSessionRegistry()
 	tokenService := service.NewTokenService(masterKeyRepository)
-	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry)
+	fcmClient := initTestNilFCMClient()
+	pushService := service.NewPushService(deviceTokenRepository, wsHub, fcmClient)
+	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService)
 	wsHandler := ioc.InitWSHandler(wsService)
 	engine := initTestRouter(authHandler, keyringHandler, wsHandler)
 	testContainer := &testContainer{
@@ -65,11 +69,11 @@ func InitTestContainer() (*testContainer, error) {
 
 var testInfraSet = wire.NewSet(initTestDB, initTestRelaySigningKey, ioc.RelaySignPrivate, ioc.RelaySignPublic)
 
-var testDaoSet = wire.NewSet(dao.NewGormAuthRequestDAO, dao.NewGormMasterIdentityDAO, dao.NewGormMasterKeyDAO, dao.NewGormMachineDAO, dao.NewGormKeyringUpdateDAO)
+var testDaoSet = wire.NewSet(dao.NewGormAuthRequestDAO, dao.NewGormMasterIdentityDAO, dao.NewGormMasterKeyDAO, dao.NewGormMachineDAO, dao.NewGormKeyringUpdateDAO, dao.NewGormDeviceTokenDAO)
 
-var testRepositorySet = wire.NewSet(repository.NewAuthRequestRepository, repository.NewMasterIdentityRepository, repository.NewMasterKeyRepository, repository.NewMachineRepository, repository.NewKeyringUpdateRepository, repository.NewTxRunner)
+var testRepositorySet = wire.NewSet(repository.NewAuthRequestRepository, repository.NewMasterIdentityRepository, repository.NewMasterKeyRepository, repository.NewMachineRepository, repository.NewKeyringUpdateRepository, repository.NewDeviceTokenRepository, repository.NewTxRunner)
 
-var testServiceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService)
+var testServiceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, initTestNilFCMClient, service.NewPushService)
 
 var testHandlerSet = wire.NewSet(initTestAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler)
 

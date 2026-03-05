@@ -11,5 +11,8 @@
     "public_base_url": "http://127.0.0.1:8080",
     "listen_addr": ":8080",
     "signing_private_key": ""
+  },
+  "firebase": {
+    "credentials_file": ""
   }
 }

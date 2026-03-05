@@ -18,7 +18,7 @@ func TestWSHub_RegisterGetUnregister(t *testing.T) {
 			run: func(t *testing.T, hub *WSHub) {
 				clientID := uuid.New()
 				masterID := uuid.New()
-				hub.RegisterClient(clientID, masterID, "fp", &websocket.Conn{})
+				hub.RegisterClient(clientID, masterID, "fp", &lockedConn{conn: &websocket.Conn{}})
 				client, ok := hub.GetClient(clientID)
 				assert.True(t, ok)
 				assert.Equal(t, clientID, client.ID)
@@ -32,7 +32,7 @@ func TestWSHub_RegisterGetUnregister(t *testing.T) {
 			run: func(t *testing.T, hub *WSHub) {
 				machineID := uuid.New()
 				masterID := uuid.New()
-				hub.RegisterMachine(machineID, masterID, "host", &websocket.Conn{})
+				hub.RegisterMachine(machineID, masterID, "host", &lockedConn{conn: &websocket.Conn{}})
 				machine, ok := hub.GetMachine(machineID)
 				assert.True(t, ok)
 				assert.Equal(t, machineID, machine.ID)
