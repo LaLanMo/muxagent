@@ -76,7 +76,7 @@ class PermissionCard extends StatelessWidget {
                 style: AppFonts.code(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
-                  color: const Color(0xFFE0E2E6),
+                  color: AppTheme.codeText,
                 ),
               ),
             ),

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../config/fonts.dart';
-import '../../../config/theme.dart';
 import '../../../utils/app_toast.dart';
 
 class CodeBlock extends StatelessWidget {

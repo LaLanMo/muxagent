@@ -26,7 +26,7 @@ class ChatInputBar extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       decoration: const BoxDecoration(
-        color: Color(0xFFFFFFFF),
+        color: AppTheme.surface,
         border: Border(
           top: BorderSide(color: AppTheme.border),
         ),
@@ -55,7 +55,7 @@ class ChatInputBar extends StatelessWidget {
                     hintStyle: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w400,
-                      color: const Color(0xFFC8CBD0),
+                      color: AppTheme.textMuted,
                     ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(

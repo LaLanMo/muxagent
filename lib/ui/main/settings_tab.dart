@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../config/theme.dart';
 import '../../domain/paired_machine.dart';
 import '../common/ui_effect_listener.dart';
 import 'settings_tab_viewmodel.dart';
@@ -26,7 +27,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
             style: GoogleFonts.inter(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: const Color(0xFF1D1D1F),
+              color: AppTheme.textPrimary,
             ),
           ),
         ),
@@ -44,7 +45,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                     icon: LucideIcons.qrCode,
                     label: 'Scan QR',
                     trailing: Icon(LucideIcons.chevronRight,
-                        size: 16, color: const Color(0xFFC8CBD0)),
+                        size: 16, color: AppTheme.textMuted),
                     onTap: controller.navigateToScan,
                     hasBorder: true,
                   ),
@@ -52,7 +53,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                     icon: LucideIcons.link,
                     label: 'Enter URL',
                     trailing: Icon(LucideIcons.chevronRight,
-                        size: 16, color: const Color(0xFFC8CBD0)),
+                        size: 16, color: AppTheme.textMuted),
                     onTap: controller.showPasteUrlDialog,
                   ),
                   _buildSectionLabel('ABOUT'),
@@ -63,7 +64,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                       '1.0.0',
                       style: GoogleFonts.inter(
                         fontSize: 15,
-                        color: const Color(0xFF808690),
+                        color: AppTheme.textTertiary,
                       ),
                     ),
                     hasBorder: true,
@@ -72,7 +73,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                   //   icon: LucideIcons.zap,
                   //   label: "What's New",
                   //   trailing: Icon(LucideIcons.chevronRight,
-                  //       size: 16, color: const Color(0xFFC8CBD0)),
+                  //       size: 16, color: AppTheme.textMuted),
                   // ),
                   const SizedBox(height: 24),
                 ],
@@ -95,7 +96,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           fontSize: 13,
           fontWeight: FontWeight.w500,
           letterSpacing: 1,
-          color: const Color(0xFF808690),
+          color: AppTheme.textTertiary,
         ),
       ),
     );
@@ -124,7 +125,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: const BoxDecoration(
           border: Border(
-            bottom: BorderSide(color: Color(0xFFE5E7EB)),
+            bottom: BorderSide(color: AppTheme.border),
           ),
         ),
         child: Row(
@@ -132,7 +133,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           children: [
             // Monitor icon 20x20 #6B6F76
             Icon(LucideIcons.monitor,
-                size: 20, color: const Color(0xFF6B6F76)),
+                size: 20, color: AppTheme.textSecondary),
             const SizedBox(width: 12),
             // Machine name: Inter 15 normal #1D1D1F, fill_container
             Expanded(
@@ -144,7 +145,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                     style: GoogleFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.normal,
-                      color: const Color(0xFF1D1D1F),
+                      color: AppTheme.textPrimary,
                     ),
                   ),
                   if (!connected && !connecting)
@@ -152,7 +153,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                       'Tap to reconnect',
                       style: GoogleFonts.inter(
                         fontSize: 12,
-                        color: const Color(0xFF808690),
+                        color: AppTheme.textTertiary,
                       ),
                     ),
                 ],
@@ -173,16 +174,16 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     final String textStr;
 
     if (connecting) {
-      pillColor = const Color(0xFFFFF8E1);
-      dotColor = const Color(0xFFE07B54);
+      pillColor = AppTheme.warningBg;
+      dotColor = AppTheme.statusConnecting;
       textStr = 'connecting';
     } else if (online) {
-      pillColor = const Color(0xFFECFDF5);
-      dotColor = const Color(0xFF4CB782);
+      pillColor = AppTheme.successBg;
+      dotColor = AppTheme.successText;
       textStr = 'online';
     } else {
-      pillColor = const Color(0xFFF5F5F5);
-      dotColor = const Color(0xFF808690);
+      pillColor = AppTheme.idleBg;
+      dotColor = AppTheme.textTertiary;
       textStr = 'offline';
     }
 
@@ -201,7 +202,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               height: 10,
               child: CircularProgressIndicator(
                 strokeWidth: 1.5,
-                color: Color(0xFFE07B54),
+                color: AppTheme.statusConnecting,
               ),
             )
           else
@@ -243,7 +244,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
         decoration: hasBorder
             ? const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                  bottom: BorderSide(color: AppTheme.border),
                 ),
               )
             : null,
@@ -251,7 +252,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Left icon 20x20 #6B6F76
-            Icon(icon, size: 20, color: const Color(0xFF6B6F76)),
+            Icon(icon, size: 20, color: AppTheme.textSecondary),
             const SizedBox(width: 12),
             // Label: Inter 15 normal #1D1D1F, fill_container
             Expanded(
@@ -260,7 +261,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                 style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.normal,
-                  color: const Color(0xFF1D1D1F),
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),

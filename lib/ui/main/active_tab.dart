@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../domain/enums.dart';
+import '../../config/theme.dart';
 import '../../domain/session.dart';
 import '../../utils/app_toast.dart';
 import 'active_tab_viewmodel.dart';
@@ -13,11 +14,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   const ActiveTab({super.key});
 
   MainShellViewModel get shell => Get.find<MainShellViewModel>();
-
-  // Status colors matching the design spec
-  static const _approvalColor = Color(0xFFE8B730);
-  static const _runningColor = Color(0xFF4CB782);
-  static const _idleColor = Color(0xFFC8CBD0);
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +32,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                 style: GoogleFonts.inter(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF1D1D1F),
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ],
@@ -73,7 +69,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             Icon(
               LucideIcons.checkCircle,
               size: 48,
-              color: const Color(0xFFC8CBD0),
+              color: AppTheme.textMuted,
             ),
             const SizedBox(height: 16),
             // Title: "All clear", Inter 20px w500 #6B6F76
@@ -82,7 +78,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               style: GoogleFonts.inter(
                 fontSize: 20,
                 fontWeight: FontWeight.w500,
-                color: const Color(0xFF6B6F76),
+                color: AppTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 16),
@@ -93,7 +89,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                 'No sessions need your attention right now.',
                 style: GoogleFonts.inter(
                   fontSize: 14,
-                  color: const Color(0xFF808690),
+                  color: AppTheme.textTertiary,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -110,7 +106,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                 style: GoogleFonts.inter(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1D1D1F),
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
@@ -127,7 +123,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: const Color(0xFFEDEEF1),
+        color: AppTheme.inputFill,
         borderRadius: BorderRadius.circular(12),
       ),
       clipBehavior: Clip.antiAlias,
@@ -157,7 +153,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             const Icon(
               LucideIcons.monitor,
               size: 18,
-              color: Color(0xFF6B6F76),
+              color: AppTheme.textSecondary,
             ),
             const SizedBox(width: 10),
             // Machine name: Inter 14px normal #1D1D1F, fill_container
@@ -167,7 +163,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                 style: GoogleFonts.inter(
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
-                  color: const Color(0xFF1D1D1F),
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
@@ -182,9 +178,9 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
 
   Widget _buildStatusPill(bool connected) {
     final dotColor =
-        connected ? const Color(0xFF4CB782) : const Color(0xFF808690);
+        connected ? AppTheme.successText : AppTheme.textTertiary;
     final bgColor =
-        connected ? const Color(0xFFECFDF5) : const Color(0xFFF5F5F5);
+        connected ? AppTheme.successBg : AppTheme.idleBg;
     final label = connected ? 'online' : 'offline';
 
     return Container(
@@ -238,9 +234,9 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (approvalSessions.isNotEmpty)
-            _buildSection('Approval', _approvalColor, approvalSessions),
+            _buildSection('Approval', AppTheme.warning, approvalSessions),
           if (runningSessions.isNotEmpty)
-            _buildSection('Running', _runningColor, runningSessions),
+            _buildSection('Running', AppTheme.successText, runningSessions),
         ],
       ),
     );
@@ -299,7 +295,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         decoration: const BoxDecoration(
           // Bottom border: stroke inside #E5E7EB, thickness bottom 1
           border: Border(
-            bottom: BorderSide(color: Color(0xFFE5E7EB), width: 1),
+            bottom: BorderSide(color: AppTheme.border, width: 1),
           ),
         ),
         child: Row(
@@ -319,7 +315,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                     style: GoogleFonts.inter(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: const Color(0xFF1D1D1F),
+                      color: AppTheme.textPrimary,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -332,7 +328,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.normal,
-                        color: const Color(0xFF808690),
+                        color: AppTheme.textTertiary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -345,7 +341,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.normal,
-                      color: const Color(0xFFC8CBD0),
+                      color: AppTheme.textMuted,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -368,7 +364,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: const Color(0xFFC8CBD0),
+            color: AppTheme.textMuted,
             width: 1.5,
           ),
         ),

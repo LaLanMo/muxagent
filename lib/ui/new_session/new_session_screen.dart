@@ -28,7 +28,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: const BoxDecoration(
                 border: Border(
-                  bottom: BorderSide(color: Color(0xFFE5E7EB)),
+                  bottom: BorderSide(color: AppTheme.border),
                 ),
               ),
               child: Row(
@@ -38,7 +38,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   GestureDetector(
                     onTap: () => Get.back(),
                     child: const Icon(LucideIcons.x,
-                        size: 24, color: Color(0xFF6B6F76)),
+                        size: 24, color: AppTheme.textSecondary),
                   ),
                   const SizedBox(width: 12),
                   // Title: Inter 17 w600 #1D1D1F
@@ -47,7 +47,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     style: GoogleFonts.inter(
                       fontSize: 17,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF1D1D1F),
+                      color: AppTheme.textPrimary,
                     ),
                   ),
                 ],
@@ -110,7 +110,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       style: GoogleFonts.inter(
         fontSize: 13,
         fontWeight: FontWeight.w500,
-        color: const Color(0xFF6B6F76),
+        color: AppTheme.textSecondary,
       ),
     );
   }
@@ -129,7 +129,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFEDEEF1),
+          color: AppTheme.inputFill,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -137,7 +137,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           children: [
             // Monitor icon 16x16 #808690
             const Icon(LucideIcons.monitor,
-                size: 16, color: Color(0xFF808690)),
+                size: 16, color: AppTheme.textTertiary),
             const SizedBox(width: 8),
             // Machine name: Inter 14 normal #1D1D1F
             Expanded(
@@ -147,14 +147,14 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
                   color: selected != null
-                      ? const Color(0xFF1D1D1F)
-                      : const Color(0xFFC8CBD0),
+                      ? AppTheme.textPrimary
+                      : AppTheme.textMuted,
                 ),
               ),
             ),
             // Chevron-right 16x16 #C8CBD0
             const Icon(LucideIcons.chevronRight,
-                size: 16, color: Color(0xFFC8CBD0)),
+                size: 16, color: AppTheme.textMuted),
           ],
         ),
       ),
@@ -197,7 +197,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF1D1D1F) : const Color(0xFFEDEEF1),
+          color: isSelected ? AppTheme.primary : AppTheme.inputFill,
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -217,7 +217,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Colors.white : const Color(0xFF6B6F76),
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
               ),
             ),
           ],
@@ -246,7 +246,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 style: GoogleFonts.inter(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
-                  color: const Color(0xFF1D1D1F),
+                  color: AppTheme.textPrimary,
                 ),
               ),
             ),
@@ -258,14 +258,14 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               return ListTile(
                 enabled: isOnline,
                 leading: const Icon(LucideIcons.monitor,
-                    size: 20, color: Color(0xFF6B6F76)),
+                    size: 20, color: AppTheme.textSecondary),
                 title: Text(
                   name,
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     color: isOnline
-                        ? const Color(0xFF1D1D1F)
-                        : const Color(0xFFC8CBD0),
+                        ? AppTheme.textPrimary
+                        : AppTheme.textMuted,
                   ),
                 ),
                 trailing: isOnline
@@ -291,8 +291,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       height: 8,
       decoration: BoxDecoration(
         color: online
-            ? const Color(0xFF4CB782)
-            : const Color(0xFF808690),
+            ? AppTheme.successText
+            : AppTheme.textTertiary,
         shape: BoxShape.circle,
       ),
     );
@@ -310,15 +310,15 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         decoration: isOpen
             ? null
             : BoxDecoration(
-                color: const Color(0xFFEDEEF1),
+                color: AppTheme.inputFill,
                 borderRadius: BorderRadius.circular(8),
               ),
-        color: isOpen ? const Color(0xFFEDEEF1) : null,
+        color: isOpen ? AppTheme.inputFill : null,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Icon(LucideIcons.folder,
-                size: 16, color: Color(0xFF808690)),
+                size: 16, color: AppTheme.textTertiary),
             const SizedBox(width: 8),
             Expanded(
               child: TextField(
@@ -331,7 +331,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 style: AppFonts.code(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: const Color(0xFF1D1D1F),
+                  color: AppTheme.textPrimary,
                 ),
                 decoration: InputDecoration(
                   isDense: true,
@@ -343,7 +343,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   hintStyle: AppFonts.code(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: const Color(0xFFC8CBD0),
+                    color: AppTheme.textMuted,
                   ),
                 ),
               ),
@@ -358,7 +358,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     // Open state: border wraps input + dropdown
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFF1D1D1F), width: 2),
+        border: Border.all(color: AppTheme.primary, width: 2),
         borderRadius: BorderRadius.circular(8),
       ),
       clipBehavior: Clip.antiAlias,
@@ -366,7 +366,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         mainAxisSize: MainAxisSize.min,
         children: [
           inputRow(),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+          const Divider(height: 1, thickness: 1, color: AppTheme.border),
           Container(
             color: Colors.white,
             constraints: const BoxConstraints(maxHeight: 220),
@@ -395,7 +395,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   onTap: () => controller.selectCwd(cwd),
                   child: Container(
                     color: isFirst
-                        ? const Color(0xFFF0F1F4)
+                        ? AppTheme.hoverBg
                         : Colors.transparent,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 8),
@@ -413,7 +413,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                                 style: AppFonts.code(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF1D1D1F),
+                                  color: AppTheme.textPrimary,
                                 ),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -463,7 +463,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       height: 80,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDEEF1),
+        color: AppTheme.inputFill,
         borderRadius: BorderRadius.circular(8),
       ),
       child: TextField(
@@ -478,7 +478,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         style: GoogleFonts.inter(
           fontSize: 14,
           fontWeight: FontWeight.normal,
-          color: const Color(0xFF1D1D1F),
+          color: AppTheme.textPrimary,
         ),
         decoration: InputDecoration(
           isDense: true,
@@ -491,7 +491,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           hintStyle: GoogleFonts.inter(
             fontSize: 14,
             fontWeight: FontWeight.normal,
-            color: const Color(0xFFC8CBD0),
+            color: AppTheme.textMuted,
           ),
         ),
       ),
@@ -512,8 +512,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         decoration: BoxDecoration(
           color: controller.selectedMachine.value != null &&
                   !controller.isLoading.value
-              ? const Color(0xFF1D1D1F)
-              : const Color(0xFFE5E7EB),
+              ? AppTheme.primary
+              : AppTheme.border,
           borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
@@ -533,7 +533,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   fontWeight: FontWeight.w600,
                   color: controller.selectedMachine.value != null
                       ? Colors.white
-                      : const Color(0xFF808690),
+                      : AppTheme.textTertiary,
                 ),
               ),
       ),

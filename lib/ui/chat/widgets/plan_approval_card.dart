@@ -49,7 +49,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         border: const Border(
-          left: BorderSide(color: Color(0xFF3B82F6), width: 3),
+          left: BorderSide(color: AppTheme.planAccent, width: 3),
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -62,7 +62,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
             child: Row(
               children: [
                 const Icon(LucideIcons.fileText,
-                    color: Color(0xFF3B82F6), size: 16),
+                    color: AppTheme.planAccent, size: 16),
                 const SizedBox(width: 8),
                 Text(
                   'Review Plan',
@@ -214,7 +214,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
         decoration: BoxDecoration(
-          color: const Color(0xFF1D1D1F),
+          color: AppTheme.primary,
           borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
@@ -270,7 +270,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
           style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: const Color(0xFF9DA1A8),
+            color: AppTheme.textMetadata,
           ),
           textAlign: TextAlign.center,
         ),

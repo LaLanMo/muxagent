@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../config/theme.dart';
+
 import '../common/pill_tab_bar.dart';
 import 'active_tab.dart';
 import 'history_tab.dart';
@@ -13,7 +15,7 @@ class MainShell extends GetView<MainShellViewModel> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         bottom: false,
         child: Obx(

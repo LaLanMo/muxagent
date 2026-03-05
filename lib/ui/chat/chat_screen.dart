@@ -166,7 +166,7 @@ class ChatScreen extends GetView<ChatViewModel> {
         height: 56,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: const BoxDecoration(
-          color: Color(0xFFFFFFFF),
+          color: AppTheme.surface,
           border: Border(bottom: BorderSide(color: AppTheme.border)),
         ),
         child: Row(
@@ -277,15 +277,15 @@ class ChatScreen extends GetView<ChatViewModel> {
 
     switch (mode) {
       case PermissionMode.bypassPermissions:
-        bgColor = const Color(0xFFFEF2F2);
+        bgColor = AppTheme.modeSkipBg;
       case PermissionMode.plan:
-        bgColor = const Color(0xFFF3E8FF);
+        bgColor = AppTheme.modePlanBg;
       case PermissionMode.acceptEdits:
-        bgColor = const Color(0xFFEFF6FF);
+        bgColor = AppTheme.modeAcceptBg;
       case PermissionMode.dontAsk:
         bgColor = const Color(0xFFFFFBEB);
       default:
-        bgColor = const Color(0xFFF5F5F5);
+        bgColor = AppTheme.idleBg;
     }
 
     return Container(
@@ -441,11 +441,11 @@ class ChatScreen extends GetView<ChatViewModel> {
 
     final bool isDisconnected = state == ConnState.disconnected;
     final Color color = isDisconnected
-        ? const Color(0xFFCC4444)
-        : const Color(0xFFE07B54);
+        ? AppTheme.statusDisconnected
+        : AppTheme.statusConnecting;
     final Color bg = isDisconnected
-        ? const Color(0xFFFFF0F0)
-        : const Color(0xFFFFF8E1);
+        ? AppTheme.disconnectedBg
+        : AppTheme.warningBg;
     final IconData icon = isDisconnected
         ? LucideIcons.wifiOff
         : LucideIcons.loader;
@@ -616,7 +616,7 @@ class _PlanPanelState extends State<_PlanPanel> {
       textColor = AppTheme.textTertiary;
       fontWeight = FontWeight.normal;
     } else if (entry.isInProgress) {
-      icon = const Icon(LucideIcons.loader, size: 14, color: Color(0xFFE07B54));
+      icon = const Icon(LucideIcons.loader, size: 14, color: AppTheme.statusConnecting);
       textColor = AppTheme.textPrimary;
       fontWeight = FontWeight.w500;
     } else {

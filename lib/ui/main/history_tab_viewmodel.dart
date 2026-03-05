@@ -53,7 +53,7 @@ class HistoryTabViewModel extends GetxController {
       }).toList();
     }
 
-    filtered.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     // Group by date
     final groups = <String, List<AgentSession>>{};
@@ -63,9 +63,9 @@ class HistoryTabViewModel extends GetxController {
 
     for (final session in filtered) {
       final dt = DateTime(
-        session.updatedAt.year,
-        session.updatedAt.month,
-        session.updatedAt.day,
+        session.createdAt.year,
+        session.createdAt.month,
+        session.createdAt.day,
       );
       String label;
       if (dt == today) {
@@ -73,9 +73,9 @@ class HistoryTabViewModel extends GetxController {
       } else if (dt == yesterday) {
         label = 'Yesterday';
       } else if (dt.year == now.year) {
-        label = _formatDate(session.updatedAt);
+        label = _formatDate(session.createdAt);
       } else {
-        label = _formatDateWithYear(session.updatedAt);
+        label = _formatDateWithYear(session.createdAt);
       }
       groups.putIfAbsent(label, () => []).add(session);
     }

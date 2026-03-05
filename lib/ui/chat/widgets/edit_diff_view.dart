@@ -6,9 +6,9 @@ import '../../../utils/diff_utils.dart';
 
 const _kRemovedBg = Color(0x12EF4444);
 const _kAddedBg = Color(0x1222C55E);
-const _kRemovedAccent = Color(0xFFEF4444);
-const _kAddedAccent = Color(0xFF22C55E);
-const _kSeparatorColor = Color(0xFFE5E7EB);
+const _kRemovedAccent = AppTheme.diffRemoved;
+const _kAddedAccent = AppTheme.diffAdded;
+const _kSeparatorColor = AppTheme.border;
 const _kRemovedTokenBg = Color(0x30EF4444);
 const _kAddedTokenBg = Color(0x3022C55E);
 
@@ -102,7 +102,7 @@ class _EditDiffViewState extends State<EditDiffView> {
     }
 
     final bgColor =
-        widget.dark ? const Color(0xFF1D1D1F) : const Color(0xFFF8F9FA);
+        widget.dark ? AppTheme.codeBg : const Color(0xFFF8F9FA);
     final contextTextColor =
         widget.dark ? const Color(0xFFB0B0B0) : AppTheme.textSecondary;
 

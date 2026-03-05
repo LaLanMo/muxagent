@@ -12,7 +12,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -28,7 +28,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1D1D1F),
+                        color: AppTheme.primary,
                         borderRadius: BorderRadius.circular(40),
                       ),
                       alignment: Alignment.center,
@@ -44,7 +44,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                       style: GoogleFonts.inter(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF1D1D1F),
+                        color: AppTheme.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -55,7 +55,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         fontWeight: FontWeight.normal,
-                        color: const Color(0xFF6B6F76),
+                        color: AppTheme.textSecondary,
                         height: 1.5,
                       ),
                     ),
@@ -75,7 +75,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                       width: double.infinity,
                       height: 52,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1D1D1F),
+                        color: AppTheme.primary,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       alignment: Alignment.center,
@@ -107,7 +107,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                     style: GoogleFonts.inter(
                       fontSize: 13,
                       fontWeight: FontWeight.normal,
-                      color: const Color(0xFF808690),
+                      color: AppTheme.textTertiary,
                       height: 1.5,
                     ),
                   ),
@@ -132,7 +132,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                           style: GoogleFonts.inter(
                             fontSize: 13,
                             fontWeight: FontWeight.normal,
-                            color: const Color(0xFF808690),
+                            color: AppTheme.textTertiary,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -152,7 +152,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                     height: 48,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFEDEEF1),
+                      color: AppTheme.inputFill,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -160,7 +160,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                       children: [
                         // Link icon 18x18 #808690
                         const Icon(LucideIcons.link,
-                            size: 18, color: Color(0xFF808690)),
+                            size: 18, color: AppTheme.textTertiary),
                         const SizedBox(width: 8),
                         // Placeholder: "Enter server URL...", Inter 14 normal #C8CBD0
                         Expanded(
@@ -174,7 +174,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.normal,
-                              color: const Color(0xFF1D1D1F),
+                              color: AppTheme.textPrimary,
                             ),
                             decoration: InputDecoration(
                               isDense: true,
@@ -186,7 +186,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                               hintStyle: GoogleFonts.inter(
                                 fontSize: 14,
                                 fontWeight: FontWeight.normal,
-                                color: const Color(0xFFC8CBD0),
+                                color: AppTheme.textMuted,
                               ),
                               errorText: controller.urlError.value,
                               errorStyle: GoogleFonts.inter(

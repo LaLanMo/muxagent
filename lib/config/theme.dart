@@ -13,6 +13,15 @@ class AppTheme {
   static const inputFill = Color(0xFFEDEEF1);
   static const codeBg = Color(0xFF1D1D1F);
 
+  // Text variants
+  static const textMuted = Color(0xFFC8CBD0);
+  static const textMetadata = Color(0xFF9DA1A8);
+
+  // Border / surface variants
+  static const chipBorder = Color(0xFFE0E2E6);
+  static const selectedBg = Color(0xFFEBEBEC);
+  static const hoverBg = Color(0xFFF0F1F4);
+
   // Status colors
   static const warning = Color(0xFFE8B730);
   static const warningBg = Color(0xFFFFF8E1);
@@ -22,6 +31,33 @@ class AppTheme {
   static const errorText = Color(0xFFE5484D);
   static const errorBg = Color(0xFFFDE8E8);
   static const failedRed = Color(0xFFEF4444);
+  static const statusConnecting = Color(0xFFE07B54);
+  static const statusDisconnected = Color(0xFFCC4444);
+  static const disconnectedBg = Color(0xFFFFF0F0);
+
+  // Feature accent
+  static const planAccent = Color(0xFF3B82F6);
+  static const subagentAccent = Color(0xFF7C6EF6);
+
+  // Permission mode
+  static const modeSkipBg = Color(0xFFFEF2F2);
+  static const modePlanBg = Color(0xFFF3E8FF);
+  static const modeAcceptBg = Color(0xFFEFF6FF);
+  static const modePlanText = Color(0xFF7C3AED);
+  static const modeAcceptText = Color(0xFF2563EB);
+  static const modeSkipDot = Color(0xFFF87171);
+
+  // Code block
+  static const codeHeaderBg = Color(0xFF2A2A2A);
+  static const codeText = Color(0xFFE0E2E6);
+
+  // Diff
+  static const diffRemoved = Color(0xFFEF4444);
+  static const diffAdded = Color(0xFF22C55E);
+
+  // Voice / recording
+  static const recordRed = Color(0xFFFF3B30);
+  static const waveformGreen = Color(0xFF34C759);
 
   static ThemeData light() {
     final textTheme = _textTheme();

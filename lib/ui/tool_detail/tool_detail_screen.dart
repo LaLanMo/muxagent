@@ -209,7 +209,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
         // Summary row
         Row(
           children: [
-            const Icon(LucideIcons.layers, size: 16, color: Color(0xFF7C6EF6)),
+            const Icon(LucideIcons.layers, size: 16, color: AppTheme.subagentAccent),
             const SizedBox(width: 8),
             Text(
               '$count $noun completed',

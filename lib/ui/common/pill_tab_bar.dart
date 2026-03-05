@@ -40,7 +40,7 @@ class PillTabBar extends StatelessWidget {
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFFE0E2E6)),
+              border: Border.all(color: AppTheme.chipBorder),
             ),
             child: Row(
               children: List.generate(_tabs.length, (i) {
@@ -56,7 +56,7 @@ class PillTabBar extends StatelessWidget {
                     child: Container(
                       decoration: BoxDecoration(
                         color: selected
-                            ? const Color(0xFFEBEBEC)
+                            ? AppTheme.selectedBg
                             : Colors.transparent,
                         borderRadius: BorderRadius.circular(22),
                       ),
@@ -83,13 +83,13 @@ class PillTabBar extends StatelessWidget {
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: const Color(0xFFE0E2E6)),
+                border: Border.all(color: AppTheme.chipBorder),
               ),
               child: const Center(
                 child: Icon(
                   LucideIcons.pencil,
                   size: 22,
-                  color: Color(0xFF1D1D1F),
+                  color: AppTheme.primary,
                 ),
               ),
             ),
@@ -103,7 +103,7 @@ class PillTabBar extends StatelessWidget {
     final icon = Icon(
       tab.icon,
       size: 22,
-      color: const Color(0xFF1D1D1F),
+      color: AppTheme.primary,
     );
 
     // Show badge on Active tab (index 0)

@@ -85,7 +85,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
           borderRadius: BorderRadius.circular(16),
           border: selected
               ? null
-              : Border.all(color: const Color(0xFFE0E2E6)),
+              : Border.all(color: AppTheme.chipBorder),
         ),
         child: Text(
           label,
@@ -224,17 +224,18 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 2),
-                  // Machine + Duration: Inter 12px normal #C8CBD0
-                  Text(
-                    _buildMachineDuration(session, machineId),
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                      color: const Color(0xFFC8CBD0),
+                  // Machine name: Inter 12px normal #C8CBD0
+                  if (machineId.isNotEmpty)
+                    Text(
+                      shell.machineDisplayName(machineId),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: AppTheme.textMuted,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ],
               ),
             ),
@@ -263,7 +264,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         dotColor = AppTheme.errorText;
       case SessionStatus.idle:
       case SessionStatus.done:
-        dotColor = const Color(0xFFC8CBD0);
+        dotColor = AppTheme.textMuted;
     }
 
     return Container(
@@ -277,29 +278,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     );
   }
 
-  String _buildMachineDuration(AgentSession session, String machineId) {
-    final machineName = machineId.isNotEmpty
-        ? shell.machineDisplayName(machineId)
-        : '';
-    final duration = _formatDuration(session.createdAt, session.updatedAt);
-
-    if (machineName.isNotEmpty && duration.isNotEmpty) {
-      return '$machineName \u00B7 $duration';
-    } else if (machineName.isNotEmpty) {
-      return machineName;
-    } else if (duration.isNotEmpty) {
-      return duration;
-    }
-    return '';
-  }
-
-  String _formatDuration(DateTime start, DateTime end) {
-    final diff = end.difference(start);
-    if (diff.inSeconds < 60) return '${diff.inSeconds}s';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m';
-    if (diff.inHours < 24) return '${diff.inHours}h';
-    return '${diff.inDays}d';
-  }
 }
 
 class _ListItem {
