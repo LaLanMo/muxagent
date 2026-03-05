@@ -9,6 +9,7 @@ import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/paired_machine.dart';
+import '../../domain/permission_mode.dart';
 import '../../domain/session.dart';
 import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
@@ -24,6 +25,7 @@ class NewSessionViewModel extends GetxController {
   final isLoading = false.obs;
   final activeSessionIds = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
+  final selectedMode = PermissionMode.bypassPermissions.obs;
 
   final cwdController = TextEditingController();
   final promptController = TextEditingController();
@@ -108,6 +110,8 @@ class NewSessionViewModel extends GetxController {
     selectedMachine.value = machine;
   }
 
+  void selectMode(PermissionMode mode) => selectedMode.value = mode;
+
   Future<void> _loadRecentCwds() async {
     final machineId = selectedMachine.value?.machineId;
     final list = await SessionDatabase.recentCwds(machineId: machineId);
@@ -160,7 +164,10 @@ class NewSessionViewModel extends GetxController {
           'Working directory must be an absolute path or start with ~',
         );
       }
-      final createParams = <String, dynamic>{'cwd': cwd};
+      final createParams = <String, dynamic>{
+        'cwd': cwd,
+        'permissionMode': selectedMode.value.id,
+      };
 
       final createResult = await _wsRepo.callRpc(
         machineId: machine.machineId,
@@ -172,6 +179,7 @@ class NewSessionViewModel extends GetxController {
       if (sessionId == null || sessionId.isEmpty) {
         throw Exception('Failed to create session: no sessionId returned');
       }
+      final runtime = createResult['runtime'] as String? ?? '';
 
       // Register session in EventRepository
       _eventRepo.registerSession(
@@ -181,7 +189,12 @@ class NewSessionViewModel extends GetxController {
           status: SessionStatus.idle,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
-          metadata: {'machineId': machine.machineId, 'cwd': cwd},
+          metadata: {
+            'machineId': machine.machineId,
+            'runtime': runtime,
+            'cwd': cwd,
+            'mode': selectedMode.value.id,
+          },
         ),
       );
 
@@ -194,6 +207,7 @@ class NewSessionViewModel extends GetxController {
           'machineId': machine.machineId,
           'cwd': cwd,
           'sessionTitle': '',
+          'isNewSession': true,
           if (prompt.isNotEmpty) 'initialPrompt': prompt,
         },
       );

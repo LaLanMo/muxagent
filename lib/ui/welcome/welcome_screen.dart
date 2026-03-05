@@ -168,6 +168,9 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                             controller: controller.urlController,
                             onChanged: (_) => controller.clearUrlError(),
                             onSubmitted: (_) => controller.onManualConnect(),
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            keyboardType: TextInputType.url,
                             style: GoogleFonts.inter(
                               fontSize: 14,
                               fontWeight: FontWeight.normal,

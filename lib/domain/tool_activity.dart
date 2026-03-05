@@ -1,4 +1,5 @@
 import 'enums.dart';
+import 'event.dart';
 
 class ToolActivity {
   final String id;
@@ -10,6 +11,8 @@ class ToolActivity {
   String? output;
   String? error;
   Map<String, dynamic>? metadata;
+  List<ToolDiff>? diffs;
+  List<ToolLocation>? locations;
 
   ToolActivity({
     required this.id,
@@ -21,6 +24,8 @@ class ToolActivity {
     this.output,
     this.error,
     this.metadata,
+    this.diffs,
+    this.locations,
   });
 
   factory ToolActivity.fromJson(Map<String, dynamic> json) {
@@ -59,4 +64,14 @@ class ToolActivity {
         if (error != null) 'error': error,
         if (metadata != null) 'metadata': metadata,
       };
+}
+
+extension ToolActivityMeta on ToolActivity {
+  String? get parentToolCallId =>
+      metadata?['claudeCode']?['parentToolUseId'] as String?;
+
+  String? get claudeToolName =>
+      metadata?['claudeCode']?['toolName'] as String?;
+
+  bool get isChildTool => parentToolCallId != null;
 }

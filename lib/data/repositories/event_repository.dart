@@ -23,8 +23,8 @@ class EventRepository {
   /// Pending approval requests, keyed by requestId.
   final pendingApprovals = <String, ApprovalRequest>{}.obs;
 
-  /// Last seen event sequence number (for resync after reconnect).
-  int _lastSeq = 0;
+  /// Last seen event sequence number per machine (for resync after reconnect).
+  final Map<String, int> _lastSeqByMachine = {};
 
   EventRepository({required WsSessionRepository wsRepo}) : _wsRepo = wsRepo {
     _sub = _wsRepo.events.listen(_onWsEvent);
@@ -35,7 +35,7 @@ class EventRepository {
   /// Emits only when session metadata changes (status, runFinished, runFailed, register).
   Stream<void> get sessionsChanged => _sessionsChangedController.stream;
 
-  int get lastSeq => _lastSeq;
+  int lastSeqFor(String machineId) => _lastSeqByMachine[machineId] ?? 0;
 
   /// Load all sessions from SQLite into memory. Call once at startup.
   Future<void> init() async {
@@ -55,9 +55,9 @@ class EventRepository {
     final event = AgentEvent.fromJson(payload, machineId);
     if (event.type == null) return;
 
-    // Track sequence number for resync
-    if (event.seq > _lastSeq) {
-      _lastSeq = event.seq;
+    // Track sequence number per machine for resync
+    if (machineId.isNotEmpty && event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
+      _lastSeqByMachine[machineId] = event.seq;
     }
 
     _processEvent(event);
@@ -180,6 +180,19 @@ class EventRepository {
           });
           _sessionsChangedController.add(null);
         }
+      case EventType.modeChanged:
+        final existing = sessions[sessionId];
+        if (existing != null && event.data != null) {
+          final modeId = event.data!['currentModeId'] as String?;
+          if (modeId != null) {
+            final metadata = <String, dynamic>{...?existing.metadata};
+            metadata['mode'] = modeId;
+            existing.metadata = metadata;
+            existing.updatedAt = event.at;
+            SessionDatabase.updateFields(sessionId, {'mode': modeId});
+            _sessionsChangedController.add(null);
+          }
+        }
       case EventType.messageDelta:
       case EventType.messageFinal:
       case EventType.toolStarted:
@@ -198,13 +211,14 @@ class EventRepository {
 
   /// Resync missed events after reconnect. Call after session re-init.
   Future<void> resync(String machineId) async {
-    if (_lastSeq == 0) return; // No events seen yet, nothing to resync
+    final lastSeq = _lastSeqByMachine[machineId] ?? 0;
+    if (lastSeq == 0) return; // No events seen yet, nothing to resync
 
     try {
       final result = await _wsRepo.callRpc(
         machineId: machineId,
         method: 'events.resync',
-        params: {'lastSeq': _lastSeq},
+        params: {'lastSeq': lastSeq},
       );
 
       final events = result['events'] as List<dynamic>? ?? [];
@@ -212,8 +226,8 @@ class EventRepository {
         if (eventJson is Map<String, dynamic>) {
           final event = AgentEvent.fromJson(eventJson, machineId);
           if (event.type == null) continue;
-          if (event.seq > _lastSeq) {
-            _lastSeq = event.seq;
+          if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
+            _lastSeqByMachine[machineId] = event.seq;
           }
           _processEvent(event);
         }
@@ -229,6 +243,68 @@ class EventRepository {
       }
     } catch (e) {
       debugPrint('[EventRepo] resync failed: $e');
+    }
+  }
+
+  /// Reconcile stale running/waitingApproval sessions after reconnect.
+  /// Uses session.resolve to check which sessions the daemon still knows about.
+  /// Sessions returned → idle (exists but not running).
+  /// Sessions NOT returned → done (unknown to this daemon instance).
+  Future<void> reconcileSessionStatus(String machineId) async {
+    // Collect all running/waitingApproval sessions for this machine
+    final stale = sessions.values.where((s) {
+      final mid = s.metadata?['machineId'] as String? ?? '';
+      return mid == machineId &&
+          (s.status == SessionStatus.running ||
+           s.status == SessionStatus.waitingApproval);
+    }).toList();
+
+    if (stale.isEmpty) return;
+
+    try {
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'session.resolve',
+        params: {'sessionIds': stale.map((s) => s.id).toList()},
+      );
+
+      final list = result['sessions'] as List<dynamic>? ?? [];
+      final resolvedIds = <String>{};
+      for (final item in list) {
+        if (item is Map) {
+          final id = (item['sessionId'] as String?) ?? '';
+          if (id.isNotEmpty) resolvedIds.add(id);
+        }
+      }
+
+      var changed = false;
+      for (final session in stale) {
+        // Active sessions briefly marked idle will self-correct
+        // when runFinished/runFailed events arrive.
+        final newStatus = resolvedIds.contains(session.id)
+            ? SessionStatus.idle   // daemon knows it, but it's at rest
+            : SessionStatus.done;  // daemon doesn't know it (previous lifetime)
+
+        if (session.status != newStatus) {
+          session.status = newStatus;
+          session.updatedAt = DateTime.now();
+          await SessionDatabase.updateFields(session.id, {
+            'status': newStatus.value,
+            'updated_at': session.updatedAt.toIso8601String(),
+          });
+          // Clear stale approvals for this session
+          pendingApprovals.removeWhere(
+            (_, a) => a.sessionId == session.id,
+          );
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        _sessionsChangedController.add(null);
+      }
+    } catch (e) {
+      debugPrint('[EventRepo] reconcileSessionStatus failed: $e');
     }
   }
 
@@ -262,10 +338,14 @@ class EventRepository {
     }
   }
 
-  /// Resolve missing session titles via daemon-side opencode.db lookup.
+  /// Resolve missing session titles via daemon-side session/list.
+  /// When [runtime] is provided, only sessions matching that runtime are
+  /// included in the RPC call. Sessions from a different runtime would not
+  /// be resolvable by the current daemon anyway.
   Future<void> backfillMissingTitles(
     String machineId, {
     List<String>? sessionIds,
+    String? runtime,
   }) async {
     try {
       final targetIds =
@@ -274,7 +354,14 @@ class EventRepository {
               .where((s) {
                 final sameMachine =
                     (s.metadata?['machineId'] as String? ?? '') == machineId;
-                return sameMachine && s.title.isEmpty;
+                if (!sameMachine || s.title.isNotEmpty) return false;
+                // Skip sessions from a different runtime — the daemon can't
+                // resolve them.
+                if (runtime != null && runtime.isNotEmpty) {
+                  final sr = s.metadata?['runtime'] as String? ?? '';
+                  if (sr.isNotEmpty && sr != runtime) return false;
+                }
+                return true;
               })
               .map((s) => s.id)
               .toList();

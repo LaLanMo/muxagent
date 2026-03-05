@@ -9,7 +9,9 @@ import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/message.dart';
+import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
+import '../../utils/app_toast.dart';
 import 'chat_state.dart';
 
 class ChatViewModel extends GetxController {
@@ -25,6 +27,7 @@ class ChatViewModel extends GetxController {
   final approvals = <String, ApprovalRequest>{}.obs;
   final planEntries = <PlanEntry>[].obs;
   final sessionStatus = SessionStatus.idle.obs;
+  final currentMode = Rxn<PermissionMode>();
   final connState = ConnState.connected.obs;
   final sessionTitle = ''.obs;
   final isLoading = true.obs;
@@ -54,6 +57,7 @@ class ChatViewModel extends GetxController {
     final existing = _eventRepo.sessionById(sessionId);
     if (existing != null) {
       sessionStatus.value = existing.status;
+      currentMode.value = PermissionMode.fromId(existing.mode);
     }
 
     scrollController.addListener(_onScrollChanged);
@@ -68,12 +72,23 @@ class ChatViewModel extends GetxController {
     _refreshApprovals();
 
     final initialPrompt = args['initialPrompt'] as String?;
-    _loadSession().then((_) {
-      _scrollToBottom();
+    final isNewSession = args['isNewSession'] as bool? ?? false;
+
+    if (isNewSession) {
+      // New sessions are already created via session.create — skip load.
+      isLoading.value = false;
+      _scheduleScrollStateSync();
       if (initialPrompt != null && initialPrompt.isNotEmpty) {
         sendMessage(initialPrompt);
       }
-    });
+    } else {
+      _loadSession().then((_) {
+        _scrollToBottom();
+        if (initialPrompt != null && initialPrompt.isNotEmpty) {
+          sendMessage(initialPrompt);
+        }
+      });
+    }
   }
 
   void _subscribeEvents() {
@@ -87,10 +102,16 @@ class ChatViewModel extends GetxController {
       if (cwd.isEmpty) {
         throw Exception('missing cwd for session.load');
       }
+      final mode = _eventRepo.sessionById(sessionId)?.mode ?? '';
+      final params = <String, dynamic>{
+        'sessionId': sessionId,
+        'cwd': cwd,
+        if (mode.isNotEmpty && mode != 'default') 'permissionMode': mode,
+      };
       await _wsRepo.callRpc(
         machineId: machineId,
         method: 'session.load',
-        params: {'sessionId': sessionId, 'cwd': cwd},
+        params: params,
       );
     } catch (e) {
       debugPrint('Failed to load session: $e');
@@ -101,13 +122,6 @@ class ChatViewModel extends GetxController {
   }
 
   void _handleEvent(AgentEvent event) {
-    debugPrint(
-      '[Event] ${event.type?.value ?? 'null'}'
-      '${event.messagePart != null ? ' part=${event.messagePart!.partType}' : ''}'
-      '${event.tool != null ? ' tool=${event.tool!.name}(${event.tool!.status.value})' : ''}'
-      '${event.data != null ? ' data=${event.data}' : ''}',
-    );
-
     switch (event.type) {
       case EventType.reasoning:
       case EventType.messageDelta:
@@ -133,10 +147,6 @@ class ChatViewModel extends GetxController {
 
       case EventType.approvalRequested:
         if (event.approval != null) {
-          debugPrint(
-            '[Approval] tool=${event.approval!.toolName} '
-            'options=${event.approval!.options.map((o) => '${o.name}(${o.kind}:${o.optionId})').toList()}',
-          );
           chatState.addApproval(event.approval!);
           _refreshApprovals();
           sessionStatus.value = SessionStatus.waitingApproval;
@@ -161,6 +171,17 @@ class ChatViewModel extends GetxController {
 
       case EventType.runFailed:
         sessionStatus.value = SessionStatus.error;
+        if (event.error != null && event.error!.message.isNotEmpty) {
+          final errorMsg = Message(
+            id: 'error-${event.at.millisecondsSinceEpoch}',
+            sessionId: sessionId,
+            role: MessageRole.agent,
+            parts: [MessagePart(type: PartType.text, text: event.error!.message)],
+            createdAt: event.at,
+          );
+          chatState.finalizeMessage(errorMsg);
+          _refreshMessages();
+        }
 
       case EventType.planUpdated:
         final rawEntries = event.data?['entries'] as List?;
@@ -171,6 +192,10 @@ class ChatViewModel extends GetxController {
           chatState.updatePlan(entries);
           planEntries.value = entries;
         }
+
+      case EventType.modeChanged:
+        final modeId = event.data?['currentModeId'] as String?;
+        currentMode.value = PermissionMode.fromId(modeId);
 
       case EventType.connectionState:
         final state = event.data?['state'] as String? ?? 'connected';
@@ -329,28 +354,25 @@ class ChatViewModel extends GetxController {
     sessionStatus.value = SessionStatus.running;
     _eventRepo.setSessionStatus(sessionId, SessionStatus.running);
 
-    // Fire-and-forget: the prompt RPC blocks until the agent finishes,
-    // but the UI is event-driven (messageDelta, runFinished, etc.).
-    _wsRepo
-        .callRpc(
-          machineId: machineId,
-          method: 'session.prompt',
-          params: {'sessionId': sessionId, 'text': trimmed},
-        )
-        .then((_) {
-          // Prompt completed; status is updated via events.
-        })
-        .catchError((e) {
-          debugPrint('Prompt RPC error (non-fatal): $e');
-        });
+    // Await ACK from daemon — prompt runs asynchronously on daemon side,
+    // so this returns quickly. Failure means daemon rejected the request.
+    try {
+      await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'session.prompt',
+        params: {'sessionId': sessionId, 'text': trimmed},
+      );
+    } catch (e) {
+      debugPrint('Prompt rejected: $e');
+      // ACK failure = daemon didn't start the prompt = no events coming
+      sessionStatus.value = SessionStatus.error;
+      _eventRepo.setSessionStatus(sessionId, SessionStatus.error);
+    }
   }
 
   Future<void> replyApproval(String requestId, String optionId) async {
-    debugPrint(
-      '[ChatVM] replyApproval requestId=$requestId optionId=$optionId',
-    );
     try {
-      final result = await _wsRepo.callRpc(
+      await _wsRepo.callRpc(
         machineId: machineId,
         method: 'approval.reply',
         params: {
@@ -359,7 +381,6 @@ class ChatViewModel extends GetxController {
           'optionId': optionId,
         },
       );
-      debugPrint('[ChatVM] replyApproval success: $result');
       chatState.resolveApproval(requestId);
       _refreshApprovals();
       sessionStatus.value = SessionStatus.running;
@@ -370,6 +391,11 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> cancelSession() async {
+    // Fast path: WS disconnected, skip RPC
+    if (!_wsRepo.isConnected) {
+      _resetSessionLocally();
+      return;
+    }
     try {
       await _wsRepo.callRpc(
         machineId: machineId,
@@ -378,7 +404,24 @@ class ChatViewModel extends GetxController {
       );
     } catch (e) {
       debugPrint('Failed to cancel session: $e');
+      _resetSessionLocally();
     }
+  }
+
+  void _resetSessionLocally() {
+    // Guard: only reset non-terminal status to avoid overwriting done/error
+    if (sessionStatus.value == SessionStatus.running ||
+        sessionStatus.value == SessionStatus.waitingApproval) {
+      sessionStatus.value = SessionStatus.idle;
+      _eventRepo.setSessionStatus(sessionId, SessionStatus.idle);
+    }
+    // Clear stale approvals to avoid badge count and ghost approval cards
+    _eventRepo.pendingApprovals.removeWhere(
+      (_, approval) => approval.sessionId == sessionId,
+    );
+    chatState.approvals.clear();
+    _refreshApprovals();
+    AppToast.show('Session stopped locally');
   }
 
   @override

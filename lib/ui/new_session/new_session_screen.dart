@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
 import '../../config/theme.dart';
+import '../../domain/permission_mode.dart';
 import '../common/ui_effect_listener.dart';
 import 'new_session_viewmodel.dart';
 
@@ -69,6 +70,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     _buildFieldLabel('Working Directory'),
                     const SizedBox(height: 8),
                     _buildDirectorySection(),
+                    const SizedBox(height: 24),
+
+                    // Permission Mode Section: gap 8, vertical
+                    _buildFieldLabel('Permission Mode'),
+                    const SizedBox(height: 8),
+                    _buildPermissionModeGrid(),
                     const SizedBox(height: 24),
 
                     // Prompt Section: gap 8, vertical
@@ -148,6 +155,71 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             // Chevron-right 16x16 #C8CBD0
             const Icon(LucideIcons.chevronRight,
                 size: 16, color: Color(0xFFC8CBD0)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Permission mode 2x2 grid
+  Widget _buildPermissionModeGrid() {
+    const modes = [
+      PermissionMode.bypassPermissions,
+      PermissionMode.defaultMode,
+      PermissionMode.acceptEdits,
+      PermissionMode.plan,
+    ];
+
+    return Column(
+      children: [
+        for (var row = 0; row < 2; row++)
+          Padding(
+            padding: EdgeInsets.only(top: row > 0 ? 8 : 0),
+            child: Row(
+              children: [
+                for (var col = 0; col < 2; col++) ...[
+                  if (col > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: _buildModeChip(modes[row * 2 + col]),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildModeChip(PermissionMode mode) {
+    final isSelected = controller.selectedMode.value == mode;
+    return GestureDetector(
+      onTap: () => controller.selectMode(mode),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF1D1D1F) : const Color(0xFFEDEEF1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: BoxDecoration(
+                color: mode.color,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              mode.label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected ? Colors.white : const Color(0xFF6B6F76),
+              ),
+            ),
           ],
         ),
       ),
@@ -252,6 +324,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               child: TextField(
                 controller: controller.cwdController,
                 focusNode: controller.cwdFocusNode,
+                autocorrect: false,
+                enableSuggestions: false,
+                smartDashesType: SmartDashesType.disabled,
+                smartQuotesType: SmartQuotesType.disabled,
                 style: AppFonts.code(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
@@ -395,6 +471,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         maxLines: null,
         expands: true,
         textAlignVertical: TextAlignVertical.top,
+        autocorrect: false,
+        enableSuggestions: false,
+        smartDashesType: SmartDashesType.disabled,
+        smartQuotesType: SmartQuotesType.disabled,
         style: GoogleFonts.inter(
           fontSize: 14,
           fontWeight: FontWeight.normal,

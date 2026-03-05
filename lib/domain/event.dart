@@ -34,6 +34,36 @@ class MessagePartEvent {
   }
 }
 
+class ToolDiff {
+  final String path;
+  final String? oldText;
+  final String newText;
+
+  ToolDiff({required this.path, this.oldText, required this.newText});
+
+  factory ToolDiff.fromJson(Map<String, dynamic> json) {
+    return ToolDiff(
+      path: json['path'] as String? ?? '',
+      oldText: json['oldText'] as String?,
+      newText: json['newText'] as String? ?? '',
+    );
+  }
+}
+
+class ToolLocation {
+  final String path;
+  final int? line;
+
+  ToolLocation({required this.path, this.line});
+
+  factory ToolLocation.fromJson(Map<String, dynamic> json) {
+    return ToolLocation(
+      path: json['path'] as String? ?? '',
+      line: (json['line'] as num?)?.toInt(),
+    );
+  }
+}
+
 class ToolEvent {
   final String partId;
   final String messageId;
@@ -45,6 +75,9 @@ class ToolEvent {
   final Map<String, dynamic>? input;
   final String? output;
   final String? error;
+  final List<ToolDiff>? diffs;
+  final Map<String, dynamic>? metadata;
+  final List<ToolLocation>? locations;
 
   ToolEvent({
     required this.partId,
@@ -57,9 +90,14 @@ class ToolEvent {
     this.input,
     this.output,
     this.error,
+    this.diffs,
+    this.metadata,
+    this.locations,
   });
 
   factory ToolEvent.fromJson(Map<String, dynamic> json) {
+    final diffsJson = json['diffs'] as List<dynamic>?;
+    final locsJson = json['locations'] as List<dynamic>?;
     return ToolEvent(
       partId: json['partId'] as String? ?? '',
       messageId: json['messageId'] as String? ?? '',
@@ -71,6 +109,13 @@ class ToolEvent {
       input: json['input'] as Map<String, dynamic>?,
       output: json['output'] as String?,
       error: json['error'] as String?,
+      diffs: diffsJson
+          ?.map((e) => ToolDiff.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      metadata: json['metadata'] as Map<String, dynamic>?,
+      locations: locsJson
+          ?.map((e) => ToolLocation.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

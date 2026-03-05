@@ -47,7 +47,8 @@ enum EventType {
   runFailed('run.failed'),
   runFinished('run.finished'),
   connectionState('connection.state'),
-  planUpdated('plan.updated');
+  planUpdated('plan.updated'),
+  modeChanged('mode.changed');
 
   const EventType(this.value);
   final String value;
@@ -100,6 +101,10 @@ enum ToolKind {
   edit('edit'),
   search('search'),
   read('read'),
+  delete('delete'),
+  move('move'),
+  think('think'),
+  switchMode('switch_mode'),
   other('other');
 
   const ToolKind(this.value);

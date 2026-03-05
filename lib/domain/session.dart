@@ -11,6 +11,9 @@ class AgentSession {
   DateTime updatedAt;
   Map<String, dynamic>? metadata;
 
+  /// Current ACP session mode string (e.g. "default", "plan", "acceptEdits").
+  String? get mode => metadata?['mode'] as String?;
+
   AgentSession({
     required this.id,
     this.title = '',

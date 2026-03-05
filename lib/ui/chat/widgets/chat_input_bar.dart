@@ -46,6 +46,10 @@ class ChatInputBar extends StatelessWidget {
                 child: TextField(
                   controller: controller,
                   enabled: !_isRunning,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  smartDashesType: SmartDashesType.disabled,
+                  smartQuotesType: SmartQuotesType.disabled,
                   decoration: InputDecoration(
                     hintText: 'Type a message...',
                     hintStyle: GoogleFonts.inter(

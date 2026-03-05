@@ -104,6 +104,9 @@ class ChatState {
         input: event.input,
         output: event.output,
         error: event.error,
+        diffs: event.diffs,
+        metadata: event.metadata,
+        locations: event.locations,
       );
       tools[event.callId] = tool;
     } else {
@@ -113,6 +116,9 @@ class ChatState {
       if (event.error != null) tool.error = event.error;
       if (event.title != null) tool.title = event.title;
       if (event.input != null) tool.input = event.input;
+      if (event.diffs != null) tool.diffs = event.diffs;
+      if (event.metadata != null) tool.metadata = event.metadata;
+      if (event.locations != null) tool.locations = event.locations;
     }
 
     // Also update in message parts if present
@@ -159,6 +165,12 @@ class ChatState {
 
   void updatePlan(List<PlanEntry> entries) {
     planEntries = entries;
+  }
+
+  List<ToolActivity> childToolsOf(String parentToolId) {
+    return tools.values
+        .where((t) => t.parentToolCallId == parentToolId)
+        .toList();
   }
 
   List<Message> get orderedMessages {

@@ -81,8 +81,20 @@ class BaseApiClient {
     }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      // Try to extract the error message from the JSON envelope.
+      var msg = 'Request failed (${response.statusCode})';
+      if (response.body.isNotEmpty) {
+        try {
+          final errJson =
+              jsonDecode(response.body) as Map<String, dynamic>;
+          final serverMsg = errJson['message'] as String?;
+          if (serverMsg != null && serverMsg.isNotEmpty) {
+            msg = serverMsg;
+          }
+        } catch (_) {}
+      }
       throw ApiException(
-        'Request failed',
+        msg,
         statusCode: response.statusCode,
         body: response.body,
       );

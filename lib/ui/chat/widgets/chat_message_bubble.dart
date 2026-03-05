@@ -8,11 +8,13 @@ import 'code_block.dart';
 class ChatMessageBubble extends StatelessWidget {
   final String text;
   final bool isUser;
+  final bool isStreaming;
 
   const ChatMessageBubble({
     super.key,
     required this.text,
     required this.isUser,
+    this.isStreaming = false,
   });
 
   @override
@@ -46,23 +48,24 @@ class ChatMessageBubble extends StatelessWidget {
   }
 
   Widget _buildAgentText() {
+    final markdown = GptMarkdown(
+      text,
+      style: GoogleFonts.inter(
+        fontSize: 14,
+        fontWeight: FontWeight.w400,
+        color: AppTheme.textPrimary,
+        height: 1.5,
+      ),
+      codeBuilder: (context, name, code, closed) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: CodeBlock(text: code),
+      ),
+    );
+    // Skip SelectionArea while streaming — Flutter's SelectableRegion crashes
+    // with a RangeError when selectables change mid-notification dispatch.
     return SizedBox(
       width: double.infinity,
-      child: SelectionArea(
-        child: GptMarkdown(
-          text,
-          style: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: AppTheme.textPrimary,
-            height: 1.5,
-          ),
-          codeBuilder: (context, name, code, closed) => Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: CodeBlock(text: code),
-          ),
-        ),
-      ),
+      child: isStreaming ? markdown : SelectionArea(child: markdown),
     );
   }
 }

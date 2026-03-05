@@ -110,6 +110,7 @@ class MainShellViewModel extends GetxController {
       await _wsRepo.startSession(machine: machine);
       // Resync missed events after reconnect
       await _eventRepo.resync(machine.machineId);
+      await _eventRepo.reconcileSessionStatus(machine.machineId);
       await _eventRepo.backfillMissingTitles(machine.machineId);
       await _eventRepo.fetchPendingApprovals(machine.machineId);
     } catch (e) {

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
 import '../../domain/paired_machine.dart';
@@ -9,15 +7,12 @@ import 'session_manager.dart';
 class WsSessionRepository {
   final RelayWsClient _relay;
   final SessionManager _sessions;
-  late final StreamSubscription<WsEvent> _eventSub;
 
   WsSessionRepository({
     required RelayWsClient relay,
     required SessionManager sessions,
   }) : _relay = relay,
-       _sessions = sessions {
-    _eventSub = _relay.events.listen(_handleEvent);
-  }
+       _sessions = sessions;
 
   /// Raw WS event stream for EventRepository to consume.
   Stream<WsEvent> get events => _relay.events;
@@ -81,12 +76,4 @@ class WsSessionRepository {
   }
 
   Future<void> close() => _relay.close();
-
-  void dispose() {
-    _eventSub.cancel();
-  }
-
-  void _handleEvent(WsEvent event) {
-    // echo events are debug-only; repo layer should not trigger UI
-  }
 }

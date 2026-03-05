@@ -37,7 +37,9 @@ class SessionDatabase {
         cost_cache_write INTEGER DEFAULT 0,
         cost_total_usd REAL DEFAULT 0,
         machine_id TEXT NOT NULL,
+        runtime TEXT NOT NULL DEFAULT '',
         cwd TEXT NOT NULL DEFAULT '',
+        mode TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
       )
@@ -47,7 +49,9 @@ class SessionDatabase {
   static Future<void> insertSession(AgentSession s) async {
     final db = await database;
     final machineId = s.metadata?['machineId'] as String? ?? '';
+    final runtime = s.metadata?['runtime'] as String? ?? '';
     final cwd = s.metadata?['cwd'] as String? ?? '';
+    final mode = s.metadata?['mode'] as String? ?? '';
     await db.insert(
       'sessions',
       {
@@ -61,7 +65,9 @@ class SessionDatabase {
         'cost_cache_write': s.cost?.cacheWrite ?? 0,
         'cost_total_usd': s.cost?.totalUsd ?? 0,
         'machine_id': machineId,
+        'runtime': runtime,
         'cwd': cwd,
+        'mode': mode,
         'created_at': s.createdAt.toIso8601String(),
         'updated_at': s.updatedAt.toIso8601String(),
       },
@@ -141,7 +147,9 @@ class SessionDatabase {
       updatedAt: DateTime.parse(row['updated_at'] as String),
       metadata: {
         'machineId': row['machine_id'] as String? ?? '',
+        'runtime': row['runtime'] as String? ?? '',
         'cwd': row['cwd'] as String? ?? '',
+        'mode': row['mode'] as String? ?? '',
       },
     );
   }

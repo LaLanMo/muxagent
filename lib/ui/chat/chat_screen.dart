@@ -8,11 +8,14 @@ import '../../config/theme.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/message.dart';
+import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
+import '../../domain/tool_activity.dart';
 import 'chat_viewmodel.dart';
 import 'widgets/chat_input_bar.dart';
 import 'widgets/chat_message_bubble.dart';
 import 'widgets/permission_card.dart';
+import 'widgets/plan_approval_card.dart';
 import 'widgets/tool_call_card.dart';
 
 class ChatScreen extends GetView<ChatViewModel> {
@@ -54,11 +57,16 @@ class ChatScreen extends GetView<ChatViewModel> {
                   final renderedApprovalIds = <String>{};
 
                   // Pre-build message widgets so we can count unlinked approvals
-                  final messageWidgets = allMessages.map((msg) {
+                  final isRunning =
+                      controller.sessionStatus.value == SessionStatus.running;
+                  final messageWidgets =
+                      allMessages.asMap().entries.map((entry) {
+                    final isLast = entry.key == allMessages.length - 1;
                     return _buildMessageItem(
-                      msg,
+                      entry.value,
                       pendingApprovals,
                       renderedApprovalIds,
+                      isStreaming: isLast && isRunning,
                     );
                   }).toList();
 
@@ -92,11 +100,17 @@ class ChatScreen extends GetView<ChatViewModel> {
                       final approval = unlinkedApprovals[approvalIndex];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),
-                        child: PermissionCard(
-                          approval: approval,
-                          onReply: (optionId) =>
-                              controller.replyApproval(approval.id, optionId),
-                        ),
+                        child: approval.kind == 'switch_mode'
+                            ? PlanApprovalCard(
+                                approval: approval,
+                                onReply: (optionId) => controller.replyApproval(
+                                    approval.id, optionId),
+                              )
+                            : PermissionCard(
+                                approval: approval,
+                                onReply: (optionId) => controller.replyApproval(
+                                    approval.id, optionId),
+                              ),
                       );
                     },
                   );
@@ -183,8 +197,17 @@ class ChatScreen extends GetView<ChatViewModel> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    const SizedBox(height: 1),
-                    _buildStatusPill(controller.sessionStatus.value),
+                    const SizedBox(height: 3),
+                    Row(
+                      children: [
+                        _buildStatusPill(controller.sessionStatus.value),
+                        if (controller.currentMode.value != null &&
+                            controller.currentMode.value!.showPill) ...[
+                          const SizedBox(width: 6),
+                          _buildModePill(controller.currentMode.value!),
+                        ],
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -248,11 +271,57 @@ class ChatScreen extends GetView<ChatViewModel> {
     );
   }
 
+  Widget _buildModePill(PermissionMode mode) {
+    final dotColor = mode.color;
+    final Color bgColor;
+
+    switch (mode) {
+      case PermissionMode.bypassPermissions:
+        bgColor = const Color(0xFFFEF2F2);
+      case PermissionMode.plan:
+        bgColor = const Color(0xFFF3E8FF);
+      case PermissionMode.acceptEdits:
+        bgColor = const Color(0xFFEFF6FF);
+      case PermissionMode.dontAsk:
+        bgColor = const Color(0xFFFFFBEB);
+      default:
+        bgColor = const Color(0xFFF5F5F5);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(
+            mode.label.toLowerCase(),
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: dotColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageItem(
     Message message,
     List<ApprovalRequest> pendingApprovals,
-    Set<String> renderedApprovalIds,
-  ) {
+    Set<String> renderedApprovalIds, {
+    bool isStreaming = false,
+  }) {
     final isUser = message.role == MessageRole.user;
     final widgets = <Widget>[];
 
@@ -284,18 +353,27 @@ class ChatScreen extends GetView<ChatViewModel> {
             widgets.add(
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: ChatMessageBubble(text: part.text!, isUser: isUser),
+                child: ChatMessageBubble(
+                  text: part.text!,
+                  isUser: isUser,
+                  isStreaming: isStreaming && !isUser,
+                ),
               ),
             );
           }
 
         case PartType.tool:
           flushReasoning();
-          if (part.tool != null) {
+          if (part.tool != null && !part.tool!.isChildTool) {
+            final childTools =
+                controller.chatState.childToolsOf(part.tool!.id);
             widgets.add(
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: ToolCallCard(tool: part.tool!),
+                child: ToolCallCard(
+                  tool: part.tool!,
+                  childTools: childTools,
+                ),
               ),
             );
             // If this tool has a pending approval, render it inline
@@ -310,11 +388,17 @@ class ChatScreen extends GetView<ChatViewModel> {
               widgets.add(
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: PermissionCard(
-                    approval: linkedApproval,
-                    onReply: (optionId) =>
-                        controller.replyApproval(linkedApproval.id, optionId),
-                  ),
+                  child: linkedApproval.kind == 'switch_mode'
+                      ? PlanApprovalCard(
+                          approval: linkedApproval,
+                          onReply: (optionId) => controller.replyApproval(
+                              linkedApproval.id, optionId),
+                        )
+                      : PermissionCard(
+                          approval: linkedApproval,
+                          onReply: (optionId) => controller.replyApproval(
+                              linkedApproval.id, optionId),
+                        ),
                 ),
               );
             }
