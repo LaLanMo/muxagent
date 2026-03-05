@@ -5,7 +5,10 @@ import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/approval.dart';
 
 class PermissionDetailViewModel extends GetxController {
-  final WsSessionRepository _wsRepo = Get.find<WsSessionRepository>();
+  final WsSessionRepository _wsRepo;
+
+  PermissionDetailViewModel({required WsSessionRepository wsRepo})
+      : _wsRepo = wsRepo;
 
   late final ApprovalRequest approval;
   late final String machineId;

@@ -1,9 +1,14 @@
 import 'package:get/get.dart';
 
+import '../../domain/message.dart';
 import '../../domain/tool_activity.dart';
-import '../chat/chat_viewmodel.dart';
 
 class ToolDetailViewModel extends GetxController {
+  final RxList<Message> _messages;
+
+  ToolDetailViewModel({required RxList<Message> messages})
+      : _messages = messages;
+
   late final ToolActivity tool;
   late final List<ToolActivity> childTools;
 
@@ -18,9 +23,8 @@ class ToolDetailViewModel extends GetxController {
     tool = args['tool'] as ToolActivity;
     childTools = (args['childTools'] as List<ToolActivity>?) ?? const [];
 
-    // Listen to the chat viewmodel's message list; each refresh may have
+    // Listen to message list changes; each refresh may have
     // mutated our tool's status/output/error in-place.
-    final chatVm = Get.find<ChatViewModel>();
-    ever(chatVm.messages, (_) => version.value++);
+    ever(_messages, (_) => version.value++);
   }
 }

@@ -7,7 +7,10 @@ import '../../domain/enums.dart';
 import '../../domain/session.dart';
 
 class ActiveTabViewModel extends GetxController {
-  final EventRepository _eventRepo = Get.find<EventRepository>();
+  final EventRepository _eventRepo;
+
+  ActiveTabViewModel({required EventRepository eventRepo})
+      : _eventRepo = eventRepo;
 
   final activeSessions = <AgentSession>[].obs;
 

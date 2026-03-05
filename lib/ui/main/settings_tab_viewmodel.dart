@@ -7,16 +7,28 @@ import '../../data/services/local/crypto_service.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
-import 'main_shell_viewmodel.dart';
 
 class SettingsTabViewModel extends GetxController {
-  final CryptoService _crypto = Get.find<CryptoService>();
+  final CryptoService _crypto;
+  final RxList<PairedMachine> machines;
+  final RxSet<String> activeSessionIds;
+  final Future<void> Function(PairedMachine) _connectMachine;
+
+  SettingsTabViewModel({
+    required CryptoService crypto,
+    required this.machines,
+    required this.activeSessionIds,
+    required Future<void> Function(PairedMachine) connectMachine,
+  })  : _crypto = crypto,
+        _connectMachine = connectMachine;
 
   final hasMasterKey = false.obs;
   final connectingMachines = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
 
-  MainShellViewModel get shell => Get.find<MainShellViewModel>();
+  bool isMachineConnected(String machineId) {
+    return activeSessionIds.contains(machineId);
+  }
 
   @override
   void onInit() {
@@ -36,8 +48,8 @@ class SettingsTabViewModel extends GetxController {
     if (connectingMachines.contains(machine.machineId)) return;
     connectingMachines.add(machine.machineId);
     try {
-      await shell.connectMachine(machine);
-      if (shell.isMachineConnected(machine.machineId)) {
+      await _connectMachine(machine);
+      if (isMachineConnected(machine.machineId)) {
         uiEffect.value = ShowToast('Connected to ${machine.hostname ?? 'machine'}');
       } else {
         uiEffect.value = ShowToast('Failed to connect');

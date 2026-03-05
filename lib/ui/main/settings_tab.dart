@@ -5,13 +5,10 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../domain/paired_machine.dart';
 import '../common/ui_effect_listener.dart';
-import 'main_shell_viewmodel.dart';
 import 'settings_tab_viewmodel.dart';
 
 class SettingsTab extends GetView<SettingsTabViewModel> {
   const SettingsTab({super.key});
-
-  MainShellViewModel get shell => Get.find<MainShellViewModel>();
 
   @override
   Widget build(BuildContext context) {
@@ -104,9 +101,9 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     );
   }
 
-  // Build all machine rows from shell.machines
+  // Build all machine rows from controller.machines
   List<Widget> _buildMachineRows() {
-    final machines = shell.machines;
+    final machines = controller.machines;
     // Force reactivity
     machines.length;
     if (machines.isEmpty) return const [];
@@ -116,7 +113,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
 
   // Machine row: padding [14, 16], gap 12, alignItems center, bottom border #E5E7EB
   Widget _buildMachineRow(PairedMachine machine) {
-    final connected = shell.isMachineConnected(machine.machineId);
+    final connected = controller.isMachineConnected(machine.machineId);
     final connecting = controller.connectingMachines.contains(machine.machineId);
     final hostname = machine.hostname ?? 'Unknown host';
 

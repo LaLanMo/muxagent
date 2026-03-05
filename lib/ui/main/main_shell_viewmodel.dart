@@ -12,10 +12,17 @@ import '../../domain/paired_machine.dart';
 import '../../routing/routes.dart';
 
 class MainShellViewModel extends GetxController {
-  final PairedMachineRepository _machineRepo =
-      Get.find<PairedMachineRepository>();
-  final WsSessionRepository _wsRepo = Get.find<WsSessionRepository>();
-  final EventRepository _eventRepo = Get.find<EventRepository>();
+  final PairedMachineRepository _machineRepo;
+  final WsSessionRepository _wsRepo;
+  final EventRepository _eventRepo;
+
+  MainShellViewModel({
+    required PairedMachineRepository machineRepo,
+    required WsSessionRepository wsRepo,
+    required EventRepository eventRepo,
+  })  : _machineRepo = machineRepo,
+        _wsRepo = wsRepo,
+        _eventRepo = eventRepo;
 
   final tabIndex = 0.obs;
   final machines = <PairedMachine>[].obs;

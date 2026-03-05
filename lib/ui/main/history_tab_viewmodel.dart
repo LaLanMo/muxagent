@@ -12,7 +12,10 @@ class SessionGroup {
 }
 
 class HistoryTabViewModel extends GetxController {
-  final EventRepository _eventRepo = Get.find<EventRepository>();
+  final EventRepository _eventRepo;
+
+  HistoryTabViewModel({required EventRepository eventRepo})
+      : _eventRepo = eventRepo;
 
   final sessionGroups = <SessionGroup>[].obs;
   final selectedMachineFilter = Rxn<String>();

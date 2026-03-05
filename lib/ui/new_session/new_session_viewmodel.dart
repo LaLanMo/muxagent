@@ -15,10 +15,17 @@ import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
 
 class NewSessionViewModel extends GetxController {
-  final PairedMachineRepository _machineRepo =
-      Get.find<PairedMachineRepository>();
-  final WsSessionRepository _wsRepo = Get.find<WsSessionRepository>();
-  final EventRepository _eventRepo = Get.find<EventRepository>();
+  final PairedMachineRepository _machineRepo;
+  final WsSessionRepository _wsRepo;
+  final EventRepository _eventRepo;
+
+  NewSessionViewModel({
+    required PairedMachineRepository machineRepo,
+    required WsSessionRepository wsRepo,
+    required EventRepository eventRepo,
+  })  : _machineRepo = machineRepo,
+        _wsRepo = wsRepo,
+        _eventRepo = eventRepo;
 
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
