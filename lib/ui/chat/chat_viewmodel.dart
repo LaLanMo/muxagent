@@ -58,6 +58,7 @@ class ChatViewModel extends GetxController {
   final scrollController = ScrollController();
   final isVoiceRecording = false.obs;
   final isTranscribing = false.obs;
+  final showModeDropdown = false.obs;
 
   AudioRecorder? _voiceRecorder;
   final hasSttConfig = false.obs;
@@ -241,10 +242,30 @@ class ChatViewModel extends GetxController {
   }
 
   void _onScrollChanged() {
-    if (_isProgrammaticScroll) {
-      return;
-    }
+    if (_isProgrammaticScroll) return;
+    if (showModeDropdown.value) showModeDropdown.value = false;
     _syncScrollState();
+  }
+
+  void toggleModeDropdown() => showModeDropdown.toggle();
+
+  Future<void> changeMode(PermissionMode mode) async {
+    showModeDropdown.value = false;
+    if (mode == currentMode.value) return;
+
+    final previous = currentMode.value;
+    currentMode.value = mode;
+
+    try {
+      await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'session.setMode',
+        params: {'sessionId': sessionId, 'permissionMode': mode.id},
+      );
+    } catch (e) {
+      debugPrint('[ChatVM] changeMode failed: $e');
+      currentMode.value = previous;
+    }
   }
 
   void _scrollToBottom() {

@@ -29,6 +29,14 @@ class ChatScreen extends GetView<ChatViewModel> {
           // Header
           _buildHeader(),
 
+          // Mode dropdown panel
+          Obx(() {
+            if (!controller.showModeDropdown.value) {
+              return const SizedBox.shrink();
+            }
+            return _buildModeDropdown();
+          }),
+
           // Connection banner
           Obx(() => _buildConnectionBanner(controller.connState.value)),
 
@@ -209,11 +217,16 @@ class ChatScreen extends GetView<ChatViewModel> {
                     Row(
                       children: [
                         _buildStatusPill(controller.sessionStatus.value),
-                        if (controller.currentMode.value != null &&
-                            controller.currentMode.value!.showPill) ...[
-                          const SizedBox(width: 6),
-                          _buildModePill(controller.currentMode.value!),
-                        ],
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: controller.toggleModeDropdown,
+                          child: _buildModePill(
+                            controller.currentMode.value ??
+                                PermissionMode.defaultMode,
+                            showChevron: true,
+                            isOpen: controller.showModeDropdown.value,
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -279,22 +292,13 @@ class ChatScreen extends GetView<ChatViewModel> {
     );
   }
 
-  Widget _buildModePill(PermissionMode mode) {
+  Widget _buildModePill(
+    PermissionMode mode, {
+    bool showChevron = false,
+    bool isOpen = false,
+  }) {
     final dotColor = mode.color;
-    final Color bgColor;
-
-    switch (mode) {
-      case PermissionMode.bypassPermissions:
-        bgColor = AppTheme.modeSkipBg;
-      case PermissionMode.plan:
-        bgColor = AppTheme.modePlanBg;
-      case PermissionMode.acceptEdits:
-        bgColor = AppTheme.modeAcceptBg;
-      case PermissionMode.dontAsk:
-        bgColor = const Color(0xFFFFFBEB);
-      default:
-        bgColor = AppTheme.idleBg;
-    }
+    final bgColor = _modeBgColor(mode);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -319,9 +323,128 @@ class ChatScreen extends GetView<ChatViewModel> {
               color: dotColor,
             ),
           ),
+          if (showChevron) ...[
+            const SizedBox(width: 4),
+            Icon(
+              isOpen ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+              size: 12,
+              color: dotColor,
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  static const _dropdownModes = [
+    PermissionMode.bypassPermissions,
+    PermissionMode.defaultMode,
+    PermissionMode.acceptEdits,
+    PermissionMode.plan,
+  ];
+
+  Widget _buildModeDropdown() {
+    final current = controller.currentMode.value ?? PermissionMode.defaultMode;
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        border: const Border(bottom: BorderSide(color: AppTheme.border)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      child: Column(
+        children:
+            _dropdownModes.map((m) => _buildModeRow(m, m == current)).toList(),
+      ),
+    );
+  }
+
+  Widget _buildModeRow(PermissionMode mode, bool isSelected) {
+    final bgColor = isSelected ? _modeBgColor(mode) : Colors.transparent;
+    final textColor = isSelected ? mode.color : AppTheme.textPrimary;
+
+    return GestureDetector(
+      onTap: () => controller.changeMode(mode),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration:
+                  BoxDecoration(color: mode.color, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              mode.label,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: textColor,
+              ),
+            ),
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Icon(LucideIcons.check, size: 14, color: mode.color),
+            ],
+            const Spacer(),
+            Flexible(
+              child: Text(
+                _modeDescription(mode),
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: isSelected
+                      ? mode.color.withValues(alpha: 0.7)
+                      : AppTheme.textTertiary,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static Color _modeBgColor(PermissionMode mode) {
+    switch (mode) {
+      case PermissionMode.bypassPermissions:
+        return AppTheme.modeSkipBg;
+      case PermissionMode.plan:
+        return AppTheme.modePlanBg;
+      case PermissionMode.acceptEdits:
+        return AppTheme.modeAcceptBg;
+      default:
+        return AppTheme.idleBg;
+    }
+  }
+
+  static String _modeDescription(PermissionMode mode) {
+    switch (mode) {
+      case PermissionMode.bypassPermissions:
+        return 'No safety checks';
+      case PermissionMode.defaultMode:
+        return 'Ask for each action';
+      case PermissionMode.acceptEdits:
+        return 'Auto-approve edits';
+      case PermissionMode.plan:
+        return 'Plan before coding';
+      default:
+        return '';
+    }
   }
 
   Widget _buildMessageItem(
