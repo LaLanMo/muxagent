@@ -76,6 +76,20 @@ class BaseApiClient {
           body: jsonBody != null ? jsonEncode(jsonBody) : null,
         );
         break;
+      case 'PUT':
+        response = await _client.put(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonBody != null ? jsonEncode(jsonBody) : null,
+        );
+        break;
+      case 'DELETE':
+        response = await _client.delete(
+          uri,
+          headers: {'Content-Type': 'application/json'},
+          body: jsonBody != null ? jsonEncode(jsonBody) : null,
+        );
+        break;
       default:
         throw ApiException('Unsupported HTTP method: $method');
     }

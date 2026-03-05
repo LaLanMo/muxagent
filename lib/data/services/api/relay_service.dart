@@ -57,5 +57,53 @@ class RelayService {
     );
   }
 
+  /// Register FCM device token with relay for push notifications
+  Future<void> registerDeviceToken(
+    String relayUrl,
+    String connectToken,
+    String fcmToken,
+    String platform,
+  ) async {
+    final uri = Uri.parse(relayUrl);
+    _client.updateEndpoint(
+      host: uri.host,
+      port: uri.port,
+      scheme: uri.scheme,
+    );
+    await _client.sendRequest<void>(
+      path: '/v1/device/token',
+      method: 'PUT',
+      fromJson: (_) {},
+      jsonBody: {
+        'connect_token': connectToken,
+        'fcm_token': fcmToken,
+        'platform': platform,
+      },
+    );
+  }
+
+  /// Unregister FCM device token from relay
+  Future<void> unregisterDeviceToken(
+    String relayUrl,
+    String connectToken,
+    String fcmToken,
+  ) async {
+    final uri = Uri.parse(relayUrl);
+    _client.updateEndpoint(
+      host: uri.host,
+      port: uri.port,
+      scheme: uri.scheme,
+    );
+    await _client.sendRequest<void>(
+      path: '/v1/device/token',
+      method: 'DELETE',
+      fromJson: (_) {},
+      jsonBody: {
+        'connect_token': connectToken,
+        'fcm_token': fcmToken,
+      },
+    );
+  }
+
   void dispose() => _client.dispose();
 }

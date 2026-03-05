@@ -1,3 +1,4 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -5,17 +6,22 @@ import 'bindings/initial_binding.dart';
 import 'config/constant.dart';
 import 'config/theme.dart';
 import 'data/repositories/event_repository.dart';
+import 'data/services/push/push_notification_service.dart';
 import 'routing/router.dart';
 import 'routing/routes.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
 
   // Eagerly register bindings so we can init the EventRepository.
   InitialBinding().dependencies();
 
   // Load persisted sessions from SQLite before the UI starts.
   await Get.find<EventRepository>().init();
+
+  // Fire-and-forget: don't block app startup for push registration.
+  Get.find<PushNotificationService>().init();
 
   runApp(const MuxAgentApp());
 }

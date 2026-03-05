@@ -1,6 +1,9 @@
+import 'package:get/get.dart';
+
 import '../../domain/master_key.dart';
 import '../../domain/paired_machine.dart';
 import '../models/auth_request.dart';
+import '../services/push/push_notification_service.dart';
 import 'paired_machine_repository.dart';
 import '../services/api/relay_service.dart';
 import '../services/local/crypto_service.dart';
@@ -89,6 +92,11 @@ class AuthRepository {
         hostname: status.machineHostname,
       ),
     );
+
+    // Register push token with the new machine's relay.
+    try {
+      await Get.find<PushNotificationService>().refreshRegistration();
+    } catch (_) {}
   }
 
   String _buildApprovalMessage(

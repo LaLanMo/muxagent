@@ -9,6 +9,7 @@ import '../data/repositories/ws_session_repository.dart';
 import '../data/services/api/relay_service.dart';
 import '../data/services/api/stt_service.dart';
 import '../data/services/local/crypto_service.dart';
+import '../data/services/push/push_notification_service.dart';
 import '../data/services/ws/relay_ws_client.dart';
 import '../data/services/ws/token_service.dart';
 import '../usecases/transcribe_audio.dart';
@@ -58,6 +59,15 @@ class InitialBinding extends Bindings {
     );
     Get.lazyPut<EventRepository>(
       () => EventRepository(wsRepo: Get.find<WsSessionRepository>()),
+      fenix: true,
+    );
+    Get.lazyPut<PushNotificationService>(
+      () => PushNotificationService(
+        relay: Get.find<RelayService>(),
+        tokens: Get.find<TokenService>(),
+        crypto: Get.find<CryptoService>(),
+        machines: Get.find<PairedMachineRepository>(),
+      ),
       fenix: true,
     );
 
