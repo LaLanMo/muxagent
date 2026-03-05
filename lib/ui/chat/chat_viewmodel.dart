@@ -1,9 +1,15 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/stt_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
@@ -11,12 +17,25 @@ import '../../domain/event.dart';
 import '../../domain/message.dart';
 import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
+import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import 'chat_state.dart';
 
 class ChatViewModel extends GetxController {
-  final EventRepository _eventRepo = Get.find<EventRepository>();
-  final WsSessionRepository _wsRepo = Get.find<WsSessionRepository>();
+  final EventRepository _eventRepo;
+  final WsSessionRepository _wsRepo;
+  final SttRepository _sttRepo;
+  final TranscribeAudioUseCase _transcribe;
+
+  ChatViewModel({
+    required EventRepository eventRepo,
+    required WsSessionRepository wsRepo,
+    required SttRepository sttRepo,
+    required TranscribeAudioUseCase transcribe,
+  })  : _eventRepo = eventRepo,
+        _wsRepo = wsRepo,
+        _sttRepo = sttRepo,
+        _transcribe = transcribe;
 
   late final String machineId;
   late final String sessionId;
@@ -32,8 +51,16 @@ class ChatViewModel extends GetxController {
   final sessionTitle = ''.obs;
   final isLoading = true.obs;
   final showScrollToBottomButton = false.obs;
+  final pendingImages = <XFile>[].obs;
+  final pendingPreviews = <Uint8List>[].obs;
+  final pendingMimeTypes = <String>[].obs;
   final inputController = TextEditingController();
   final scrollController = ScrollController();
+  final isVoiceRecording = false.obs;
+  final isTranscribing = false.obs;
+
+  AudioRecorder? _voiceRecorder;
+  final hasSttConfig = false.obs;
   bool _userIsScrolling = false;
   bool _isProgrammaticScroll = false;
   int _scrollRequestId = 0;
@@ -62,6 +89,7 @@ class ChatViewModel extends GetxController {
 
     scrollController.addListener(_onScrollChanged);
     _subscribeEvents();
+    _checkSttConfig();
 
     // Restore pending approvals for this session
     for (final approval in _eventRepo.pendingApprovals.values) {
@@ -333,18 +361,145 @@ class ChatViewModel extends GetxController {
     _scheduleScrollStateSync();
   }
 
-  Future<void> sendMessage(String text) async {
-    if (text.trim().isEmpty) return;
+  Future<void> pickImage() async {
+    final remaining = 20 - pendingImages.length;
+    if (remaining <= 0) return;
+    final images = await ImagePicker().pickMultiImage(limit: remaining);
+    for (final img in images) {
+      pendingImages.add(img);
+      pendingPreviews.add(await img.readAsBytes());
+      pendingMimeTypes.add(_mimeType(img.name));
+    }
+  }
 
+  void removeImage(int index) {
+    if (index >= 0 && index < pendingImages.length) {
+      pendingImages.removeAt(index);
+      pendingPreviews.removeAt(index);
+      pendingMimeTypes.removeAt(index);
+    }
+  }
+
+  Future<void> _checkSttConfig() async {
+    hasSttConfig.value = await _sttRepo.hasConfig();
+  }
+
+  Future<void> startVoiceInput() async {
+    _voiceRecorder = AudioRecorder();
+    if (!await _voiceRecorder!.hasPermission()) {
+      AppToast.show('Microphone permission denied');
+      _voiceRecorder = null;
+      return;
+    }
+
+    final path =
+        '${Directory.systemTemp.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    try {
+      await _voiceRecorder!.start(const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        sampleRate: 16000,
+        numChannels: 1,
+      ), path: path);
+    } catch (e) {
+      AppToast.show('Failed to start recording');
+      await _voiceRecorder!.dispose();
+      _voiceRecorder = null;
+      return;
+    }
+
+    if (!await _voiceRecorder!.isRecording()) {
+      AppToast.show('Microphone unavailable');
+      await _voiceRecorder!.dispose();
+      _voiceRecorder = null;
+      return;
+    }
+
+    isVoiceRecording.value = true;
+  }
+
+  Future<void> stopVoiceInput() async {
+    if (_voiceRecorder == null) return;
+
+    final path = await _voiceRecorder!.stop();
+    isVoiceRecording.value = false;
+    await _voiceRecorder!.dispose();
+    _voiceRecorder = null;
+
+    if (path == null) {
+      AppToast.show('Recording failed');
+      return;
+    }
+
+    final file = File(path);
+    final size = await file.length();
+    if (size < 100) {
+      AppToast.show('No audio captured — microphone may be unavailable');
+      try {
+        await file.delete();
+      } catch (_) {}
+      return;
+    }
+
+    isTranscribing.value = true;
+    try {
+      final bytes = await file.readAsBytes();
+      final result = await _transcribe.call(bytes, 'audio/m4a');
+      if (result.text.isNotEmpty) {
+        final current = inputController.text;
+        if (current.isNotEmpty && !current.endsWith(' ')) {
+          inputController.text = '$current ${result.text}';
+        } else {
+          inputController.text = '$current${result.text}';
+        }
+        // Move cursor to end
+        inputController.selection = TextSelection.collapsed(
+          offset: inputController.text.length,
+        );
+      }
+    } catch (e) {
+      AppToast.show('Transcription failed: $e');
+    } finally {
+      isTranscribing.value = false;
+      try {
+        await File(path).delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> sendMessage(String text) async {
     final trimmed = text.trim();
+    final hasImages = pendingImages.isNotEmpty;
+    if (trimmed.isEmpty && !hasImages) return;
+
     inputController.clear();
 
-    // Optimistic insert of user message
+    // Snapshot pending images and clear state
+    final previewsToSend = List<Uint8List>.from(pendingPreviews);
+    final mimeTypesToSend = List<String>.from(pendingMimeTypes);
+    pendingImages.clear();
+    pendingPreviews.clear();
+    pendingMimeTypes.clear();
+
+    // Build optimistic message parts
+    final parts = <MessagePart>[];
+    for (var i = 0; i < previewsToSend.length; i++) {
+      parts.add(MessagePart(
+        type: PartType.media,
+        media: MediaPart(
+          base64: base64Encode(previewsToSend[i]),
+          mimeType: mimeTypesToSend[i],
+        ),
+      ));
+    }
+    if (trimmed.isNotEmpty) {
+      parts.add(MessagePart(type: PartType.text, text: trimmed));
+    }
+
     final userMsg = Message(
       id: 'local-${DateTime.now().millisecondsSinceEpoch}',
       sessionId: sessionId,
       role: MessageRole.user,
-      parts: [MessagePart(type: PartType.text, text: trimmed)],
+      parts: parts,
       createdAt: DateTime.now(),
     );
     chatState.finalizeMessage(userMsg);
@@ -354,19 +509,48 @@ class ChatViewModel extends GetxController {
     sessionStatus.value = SessionStatus.running;
     _eventRepo.setSessionStatus(sessionId, SessionStatus.running);
 
+    // Build content blocks for the RPC
+    final content = <Map<String, dynamic>>[];
+    for (var i = 0; i < previewsToSend.length; i++) {
+      content.add({
+        'type': 'image',
+        'mimeType': mimeTypesToSend[i],
+        'data': base64Encode(previewsToSend[i]),
+      });
+    }
+    if (trimmed.isNotEmpty) {
+      content.add({'type': 'text', 'text': trimmed});
+    }
+
     // Await ACK from daemon — prompt runs asynchronously on daemon side,
     // so this returns quickly. Failure means daemon rejected the request.
     try {
       await _wsRepo.callRpc(
         machineId: machineId,
         method: 'session.prompt',
-        params: {'sessionId': sessionId, 'text': trimmed},
+        params: {'sessionId': sessionId, 'content': content},
       );
     } catch (e) {
       debugPrint('Prompt rejected: $e');
       // ACK failure = daemon didn't start the prompt = no events coming
       sessionStatus.value = SessionStatus.error;
       _eventRepo.setSessionStatus(sessionId, SessionStatus.error);
+    }
+  }
+
+  static String _mimeType(String filename) {
+    final ext = filename.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      default:
+        return 'image/jpeg';
     }
   }
 
@@ -429,6 +613,7 @@ class ChatViewModel extends GetxController {
     _eventSub?.cancel();
     scrollController.dispose();
     inputController.dispose();
+    _voiceRecorder?.dispose();
     super.onClose();
   }
 }

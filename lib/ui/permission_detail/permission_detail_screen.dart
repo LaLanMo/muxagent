@@ -43,7 +43,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
                       style: AppFonts.code(
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
-                        color: const Color(0xFFE0E2E6),
+                        color: AppTheme.codeText,
                       ),
                     ),
                   ),
@@ -67,7 +67,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
       height: 56,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
-        color: Color(0xFFFFFFFF),
+        color: AppTheme.surface,
         border: Border(
           bottom: BorderSide(color: AppTheme.border),
         ),

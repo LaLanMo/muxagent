@@ -4,11 +4,14 @@ import '../data/repositories/auth_repository.dart';
 import '../data/repositories/event_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
 import '../data/repositories/session_manager.dart';
+import '../data/repositories/stt_repository.dart';
 import '../data/repositories/ws_session_repository.dart';
 import '../data/services/api/relay_service.dart';
+import '../data/services/api/stt_service.dart';
 import '../data/services/local/crypto_service.dart';
 import '../data/services/ws/relay_ws_client.dart';
 import '../data/services/ws/token_service.dart';
+import '../usecases/transcribe_audio.dart';
 
 class InitialBinding extends Bindings {
   @override
@@ -55,6 +58,17 @@ class InitialBinding extends Bindings {
     );
     Get.lazyPut<EventRepository>(
       () => EventRepository(wsRepo: Get.find<WsSessionRepository>()),
+      fenix: true,
+    );
+
+    // Speech-to-text
+    Get.lazyPut<SttService>(() => SttService(), fenix: true);
+    Get.lazyPut<SttRepository>(
+      () => SttRepository(service: Get.find<SttService>()),
+      fenix: true,
+    );
+    Get.lazyPut<TranscribeAudioUseCase>(
+      () => TranscribeAudioUseCase(repo: Get.find<SttRepository>()),
       fenix: true,
     );
   }

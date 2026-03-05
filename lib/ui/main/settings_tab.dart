@@ -56,6 +56,14 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         size: 16, color: AppTheme.textMuted),
                     onTap: controller.showPasteUrlDialog,
                   ),
+                  _buildSectionLabel('VOICE'),
+                  _buildSettingsRow(
+                    icon: LucideIcons.mic,
+                    label: 'Speech to Text',
+                    trailing: Icon(LucideIcons.chevronRight,
+                        size: 16, color: AppTheme.textMuted),
+                    onTap: controller.navigateToSttSettings,
+                  ),
                   _buildSectionLabel('ABOUT'),
                   _buildSettingsRow(
                     icon: LucideIcons.info,

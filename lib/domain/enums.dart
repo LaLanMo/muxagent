@@ -81,6 +81,7 @@ enum PartType {
   text('text'),
   reasoning('reasoning'),
   file('file'),
+  media('media'),
   tool('tool'),
   data('data');
 

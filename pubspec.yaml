@@ -40,6 +40,7 @@ dependencies:
 
   # HTTP client
   http: ^1.2.0
+  http_parser: ^4.0.0
 
   # Cryptography (Ed25519)
   cryptography: ^2.7.0
@@ -76,6 +77,12 @@ dependencies:
 
   # Diff algorithm (Myers' algorithm, used for edit tool call diffs)
   diff_match_patch: ^0.4.1
+
+  # Image picker for attaching images to chat
+  image_picker: ^1.1.2
+
+  # Audio recording for speech-to-text
+  record: ^6.0.0
 
 dev_dependencies:
   flutter_test:

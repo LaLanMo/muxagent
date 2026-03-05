@@ -44,6 +44,10 @@ class SettingsTabViewModel extends GetxController {
     Get.toNamed(Routes.scan);
   }
 
+  void navigateToSttSettings() {
+    Get.toNamed(Routes.sttSettings);
+  }
+
   Future<void> connectMachine(PairedMachine machine) async {
     if (connectingMachines.contains(machine.machineId)) return;
     connectingMachines.add(machine.machineId);

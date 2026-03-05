@@ -152,6 +152,14 @@ class ChatScreen extends GetView<ChatViewModel> {
               onSend: () =>
                   controller.sendMessage(controller.inputController.text),
               onCancel: controller.cancelSession,
+              onAttach: controller.pickImage,
+              imagePreviews: controller.pendingPreviews,
+              onRemoveImage: controller.removeImage,
+              showMic: controller.hasSttConfig.value,
+              isRecording: controller.isVoiceRecording.value,
+              isTranscribing: controller.isTranscribing.value,
+              onMicStart: controller.startVoiceInput,
+              onMicStop: controller.stopVoiceInput,
             ),
           ),
         ],
@@ -325,7 +333,29 @@ class ChatScreen extends GetView<ChatViewModel> {
     final isUser = message.role == MessageRole.user;
     final widgets = <Widget>[];
 
-    // Merge consecutive reasoning parts for display
+    // For user messages, group all text+media parts into a single bubble
+    if (isUser) {
+      final contentParts = message.parts
+          .where((p) => p.type == PartType.text || p.type == PartType.media)
+          .toList();
+      if (contentParts.isNotEmpty) {
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ChatMessageBubble(
+              parts: contentParts,
+              isUser: true,
+            ),
+          ),
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: widgets,
+      );
+    }
+
+    // Agent messages: render per-part with reasoning merging
     final StringBuffer reasoningBuf = StringBuffer();
 
     void flushReasoning() {
@@ -348,19 +378,18 @@ class ChatScreen extends GetView<ChatViewModel> {
           }
 
         case PartType.text:
+        case PartType.media:
           flushReasoning();
-          if (part.text != null && part.text!.isNotEmpty) {
-            widgets.add(
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: ChatMessageBubble(
-                  text: part.text!,
-                  isUser: isUser,
-                  isStreaming: isStreaming && !isUser,
-                ),
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: ChatMessageBubble(
+                parts: [part],
+                isUser: false,
+                isStreaming: isStreaming,
               ),
-            );
-          }
+            ),
+          );
 
         case PartType.tool:
           flushReasoning();
