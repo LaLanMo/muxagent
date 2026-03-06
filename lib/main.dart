@@ -1,5 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 
 import 'bindings/initial_binding.dart';
@@ -22,6 +23,12 @@ Future<void> main() async {
 
   // Fire-and-forget: don't block app startup for push registration.
   Get.find<PushNotificationService>().init();
+
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+  ));
 
   runApp(const MuxAgentApp());
 }

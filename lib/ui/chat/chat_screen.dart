@@ -179,15 +179,16 @@ class ChatScreen extends GetView<ChatViewModel> {
   }
 
   Widget _buildHeader() {
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: const BoxDecoration(
-          color: AppTheme.surface,
-          border: Border(bottom: BorderSide(color: AppTheme.border)),
-        ),
+    return Container(
+      color: AppTheme.surface,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppTheme.border)),
+          ),
         child: Row(
           children: [
             GestureDetector(
@@ -238,6 +239,7 @@ class ChatScreen extends GetView<ChatViewModel> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

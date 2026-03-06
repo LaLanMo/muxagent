@@ -18,14 +18,17 @@ class MainShell extends GetView<MainShellViewModel> {
       backgroundColor: AppTheme.background,
       body: SafeArea(
         bottom: false,
-        child: Obx(
-          () => IndexedStack(
-            index: controller.tabIndex.value,
-            children: const [
-              ActiveTab(),
-              HistoryTab(),
-              SettingsTab(),
-            ],
+        child: ColoredBox(
+          color: AppTheme.background,
+          child: Obx(
+            () => IndexedStack(
+              index: controller.tabIndex.value,
+              children: const [
+                ActiveTab(),
+                HistoryTab(),
+                SettingsTab(),
+              ],
+            ),
           ),
         ),
       ),
