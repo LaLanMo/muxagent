@@ -1,12 +1,16 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:record/record.dart';
 
 import '../../data/local/session_database.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../usecases/transcribe_audio.dart';
+import '../../utils/app_toast.dart';
 import '../../domain/enums.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/permission_mode.dart';
@@ -18,14 +22,17 @@ class NewSessionViewModel extends GetxController {
   final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
+  final TranscribeAudioUseCase _transcribe;
 
   NewSessionViewModel({
     required PairedMachineRepository machineRepo,
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
+    required TranscribeAudioUseCase transcribe,
   })  : _machineRepo = machineRepo,
         _wsRepo = wsRepo,
-        _eventRepo = eventRepo;
+        _eventRepo = eventRepo,
+        _transcribe = transcribe;
 
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
@@ -34,6 +41,11 @@ class NewSessionViewModel extends GetxController {
   final uiEffect = Rxn<UiEffect>();
   final selectedMode = PermissionMode.bypassPermissions.obs;
   final useWorktree = false.obs;
+
+  final hasSttConfig = false.obs;
+  final isVoiceRecording = false.obs;
+  final isTranscribing = false.obs;
+  AudioRecorder? _voiceRecorder;
 
   final cwdController = TextEditingController();
   final promptController = TextEditingController();
@@ -50,6 +62,7 @@ class NewSessionViewModel extends GetxController {
     super.onInit();
     _subscribeToActiveSessions();
     _loadMachines();
+    _checkSttConfig();
 
     cwdFocusNode.addListener(() {
       if (cwdFocusNode.hasFocus) {
@@ -72,6 +85,7 @@ class NewSessionViewModel extends GetxController {
   @override
   void onClose() {
     _sessionSub?.cancel();
+    _voiceRecorder?.dispose();
     cwdFocusNode.dispose();
     cwdController.dispose();
     promptController.dispose();
@@ -149,6 +163,99 @@ class NewSessionViewModel extends GetxController {
     cwdController.text = cwd.path;
     isCwdDropdownOpen.value = false;
     cwdFocusNode.unfocus();
+  }
+
+  Future<void> _checkSttConfig() async {
+    hasSttConfig.value = await _transcribe.hasConfig();
+  }
+
+  Future<void> startVoiceInput() async {
+    isVoiceRecording.value = true;
+
+    _voiceRecorder = AudioRecorder();
+    if (!await _voiceRecorder!.hasPermission()) {
+      AppToast.show('Microphone permission denied');
+      isVoiceRecording.value = false;
+      _voiceRecorder = null;
+      return;
+    }
+
+    final path =
+        '${Directory.systemTemp.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    try {
+      await _voiceRecorder!.start(const RecordConfig(
+        encoder: AudioEncoder.aacLc,
+        sampleRate: 16000,
+        numChannels: 1,
+      ), path: path);
+    } catch (e) {
+      AppToast.show('Failed to start recording');
+      isVoiceRecording.value = false;
+      await _voiceRecorder!.dispose();
+      _voiceRecorder = null;
+      return;
+    }
+
+    if (!await _voiceRecorder!.isRecording()) {
+      AppToast.show('Microphone unavailable');
+      isVoiceRecording.value = false;
+      await _voiceRecorder!.dispose();
+      _voiceRecorder = null;
+      return;
+    }
+  }
+
+  Future<void> stopVoiceInput() async {
+    if (_voiceRecorder == null) {
+      isVoiceRecording.value = false;
+      return;
+    }
+
+    final path = await _voiceRecorder!.stop();
+    await _voiceRecorder!.dispose();
+    _voiceRecorder = null;
+
+    if (path == null) {
+      isVoiceRecording.value = false;
+      AppToast.show('Recording failed');
+      return;
+    }
+
+    final file = File(path);
+    final size = await file.length();
+    if (size < 100) {
+      isVoiceRecording.value = false;
+      AppToast.show('No audio captured — microphone may be unavailable');
+      try {
+        await file.delete();
+      } catch (_) {}
+      return;
+    }
+
+    isTranscribing.value = true;
+    isVoiceRecording.value = false;
+    try {
+      final bytes = await file.readAsBytes();
+      final result = await _transcribe.call(bytes, 'audio/m4a');
+      if (result.text.isNotEmpty) {
+        final current = promptController.text;
+        if (current.isNotEmpty && !current.endsWith(' ')) {
+          promptController.text = '$current ${result.text}';
+        } else {
+          promptController.text = '$current${result.text}';
+        }
+        promptController.selection = TextSelection.collapsed(
+          offset: promptController.text.length,
+        );
+      }
+    } catch (e) {
+      AppToast.show('Transcription failed: $e');
+    } finally {
+      isTranscribing.value = false;
+      try {
+        await File(path).delete();
+      } catch (_) {}
+    }
   }
 
   Future<void> startSession() async {

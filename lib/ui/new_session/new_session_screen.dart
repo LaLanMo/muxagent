@@ -535,45 +535,121 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  // Prompt input: cornerRadius 8, fill #EDEEF1, height 80, padding [10, 12]
+  // Prompt input: cornerRadius 8, fill #EDEEF1, height 80 (108 with mic)
   Widget _buildPromptInput() {
-    return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppTheme.inputFill,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: TextField(
-        controller: controller.promptController,
-        maxLines: null,
-        expands: true,
-        textAlignVertical: TextAlignVertical.top,
-        autocorrect: false,
-        enableSuggestions: false,
-        smartDashesType: SmartDashesType.disabled,
-        smartQuotesType: SmartQuotesType.disabled,
-        style: GoogleFonts.inter(
-          fontSize: 14,
-          fontWeight: FontWeight.normal,
-          color: AppTheme.textPrimary,
+    return Obx(() {
+      final showMic = controller.hasSttConfig.value;
+      return Container(
+        height: showMic ? 108 : 80,
+        decoration: BoxDecoration(
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(8),
         ),
-        decoration: InputDecoration(
-          isDense: true,
-          contentPadding: EdgeInsets.zero,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          // Placeholder: "Describe what you want to do...", Inter 14 normal #C8CBD0
-          hintText: 'Describe what you want to do...',
-          hintStyle: GoogleFonts.inter(
-            fontSize: 14,
-            fontWeight: FontWeight.normal,
-            color: AppTheme.textMuted,
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                child: TextField(
+                  controller: controller.promptController,
+                  maxLines: null,
+                  expands: true,
+                  textAlignVertical: TextAlignVertical.top,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  smartDashesType: SmartDashesType.disabled,
+                  smartQuotesType: SmartQuotesType.disabled,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                    color: AppTheme.textPrimary,
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    hintText: 'Describe what you want to do...',
+                    hintStyle: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.normal,
+                      color: AppTheme.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (showMic)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [_buildMicButton()],
+                ),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildMicButton() {
+    return Obx(() {
+      final recording = controller.isVoiceRecording.value;
+      final transcribing = controller.isTranscribing.value;
+
+      if (transcribing) {
+        return const SizedBox(
+          width: 32,
+          height: 32,
+          child: Padding(
+            padding: EdgeInsets.all(4),
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              valueColor: AlwaysStoppedAnimation<Color>(AppTheme.textSecondary),
+            ),
           ),
+        );
+      }
+
+      if (recording) {
+        return GestureDetector(
+          onTap: controller.stopVoiceInput,
+          child: Container(
+            width: 32,
+            height: 32,
+            decoration: const BoxDecoration(
+              color: AppTheme.recordRed,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(2.5),
+                ),
+              ),
+            ),
+          ),
+        );
+      }
+
+      return GestureDetector(
+        onTap: controller.startVoiceInput,
+        child: Container(
+          width: 32,
+          height: 32,
+          decoration: const BoxDecoration(
+            color: AppTheme.primary,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(LucideIcons.mic, size: 16, color: Colors.white),
         ),
-      ),
-    );
+      );
+    });
   }
 
   // Create Button: cornerRadius 8, fill #1D1D1F, height 48, center

@@ -8,6 +8,8 @@ class TranscribeAudioUseCase {
 
   TranscribeAudioUseCase({required SttRepository repo}) : _repo = repo;
 
+  Future<bool> hasConfig() => _repo.hasConfig();
+
   /// Transcribes audio data via the configured STT API.
   /// Throws if not configured or API fails.
   Future<SttResult> call(Uint8List audioData, String mimeType) async {

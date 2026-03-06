@@ -4,6 +4,7 @@ import '../data/repositories/event_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
 import '../data/repositories/ws_session_repository.dart';
 import '../ui/new_session/new_session_viewmodel.dart';
+import '../usecases/transcribe_audio.dart';
 
 class NewSessionBinding extends Bindings {
   @override
@@ -12,6 +13,7 @@ class NewSessionBinding extends Bindings {
           machineRepo: Get.find<PairedMachineRepository>(),
           wsRepo: Get.find<WsSessionRepository>(),
           eventRepo: Get.find<EventRepository>(),
+          transcribe: Get.find<TranscribeAudioUseCase>(),
         ));
   }
 }

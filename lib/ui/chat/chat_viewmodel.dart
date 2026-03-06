@@ -10,7 +10,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
-import '../../data/repositories/stt_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
@@ -27,17 +26,14 @@ import 'widgets/mention_text_controller.dart';
 class ChatViewModel extends GetxController {
   final EventRepository _eventRepo;
   final WsSessionRepository _wsRepo;
-  final SttRepository _sttRepo;
   final TranscribeAudioUseCase _transcribe;
 
   ChatViewModel({
     required EventRepository eventRepo,
     required WsSessionRepository wsRepo,
-    required SttRepository sttRepo,
     required TranscribeAudioUseCase transcribe,
   })  : _eventRepo = eventRepo,
         _wsRepo = wsRepo,
-        _sttRepo = sttRepo,
         _transcribe = transcribe;
 
   late final String machineId;
@@ -438,7 +434,7 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> _checkSttConfig() async {
-    hasSttConfig.value = await _sttRepo.hasConfig();
+    hasSttConfig.value = await _transcribe.hasConfig();
   }
 
   Future<void> startVoiceInput() async {
