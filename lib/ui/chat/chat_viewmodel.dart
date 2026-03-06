@@ -430,9 +430,13 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> startVoiceInput() async {
+    // Show stop button immediately for responsive feedback.
+    isVoiceRecording.value = true;
+
     _voiceRecorder = AudioRecorder();
     if (!await _voiceRecorder!.hasPermission()) {
       AppToast.show('Microphone permission denied');
+      isVoiceRecording.value = false;
       _voiceRecorder = null;
       return;
     }
@@ -447,6 +451,7 @@ class ChatViewModel extends GetxController {
       ), path: path);
     } catch (e) {
       AppToast.show('Failed to start recording');
+      isVoiceRecording.value = false;
       await _voiceRecorder!.dispose();
       _voiceRecorder = null;
       return;
@@ -454,23 +459,25 @@ class ChatViewModel extends GetxController {
 
     if (!await _voiceRecorder!.isRecording()) {
       AppToast.show('Microphone unavailable');
+      isVoiceRecording.value = false;
       await _voiceRecorder!.dispose();
       _voiceRecorder = null;
       return;
     }
-
-    isVoiceRecording.value = true;
   }
 
   Future<void> stopVoiceInput() async {
-    if (_voiceRecorder == null) return;
+    if (_voiceRecorder == null) {
+      isVoiceRecording.value = false;
+      return;
+    }
 
     final path = await _voiceRecorder!.stop();
-    isVoiceRecording.value = false;
     await _voiceRecorder!.dispose();
     _voiceRecorder = null;
 
     if (path == null) {
+      isVoiceRecording.value = false;
       AppToast.show('Recording failed');
       return;
     }
@@ -478,6 +485,7 @@ class ChatViewModel extends GetxController {
     final file = File(path);
     final size = await file.length();
     if (size < 100) {
+      isVoiceRecording.value = false;
       AppToast.show('No audio captured — microphone may be unavailable');
       try {
         await file.delete();
@@ -485,7 +493,9 @@ class ChatViewModel extends GetxController {
       return;
     }
 
+    // Transition directly: recording → transcribing (no gap/flash).
     isTranscribing.value = true;
+    isVoiceRecording.value = false;
     try {
       final bytes = await file.readAsBytes();
       final result = await _transcribe.call(bytes, 'audio/m4a');

@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -75,43 +76,45 @@ class ChatInputBar extends StatelessWidget {
                     ),
                   ),
                 Expanded(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: AppTheme.inputFill,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: TextField(
-                      controller: controller,
-                      enabled: !_isRunning,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      decoration: InputDecoration(
-                        hintText: 'Type a message...',
-                        hintStyle: GoogleFonts.inter(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: AppTheme.textMuted,
+                  child: isRecording
+                      ? const _RecordingWaveform()
+                      : Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.inputFill,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: TextField(
+                            controller: controller,
+                            enabled: !_isRunning,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            smartDashesType: SmartDashesType.disabled,
+                            smartQuotesType: SmartQuotesType.disabled,
+                            decoration: InputDecoration(
+                              hintText: 'Type a message...',
+                              hintStyle: GoogleFonts.inter(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w400,
+                                color: AppTheme.textMuted,
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 10,
+                                horizontal: 14,
+                              ),
+                              isDense: true,
+                            ),
+                            style: GoogleFonts.inter(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w400,
+                              color: AppTheme.textPrimary,
+                            ),
+                            textInputAction: TextInputAction.send,
+                            minLines: 1,
+                            maxLines: 4,
+                            onSubmitted: (_) => onSend(),
+                          ),
                         ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10,
-                          horizontal: 14,
-                        ),
-                        isDense: true,
-                      ),
-                      style: GoogleFonts.inter(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w400,
-                        color: AppTheme.textPrimary,
-                      ),
-                      textInputAction: TextInputAction.send,
-                      minLines: 1,
-                      maxLines: 4,
-                      onSubmitted: (_) => onSend(),
-                    ),
-                  ),
                 ),
                 const SizedBox(width: 8),
                 _isRunning
@@ -243,11 +246,11 @@ class ChatInputBar extends StatelessWidget {
         width: 36,
         height: 36,
         decoration: const BoxDecoration(
-          color: AppTheme.primary,
+          color: AppTheme.inputFill,
           shape: BoxShape.circle,
         ),
         child: const Center(
-          child: Icon(LucideIcons.mic, color: Colors.white, size: 18),
+          child: Icon(LucideIcons.mic, color: AppTheme.textSecondary, size: 18),
         ),
       ),
     );
@@ -259,12 +262,19 @@ class ChatInputBar extends StatelessWidget {
       child: Container(
         width: 36,
         height: 36,
-        decoration: BoxDecoration(
-          color: Colors.red.shade600,
+        decoration: const BoxDecoration(
+          color: AppTheme.recordRed,
           shape: BoxShape.circle,
         ),
-        child: const Center(
-          child: Icon(Icons.stop_rounded, color: Colors.white, size: 18),
+        child: Center(
+          child: Container(
+            width: 14,
+            height: 14,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
         ),
       ),
     );
@@ -300,6 +310,96 @@ class ChatInputBar extends StatelessWidget {
         child: const Center(
           child: Icon(Icons.stop_rounded, color: Colors.white, size: 18),
         ),
+      ),
+    );
+  }
+}
+
+/// Animated waveform shown in place of the text field while recording.
+class _RecordingWaveform extends StatefulWidget {
+  const _RecordingWaveform();
+
+  @override
+  State<_RecordingWaveform> createState() => _RecordingWaveformState();
+}
+
+class _RecordingWaveformState extends State<_RecordingWaveform>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _anim;
+
+  static const _barCount = 14;
+  static const _minH = 6.0;
+  static const _maxH = 24.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _anim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _anim.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.inputFill,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+      child: AnimatedBuilder(
+        animation: _anim,
+        builder: (context, _) {
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Pulsing red recording dot
+              Opacity(
+                opacity: 0.4 + 0.6 * ((sin(_anim.value * 2 * pi) + 1) / 2),
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: AppTheme.recordRed,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Animated waveform bars
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: List.generate(_barCount, (i) {
+                    final phase = i * 0.45;
+                    final t =
+                        (sin(_anim.value * 2 * pi + phase) + 1) / 2;
+                    final h = _minH + (_maxH - _minH) * t;
+                    return Padding(
+                      padding: EdgeInsets.only(left: i > 0 ? 6 : 0),
+                      child: Container(
+                        width: 3,
+                        height: h,
+                        decoration: BoxDecoration(
+                          color: AppTheme.waveformGreen,
+                          borderRadius: BorderRadius.circular(1.5),
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
