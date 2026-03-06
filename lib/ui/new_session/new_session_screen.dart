@@ -56,42 +56,52 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             // Body: padding [24, 16], gap 24, vertical, fill_container
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 24, 16, 0),
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Machine Section: gap 8, vertical
-                    _buildFieldLabel('Machine'),
-                    const SizedBox(height: 8),
-                    _buildMachineSelector(),
-                    const SizedBox(height: 24),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.only(top: 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Machine Section: gap 8, vertical
+                            _buildFieldLabel('Machine'),
+                            const SizedBox(height: 8),
+                            _buildMachineSelector(),
+                            const SizedBox(height: 24),
 
-                    // Directory Section: gap 8, vertical
-                    _buildFieldLabel('Working Directory'),
-                    const SizedBox(height: 8),
-                    _buildDirectorySection(),
-                    const SizedBox(height: 24),
+                            // Directory Section: gap 8, vertical
+                            _buildFieldLabel('Working Directory'),
+                            const SizedBox(height: 8),
+                            _buildDirectorySection(),
+                            const SizedBox(height: 24),
 
-                    // Permission Mode Section: gap 8, vertical
-                    _buildFieldLabel('Permission Mode'),
-                    const SizedBox(height: 8),
-                    _buildPermissionModeGrid(),
-                    const SizedBox(height: 24),
+                            // Permission Mode Section: gap 8, vertical
+                            _buildFieldLabel('Permission Mode'),
+                            const SizedBox(height: 8),
+                            _buildPermissionModeGrid(),
+                            const SizedBox(height: 24),
 
-                    // Prompt Section: gap 8, vertical
-                    _buildFieldLabel('Initial Prompt'),
-                    const SizedBox(height: 8),
-                    _buildPromptInput(),
+                            // Prompt Section: gap 8, vertical
+                            _buildFieldLabel('Initial Prompt'),
+                            const SizedBox(height: 8),
+                            _buildPromptInput(),
+                          ],
+                        ),
+                      ),
+                    ),
 
-                    // Spacer fills remaining space
-                    const Spacer(),
-
-                    // Create Button: cornerRadius 8, fill #1D1D1F, height 48, center
-                    _buildCreateButton(),
-                    SizedBox(
-                        height: MediaQuery.of(Get.context!).padding.bottom > 0
+                    // Create Button: pinned at bottom
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: 16,
+                        bottom: MediaQuery.of(Get.context!).padding.bottom > 0
                             ? 16
-                            : 24),
+                            : 24,
+                      ),
+                      child: _buildCreateButton(),
+                    ),
                   ],
                 ),
               ),
