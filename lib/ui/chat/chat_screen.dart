@@ -14,6 +14,7 @@ import '../../domain/tool_activity.dart';
 import 'chat_viewmodel.dart';
 import 'widgets/chat_input_bar.dart';
 import 'widgets/chat_message_bubble.dart';
+import 'widgets/file_picker_panel.dart';
 import 'widgets/permission_card.dart';
 import 'widgets/plan_approval_card.dart';
 import 'widgets/tool_call_card.dart';
@@ -151,6 +152,20 @@ class ChatScreen extends GetView<ChatViewModel> {
               ],
             ),
           ),
+
+          // File picker panel
+          Obx(() {
+            if (!controller.showFilePicker.value) {
+              return const SizedBox.shrink();
+            }
+            return FilePickerPanel(
+              entries: controller.filePickerEntries.toList(),
+              isSearchMode: controller.isFileSearchMode.value,
+              isLoading: controller.filePickerLoading.value,
+              onTap: controller.onFileEntryTap,
+              onDrillDown: controller.onFileEntryDrillDown,
+            );
+          }),
 
           // Input bar
           Obx(

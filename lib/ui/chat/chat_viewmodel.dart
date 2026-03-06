@@ -15,12 +15,14 @@ import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
+import '../../domain/fs_entry.dart';
 import '../../domain/message.dart';
 import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import 'chat_state.dart';
+import 'widgets/mention_text_controller.dart';
 
 class ChatViewModel extends GetxController {
   final EventRepository _eventRepo;
@@ -55,11 +57,20 @@ class ChatViewModel extends GetxController {
   final pendingImages = <XFile>[].obs;
   final pendingPreviews = <Uint8List>[].obs;
   final pendingMimeTypes = <String>[].obs;
-  final inputController = TextEditingController();
+  final inputController = MentionTextEditingController();
   final scrollController = ScrollController();
   final isVoiceRecording = false.obs;
   final isTranscribing = false.obs;
   final showModeDropdown = false.obs;
+  final showFilePicker = false.obs;
+  final filePickerEntries = <FsEntry>[].obs;
+  final filePickerLoading = false.obs;
+  final isFileSearchMode = false.obs;
+
+  String _browsePath = '';
+  int _atPosition = -1;
+  String _lastMentionQuery = '';
+  Timer? _searchDebounce;
 
   AudioRecorder? _voiceRecorder;
   final hasSttConfig = false.obs;
@@ -91,6 +102,7 @@ class ChatViewModel extends GetxController {
     }
 
     scrollController.addListener(_onScrollChanged);
+    inputController.addListener(_detectMention);
     _subscribeEvents();
     _checkSttConfig();
 
@@ -521,7 +533,152 @@ class ChatViewModel extends GetxController {
     }
   }
 
+  // ── File mention detection ──
+
+  void _detectMention() {
+    final value = inputController.value;
+
+    // Skip during IME composing (e.g. Chinese pinyin input)
+    if (value.composing.isValid && !value.composing.isCollapsed) return;
+
+    final text = value.text;
+    final cursorPos = value.selection.baseOffset;
+    if (cursorPos < 0) return;
+
+    // Scan backwards from cursor for nearest valid @
+    int atPos = -1;
+    for (var i = cursorPos - 1; i >= 0; i--) {
+      if (text[i] == '@') {
+        // Valid @ must be at start of text or preceded by whitespace
+        if (i == 0 || text[i - 1] == ' ' || text[i - 1] == '\n') {
+          atPos = i;
+        }
+        break; // Stop at first @ found regardless of validity
+      }
+      // Stop scanning if we hit whitespace before finding @
+      if (text[i] == ' ' || text[i] == '\n') break;
+    }
+
+    if (atPos < 0) {
+      if (showFilePicker.value) _dismissFilePicker();
+      return;
+    }
+
+    final query = text.substring(atPos + 1, cursorPos);
+
+    // Space in query terminates mention
+    if (query.contains(' ')) {
+      if (showFilePicker.value) _dismissFilePicker();
+      return;
+    }
+
+    _atPosition = atPos;
+
+    if (query.isEmpty) {
+      // Browse mode
+      isFileSearchMode.value = false;
+      if (!showFilePicker.value) {
+        showFilePicker.value = true;
+        _browsePath = '';
+        _fetchListing(_browsePath);
+      }
+    } else {
+      // Search mode
+      isFileSearchMode.value = true;
+      showFilePicker.value = true;
+      if (query != _lastMentionQuery) {
+        _lastMentionQuery = query;
+        _searchDebounce?.cancel();
+        _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+          _fetchSearch(query);
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchListing(String path) async {
+    filePickerLoading.value = true;
+    try {
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'fs.list',
+        params: {'sessionId': sessionId, 'path': path},
+      );
+      final raw = result['entries'] as List? ?? [];
+      final entries = raw
+          .map((e) => FsEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+      filePickerEntries.value = entries;
+    } catch (e) {
+      debugPrint('[ChatVM] fs.list failed: $e');
+      filePickerEntries.clear();
+    } finally {
+      filePickerLoading.value = false;
+    }
+  }
+
+  Future<void> _fetchSearch(String query) async {
+    filePickerLoading.value = true;
+    try {
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'fs.search',
+        params: {'sessionId': sessionId, 'query': query},
+      );
+      final raw = result['results'] as List? ?? [];
+      final entries = raw
+          .map((e) => FsEntry.fromJson(e as Map<String, dynamic>))
+          .toList();
+      filePickerEntries.value = entries;
+    } catch (e) {
+      debugPrint('[ChatVM] fs.search failed: $e');
+      filePickerEntries.clear();
+    } finally {
+      filePickerLoading.value = false;
+    }
+  }
+
+  void onFileEntryDrillDown(FsEntry entry) {
+    _browsePath = entry.path;
+    _fetchListing(_browsePath);
+  }
+
+  void onFileEntryTap(FsEntry entry) {
+    // Insert file path replacing @query
+    final text = inputController.text;
+    final cursorPos = inputController.selection.baseOffset;
+    if (_atPosition < 0 || _atPosition >= text.length) {
+      _dismissFilePicker();
+      return;
+    }
+
+    final before = text.substring(0, _atPosition);
+    final after = cursorPos < text.length ? text.substring(cursorPos) : '';
+    final insertion = '@${entry.path} ';
+    final newText = '$before$insertion$after';
+    final newCursor = before.length + insertion.length;
+
+    inputController.value = TextEditingValue(
+      text: newText,
+      selection: TextSelection.collapsed(offset: newCursor),
+    );
+    _dismissFilePicker();
+  }
+
+  void _dismissFilePicker() {
+    showFilePicker.value = false;
+    filePickerEntries.clear();
+    filePickerLoading.value = false;
+    isFileSearchMode.value = false;
+    _atPosition = -1;
+    _browsePath = '';
+    _lastMentionQuery = '';
+    _searchDebounce?.cancel();
+  }
+
   Future<void> sendMessage(String text) async {
+    if (showFilePicker.value) _dismissFilePicker();
+
     final trimmed = text.trim();
     final hasImages = pendingImages.isNotEmpty;
     if (trimmed.isEmpty && !hasImages) return;
@@ -667,7 +824,9 @@ class ChatViewModel extends GetxController {
   @override
   void onClose() {
     _eventSub?.cancel();
+    _searchDebounce?.cancel();
     scrollController.dispose();
+    inputController.removeListener(_detectMention);
     inputController.dispose();
     _voiceRecorder?.dispose();
     super.onClose();
