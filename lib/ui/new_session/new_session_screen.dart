@@ -19,7 +19,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       body: UiEffectListener(
         effects: controller.uiEffect,
         child: SafeArea(
-          child: Obx(() => Column(
+          child: Column(
           children: [
             // Header: height 56, padding [0, 16], gap 12, alignItems center,
             // bottom border #E5E7EB
@@ -68,7 +68,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                             // Machine Section: gap 8, vertical
                             _buildFieldLabel('Machine'),
                             const SizedBox(height: 8),
-                            _buildMachineSelector(),
+                            Obx(() => _buildMachineSelector()),
                             const SizedBox(height: 24),
 
                             // Directory Section: gap 8, vertical
@@ -80,7 +80,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                             // Permission Mode Section: gap 8, vertical
                             _buildFieldLabel('Permission Mode'),
                             const SizedBox(height: 8),
-                            _buildPermissionModeGrid(),
+                            Obx(() => _buildPermissionModeGrid()),
                             const SizedBox(height: 24),
 
                             // Prompt Section: gap 8, vertical
@@ -107,7 +107,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               ),
             ),
           ],
-        )),
+        ),
         ),
       ),
     );
@@ -308,147 +308,154 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  // Directory input with recent-cwd dropdown
+  // Directory input with recent-cwd dropdown.
+  // The outer Obx only tracks isCwdDropdownOpen (for the border & showing the
+  // dropdown). The inner Obx tracks filteredCwds so that typing to filter the
+  // list does NOT rebuild the TextField — which would disconnect the IME and
+  // close the keyboard on Android.
   Widget _buildDirectorySection() {
-    final isOpen = controller.isCwdDropdownOpen.value;
-    final filtered = controller.filteredCwds;
+    return Obx(() {
+      final isOpen = controller.isCwdDropdownOpen.value;
 
-    // Input row — shared between open and closed states
-    Widget inputRow() {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: isOpen
-            ? null
-            : BoxDecoration(
-                color: AppTheme.inputFill,
-                borderRadius: BorderRadius.circular(8),
-              ),
-        color: isOpen ? AppTheme.inputFill : null,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Icon(LucideIcons.folder,
-                size: 16, color: AppTheme.textTertiary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: TextField(
-                controller: controller.cwdController,
-                focusNode: controller.cwdFocusNode,
-                autocorrect: false,
-                enableSuggestions: false,
-                smartDashesType: SmartDashesType.disabled,
-                smartQuotesType: SmartQuotesType.disabled,
-                style: AppFonts.code(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimary,
-                ),
-                decoration: InputDecoration(
-                  isDense: true,
-                  contentPadding: EdgeInsets.zero,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  hintText: '~/project',
-                  hintStyle: AppFonts.code(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textMuted,
-                  ),
-                ),
-              ),
-            ),
-          ],
+        decoration: BoxDecoration(
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(8),
+          border: isOpen
+              ? Border.all(color: AppTheme.primary, width: 2)
+              : null,
         ),
-      );
-    }
-
-    if (!isOpen) return inputRow();
-
-    // Open state: border wraps input + dropdown
-    return Container(
-      decoration: BoxDecoration(
-        border: Border.all(color: AppTheme.primary, width: 2),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          inputRow(),
-          const Divider(height: 1, thickness: 1, color: AppTheme.border),
-          Container(
-            color: Colors.white,
-            constraints: const BoxConstraints(maxHeight: 220),
-            child: ListView.builder(
-              shrinkWrap: true,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: filtered.length + 1, // +1 for header
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                    child: Text(
-                      'RECENT',
-                      style: GoogleFonts.inter(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF9CA0A8),
-                        letterSpacing: 0.5,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Input row — always at index 0 to preserve focus
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(LucideIcons.folder,
+                      size: 16, color: AppTheme.textTertiary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: controller.cwdController,
+                      focusNode: controller.cwdFocusNode,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      smartDashesType: SmartDashesType.disabled,
+                      smartQuotesType: SmartQuotesType.disabled,
+                      style: AppFonts.code(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        hintText: '~/project',
+                        hintStyle: AppFonts.code(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textMuted,
+                        ),
                       ),
                     ),
-                  );
-                }
-                final cwd = filtered[index - 1];
-                final isFirst = index == 1;
-                return GestureDetector(
-                  onTap: () => controller.selectCwd(cwd),
-                  child: Container(
-                    color: isFirst
-                        ? AppTheme.hoverBg
-                        : Colors.transparent,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    child: Row(
-                      children: [
-                        const Icon(LucideIcons.folder,
-                            size: 14, color: Color(0xFF9CA0A8)),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                  ),
+                ],
+              ),
+            ),
+            // Dropdown — conditionally shown below the input
+            if (isOpen) ...[
+              const Divider(
+                  height: 1, thickness: 1, color: AppTheme.border),
+              // Nested Obx: only this rebuilds when filteredCwds changes,
+              // keeping the TextField above stable.
+              Obx(() {
+                final filtered = controller.filteredCwds;
+                return Container(
+                  color: Colors.white,
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: filtered.length + 1, // +1 for header
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding:
+                              const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                          child: Text(
+                            'RECENT',
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF9CA0A8),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        );
+                      }
+                      final cwd = filtered[index - 1];
+                      final isFirst = index == 1;
+                      return GestureDetector(
+                        onTap: () => controller.selectCwd(cwd),
+                        child: Container(
+                          color: isFirst
+                              ? AppTheme.hoverBg
+                              : Colors.transparent,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          child: Row(
                             children: [
-                              Text(
-                                cwd.path,
-                                style: AppFonts.code(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppTheme.textPrimary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _relativeTime(cwd.lastUsed),
-                                style: GoogleFonts.inter(
-                                  fontSize: 11,
-                                  color: const Color(0xFF9CA0A8),
+                              const Icon(LucideIcons.folder,
+                                  size: 14,
+                                  color: Color(0xFF9CA0A8)),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      cwd.path,
+                                      style: AppFonts.code(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _relativeTime(cwd.lastUsed),
+                                      style: GoogleFonts.inter(
+                                        fontSize: 11,
+                                        color: const Color(0xFF9CA0A8),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
                 );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
+              }),
+            ],
+          ],
+        ),
+      );
+    });
   }
 
   String _relativeTime(DateTime dt) {
