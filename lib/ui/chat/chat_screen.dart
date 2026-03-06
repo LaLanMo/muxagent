@@ -486,12 +486,15 @@ class ChatScreen extends GetView<ChatViewModel> {
     // Agent messages: render per-part with reasoning merging
     final StringBuffer reasoningBuf = StringBuffer();
 
-    void flushReasoning() {
+    void flushReasoning({bool isLastPart = false}) {
       if (reasoningBuf.isNotEmpty) {
         widgets.add(
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: _buildReasoningBlock(reasoningBuf.toString()),
+            child: _CollapsibleReasoningBlock(
+              text: reasoningBuf.toString(),
+              isStreaming: isStreaming && isLastPart,
+            ),
           ),
         );
         reasoningBuf.clear();
@@ -566,7 +569,7 @@ class ChatScreen extends GetView<ChatViewModel> {
           break;
       }
     }
-    flushReasoning();
+    flushReasoning(isLastPart: true);
 
     return Column(
       crossAxisAlignment: isUser
@@ -576,22 +579,6 @@ class ChatScreen extends GetView<ChatViewModel> {
     );
   }
 
-  Widget _buildReasoningBlock(String text) {
-    return Container(
-      padding: const EdgeInsets.only(left: 10),
-      decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: AppTheme.border, width: 2)),
-      ),
-      child: Text(
-        text,
-        style: GoogleFonts.inter(
-          fontSize: 13,
-          color: AppTheme.textTertiary,
-          height: 1.5,
-        ),
-      ),
-    );
-  }
 
   Widget _buildConnectionBanner(ConnState state) {
     if (state == ConnState.connected) return const SizedBox.shrink();
@@ -806,6 +793,71 @@ class _PlanPanelState extends State<_PlanPanel> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CollapsibleReasoningBlock extends StatefulWidget {
+  final String text;
+  final bool isStreaming;
+
+  const _CollapsibleReasoningBlock({
+    required this.text,
+    required this.isStreaming,
+  });
+
+  @override
+  State<_CollapsibleReasoningBlock> createState() =>
+      _CollapsibleReasoningBlockState();
+}
+
+class _CollapsibleReasoningBlockState
+    extends State<_CollapsibleReasoningBlock> {
+  bool _expanded = false;
+
+  String get _lastLine {
+    final trimmed = widget.text.trimRight();
+    final idx = trimmed.lastIndexOf('\n');
+    if (idx == -1) return trimmed;
+    return trimmed.substring(idx + 1);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = GoogleFonts.inter(
+      fontSize: 13,
+      color: AppTheme.textTertiary,
+      height: 1.5,
+    );
+
+    return GestureDetector(
+      onTap: () => setState(() => _expanded = !_expanded),
+      child: Container(
+        padding: const EdgeInsets.only(left: 10),
+        decoration: const BoxDecoration(
+          border: Border(left: BorderSide(color: AppTheme.border, width: 2)),
+        ),
+        child: _expanded
+            ? Text(widget.text, style: textStyle)
+            : Row(
+                children: [
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 14,
+                    color: AppTheme.textTertiary,
+                  ),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      _lastLine,
+                      style: textStyle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
