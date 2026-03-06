@@ -131,7 +131,7 @@ class ChatInputBar extends StatelessWidget {
 
   Widget _buildPreviewStrip() {
     return SizedBox(
-      height: 68,
+      height: 74,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: imagePreviews.length + 1,

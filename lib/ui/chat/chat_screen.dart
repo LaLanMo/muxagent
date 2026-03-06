@@ -154,21 +154,24 @@ class ChatScreen extends GetView<ChatViewModel> {
 
           // Input bar
           Obx(
-            () => ChatInputBar(
+            () {
+              final previews = controller.pendingPreviews.toList();
+              return ChatInputBar(
               controller: controller.inputController,
               sessionStatus: controller.sessionStatus.value,
               onSend: () =>
                   controller.sendMessage(controller.inputController.text),
               onCancel: controller.cancelSession,
               onAttach: controller.pickImage,
-              imagePreviews: controller.pendingPreviews,
+              imagePreviews: previews,
               onRemoveImage: controller.removeImage,
               showMic: controller.hasSttConfig.value,
               isRecording: controller.isVoiceRecording.value,
               isTranscribing: controller.isTranscribing.value,
               onMicStart: controller.startVoiceInput,
               onMicStop: controller.stopVoiceInput,
-            ),
+            );
+            },
           ),
         ],
       ),
