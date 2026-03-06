@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
@@ -64,6 +65,7 @@ class ChatViewModel extends GetxController {
   final hasSttConfig = false.obs;
   bool _userIsScrolling = false;
   bool _isProgrammaticScroll = false;
+  bool _hasOptimisticUserMsg = false;
   int _scrollRequestId = 0;
 
   StreamSubscription<AgentEvent>? _eventSub;
@@ -155,6 +157,13 @@ class ChatViewModel extends GetxController {
       case EventType.reasoning:
       case EventType.messageDelta:
         if (event.messagePart != null) {
+          // Skip user message echoes when we already show the optimistic
+          // version created in sendMessage(). During session.load history
+          // replay _hasOptimisticUserMsg is false so messages pass through.
+          if (_hasOptimisticUserMsg &&
+              event.messagePart!.role == MessageRole.user) {
+            break;
+          }
           chatState.applyDelta(event.messagePart!);
           _refreshMessages();
         }
@@ -196,9 +205,11 @@ class ChatViewModel extends GetxController {
         }
 
       case EventType.runFinished:
+        _hasOptimisticUserMsg = false;
         sessionStatus.value = SessionStatus.done;
 
       case EventType.runFailed:
+        _hasOptimisticUserMsg = false;
         sessionStatus.value = SessionStatus.error;
         if (event.error != null && event.error!.message.isNotEmpty) {
           final errorMsg = Message(
@@ -371,9 +382,19 @@ class ChatViewModel extends GetxController {
   }
 
   void _refreshMessages() {
-    messages.value = chatState.orderedMessages;
-    _scrollToBottom();
-    _scheduleScrollStateSync();
+    void doRefresh() {
+      messages.value = chatState.orderedMessages;
+      _scrollToBottom();
+      _scheduleScrollStateSync();
+    }
+
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.persistentCallbacks ||
+        phase == SchedulerPhase.midFrameMicrotasks) {
+      SchedulerBinding.instance.addPostFrameCallback((_) => doRefresh());
+    } else {
+      doRefresh();
+    }
   }
 
   void _refreshApprovals() {
@@ -385,7 +406,10 @@ class ChatViewModel extends GetxController {
   Future<void> pickImage() async {
     final remaining = 20 - pendingImages.length;
     if (remaining <= 0) return;
-    final images = await ImagePicker().pickMultiImage(limit: remaining);
+    final images = await ImagePicker().pickMultiImage(
+      limit: remaining,
+      requestFullMetadata: false,
+    );
     for (final img in images) {
       pendingImages.add(img);
       pendingPreviews.add(await img.readAsBytes());
@@ -523,6 +547,7 @@ class ChatViewModel extends GetxController {
       parts: parts,
       createdAt: DateTime.now(),
     );
+    _hasOptimisticUserMsg = true;
     chatState.finalizeMessage(userMsg);
     _refreshMessages();
     _setFollowBottom(false);
