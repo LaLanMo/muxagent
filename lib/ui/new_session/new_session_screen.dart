@@ -83,6 +83,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                             Obx(() => _buildPermissionModeGrid()),
                             const SizedBox(height: 24),
 
+                            // Git Worktree Section
+                            _buildFieldLabel('Git Worktree'),
+                            const SizedBox(height: 8),
+                            _buildWorktreeToggle(),
+                            const SizedBox(height: 24),
+
                             // Prompt Section: gap 8, vertical
                             _buildFieldLabel('Initial Prompt'),
                             const SizedBox(height: 8),
@@ -472,6 +478,60 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       return '${(diff.inDays / 7).floor()} weeks ago';
     }
     return 'Last month';
+  }
+
+  Widget _buildWorktreeToggle() {
+    final isOn = controller.useWorktree.value;
+    return GestureDetector(
+      onTap: controller.toggleWorktree,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isOn ? AppTheme.selectedBg : AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(10),
+          border: isOn
+              ? Border.all(color: AppTheme.primary, width: 1.5)
+              : null,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              LucideIcons.gitBranch,
+              size: 14,
+              color: isOn ? AppTheme.textPrimary : AppTheme.textTertiary,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Use Worktree',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: isOn ? FontWeight.w600 : FontWeight.w500,
+                      color: isOn
+                          ? AppTheme.textPrimary
+                          : AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Agent works on an isolated branch',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: isOn
+                          ? AppTheme.textSecondary
+                          : AppTheme.textTertiary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // Prompt input: cornerRadius 8, fill #EDEEF1, height 80, padding [10, 12]

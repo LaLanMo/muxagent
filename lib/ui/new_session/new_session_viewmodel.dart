@@ -33,6 +33,7 @@ class NewSessionViewModel extends GetxController {
   final activeSessionIds = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
   final selectedMode = PermissionMode.bypassPermissions.obs;
+  final useWorktree = false.obs;
 
   final cwdController = TextEditingController();
   final promptController = TextEditingController();
@@ -119,6 +120,8 @@ class NewSessionViewModel extends GetxController {
 
   void selectMode(PermissionMode mode) => selectedMode.value = mode;
 
+  void toggleWorktree() => useWorktree.value = !useWorktree.value;
+
   Future<void> _loadRecentCwds() async {
     final machineId = selectedMachine.value?.machineId;
     final list = await SessionDatabase.recentCwds(machineId: machineId);
@@ -174,6 +177,7 @@ class NewSessionViewModel extends GetxController {
       final createParams = <String, dynamic>{
         'cwd': cwd,
         'permissionMode': selectedMode.value.id,
+        if (useWorktree.value) 'useWorktree': true,
       };
 
       final createResult = await _wsRepo.callRpc(
