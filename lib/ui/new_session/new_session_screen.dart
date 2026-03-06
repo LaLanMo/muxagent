@@ -489,9 +489,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         decoration: BoxDecoration(
           color: isOn ? AppTheme.selectedBg : AppTheme.inputFill,
           borderRadius: BorderRadius.circular(10),
-          border: isOn
-              ? Border.all(color: AppTheme.primary, width: 1.5)
-              : null,
+          border: Border.all(
+            color: isOn ? AppTheme.primary : Colors.transparent,
+            width: 1.5,
+          ),
         ),
         child: Row(
           children: [
