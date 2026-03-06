@@ -86,7 +86,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                             // Git Worktree Section
                             _buildFieldLabel('Git Worktree'),
                             const SizedBox(height: 8),
-                            _buildWorktreeToggle(),
+                            Obx(() => _buildWorktreeToggle()),
                             const SizedBox(height: 24),
 
                             // Prompt Section: gap 8, vertical
