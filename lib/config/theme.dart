@@ -34,6 +34,8 @@ class AppTheme {
   static const statusConnecting = Color(0xFFE07B54);
   static const statusDisconnected = Color(0xFFCC4444);
   static const disconnectedBg = Color(0xFFFFF0F0);
+  static const serverLostBg = Color(0xFFFEF2F2);
+  static const serverLostText = Color(0xFFDC2626);
 
   // Feature accent
   static const planAccent = Color(0xFF3B82F6);

@@ -12,12 +12,14 @@ class SettingsTabViewModel extends GetxController {
   final CryptoService _crypto;
   final RxList<PairedMachine> machines;
   final RxSet<String> activeSessionIds;
+  final RxBool relayConnected;
   final Future<void> Function(PairedMachine) _connectMachine;
 
   SettingsTabViewModel({
     required CryptoService crypto,
     required this.machines,
     required this.activeSessionIds,
+    required this.relayConnected,
     required Future<void> Function(PairedMachine) connectMachine,
   })  : _crypto = crypto,
         _connectMachine = connectMachine;

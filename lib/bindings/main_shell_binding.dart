@@ -29,6 +29,7 @@ class MainShellBinding extends Bindings {
         crypto: Get.find<CryptoService>(),
         machines: shell.machines,
         activeSessionIds: shell.activeSessionIds,
+        relayConnected: shell.relayConnected,
         connectMachine: shell.connectMachine,
       );
     });

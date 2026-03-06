@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:get/get.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 
 import '../../../domain/master_key.dart';
@@ -24,6 +25,7 @@ class RelayWsClient {
   final X25519 _x25519 = X25519();
 
   final BaseWsClient _ws = BaseWsClient();
+  final relayConnected = false.obs;
   Completer<void>? _registeredCompleter;
   final _events = StreamController<WsEvent>.broadcast();
   final _errors = StreamController<WsErrorMessage>.broadcast();
@@ -61,10 +63,12 @@ class RelayWsClient {
       wsUrl,
       onMessage: _handleMessage,
       onError: (err) {
+        relayConnected.value = false;
         _registeredCompleter?.completeError(err);
         _sessions.endAll(err);
       },
       onDone: () {
+        relayConnected.value = false;
         _registeredCompleter?.completeError('socket closed');
         _sessions.endAll('socket closed');
       },
@@ -188,6 +192,7 @@ class RelayWsClient {
   }
 
   Future<void> close() async {
+    relayConnected.value = false;
     await _ws.close();
     _sessions.endAll(null);
     await _events.close();
@@ -210,6 +215,7 @@ class RelayWsClient {
     try {
       switch (type) {
         case WsMessageType.registered:
+          relayConnected.value = true;
           _registeredCompleter?.complete();
           _registeredCompleter = null;
           return;

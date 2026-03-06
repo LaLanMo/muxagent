@@ -124,6 +124,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   Widget _buildMachineRow(PairedMachine machine) {
     final connected = controller.isMachineConnected(machine.machineId);
     final connecting = controller.connectingMachines.contains(machine.machineId);
+    final serverLost = !controller.relayConnected.value;
     final hostname = machine.hostname ?? 'Unknown host';
 
     return GestureDetector(
@@ -168,7 +169,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               ),
             ),
             // Status pill
-            _buildStatusPill(connected, connecting: connecting),
+            _buildStatusPill(connected, connecting: connecting, serverLost: serverLost),
           ],
         ),
       ),
@@ -176,7 +177,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   }
 
   // Status pill: cornerRadius 8, gap 5, padding [3, 8]
-  Widget _buildStatusPill(bool online, {bool connecting = false}) {
+  Widget _buildStatusPill(bool online, {bool connecting = false, bool serverLost = false}) {
     final Color pillColor;
     final Color dotColor;
     final String textStr;
@@ -189,6 +190,10 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
       pillColor = AppTheme.successBg;
       dotColor = AppTheme.successText;
       textStr = 'online';
+    } else if (serverLost) {
+      pillColor = AppTheme.serverLostBg;
+      dotColor = AppTheme.serverLostText;
+      textStr = 'server lost';
     } else {
       pillColor = AppTheme.idleBg;
       dotColor = AppTheme.textTertiary;

@@ -1,3 +1,4 @@
+import 'package:get/get.dart';
 import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
 import '../../domain/paired_machine.dart';
@@ -24,6 +25,8 @@ class WsSessionRepository {
   Set<String> get activeSessionIds => _sessions.activeSessionIds;
 
   bool hasSession(String machineId) => _sessions.hasSession(machineId);
+
+  RxBool get relayConnected => _relay.relayConnected;
 
   bool get isConnected => _relay.isConnected;
 

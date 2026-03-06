@@ -24,6 +24,8 @@ class MainShellViewModel extends GetxController {
         _wsRepo = wsRepo,
         _eventRepo = eventRepo;
 
+  RxBool get relayConnected => _wsRepo.relayConnected;
+
   final tabIndex = 0.obs;
   final machines = <PairedMachine>[].obs;
   final activeSessionIds = <String>{}.obs;
