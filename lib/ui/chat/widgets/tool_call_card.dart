@@ -31,7 +31,6 @@ class _ToolCallCardState extends State<ToolCallCard>
   late Animation<double> _breathAnimation;
   Timer? _dotTimer;
   int _dotCount = 3;
-  bool _diffExpanded = true; // edit cards start expanded
 
   bool get _isRunning =>
       widget.tool.status == ToolStatus.pending ||
@@ -139,11 +138,11 @@ class _ToolCallCardState extends State<ToolCallCard>
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildHeaderRow(kind, showNavIcon: false),
+                _buildHeaderRow(kind),
                 _buildChildSummary(),
               ],
             )
-          : _buildHeaderRow(kind, showNavIcon: false),
+          : _buildHeaderRow(kind),
     );
   }
 
@@ -181,28 +180,14 @@ class _ToolCallCardState extends State<ToolCallCard>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header row: tap to toggle diff visibility
-        GestureDetector(
-          onTap: _isCompleted
-              ? () => setState(() => _diffExpanded = !_diffExpanded)
-              : null,
-          child: _buildHeaderRow(kind, showNavIcon: true),
-        ),
-
-        // Diff view — only shown when completed and expanded
+        _buildHeaderRow(kind),
         if (_isCompleted)
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            child: _diffExpanded
-                ? Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: EditDiffView(
-                      oldString: oldString,
-                      newString: newString,
-                    ),
-                  )
-                : const SizedBox.shrink(),
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: EditDiffView(
+              oldString: oldString,
+              newString: newString,
+            ),
           ),
       ],
     );
@@ -212,15 +197,9 @@ class _ToolCallCardState extends State<ToolCallCard>
   // Shared header row
   // -------------------------------------------------------------------------
 
-  Widget _buildHeaderRow(ToolKind kind, {required bool showNavIcon}) {
+  Widget _buildHeaderRow(ToolKind kind) {
     final iconColor =
         _isFailed ? AppTheme.failedRed : AppTheme.textSecondary;
-    final label = _kindLabel(kind);
-    final labelColor = _isFailed
-        ? AppTheme.failedRed
-        : _isRunning
-            ? AppTheme.successText
-            : const Color(0xFF9CA3AF);
 
     final hasChildren = widget.childTools.isNotEmpty;
     final icon = hasChildren ? LucideIcons.layers : _iconForKind(kind);
@@ -230,21 +209,21 @@ class _ToolCallCardState extends State<ToolCallCard>
         Icon(icon, size: 16, color: iconColor),
         const SizedBox(width: 10),
         Expanded(child: _buildPreviewContent(kind)),
-        const SizedBox(width: 8),
-        // Status label + animated dots
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: GoogleFonts.inter(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
-                color: labelColor,
+        // Running status label + animated dots
+        if (_isRunning) ...[
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _runningLabel(kind),
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: AppTheme.successText,
+                ),
               ),
-            ),
-            if (_isRunning)
               SizedBox(
                 width: 18,
                 child: Text(
@@ -253,23 +232,15 @@ class _ToolCallCardState extends State<ToolCallCard>
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
-                    color: labelColor,
+                    color: AppTheme.successText,
                   ),
                 ),
               ),
-          ],
-        ),
-        // Collapse/expand toggle for edit+completed
-        if (_isEditWithDiff && _isCompleted) ...[
-          const SizedBox(width: 4),
-          Icon(
-            _diffExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-            size: 14,
-            color: AppTheme.textSecondary,
+            ],
           ),
         ],
-        // Navigation icon — always present for edit tools
-        if (showNavIcon) ...[
+        // Navigate to tool detail (edit tools only)
+        if (_isEditWithDiff) ...[
           const SizedBox(width: 6),
           GestureDetector(
             onTap: () => Get.toNamed(Routes.toolDetail, arguments: {
@@ -288,56 +259,31 @@ class _ToolCallCardState extends State<ToolCallCard>
   }
 
   // -------------------------------------------------------------------------
-  // Label / icon / preview helpers (unchanged logic)
+  // Icon / preview helpers
   // -------------------------------------------------------------------------
 
-  String _kindLabel(ToolKind kind) {
-    if (_isFailed) return 'FAILED';
-    if (_isRunning) {
-      switch (kind) {
-        case ToolKind.read:
-          return 'reading';
-        case ToolKind.search:
-          return 'searching';
-        case ToolKind.edit:
-          return 'editing';
-        case ToolKind.execute:
-          return 'running';
-        case ToolKind.fetch:
-          return 'fetching';
-        case ToolKind.delete:
-          return 'deleting';
-        case ToolKind.move:
-          return 'moving';
-        case ToolKind.think:
-          return 'thinking';
-        case ToolKind.switchMode:
-          return 'switching';
-        case ToolKind.other:
-          return 'running';
-      }
-    }
+  String _runningLabel(ToolKind kind) {
     switch (kind) {
       case ToolKind.read:
-        return 'READ';
+        return 'reading';
       case ToolKind.search:
-        return 'SEARCH';
+        return 'searching';
       case ToolKind.edit:
-        return 'EDIT';
+        return 'editing';
       case ToolKind.execute:
-        return 'RUN';
+        return 'running';
       case ToolKind.fetch:
-        return 'FETCH';
+        return 'fetching';
       case ToolKind.delete:
-        return 'DELETE';
+        return 'deleting';
       case ToolKind.move:
-        return 'MOVE';
+        return 'moving';
       case ToolKind.think:
-        return 'THINK';
+        return 'thinking';
       case ToolKind.switchMode:
-        return 'SWITCH';
+        return 'switching';
       case ToolKind.other:
-        return 'TOOL';
+        return 'running';
     }
   }
 

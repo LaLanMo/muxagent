@@ -118,17 +118,22 @@ class _EditDiffViewState extends State<EditDiffView> {
                 : Border.all(color: _kSeparatorColor, width: 1),
           ),
           clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (int i = 0; i < visible.length; i++)
-                visible[i] == null
-                    ? _buildSeparatorRow(contextTextColor)
-                    : _buildLineRow(
-                        visible[i] as DiffLine,
-                        contextTextColor,
-                      ),
-            ],
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: IntrinsicWidth(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (int i = 0; i < visible.length; i++)
+                    visible[i] == null
+                        ? _buildSeparatorRow(contextTextColor)
+                        : _buildLineRow(
+                            visible[i] as DiffLine,
+                            contextTextColor,
+                          ),
+                ],
+              ),
+            ),
           ),
         ),
 
@@ -210,16 +215,13 @@ class _EditDiffViewState extends State<EditDiffView> {
           ),
           const SizedBox(width: 6),
           // Content — use RichText for inline tokens, Text otherwise
-          Expanded(
-            child: line.tokens != null
-                ? _buildRichContent(line.tokens!, contextTextColor)
-                : Text(
-                    line.content,
-                    style: _codeStyle(color: contextTextColor),
-                    softWrap: false,
-                    overflow: TextOverflow.fade,
-                  ),
-          ),
+          line.tokens != null
+              ? _buildRichContent(line.tokens!, contextTextColor)
+              : Text(
+                  line.content,
+                  style: _codeStyle(color: contextTextColor),
+                  softWrap: false,
+                ),
         ],
       ),
     );
@@ -241,7 +243,6 @@ class _EditDiffViewState extends State<EditDiffView> {
     return Text.rich(
       TextSpan(children: spans),
       softWrap: false,
-      overflow: TextOverflow.fade,
     );
   }
 
