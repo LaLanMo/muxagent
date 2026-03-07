@@ -15,6 +15,7 @@ import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/fs_entry.dart';
+import '../../domain/model_info.dart';
 import '../../domain/message.dart';
 import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
@@ -59,6 +60,9 @@ class ChatViewModel extends GetxController {
   final isTranscribing = false.obs;
   final showModeDropdown = false.obs;
   final showFilePicker = false.obs;
+  final currentModel = Rxn<String>();
+  final availableModels = <ModelInfo>[].obs;
+  final modelConfigId = ''.obs;
   final filePickerEntries = <FsEntry>[].obs;
   final filePickerLoading = false.obs;
   final isFileSearchMode = false.obs;
@@ -115,6 +119,18 @@ class ChatViewModel extends GetxController {
 
     if (isNewSession) {
       // New sessions are already created via session.create — skip load.
+      // Apply configOptions from the create response (synchronous, no event timing issues).
+      final configOptions = args['configOptions'] as List<dynamic>?;
+      debugPrint('[ChatVM] new session configOptions: ${configOptions?.length} items');
+      if (configOptions != null) {
+        for (final item in configOptions) {
+          debugPrint('[ChatVM]   item type=${item.runtimeType} keys=${item is Map ? (item as Map).keys.toList() : "N/A"}');
+          if (item is Map) debugPrint('[ChatVM]   item=$item');
+        }
+      }
+      if (configOptions != null) {
+        _applyConfigOptions(configOptions);
+      }
       isLoading.value = false;
       _scheduleScrollStateSync();
       if (initialPrompt != null && initialPrompt.isNotEmpty) {
@@ -136,22 +152,51 @@ class ChatViewModel extends GetxController {
         .listen(_handleEvent);
   }
 
+  void _applyConfigOptions(List<dynamic> configOptions) {
+    debugPrint('[ChatVM] _applyConfigOptions called with ${configOptions.length} items');
+    for (final raw in configOptions) {
+      debugPrint('[ChatVM]   raw item type: ${raw.runtimeType}, value: $raw');
+      if (raw is! Map<String, dynamic>) continue;
+      final category = raw['category'] as String? ?? '';
+      debugPrint('[ChatVM]   category: $category');
+      if (category == 'model') {
+        modelConfigId.value = raw['id'] as String? ?? '';
+        currentModel.value = raw['currentValue'] as String?;
+        final rawValues = raw['options'] as List? ?? [];
+        availableModels.value = rawValues
+            .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
+            .toList();
+      }
+    }
+  }
+
   Future<void> _loadSession() async {
     try {
       if (cwd.isEmpty) {
         throw Exception('missing cwd for session.load');
       }
-      final mode = _eventRepo.sessionById(sessionId)?.mode ?? '';
+      final session = _eventRepo.sessionById(sessionId);
+      final mode = session?.mode ?? '';
+      final model = session?.model ?? '';
       final params = <String, dynamic>{
         'sessionId': sessionId,
         'cwd': cwd,
         if (mode.isNotEmpty && mode != 'default') 'permissionMode': mode,
+        if (model.isNotEmpty && model != 'default') 'model': model,
       };
-      await _wsRepo.callRpc(
+      final result = await _wsRepo.callRpc(
         machineId: machineId,
         method: 'session.load',
         params: params,
       );
+      final configOptions = result['configOptions'] as List<dynamic>?;
+      debugPrint('[ChatVM] load session configOptions: ${configOptions?.length} items');
+      if (configOptions != null) {
+        for (final item in configOptions) {
+          debugPrint('[ChatVM] load item type=${item.runtimeType} keys=${item is Map ? (item as Map).keys.toList() : "N/A"}');
+        }
+        _applyConfigOptions(configOptions);
+      }
     } catch (e) {
       debugPrint('Failed to load session: $e');
     } finally {
@@ -245,6 +290,16 @@ class ChatViewModel extends GetxController {
         final modeId = event.data?['currentModeId'] as String?;
         currentMode.value = PermissionMode.fromId(modeId);
 
+      case EventType.modelChanged:
+        if (event.data != null) {
+          currentModel.value = event.data!['currentValue'] as String?;
+          modelConfigId.value = event.data!['configId'] as String? ?? '';
+          final rawValues = event.data!['values'] as List? ?? [];
+          availableModels.value = rawValues
+              .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
+              .toList();
+        }
+
       case EventType.connectionState:
         final state = event.data?['state'] as String? ?? 'connected';
         connState.value = ConnState.fromValue(state);
@@ -284,6 +339,32 @@ class ChatViewModel extends GetxController {
     } catch (e) {
       debugPrint('[ChatVM] changeMode failed: $e');
       currentMode.value = previous;
+    }
+  }
+
+  Future<void> changeModel(String value) async {
+    if (value == currentModel.value) return;
+    final configId = modelConfigId.value;
+    if (configId.isEmpty) return;
+
+    debugPrint('[ChatVM] changeModel: $currentModel → $value (configId=$configId)');
+    final previous = currentModel.value;
+    currentModel.value = value;
+
+    try {
+      final result = await _wsRepo.callRpc(
+        machineId: machineId,
+        method: 'session.setConfigOption',
+        params: {
+          'sessionId': sessionId,
+          'configId': configId,
+          'value': value,
+        },
+      );
+      debugPrint('[ChatVM] changeModel success: $result');
+    } catch (e) {
+      debugPrint('[ChatVM] changeModel failed: $e');
+      currentModel.value = previous;
     }
   }
 

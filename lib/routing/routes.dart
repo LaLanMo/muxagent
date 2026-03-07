@@ -8,4 +8,5 @@ abstract class Routes {
   static const permissionDetail = '/permission-detail';
   static const newSession = '/new-session';
   static const sttSettings = '/stt-settings';
+  static const sessionSettings = '/session-settings';
 }

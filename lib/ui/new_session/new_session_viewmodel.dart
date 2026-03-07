@@ -298,6 +298,14 @@ class NewSessionViewModel extends GetxController {
         throw Exception('Failed to create session: no sessionId returned');
       }
       final runtime = createResult['runtime'] as String? ?? '';
+      final configOptions = createResult['configOptions'] as List<dynamic>?;
+      debugPrint('[NewSessionVM] createResult keys: ${createResult.keys.toList()}');
+      debugPrint('[NewSessionVM] configOptions type: ${configOptions.runtimeType}');
+      if (configOptions != null) {
+        for (final item in configOptions) {
+          debugPrint('[NewSessionVM]   item type: ${item.runtimeType} keys: ${item is Map ? (item as Map).keys.toList() : "N/A"}');
+        }
+      }
 
       // Register session in EventRepository
       _eventRepo.registerSession(
@@ -326,6 +334,7 @@ class NewSessionViewModel extends GetxController {
           'cwd': cwd,
           'sessionTitle': '',
           'isNewSession': true,
+          if (configOptions != null) 'configOptions': configOptions,
           if (prompt.isNotEmpty) 'initialPrompt': prompt,
         },
       );

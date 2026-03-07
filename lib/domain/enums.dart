@@ -48,7 +48,8 @@ enum EventType {
   runFinished('run.finished'),
   connectionState('connection.state'),
   planUpdated('plan.updated'),
-  modeChanged('mode.changed');
+  modeChanged('mode.changed'),
+  modelChanged('model.changed');
 
   const EventType(this.value);
   final String value;

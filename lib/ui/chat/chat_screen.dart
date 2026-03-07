@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
+import '../../routing/routes.dart';
 import '../../config/theme.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
@@ -250,6 +251,15 @@ class ChatScreen extends GetView<ChatViewModel> {
                     ),
                   ],
                 ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () => Get.toNamed(Routes.sessionSettings),
+              child: const Icon(
+                LucideIcons.settings,
+                size: 20,
+                color: AppTheme.textSecondary,
               ),
             ),
           ],

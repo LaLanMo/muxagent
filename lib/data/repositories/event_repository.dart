@@ -193,6 +193,17 @@ class EventRepository {
             _sessionsChangedController.add(null);
           }
         }
+      case EventType.modelChanged:
+        final existing = sessions[sessionId];
+        if (existing != null && event.data != null) {
+          final currentValue = event.data!['currentValue'] as String?;
+          if (currentValue != null) {
+            existing.model = currentValue;
+            existing.updatedAt = event.at;
+            SessionDatabase.updateFields(sessionId, {'model': currentValue});
+            _sessionsChangedController.add(null);
+          }
+        }
       case EventType.messageDelta:
       case EventType.messageFinal:
       case EventType.toolStarted:
