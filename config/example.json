@@ -10,7 +10,7 @@
   "relay": {
     "public_base_url": "http://127.0.0.1:8080",
     "listen_addr": ":8080",
-    "signing_private_key": ""
+    "signing_private_key": "REPLACE_WITH_BASE64_ED25519_PRIVATE_KEY"
   },
   "firebase": {
     "credentials_file": ""

@@ -2,7 +2,6 @@ package ioc
 
 import (
 	"crypto/ed25519"
-	"log"
 
 	"github.com/LaLanMo/muxagent-relay/internal/config"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
@@ -14,12 +13,9 @@ type RelaySigningKey struct {
 }
 
 func InitRelaySigningKey(cfg *config.Config) (*RelaySigningKey, error) {
-	priv, pub, generated, err := crypto.LoadRelaySigningKey(cfg.Relay.SigningPrivateKey)
+	priv, pub, err := crypto.LoadRelaySigningKey(cfg.Relay.SigningPrivateKey)
 	if err != nil {
 		return nil, err
-	}
-	if generated {
-		log.Println("WARNING: RELAY_SIGNING_PRIVATE_KEY not set; generated ephemeral relay signing key")
 	}
 	return &RelaySigningKey{Private: priv, Public: pub}, nil
 }
