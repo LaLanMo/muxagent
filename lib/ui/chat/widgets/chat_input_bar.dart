@@ -87,7 +87,6 @@ class ChatInputBar extends StatelessWidget {
                             controller: controller,
                             enabled: !_isRunning,
                             autocorrect: false,
-                            enableSuggestions: false,
                             smartDashesType: SmartDashesType.disabled,
                             smartQuotesType: SmartQuotesType.disabled,
                             decoration: InputDecoration(

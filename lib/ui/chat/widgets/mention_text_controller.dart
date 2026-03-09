@@ -28,6 +28,20 @@ class MentionTextEditingController extends TextEditingController {
       return TextSpan(style: style, text: text);
     }
 
+    // During IME composing, fall back to default behavior so the composing
+    // range renders correctly (underlined preview text). Without this,
+    // non-Latin IME keyboards (Chinese, Japanese, Korean, etc.) break on
+    // Android because the composing feedback is lost.
+    if (withComposing &&
+        value.composing.isValid &&
+        !value.composing.isCollapsed) {
+      return super.buildTextSpan(
+        context: context,
+        style: style,
+        withComposing: withComposing,
+      );
+    }
+
     final matches = _mentionRe.allMatches(text).toList();
     if (matches.isEmpty) {
       return TextSpan(style: style, text: text);

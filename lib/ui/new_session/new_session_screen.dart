@@ -556,7 +556,6 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   expands: true,
                   textAlignVertical: TextAlignVertical.top,
                   autocorrect: false,
-                  enableSuggestions: false,
                   smartDashesType: SmartDashesType.disabled,
                   smartQuotesType: SmartQuotesType.disabled,
                   style: GoogleFonts.inter(
