@@ -19,6 +19,7 @@ import '../../domain/model_info.dart';
 import '../../domain/message.dart';
 import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
+import '../../domain/usage_info.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import 'chat_state.dart';
@@ -66,6 +67,10 @@ class ChatViewModel extends GetxController {
   final filePickerEntries = <FsEntry>[].obs;
   final filePickerLoading = false.obs;
   final isFileSearchMode = false.obs;
+  final usageVersion = 0.obs;
+
+  /// Live usage info for this session (cost, tokens, context window).
+  UsageInfo? get usageInfo => _eventRepo.liveUsageFor(sessionId);
 
   String _browsePath = '';
   int _atPosition = -1;
@@ -260,9 +265,13 @@ class ChatViewModel extends GetxController {
           }
         }
 
+      case EventType.usageUpdate:
+        usageVersion.value++;
+
       case EventType.runFinished:
         _hasOptimisticUserMsg = false;
         sessionStatus.value = SessionStatus.done;
+        usageVersion.value++;
 
       case EventType.runFailed:
         _hasOptimisticUserMsg = false;

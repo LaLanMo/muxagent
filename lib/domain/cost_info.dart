@@ -1,33 +1,27 @@
 class CostInfo {
-  final double totalUsd;
-  final int inputTokens;
-  final int outputTokens;
-  final int cacheRead;
-  final int cacheWrite;
+  final double costAmount;
+  final String costCurrency;
+  final int totalTokens;
 
   CostInfo({
-    this.totalUsd = 0,
-    this.inputTokens = 0,
-    this.outputTokens = 0,
-    this.cacheRead = 0,
-    this.cacheWrite = 0,
+    this.costAmount = 0,
+    this.costCurrency = 'USD',
+    this.totalTokens = 0,
   });
+
+  bool get hasCost => costAmount > 0;
 
   factory CostInfo.fromJson(Map<String, dynamic> json) {
     return CostInfo(
-      totalUsd: (json['totalUsd'] as num?)?.toDouble() ?? 0,
-      inputTokens: (json['inputTokens'] as num?)?.toInt() ?? 0,
-      outputTokens: (json['outputTokens'] as num?)?.toInt() ?? 0,
-      cacheRead: (json['cacheRead'] as num?)?.toInt() ?? 0,
-      cacheWrite: (json['cacheWrite'] as num?)?.toInt() ?? 0,
+      costAmount: (json['costAmount'] as num?)?.toDouble() ?? 0,
+      costCurrency: json['costCurrency'] as String? ?? 'USD',
+      totalTokens: (json['totalTokens'] as num?)?.toInt() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        if (totalUsd != 0) 'totalUsd': totalUsd,
-        if (inputTokens != 0) 'inputTokens': inputTokens,
-        if (outputTokens != 0) 'outputTokens': outputTokens,
-        if (cacheRead != 0) 'cacheRead': cacheRead,
-        if (cacheWrite != 0) 'cacheWrite': cacheWrite,
+        if (costAmount != 0) 'costAmount': costAmount,
+        if (costCurrency != 'USD') 'costCurrency': costCurrency,
+        if (totalTokens != 0) 'totalTokens': totalTokens,
       };
 }

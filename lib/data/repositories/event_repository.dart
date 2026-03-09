@@ -4,9 +4,11 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../domain/approval.dart';
+import '../../domain/cost_info.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/session.dart';
+import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
 import '../services/ws/models/ws_models.dart';
 import 'ws_session_repository.dart';
@@ -22,6 +24,12 @@ class EventRepository {
 
   /// Pending approval requests, keyed by requestId.
   final pendingApprovals = <String, ApprovalRequest>{}.obs;
+
+  /// In-memory live usage per session (updated by usage.update events).
+  final Map<String, UsageInfo> _liveUsage = {};
+
+  /// Get live usage info for a session (for UI display).
+  UsageInfo? liveUsageFor(String sessionId) => _liveUsage[sessionId];
 
   /// Sessions currently being viewed in ChatVM (don't mark unread while viewing).
   final Set<String> _viewingSessions = {};
@@ -128,6 +136,30 @@ class EventRepository {
 
           _sessionsChangedController.add(null);
         }
+      case EventType.usageUpdate:
+        if (event.data != null) {
+          final usage = _liveUsage.putIfAbsent(sessionId, () => UsageInfo());
+          final d = event.data!;
+          usage.contextUsed =
+              (d['contextUsed'] as num?)?.toInt() ?? usage.contextUsed;
+          usage.contextSize =
+              (d['contextSize'] as num?)?.toInt() ?? usage.contextSize;
+          if (d['costAmount'] != null) {
+            usage.costAmount = (d['costAmount'] as num).toDouble();
+            usage.costCurrency =
+                d['costCurrency'] as String? ?? 'USD';
+          }
+          // Update in-memory session
+          final existing = sessions[sessionId];
+          if (existing != null) {
+            existing.cost = CostInfo(
+              costAmount: usage.costAmount,
+              costCurrency: usage.costCurrency,
+              totalTokens: usage.totalTokens,
+            );
+          }
+          _sessionsChangedController.add(null);
+        }
       case EventType.runFinished:
       case EventType.runFailed:
         final existing = sessions[sessionId];
@@ -142,18 +174,40 @@ class EventRepository {
             existing.isRead = false;
           }
 
+          // Extract token usage from run.finished data
+          final totalTokens =
+              (event.data?['totalTokens'] as num?)?.toInt() ?? 0;
+          if (totalTokens > 0) {
+            final usage =
+                _liveUsage.putIfAbsent(sessionId, () => UsageInfo());
+            usage.totalTokens = totalTokens;
+            usage.inputTokens =
+                (event.data?['inputTokens'] as num?)?.toInt() ?? 0;
+            usage.outputTokens =
+                (event.data?['outputTokens'] as num?)?.toInt() ?? 0;
+            usage.cachedReadTokens =
+                (event.data?['cachedReadTokens'] as num?)?.toInt() ?? 0;
+            usage.cachedWriteTokens =
+                (event.data?['cachedWriteTokens'] as num?)?.toInt() ?? 0;
+          }
+
           // Persist status + cost
           final dbFields = <String, dynamic>{
             'updated_at': event.at.toIso8601String(),
             'status': existing.status.value,
             'is_read': existing.isRead ? 1 : 0,
           };
-          if (existing.cost != null) {
-            dbFields['cost_input_tokens'] = existing.cost!.inputTokens;
-            dbFields['cost_output_tokens'] = existing.cost!.outputTokens;
-            dbFields['cost_cache_read'] = existing.cost!.cacheRead;
-            dbFields['cost_cache_write'] = existing.cost!.cacheWrite;
-            dbFields['cost_total_usd'] = existing.cost!.totalUsd;
+          final usage = _liveUsage[sessionId];
+          if (usage != null &&
+              (usage.costAmount > 0 || usage.totalTokens > 0)) {
+            dbFields['cost_amount'] = usage.costAmount;
+            dbFields['cost_currency'] = usage.costCurrency;
+            dbFields['total_tokens'] = usage.totalTokens;
+            existing.cost = CostInfo(
+              costAmount: usage.costAmount,
+              costCurrency: usage.costCurrency,
+              totalTokens: usage.totalTokens,
+            );
           }
           SessionDatabase.updateFields(sessionId, dbFields);
 

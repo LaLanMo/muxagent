@@ -31,11 +31,9 @@ class SessionDatabase {
         title TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'idle',
         model TEXT,
-        cost_input_tokens INTEGER DEFAULT 0,
-        cost_output_tokens INTEGER DEFAULT 0,
-        cost_cache_read INTEGER DEFAULT 0,
-        cost_cache_write INTEGER DEFAULT 0,
-        cost_total_usd REAL DEFAULT 0,
+        cost_amount REAL DEFAULT 0,
+        cost_currency TEXT NOT NULL DEFAULT 'USD',
+        total_tokens INTEGER DEFAULT 0,
         machine_id TEXT NOT NULL,
         runtime TEXT NOT NULL DEFAULT '',
         cwd TEXT NOT NULL DEFAULT '',
@@ -60,11 +58,9 @@ class SessionDatabase {
         'title': s.title,
         'status': s.status.value,
         'model': s.model,
-        'cost_input_tokens': s.cost?.inputTokens ?? 0,
-        'cost_output_tokens': s.cost?.outputTokens ?? 0,
-        'cost_cache_read': s.cost?.cacheRead ?? 0,
-        'cost_cache_write': s.cost?.cacheWrite ?? 0,
-        'cost_total_usd': s.cost?.totalUsd ?? 0,
+        'cost_amount': s.cost?.costAmount ?? 0,
+        'cost_currency': s.cost?.costCurrency ?? 'USD',
+        'total_tokens': s.cost?.totalTokens ?? 0,
         'machine_id': machineId,
         'runtime': runtime,
         'cwd': cwd,
@@ -119,17 +115,11 @@ class SessionDatabase {
   }
 
   static AgentSession _rowToSession(Map<String, dynamic> row) {
-    final costInputTokens = row['cost_input_tokens'] as int? ?? 0;
-    final costOutputTokens = row['cost_output_tokens'] as int? ?? 0;
-    final costCacheRead = row['cost_cache_read'] as int? ?? 0;
-    final costCacheWrite = row['cost_cache_write'] as int? ?? 0;
-    final costTotalUsd = (row['cost_total_usd'] as num?)?.toDouble() ?? 0;
+    final costAmount = (row['cost_amount'] as num?)?.toDouble() ?? 0;
+    final costCurrency = row['cost_currency'] as String? ?? 'USD';
+    final totalTokens = (row['total_tokens'] as num?)?.toInt() ?? 0;
 
-    final hasCost = costInputTokens != 0 ||
-        costOutputTokens != 0 ||
-        costCacheRead != 0 ||
-        costCacheWrite != 0 ||
-        costTotalUsd != 0;
+    final hasCost = costAmount != 0 || totalTokens != 0;
 
     return AgentSession(
       id: row['id'] as String,
@@ -138,11 +128,9 @@ class SessionDatabase {
       model: row['model'] as String?,
       cost: hasCost
           ? CostInfo(
-              inputTokens: costInputTokens,
-              outputTokens: costOutputTokens,
-              cacheRead: costCacheRead,
-              cacheWrite: costCacheWrite,
-              totalUsd: costTotalUsd,
+              costAmount: costAmount,
+              costCurrency: costCurrency,
+              totalTokens: totalTokens,
             )
           : null,
       isRead: (row['is_read'] as int? ?? 0) == 1,
