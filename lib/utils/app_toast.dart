@@ -80,8 +80,9 @@ class _ToastState extends State<_ToastWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final keyboardHeight = MediaQuery.viewInsetsOf(context).bottom;
     return Positioned(
-      bottom: 120,
+      bottom: 120 + keyboardHeight,
       left: 0,
       right: 0,
       child: IgnorePointer(
