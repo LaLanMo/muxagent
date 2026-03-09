@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../config/theme.dart';
+import '../../data/repositories/event_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/session.dart';
 import '../../utils/app_toast.dart';
@@ -178,6 +179,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
           AppToast.show('Machine is offline');
           return;
         }
+        Get.find<EventRepository>().markAsRead(session.id);
         shell.navigateToChat(session.id, machineId, cwd, title);
       },
       child: Container(
@@ -191,53 +193,56 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Status Dot: 12x12 ellipse
-            _buildStatusDot(session.status),
+            // Priority dot: 8x8
+            _buildStatusDot(session),
             // gap 12
             const SizedBox(width: 12),
             // Text Stack: vertical layout, gap 2, fill_container width
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Session Name: Inter 15px w500 #1D1D1F
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textPrimary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  // Working Directory: Inter 13px normal #808690
-                  Text(
-                    cwd.isNotEmpty ? cwd : '~',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w400,
-                      color: AppTheme.textTertiary,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 2),
-                  // Machine name: Inter 12px normal #C8CBD0
-                  if (machineId.isNotEmpty)
+              child: Builder(builder: (_) {
+                final hasIndicator =
+                    session.status == SessionStatus.waitingApproval ||
+                    session.status == SessionStatus.running ||
+                    !session.isRead;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Text(
-                      shell.machineDisplayName(machineId),
+                      title,
                       style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w400,
-                        color: AppTheme.textMuted,
+                        fontSize: 15,
+                        fontWeight: hasIndicator ? FontWeight.w600 : FontWeight.w400,
+                        color: hasIndicator ? AppTheme.textPrimary : AppTheme.textTertiary,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                ],
-              ),
+                    const SizedBox(height: 2),
+                    Text(
+                      cwd.isNotEmpty ? cwd : '~',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: hasIndicator ? AppTheme.textTertiary : const Color(0xFFAEB3BB),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    if (machineId.isNotEmpty)
+                      Text(
+                        shell.machineDisplayName(machineId),
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: hasIndicator ? AppTheme.textMuted : const Color(0xFFD1D5DB),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                );
+              }),
             ),
           ],
         ),
@@ -245,36 +250,31 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     );
   }
 
-  /// Build a 12x12 status dot based on session status.
-  /// Running: filled #4CB782
-  /// Approval: filled #E8B730
-  /// Error: filled #E5484D
-  /// Idle/Done: stroke only, #C8CBD0 thickness 1.5 (hollow circle)
-  Widget _buildStatusDot(SessionStatus status) {
-    final bool isHollow =
-        status == SessionStatus.idle || status == SessionStatus.done;
-
-    Color dotColor;
-    switch (status) {
-      case SessionStatus.running:
-        dotColor = AppTheme.successText;
+  /// Priority dot: approval (orange) > running (green) > unread (blue) > read (hidden).
+  Widget _buildStatusDot(AgentSession session) {
+    Color? dotColor;
+    switch (session.status) {
       case SessionStatus.waitingApproval:
         dotColor = AppTheme.warning;
+      case SessionStatus.running:
+        dotColor = AppTheme.successText;
       case SessionStatus.error:
-        dotColor = AppTheme.errorText;
       case SessionStatus.idle:
       case SessionStatus.done:
-        dotColor = AppTheme.textMuted;
+        dotColor = session.isRead ? null : AppTheme.unreadDot;
     }
 
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(
-        color: isHollow ? null : dotColor,
-        shape: BoxShape.circle,
-        border: isHollow ? Border.all(color: dotColor, width: 1.5) : null,
-      ),
+    return SizedBox(
+      width: 8,
+      height: 8,
+      child: dotColor != null
+          ? DecoratedBox(
+              decoration: BoxDecoration(
+                color: dotColor,
+                shape: BoxShape.circle,
+              ),
+            )
+          : null,
     );
   }
 

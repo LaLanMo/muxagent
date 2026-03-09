@@ -23,6 +23,9 @@ class EventRepository {
   /// Pending approval requests, keyed by requestId.
   final pendingApprovals = <String, ApprovalRequest>{}.obs;
 
+  /// Sessions currently being viewed in ChatVM (don't mark unread while viewing).
+  final Set<String> _viewingSessions = {};
+
   /// Last seen event sequence number per machine (for resync after reconnect).
   final Map<String, int> _lastSeqByMachine = {};
 
@@ -134,10 +137,16 @@ class EventRepository {
               ? SessionStatus.done
               : SessionStatus.error;
 
+          // Mark unread if user is not currently viewing this session
+          if (!_viewingSessions.contains(sessionId) && existing.isRead) {
+            existing.isRead = false;
+          }
+
           // Persist status + cost
           final dbFields = <String, dynamic>{
             'updated_at': event.at.toIso8601String(),
             'status': existing.status.value,
+            'is_read': existing.isRead ? 1 : 0,
           };
           if (existing.cost != null) {
             dbFields['cost_input_tokens'] = existing.cost!.inputTokens;
@@ -299,9 +308,15 @@ class EventRepository {
         if (session.status != newStatus) {
           session.status = newStatus;
           session.updatedAt = DateTime.now();
+          if (newStatus == SessionStatus.done &&
+              session.isRead &&
+              !_viewingSessions.contains(session.id)) {
+            session.isRead = false;
+          }
           await SessionDatabase.updateFields(session.id, {
             'status': newStatus.value,
             'updated_at': session.updatedAt.toIso8601String(),
+            'is_read': session.isRead ? 1 : 0,
           });
           // Clear stale approvals for this session
           pendingApprovals.removeWhere(
@@ -494,6 +509,26 @@ class EventRepository {
       SessionDatabase.updateFields(sessionId, {'status': status.value});
       _sessionsChangedController.add(null);
     }
+  }
+
+  /// Mark a session as read. Called when user opens a chat.
+  void markAsRead(String sessionId) {
+    final session = sessions[sessionId];
+    if (session != null && !session.isRead) {
+      session.isRead = true;
+      SessionDatabase.updateFields(sessionId, {'is_read': 1});
+      _sessionsChangedController.add(null);
+    }
+  }
+
+  /// Track that user is currently viewing this session.
+  void markViewing(String sessionId) {
+    _viewingSessions.add(sessionId);
+  }
+
+  /// Track that user left this session's chat.
+  void markNotViewing(String sessionId) {
+    _viewingSessions.remove(sessionId);
   }
 
   void dispose() {

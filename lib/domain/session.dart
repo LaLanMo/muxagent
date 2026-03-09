@@ -7,6 +7,7 @@ class AgentSession {
   SessionStatus status;
   String? model;
   CostInfo? cost;
+  bool isRead;
   final DateTime createdAt;
   DateTime updatedAt;
   Map<String, dynamic>? metadata;
@@ -20,6 +21,7 @@ class AgentSession {
     this.status = SessionStatus.idle,
     this.model,
     this.cost,
+    this.isRead = false,
     required this.createdAt,
     required this.updatedAt,
     this.metadata,
@@ -34,6 +36,7 @@ class AgentSession {
       cost: json['cost'] != null
           ? CostInfo.fromJson(json['cost'] as Map<String, dynamic>)
           : null,
+      isRead: json['isRead'] as bool? ?? false,
       createdAt: DateTime.parse(json['createdAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       metadata: json['metadata'] as Map<String, dynamic>?,
@@ -46,6 +49,7 @@ class AgentSession {
         'status': status.value,
         if (model != null) 'model': model,
         if (cost != null) 'cost': cost!.toJson(),
+        'isRead': isRead,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
         if (metadata != null) 'metadata': metadata,

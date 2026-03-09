@@ -41,6 +41,7 @@ class AppTheme {
   // Feature accent
   static const planAccent = Color(0xFF3B82F6);
   static const subagentAccent = Color(0xFF7C6EF6);
+  static const unreadDot = Color(0xFF007AFF);
 
   // Permission mode
   static const modeSkipBg = Color(0xFFFEF2F2);

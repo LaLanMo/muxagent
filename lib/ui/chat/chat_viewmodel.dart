@@ -101,6 +101,9 @@ class ChatViewModel extends GetxController {
       currentMode.value = PermissionMode.fromId(existing.mode);
     }
 
+    _eventRepo.markViewing(sessionId);
+    _eventRepo.markAsRead(sessionId);
+
     scrollController.addListener(_onScrollChanged);
     inputController.addListener(_detectMention);
     _subscribeEvents();
@@ -900,6 +903,7 @@ class ChatViewModel extends GetxController {
 
   @override
   void onClose() {
+    _eventRepo.markNotViewing(sessionId);
     _eventSub?.cancel();
     _searchDebounce?.cancel();
     scrollController.dispose();

@@ -24,11 +24,6 @@ class RelayWsClient {
   final Ed25519 _ed25519 = Ed25519();
   final X25519 _x25519 = X25519();
 
-  /// Set to a non-empty URL (e.g. 'http://192.168.1.4:8080') to override the
-  /// relay URL from the paired machine. Leave empty to use the default.
-  // TODO: remove when no longer needed for local testing
-  static const String relayUrlOverride = 'http://192.168.1.5:8080';
-
   final BaseWsClient _ws = BaseWsClient();
   final relayConnected = false.obs;
   Completer<void>? _registeredCompleter;
@@ -63,10 +58,7 @@ class RelayWsClient {
     }
     _masterKey = masterKey;
 
-    final effectiveUrl = relayUrlOverride.isNotEmpty
-        ? relayUrlOverride
-        : relayHttpUrl;
-    final wsUrl = _wsUrlFromHttp(effectiveUrl);
+    final wsUrl = _wsUrlFromHttp(relayHttpUrl);
     await _ws.connect(
       wsUrl,
       onMessage: _handleMessage,

@@ -41,7 +41,8 @@ class SessionDatabase {
         cwd TEXT NOT NULL DEFAULT '',
         mode TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
+        updated_at TEXT NOT NULL,
+        is_read INTEGER NOT NULL DEFAULT 0
       )
     ''');
   }
@@ -70,6 +71,7 @@ class SessionDatabase {
         'mode': mode,
         'created_at': s.createdAt.toIso8601String(),
         'updated_at': s.updatedAt.toIso8601String(),
+        'is_read': s.isRead ? 1 : 0,
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
@@ -143,6 +145,7 @@ class SessionDatabase {
               totalUsd: costTotalUsd,
             )
           : null,
+      isRead: (row['is_read'] as int? ?? 0) == 1,
       createdAt: DateTime.parse(row['created_at'] as String),
       updatedAt: DateTime.parse(row['updated_at'] as String),
       metadata: {
