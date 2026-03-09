@@ -33,7 +33,7 @@ func InitApp(cfg *config.Config) (*App, error) {
 	keyringUpdateDAO := dao.NewGormKeyringUpdateDAO(db)
 	keyringUpdateRepository := repository.NewKeyringUpdateRepository(keyringUpdateDAO)
 	txRunner := repository.NewTxRunner(db)
-	relaySigningKey, err := ioc.InitRelaySigningKey(cfg)
+	relaySigningKey, err := ioc.InitRelaySigningKey()
 	if err != nil {
 		return nil, err
 	}

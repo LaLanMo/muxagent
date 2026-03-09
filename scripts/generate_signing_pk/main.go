@@ -13,6 +13,6 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Printf("relay.signing_private_key=%s\n", base64.StdEncoding.EncodeToString(priv))
+	fmt.Printf("MUXAGENT_RELAY_SIGNING_PRIVATE_KEY=%s\n", base64.StdEncoding.EncodeToString(priv))
 	fmt.Printf("relay_signing_public_key=%s\n", base64.StdEncoding.EncodeToString(pub))
 }

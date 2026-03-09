@@ -2,8 +2,8 @@ package ioc
 
 import (
 	"crypto/ed25519"
+	"os"
 
-	"github.com/LaLanMo/muxagent-relay/internal/config"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
 )
 
@@ -12,8 +12,9 @@ type RelaySigningKey struct {
 	Public  ed25519.PublicKey
 }
 
-func InitRelaySigningKey(cfg *config.Config) (*RelaySigningKey, error) {
-	priv, pub, err := crypto.LoadRelaySigningKey(cfg.Relay.SigningPrivateKey)
+func InitRelaySigningKey() (*RelaySigningKey, error) {
+	privB64 := os.Getenv("MUXAGENT_RELAY_SIGNING_PRIVATE_KEY")
+	priv, pub, err := crypto.LoadRelaySigningKey(privB64)
 	if err != nil {
 		return nil, err
 	}

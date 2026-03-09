@@ -17,9 +17,8 @@ type Config struct {
 		SSLMode  string `mapstructure:"sslmode"`
 	} `mapstructure:"database"`
 	Relay struct {
-		PublicBaseURL     string `mapstructure:"public_base_url"`
-		ListenAddr        string `mapstructure:"listen_addr"`
-		SigningPrivateKey string `mapstructure:"signing_private_key"`
+		PublicBaseURL string `mapstructure:"public_base_url"`
+		ListenAddr    string `mapstructure:"listen_addr"`
 	} `mapstructure:"relay"`
 	Firebase struct {
 		CredentialsFile string `mapstructure:"credentials_file"`
