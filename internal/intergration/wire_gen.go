@@ -17,10 +17,11 @@ import (
 // Injectors from wire.go:
 
 func InitTestContainer() (*testContainer, error) {
-	db, cleanup, err := initTestDB()
+	intergrationTestDBBundle, err := initTestDB()
 	if err != nil {
 		return nil, err
 	}
+	db := intergrationTestDBBundle.DB
 	authRequestDAO := dao.NewGormAuthRequestDAO(db)
 	authRequestRepository := repository.NewAuthRequestRepository(authRequestDAO)
 	masterIdentityDAO := dao.NewGormMasterIdentityDAO(db)
@@ -34,7 +35,6 @@ func InitTestContainer() (*testContainer, error) {
 	txRunner := repository.NewTxRunner(db)
 	relaySigningKey, err := initTestRelaySigningKey()
 	if err != nil {
-		cleanup()
 		return nil, err
 	}
 	privateKey := ioc.RelaySignPrivate(relaySigningKey)
@@ -43,38 +43,53 @@ func InitTestContainer() (*testContainer, error) {
 	authHandler := initTestAuthHandler(authService)
 	keyringService := service.NewKeyringService(masterIdentityRepository, masterKeyRepository, keyringUpdateRepository, txRunner)
 	keyringHandler := ioc.InitKeyringHandler(keyringService)
-	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
-	deviceTokenRepository := repository.NewDeviceTokenRepository(deviceTokenDAO)
+	tokenService := service.NewTokenService(masterKeyRepository)
 	wsHub := service.NewWSHub()
 	sessionRegistry := service.NewSessionRegistry()
-	tokenService := service.NewTokenService(masterKeyRepository)
-	fcmClient := initTestNilFCMClient()
-	pushService := service.NewPushService(deviceTokenRepository, wsHub, fcmClient)
-	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService)
-	wsHandler := ioc.InitWSHandler(wsService)
-	engine := initTestRouter(authHandler, keyringHandler, wsHandler)
-	testContainer := &testContainer{
+	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
+	deviceTokenRepository := repository.NewDeviceTokenRepository(deviceTokenDAO)
+	client := initTestNilFCMClient()
+	pushService := service.NewPushService(deviceTokenRepository, wsHub, client)
+	config := initTestConfig()
+	wsServiceConfig := ioc.InitWSServiceConfig(config)
+	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService, wsServiceConfig)
+	wsConnLimiter := ioc.InitWSConnLimiter(config)
+	wsHandler := ioc.InitWSHandler(wsService, wsConnLimiter)
+	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
+	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, config)
+	if err != nil {
+		return nil, err
+	}
+	testCleanup := intergrationTestDBBundle.Cleanup
+	intergrationTestContainer := &testContainer{
 		Router:         engine,
 		DB:             db,
 		AuthService:    authService,
 		KeyringService: keyringService,
 		RelayPriv:      privateKey,
 		RelayPub:       publicKey,
-		Cleanup:        cleanup,
+		Cleanup:        testCleanup,
 	}
-	return testContainer, nil
+	return intergrationTestContainer, nil
 }
 
 // wire.go:
 
-var testInfraSet = wire.NewSet(initTestDB, initTestRelaySigningKey, ioc.RelaySignPrivate, ioc.RelaySignPublic)
+var testInfraSet = wire.NewSet(
+	initTestDB, wire.FieldsOf(new(*testDBBundle), "DB", "Cleanup"), initTestRelaySigningKey,
+	initTestConfig, ioc.RelaySignPrivate, ioc.RelaySignPublic,
+)
 
 var testDaoSet = wire.NewSet(dao.NewGormAuthRequestDAO, dao.NewGormMasterIdentityDAO, dao.NewGormMasterKeyDAO, dao.NewGormMachineDAO, dao.NewGormKeyringUpdateDAO, dao.NewGormDeviceTokenDAO)
 
 var testRepositorySet = wire.NewSet(repository.NewAuthRequestRepository, repository.NewMasterIdentityRepository, repository.NewMasterKeyRepository, repository.NewMachineRepository, repository.NewKeyringUpdateRepository, repository.NewDeviceTokenRepository, repository.NewTxRunner)
 
-var testServiceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, initTestNilFCMClient, service.NewPushService)
+var testServiceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, initTestNilFCMClient, service.NewPushService, ioc.InitWSServiceConfig)
 
-var testHandlerSet = wire.NewSet(initTestAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler)
+var testHandlerSet = wire.NewSet(
+	initTestAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler, ioc.InitDeviceHandler, ioc.InitWSConnLimiter,
+)
 
-var testRouterSet = wire.NewSet(initTestRouter)
+// Use production SetupRouter so rate-limit middleware and SetTrustedProxies
+// validation are exercised by integration tests.
+var testRouterSet = wire.NewSet(ioc.SetupRouter)

@@ -23,6 +23,57 @@ type Config struct {
 	Firebase struct {
 		CredentialsFile string `mapstructure:"credentials_file"`
 	} `mapstructure:"firebase"`
+	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
+}
+
+type RateLimitConfig struct {
+	// Per-IP HTTP rate limits (token bucket, requests/min)
+	AuthCreatePerIPPerMin int `mapstructure:"auth_create_per_ip_per_min"`
+	ReadPerIPPerMin       int `mapstructure:"read_per_ip_per_min"`
+	WritePerIPPerMin      int `mapstructure:"write_per_ip_per_min"`
+	WSUpgradePerIPPerMin  int `mapstructure:"ws_upgrade_per_ip_per_min"`
+
+	// WS connection caps
+	MaxWSConnsPerIP int `mapstructure:"max_ws_conns_per_ip"`
+	MaxWSConnsTotal int `mapstructure:"max_ws_conns_total"`
+
+	// Per-connection WS inbound bandwidth (bytes/min)
+	WSInboundBytesPerConnPerMin int64 `mapstructure:"ws_inbound_bytes_per_conn_per_min"`
+
+	// WS registration deadline (seconds); unregistered connections are dropped after this
+	WSRegisterTimeoutSec int `mapstructure:"ws_register_timeout_sec"`
+
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
+}
+
+// WithDefaults fills zero-valued fields with production defaults sized for
+// a single 4C8G instance serving ~1000 concurrent users (~3000 WS conns).
+func (c RateLimitConfig) WithDefaults() RateLimitConfig {
+	if c.AuthCreatePerIPPerMin <= 0 {
+		c.AuthCreatePerIPPerMin = 20
+	}
+	if c.ReadPerIPPerMin <= 0 {
+		c.ReadPerIPPerMin = 200 // CLI polls at 0.5Hz + mobile keyring queries
+	}
+	if c.WritePerIPPerMin <= 0 {
+		c.WritePerIPPerMin = 60
+	}
+	if c.WSUpgradePerIPPerMin <= 0 {
+		c.WSUpgradePerIPPerMin = 30 // reconnect storms
+	}
+	if c.MaxWSConnsPerIP <= 0 {
+		c.MaxWSConnsPerIP = 50 // NAT/corporate: many users behind one IP
+	}
+	if c.MaxWSConnsTotal <= 0 {
+		c.MaxWSConnsTotal = 5000 // ~1000 users × (1 client + 2 machines) + headroom
+	}
+	if c.WSInboundBytesPerConnPerMin <= 0 {
+		c.WSInboundBytesPerConnPerMin = 50 * 1024 * 1024 // 50MB per conn
+	}
+	if c.WSRegisterTimeoutSec <= 0 {
+		c.WSRegisterTimeoutSec = 10
+	}
+	return c
 }
 
 func Load() (*Config, error) {

@@ -13,5 +13,16 @@
   },
   "firebase": {
     "credentials_file": ""
+  },
+  "rate_limit": {
+    "auth_create_per_ip_per_min": 20,
+    "read_per_ip_per_min": 200,
+    "write_per_ip_per_min": 60,
+    "ws_upgrade_per_ip_per_min": 30,
+    "max_ws_conns_per_ip": 50,
+    "max_ws_conns_total": 5000,
+    "ws_inbound_bytes_per_conn_per_min": 52428800,
+    "ws_register_timeout_sec": 10,
+    "trusted_proxies": []
   }
 }

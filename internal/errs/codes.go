@@ -11,4 +11,5 @@ const (
 	CodeInvalidSignature = 1007
 	CodeInvalidPublicKey = 1008
 	CodeRevoked          = 1009
+	CodeRateLimited      = 1010
 )

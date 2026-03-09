@@ -25,6 +25,7 @@ func InitApp(cfg *config.Config) (*App, error) {
 		repositorySet,
 		serviceSet,
 		handlerSet,
+		middlewareSet,
 		routerSet,
 
 		wire.Struct(new(App), "*"),
@@ -59,6 +60,7 @@ var serviceSet = wire.NewSet(
 	service.NewAuthService,
 	service.NewKeyringService,
 	service.NewPushService,
+	ioc.InitWSServiceConfig,
 )
 
 var handlerSet = wire.NewSet(
@@ -66,6 +68,10 @@ var handlerSet = wire.NewSet(
 	ioc.InitKeyringHandler,
 	ioc.InitWSHandler,
 	ioc.InitDeviceHandler,
+)
+
+var middlewareSet = wire.NewSet(
+	ioc.InitWSConnLimiter,
 )
 
 var routerSet = wire.NewSet(

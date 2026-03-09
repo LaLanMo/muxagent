@@ -6,36 +6,46 @@ import (
 
 	"firebase.google.com/go/v4/messaging"
 	"github.com/LaLanMo/muxagent-relay/internal/api"
+	"github.com/LaLanMo/muxagent-relay/internal/config"
 	"github.com/LaLanMo/muxagent-relay/internal/ioc"
 	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
 	"github.com/LaLanMo/muxagent-relay/internal/service"
-	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-func initTestDB() (*gorm.DB, func(), error) {
+// testDBBundle bundles DB and its cleanup so Wire doesn't treat cleanup as
+// a Wire cleanup function (which cannot fill struct fields).
+type testDBBundle struct {
+	DB      *gorm.DB
+	Cleanup TestCleanup
+}
+
+func initTestDB() (*testDBBundle, error) {
 	dbConn, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	sqlDB, err := dbConn.DB()
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	sqlDB.SetMaxOpenConns(5)
 	sqlDB.SetMaxIdleConns(5)
 
 	if err := dao.AutoMigrate(dbConn); err != nil {
 		_ = sqlDB.Close()
-		return nil, nil, err
+		return nil, err
 	}
 
-	return dbConn, func() {
-		_ = sqlDB.Close()
+	return &testDBBundle{
+		DB: dbConn,
+		Cleanup: TestCleanup(func() {
+			_ = sqlDB.Close()
+		}),
 	}, nil
 }
 
@@ -55,14 +65,19 @@ func initTestNilFCMClient() *messaging.Client {
 	return nil
 }
 
-func initTestRouter(authHandler *api.AuthHandler, keyringHandler *api.KeyringHandler, wsHandler *api.WSHandler) *gin.Engine {
-	router := gin.New()
-	router.Use(gin.Recovery())
-
-	v1 := router.Group("/v1")
-	authHandler.RegisterRoutes(v1.Group("/auth"))
-	keyringHandler.RegisterRoutes(v1.Group("/keyring"))
-	wsHandler.RegisterRoutes(router.Group(""))
-
-	return router
+// initTestConfig returns a config with high rate limits so tests don't get
+// throttled, while still exercising the production SetupRouter wiring.
+func initTestConfig() *config.Config {
+	return &config.Config{
+		RateLimit: config.RateLimitConfig{
+			AuthCreatePerIPPerMin:       1000,
+			ReadPerIPPerMin:             1000,
+			WritePerIPPerMin:            1000,
+			WSUpgradePerIPPerMin:        1000,
+			MaxWSConnsPerIP:             100,
+			MaxWSConnsTotal:             1000,
+			WSInboundBytesPerConnPerMin: 500 * 1024 * 1024,
+			WSRegisterTimeoutSec:        30,
+		},
+	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -24,6 +25,11 @@ type WSService interface {
 	HandleConnection(ctx context.Context, conn *websocket.Conn)
 }
 
+type WSServiceConfig struct {
+	InboundBytesPerMin int64
+	RegisterTimeout    time.Duration
+}
+
 type wsServiceImpl struct {
 	machines     repository.MachineRepository
 	masterKeys   repository.MasterKeyRepository
@@ -31,6 +37,7 @@ type wsServiceImpl struct {
 	hub          *WSHub
 	sessions     *SessionRegistry
 	pushService  PushService
+	cfg          WSServiceConfig
 }
 
 func NewWSService(
@@ -40,6 +47,7 @@ func NewWSService(
 	hub *WSHub,
 	sessions *SessionRegistry,
 	pushService PushService,
+	cfg WSServiceConfig,
 ) WSService {
 	return &wsServiceImpl{
 		machines:     machines,
@@ -48,6 +56,7 @@ func NewWSService(
 		hub:          hub,
 		sessions:     sessions,
 		pushService:  pushService,
+		cfg:          cfg,
 	}
 }
 
@@ -138,14 +147,26 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 	var pendingMachineSignPub []byte
 	var pendingHostname string
 
-	// --- Heartbeat setup ---
-	// Set pong handler + initial read deadline before entering the read loop.
-	// During registration the peer's default pong handler replies automatically,
-	// so starting early is harmless and keeps the code simple.
+	// --- Register timeout via read deadline ---
+	// Before registration, read deadline is clamped to registerDeadline so
+	// unregistered connections are dropped after RegisterTimeout.
+	registerDeadline := time.Now().Add(s.cfg.RegisterTimeout)
+
+	heartbeatDeadline := func() time.Time {
+		return time.Now().Add(pingInterval + pongTimeout)
+	}
+	clampedDeadline := func() time.Time {
+		d := heartbeatDeadline()
+		if role == "" && registerDeadline.Before(d) {
+			d = registerDeadline
+		}
+		return d
+	}
+
 	conn.SetPongHandler(func(string) error {
-		return conn.SetReadDeadline(time.Now().Add(pingInterval + pongTimeout))
+		return conn.SetReadDeadline(clampedDeadline())
 	})
-	_ = conn.SetReadDeadline(time.Now().Add(pingInterval + pongTimeout))
+	_ = conn.SetReadDeadline(clampedDeadline())
 
 	// Ping ticker — WriteControl is explicitly concurrency-safe in gorilla,
 	// so it bypasses lockedConn intentionally.
@@ -168,6 +189,18 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			}
 		}
 	}()
+
+	// --- Inbound bandwidth limiter (per-connection) ---
+	// Burst clamped to min(5MB, budget) so configs below 5MB actually limit
+	// single-message size rather than being silently ignored.
+	var bwLimiter *rate.Limiter
+	if s.cfg.InboundBytesPerMin > 0 {
+		burst := 5 * 1024 * 1024 // matches SetReadLimit
+		if s.cfg.InboundBytesPerMin < int64(burst) {
+			burst = int(s.cfg.InboundBytesPerMin)
+		}
+		bwLimiter = rate.NewLimiter(rate.Limit(float64(s.cfg.InboundBytesPerMin)/60), burst)
+	}
 
 	defer func() {
 		switch role {
@@ -198,6 +231,14 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
+			return
+		}
+
+		// Bandwidth check: drop connection if sustained inbound rate exceeded.
+		if bwLimiter != nil && !bwLimiter.AllowN(time.Now(), len(raw)) {
+			_ = conn.WriteControl(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "bandwidth limit exceeded"),
+				time.Now().Add(writeWait))
 			return
 		}
 
@@ -317,6 +358,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				clientID = uuid.New()
 				role = WSRoleClient
 				clientClaims = claims
+				_ = conn.SetReadDeadline(heartbeatDeadline()) // registered: lift register timeout
 				s.hub.RegisterClient(clientID, claims.MasterID, claims.MasterSignKeyFingerprint, lc)
 				if err := lc.WriteJSON(registeredMessage{
 					Type:     WSTypeRegistered,
@@ -382,6 +424,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 
 			role = WSRoleMachine
 			machineID = pendingMachineID
+			_ = conn.SetReadDeadline(heartbeatDeadline()) // registered: lift register timeout
 			s.hub.RegisterMachine(machineID, pendingMachineMasterID, pendingHostname, lc)
 			s.notifyMachineStatus(pendingMachineMasterID, machineID, pendingHostname, true)
 

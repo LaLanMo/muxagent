@@ -51,10 +51,15 @@ func InitApp(cfg *config.Config) (*App, error) {
 	app := ioc.InitFirebaseApp(cfg)
 	client := ioc.InitFCMClient(app)
 	pushService := service.NewPushService(deviceTokenRepository, wsHub, client)
-	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService)
-	wsHandler := ioc.InitWSHandler(wsService)
+	wsServiceConfig := ioc.InitWSServiceConfig(cfg)
+	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService, wsServiceConfig)
+	wsConnLimiter := ioc.InitWSConnLimiter(cfg)
+	wsHandler := ioc.InitWSHandler(wsService, wsConnLimiter)
 	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
-	engine := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler)
+	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, cfg)
+	if err != nil {
+		return nil, err
+	}
 	v := ioc.InitAuthCleanup(authService)
 	mainApp := &App{
 		Router:      engine,
@@ -69,8 +74,10 @@ var daoSet = wire.NewSet(dao.NewGormAuthRequestDAO, dao.NewGormMasterIdentityDAO
 
 var repositorySet = wire.NewSet(repository.NewAuthRequestRepository, repository.NewMasterIdentityRepository, repository.NewMasterKeyRepository, repository.NewMachineRepository, repository.NewKeyringUpdateRepository, repository.NewDeviceTokenRepository, repository.NewTxRunner)
 
-var serviceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, service.NewPushService)
+var serviceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, service.NewPushService, ioc.InitWSServiceConfig)
 
 var handlerSet = wire.NewSet(ioc.InitAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler, ioc.InitDeviceHandler)
+
+var middlewareSet = wire.NewSet(ioc.InitWSConnLimiter)
 
 var routerSet = wire.NewSet(ioc.SetupRouter)

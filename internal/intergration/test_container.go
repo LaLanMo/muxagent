@@ -8,6 +8,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// TestCleanup is a named type so Wire can distinguish it from provider cleanup funcs.
+type TestCleanup func()
+
 type testContainer struct {
 	Router         *gin.Engine
 	DB             *gorm.DB
@@ -15,5 +18,5 @@ type testContainer struct {
 	KeyringService service.KeyringService
 	RelayPriv      ed25519.PrivateKey
 	RelayPub       ed25519.PublicKey
-	Cleanup        func()
+	Cleanup        TestCleanup
 }

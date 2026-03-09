@@ -20,6 +20,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func testWSServiceConfig() WSServiceConfig {
+	return WSServiceConfig{
+		InboundBytesPerMin: 0, // disabled in tests
+		RegisterTimeout:    30 * time.Second,
+	}
+}
+
 type tokenServiceMock struct {
 	verifyConnectFn func(ctx context.Context, token string) (ConnectTokenClaims, error)
 	verifyMachineFn func(ctx context.Context, token string) (MachineTokenClaims, error)
@@ -113,7 +120,7 @@ func TestWSService_RegisterMachineAndClient(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil))
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -198,7 +205,7 @@ func TestWSService_SessionInitAckRouting(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil))
+	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -325,7 +332,7 @@ func TestWSService_RejectRPCWithoutActiveSession(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil))
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)

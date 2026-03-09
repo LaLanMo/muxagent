@@ -25,7 +25,9 @@ func InitTestContainer() (*testContainer, error) {
 
 var testInfraSet = wire.NewSet(
 	initTestDB,
+	wire.FieldsOf(new(*testDBBundle), "DB", "Cleanup"),
 	initTestRelaySigningKey,
+	initTestConfig,
 	ioc.RelaySignPrivate,
 	ioc.RelaySignPublic,
 )
@@ -58,14 +60,19 @@ var testServiceSet = wire.NewSet(
 	service.NewKeyringService,
 	initTestNilFCMClient,
 	service.NewPushService,
+	ioc.InitWSServiceConfig,
 )
 
 var testHandlerSet = wire.NewSet(
 	initTestAuthHandler,
 	ioc.InitKeyringHandler,
 	ioc.InitWSHandler,
+	ioc.InitDeviceHandler,
+	ioc.InitWSConnLimiter,
 )
 
+// Use production SetupRouter so rate-limit middleware and SetTrustedProxies
+// validation are exercised by integration tests.
 var testRouterSet = wire.NewSet(
-	initTestRouter,
+	ioc.SetupRouter,
 )
