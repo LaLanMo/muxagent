@@ -57,7 +57,7 @@ func InitTestContainer() (*testContainer, error) {
 	wsHandler := ioc.InitWSHandler(wsService, wsConnLimiter)
 	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
 	tokenAuthMiddleware := ioc.InitTokenAuthMiddleware(tokenService)
-	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, tokenAuthMiddleware, config)
+	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, tokenAuthMiddleware, config, db)
 	if err != nil {
 		return nil, err
 	}

@@ -30,6 +30,7 @@ func main() {
 	slog.Info(
 		"relay server starting",
 		slog.String("listen_addr", cfg.Relay.ListenAddr),
+		slog.String("health_path", "/health"),
 		slog.String("machine_ws_path", "/ws"),
 		slog.String("client_ws_path", "/ws"),
 		slog.String("auth_path", "/v1/auth/*"),

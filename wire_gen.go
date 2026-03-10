@@ -57,7 +57,7 @@ func InitApp(cfg *config.Config) (*App, error) {
 	wsHandler := ioc.InitWSHandler(wsService, wsConnLimiter)
 	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
 	tokenAuthMiddleware := ioc.InitTokenAuthMiddleware(tokenService)
-	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, tokenAuthMiddleware, cfg)
+	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, tokenAuthMiddleware, cfg, db)
 	if err != nil {
 		return nil, err
 	}

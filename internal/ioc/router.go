@@ -7,6 +7,7 @@ import (
 	"github.com/LaLanMo/muxagent-relay/internal/config"
 	"github.com/LaLanMo/muxagent-relay/internal/middleware"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 func SetupRouter(
@@ -16,7 +17,13 @@ func SetupRouter(
 	deviceHandler *api.DeviceHandler,
 	tokenAuth *middleware.TokenAuthMiddleware,
 	cfg *config.Config,
+	db *gorm.DB,
 ) (*gin.Engine, error) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("failed to access sql db handle: %w", err)
+	}
+
 	router := gin.New()
 	router.Use(gin.Recovery())
 	router.Use(middleware.AccessLog())
@@ -32,6 +39,9 @@ func SetupRouter(
 	readRL := middleware.NewIPRateLimiter(rl.ReadPerIPPerMin)
 	writeRL := middleware.NewIPRateLimiter(rl.WritePerIPPerMin)
 	wsUpgradeRL := middleware.NewIPRateLimiter(rl.WSUpgradePerIPPerMin)
+	healthHandler := api.NewHealthHandler(sqlDB.PingContext)
+
+	router.GET("/health", healthHandler.Handle)
 
 	v1 := router.Group("/v1")
 	v1.Use(middleware.LimitRequestBody(cfg.HTTP.MaxJSONBodyBytes))

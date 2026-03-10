@@ -2,6 +2,7 @@ package intergration
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -12,6 +13,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHealthEndpoint_OK(t *testing.T) {
+	srv := newTestServer(t)
+
+	resp, err := http.Get(srv.server.URL + "/health")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	defer resp.Body.Close()
+
+	var out api.HealthResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+	assert.Equal(t, "ok", out.Status)
+}
 
 func TestKeyringUpdate_NoToken_Unauthorized(t *testing.T) {
 	srv := newTestServer(t)
