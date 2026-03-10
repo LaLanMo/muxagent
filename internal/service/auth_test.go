@@ -470,6 +470,189 @@ func TestAuthService_GetAuthStatus_PollTokenGating(t *testing.T) {
 	}
 }
 
+func TestAuthService_ApproveAuthRequest_ExistingMasterEncPubMismatch(t *testing.T) {
+	relayPub, relayPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	requestID := uuid.New()
+	machineID := uuid.New()
+	masterID := uuid.New()
+
+	machineSignPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	authReq := domain.AuthRequest{
+		ID:             requestID,
+		MachineID:      machineID,
+		MachineSignPub: machineSignPub,
+		MachineEncPub:  randomBytes(t, 32),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+		RelayChallenge: randomBytes(t, 32),
+	}
+
+	masterSignPub, masterSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	storedMasterEncPub := randomBytes(t, 32)
+	inputMasterEncPub := flippedBytes(storedMasterEncPub)
+	masterFingerprint := crypto.HashKeyFingerprint(masterSignPub)
+
+	authRepo := &authRequestRepoMock{
+		findByIDForTxFn: func(ctx context.Context, id uuid.UUID) (domain.AuthRequest, error) {
+			require.Equal(t, requestID, id)
+			return authReq, nil
+		},
+	}
+	masterKeyRepo := &masterKeyRepoMock{
+		findByFingerprintFn: func(ctx context.Context, fingerprint string) (domain.MasterKey, error) {
+			require.Equal(t, masterFingerprint, fingerprint)
+			return domain.MasterKey{
+				MasterID:                 masterID,
+				MasterSignKeyFingerprint: masterFingerprint,
+				MasterSignPub:            masterSignPub,
+				MasterEncPub:             storedMasterEncPub,
+			}, nil
+		},
+	}
+
+	svc := &AuthServiceImpl{
+		machines:       noopMachineRepo{},
+		keyringUpdates: noopKeyringUpdateRepo{},
+		txRunner: txRunnerMock{repos: repository.TxRepositories{
+			AuthRequests:   authRepo,
+			MasterKeys:     masterKeyRepo,
+			Machines:       noopMachineRepo{},
+			KeyringUpdates: noopKeyringUpdateRepo{},
+		}},
+		relaySignPriv: relayPriv,
+		relaySignPub:  relayPub,
+	}
+
+	status, err := svc.ApproveAuthRequest(context.Background(), requestID, AuthApproveInput{
+		MasterSignPub:     masterSignPub,
+		MasterEncPub:      inputMasterEncPub,
+		ApprovalSignature: signApproval(t, authReq, masterSignPriv),
+	})
+	require.ErrorIs(t, err, ErrMasterEncPubMismatch)
+	assert.Nil(t, status)
+}
+
+func TestAuthService_ApproveAuthRequest_InitialKeyringTargetMasterEncMismatch(t *testing.T) {
+	relayPub, relayPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	requestID := uuid.New()
+	masterID := uuid.New()
+
+	machineSignPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	authReq := domain.AuthRequest{
+		ID:             requestID,
+		MachineID:      uuid.New(),
+		MachineSignPub: machineSignPub,
+		MachineEncPub:  randomBytes(t, 32),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+		RelayChallenge: randomBytes(t, 32),
+	}
+
+	masterSignPub, masterSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	inputMasterEncPub := randomBytes(t, 32)
+	keyringTargetMasterEncPub := flippedBytes(inputMasterEncPub)
+	masterFingerprint := crypto.HashKeyFingerprint(masterSignPub)
+
+	keyringPayload := crypto.KeyringUpdatePayload{
+		MasterID:                       masterID.String(),
+		Seq:                            1,
+		PrevHash:                       "",
+		Action:                         string(KeyringActionAdd),
+		TargetMasterSignPub:            base64.StdEncoding.EncodeToString(masterSignPub),
+		TargetMasterEncPub:             base64.StdEncoding.EncodeToString(keyringTargetMasterEncPub),
+		SignerMasterSignKeyFingerprint: masterFingerprint,
+	}
+
+	authRepo := &authRequestRepoMock{
+		findByIDForTxFn: func(ctx context.Context, id uuid.UUID) (domain.AuthRequest, error) {
+			require.Equal(t, requestID, id)
+			return authReq, nil
+		},
+	}
+	masterKeyRepo := &masterKeyRepoMock{
+		findByFingerprintFn: func(ctx context.Context, fingerprint string) (domain.MasterKey, error) {
+			require.Equal(t, masterFingerprint, fingerprint)
+			return domain.MasterKey{}, repository.ErrMasterKeyNotFound
+		},
+	}
+	masterIdentityRepo := &masterIdentityRepoMock{
+		findByIDFn: func(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+			require.Equal(t, masterID, id)
+			return domain.MasterIdentity{}, repository.ErrMasterIdentityNotFound
+		},
+	}
+
+	svc := &AuthServiceImpl{
+		machines:       noopMachineRepo{},
+		keyringUpdates: noopKeyringUpdateRepo{},
+		txRunner: txRunnerMock{repos: repository.TxRepositories{
+			AuthRequests:     authRepo,
+			MasterIdentities: masterIdentityRepo,
+			MasterKeys:       masterKeyRepo,
+			Machines:         noopMachineRepo{},
+			KeyringUpdates:   noopKeyringUpdateRepo{},
+		}},
+		relaySignPriv: relayPriv,
+		relaySignPub:  relayPub,
+	}
+
+	status, err := svc.ApproveAuthRequest(context.Background(), requestID, AuthApproveInput{
+		MasterID:          masterID.String(),
+		MasterSignPub:     masterSignPub,
+		MasterEncPub:      inputMasterEncPub,
+		ApprovalSignature: signApproval(t, authReq, masterSignPriv),
+		KeyringUpdate: &KeyringUpdateInput{
+			MasterID:                       masterID.String(),
+			Seq:                            1,
+			PrevHash:                       "",
+			Action:                         KeyringActionAdd,
+			TargetMasterSignPub:            masterSignPub,
+			TargetMasterEncPub:             keyringTargetMasterEncPub,
+			SignerMasterSignKeyFingerprint: masterFingerprint,
+			Signature:                      ed25519.Sign(masterSignPriv, []byte(crypto.BuildKeyringUpdateMessage(keyringPayload))),
+		},
+	})
+	require.ErrorIs(t, err, ErrKeyringUpdateTargetMasterEncMismatch)
+	assert.Nil(t, status)
+}
+
+func signApproval(t *testing.T, authReq domain.AuthRequest, signerPriv ed25519.PrivateKey) []byte {
+	t.Helper()
+
+	msg := crypto.BuildApprovalMessage(
+		authReq.ID.String(),
+		base64.StdEncoding.EncodeToString(authReq.MachineSignPub),
+		base64.StdEncoding.EncodeToString(authReq.MachineEncPub),
+		base64.StdEncoding.EncodeToString(authReq.RelayChallenge),
+		authReq.ExpiresAt.Unix(),
+	)
+	return ed25519.Sign(signerPriv, []byte(msg))
+}
+
+func randomBytes(t *testing.T, n int) []byte {
+	t.Helper()
+
+	buf := make([]byte, n)
+	_, err := rand.Read(buf)
+	require.NoError(t, err)
+	return buf
+}
+
+func flippedBytes(in []byte) []byte {
+	out := append([]byte(nil), in...)
+	if len(out) == 0 {
+		return out
+	}
+	out[0] ^= 0xff
+	return out
+}
+
 func ptrTime(t time.Time) *time.Time {
 	return &t
 }
