@@ -80,10 +80,14 @@ func (d *gormAuthRequestDAO) DeleteByID(ctx context.Context, id uuid.UUID) error
 	return d.db.WithContext(ctx).Delete(&AuthRequest{}, "id = ?", id).Error
 }
 
+// DeleteExpired removes only expired requests that were never approved.
+// Approved requests are intentionally retained as historical pairing records.
 func (d *gormAuthRequestDAO) DeleteExpired(ctx context.Context, cutoff time.Time) error {
 	return d.db.WithContext(ctx).Delete(&AuthRequest{}, "expires_at < ? AND approved_at IS NULL", cutoff).Error
 }
 
+// NullifyExpiredPollTokens revokes post-approval polling access after expiry
+// while keeping the approved row for audit and debugging history.
 func (d *gormAuthRequestDAO) NullifyExpiredPollTokens(ctx context.Context, cutoff time.Time) error {
 	return d.db.WithContext(ctx).Model(&AuthRequest{}).
 		Where("approved_at IS NOT NULL AND expires_at < ? AND poll_token IS NOT NULL", cutoff).

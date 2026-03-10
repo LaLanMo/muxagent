@@ -78,6 +78,9 @@ func (s *AuthServiceImpl) StartCleanup() func() {
 				return
 			case <-ticker.C:
 				cutoff := time.Now().Add(-time.Minute)
+				// Approved auth requests are intentionally retained. Cleanup only
+				// removes expired pending rows and revokes poll access for expired
+				// approved rows so the full approval payload is not retrievable forever.
 				_ = s.authRequests.DeleteExpired(context.Background(), cutoff)
 				_ = s.authRequests.NullifyExpiredPollTokens(context.Background(), cutoff)
 			}
@@ -129,7 +132,8 @@ func (s *AuthServiceImpl) GetAuthStatus(ctx context.Context, requestID uuid.UUID
 	if status.State == AuthStatusApproved {
 		expired := time.Now().After(status.ExpiresAt)
 		if expired || len(pollToken) == 0 || subtle.ConstantTimeCompare(pollToken, status.pollToken) != 1 {
-			// Strip sensitive post-approval fields
+			// Approved rows remain in the database for historical analysis, but
+			// expired or unauthenticated lookups only get a redacted view.
 			status.Keyring = nil
 			status.MasterID = ""
 			status.RelayPubKey = ""

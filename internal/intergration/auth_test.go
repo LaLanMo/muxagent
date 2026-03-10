@@ -235,6 +235,58 @@ func TestAuthStatus_Approved(t *testing.T) {
 	assert.Equal(t, fingerprint, update.SignerMasterSignKeyFingerprint)
 }
 
+func TestAuthCleanup_ApprovedRequestRetainsRowAndRevokesPollToken(t *testing.T) {
+	srv := newTestServer(t)
+
+	machineID := uuid.New()
+	signPub, _ := generateEd25519Keypair(t)
+	encPub, _ := generateX25519Keypair(t)
+	authReq, err := srv.authService.CreateAuthRequest(context.Background(), machineID, signPub, encPub, "test-host")
+	require.NoError(t, err)
+
+	masterID := uuid.New()
+	masterSignPub, masterSignPriv := generateEd25519Keypair(t)
+	masterEncPub, _ := generateX25519Keypair(t)
+
+	approvalInput := buildFirstMasterApprovalInput(t, authReq, masterID, masterSignPub, masterEncPub, masterSignPriv)
+	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/auth/"+authReq.ID.String()+"/approve", approvalInput)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	defer resp.Body.Close()
+
+	pollTokenB64 := base64.RawURLEncoding.EncodeToString(authReq.PollToken)
+	fullStatus := fetchAuthStatus(t, srv, authReq.ID.String(), pollTokenB64)
+	assert.Equal(t, service.AuthStatusApproved, fullStatus.State)
+	assert.NotEmpty(t, fullStatus.MasterID)
+	require.NotNil(t, fullStatus.Keyring)
+	assert.NotEmpty(t, fullStatus.RelaySignature)
+	assert.NotEmpty(t, fullStatus.ApprovalSignature)
+
+	expiredAt := time.Now().Add(-2 * time.Minute)
+	require.NoError(t, srv.db.Model(&dao.AuthRequest{}).Where("id = ?", authReq.ID).
+		Update("expires_at", expiredAt).Error)
+
+	authDAO := dao.NewGormAuthRequestDAO(srv.db)
+	cutoff := time.Now()
+	require.NoError(t, authDAO.DeleteExpired(context.Background(), cutoff))
+	require.NoError(t, authDAO.NullifyExpiredPollTokens(context.Background(), cutoff))
+
+	authRow := fetchAuthRequest(t, srv.db, authReq.ID.String())
+	require.NotNil(t, authRow.ApprovedAt)
+	assert.WithinDuration(t, expiredAt.UTC(), authRow.ExpiresAt.UTC(), time.Second)
+	assert.Nil(t, authRow.PollToken)
+
+	redactedStatus := fetchAuthStatus(t, srv, authReq.ID.String(), pollTokenB64)
+	assert.Equal(t, service.AuthStatusApproved, redactedStatus.State)
+	assert.Empty(t, redactedStatus.MasterID)
+	assert.Nil(t, redactedStatus.Keyring)
+	assert.Empty(t, redactedStatus.RelayPubKey)
+	assert.Empty(t, redactedStatus.RelaySignature)
+	assert.Empty(t, redactedStatus.ApprovalSignature)
+	assert.Empty(t, redactedStatus.ApprovedByMasterSignKeyFingerprint)
+}
+
 func TestAuthStatus_Approved_MasterKeyMissing(t *testing.T) {
 	srv := newTestServer(t)
 
