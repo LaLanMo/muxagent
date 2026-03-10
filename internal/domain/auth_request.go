@@ -16,6 +16,7 @@ type AuthRequest struct {
 	CreatedAt                          time.Time
 	ExpiresAt                          time.Time
 	RelayChallenge                     []byte
+	PollToken                          []byte
 	ApprovedAt                         *time.Time
 	ApprovedByMasterSignKeyFingerprint *string
 	ApprovalSignature                  []byte

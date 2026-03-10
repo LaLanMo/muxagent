@@ -43,7 +43,7 @@ func InitApp(cfg *config.Config) (*App, error) {
 	authHandler := ioc.InitAuthHandler(authService, cfg)
 	keyringService := service.NewKeyringService(masterIdentityRepository, masterKeyRepository, keyringUpdateRepository, txRunner)
 	keyringHandler := ioc.InitKeyringHandler(keyringService)
-	tokenService := service.NewTokenService(masterKeyRepository)
+	tokenService := service.NewTokenService(masterKeyRepository, machineRepository)
 	wsHub := service.NewWSHub()
 	sessionRegistry := service.NewSessionRegistry()
 	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
@@ -56,7 +56,8 @@ func InitApp(cfg *config.Config) (*App, error) {
 	wsConnLimiter := ioc.InitWSConnLimiter(cfg)
 	wsHandler := ioc.InitWSHandler(wsService, wsConnLimiter)
 	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
-	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, cfg)
+	tokenAuthMiddleware := ioc.InitTokenAuthMiddleware(tokenService)
+	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, tokenAuthMiddleware, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +79,6 @@ var serviceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, servi
 
 var handlerSet = wire.NewSet(ioc.InitAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler, ioc.InitDeviceHandler)
 
-var middlewareSet = wire.NewSet(ioc.InitWSConnLimiter)
+var middlewareSet = wire.NewSet(ioc.InitWSConnLimiter, ioc.InitTokenAuthMiddleware)
 
 var routerSet = wire.NewSet(ioc.SetupRouter)

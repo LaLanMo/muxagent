@@ -27,7 +27,7 @@ func TestKeyringGet_Valid(t *testing.T) {
 		KeyringSeq:      3,
 		KeyringHeadHash: "head",
 	}).Error)
-	signPub, _ := generateEd25519Keypair(t)
+	signPub, signPriv := generateEd25519Keypair(t)
 	encPub, _ := generateX25519Keypair(t)
 	require.NoError(t, srv.db.Create(&dao.MasterKey{
 		ID:                       uuid.New(),
@@ -39,11 +39,8 @@ func TestKeyringGet_Valid(t *testing.T) {
 		KeyringSeqAdded:          1,
 	}).Error)
 
-	resp, err := http.Get(srv.server.URL + "/v1/keyring/" + masterID.String())
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	env := decodeEnvelope(t, resp)
-	out := decodeEnvelopeData[api.KeyringStateResponse](t, env)
+	token := buildConnectToken(t, masterID, signPub, signPriv)
+	out := fetchKeyringState(t, srv, masterID, token)
 	assert.Equal(t, masterID.String(), out.MasterID)
 	assert.Equal(t, 3, out.Seq)
 	assert.Equal(t, "head", out.HeadHash)
@@ -53,7 +50,12 @@ func TestKeyringGet_Valid(t *testing.T) {
 func TestKeyringGet_InvalidMasterID(t *testing.T) {
 	srv := newTestServer(t)
 
-	resp, err := http.Get(srv.server.URL + "/v1/keyring/not-a-uuid")
+	// Send a dummy token so middleware passes the auth-header check
+	// and reaches the master_id parse step.
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/v1/keyring/not-a-uuid", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer dummy")
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	env := decodeEnvelope(t, resp)
@@ -64,7 +66,26 @@ func TestKeyringGet_InvalidMasterID(t *testing.T) {
 func TestKeyringGet_NotFound(t *testing.T) {
 	srv := newTestServer(t)
 
-	resp, err := http.Get(srv.server.URL + "/v1/keyring/" + uuid.New().String())
+	// Seed a master key (without MasterIdentity) so the connect token
+	// verifies, but the handler returns 404 for the missing identity.
+	masterID := uuid.New()
+	signPub, signPriv := generateEd25519Keypair(t)
+	encPub, _ := generateX25519Keypair(t)
+	require.NoError(t, srv.db.Create(&dao.MasterKey{
+		ID:                       uuid.New(),
+		MasterID:                 masterID,
+		MasterSignKeyFingerprint: crypto.HashKeyFingerprint(signPub),
+		MasterSignPub:            signPub,
+		MasterEncPub:             encPub,
+		CreatedAt:                time.Now(),
+		KeyringSeqAdded:          1,
+	}).Error)
+
+	token := buildConnectToken(t, masterID, signPub, signPriv)
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/v1/keyring/"+masterID.String(), nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
 	env := decodeEnvelope(t, resp)
@@ -85,7 +106,7 @@ func TestKeyringGet_KeysSortedAndIncludesRevoked(t *testing.T) {
 
 	signPub1, _ := generateEd25519Keypair(t)
 	encPub1, _ := generateX25519Keypair(t)
-	signPub2, _ := generateEd25519Keypair(t)
+	signPub2, signPriv2 := generateEd25519Keypair(t)
 	encPub2, _ := generateX25519Keypair(t)
 
 	t1 := time.Now().Add(-time.Minute)
@@ -111,15 +132,74 @@ func TestKeyringGet_KeysSortedAndIncludesRevoked(t *testing.T) {
 		KeyringSeqAdded:          1,
 	}).Error)
 
-	resp, err := http.Get(srv.server.URL + "/v1/keyring/" + masterID.String())
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	env := decodeEnvelope(t, resp)
-	out := decodeEnvelopeData[api.KeyringStateResponse](t, env)
+	token := buildConnectToken(t, masterID, signPub2, signPriv2)
+	out := fetchKeyringState(t, srv, masterID, token)
 	require.Len(t, out.Keys, 2)
 	assert.Equal(t, crypto.HashKeyFingerprint(signPub1), out.Keys[0].MasterSignKeyFingerprint)
 	assert.NotNil(t, out.Keys[0].RevokedAt)
 	assert.Equal(t, crypto.HashKeyFingerprint(signPub2), out.Keys[1].MasterSignKeyFingerprint)
+}
+
+func TestKeyringGet_NoToken_Unauthorized(t *testing.T) {
+	srv := newTestServer(t)
+	masterID := uuid.New()
+	require.NoError(t, srv.db.Create(&dao.MasterIdentity{
+		ID:              masterID,
+		CreatedAt:       time.Now(),
+		KeyringSeq:      1,
+		KeyringHeadHash: "head",
+	}).Error)
+
+	resp, err := http.Get(srv.server.URL + "/v1/keyring/" + masterID.String())
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
+func TestKeyringGet_WithMachineAccessToken(t *testing.T) {
+	srv := newTestServer(t)
+	masterID, _, _, _ := seedMasterIdentity(t, srv.db, 1, "head")
+
+	machineSignPub, machineSignPriv := generateEd25519Keypair(t)
+	machineEncPub, _ := generateX25519Keypair(t)
+	machineID := uuid.New()
+	require.NoError(t, srv.db.Create(&dao.Machine{
+		ID:                        machineID,
+		MasterID:                  masterID,
+		MachineSignKeyFingerprint: crypto.HashKeyFingerprint(machineSignPub),
+		MachineSignPub:            machineSignPub,
+		MachineEncPub:             machineEncPub,
+		Hostname:                  "test-machine",
+		CreatedAt:                 time.Now(),
+		LastSeenAt:                time.Now(),
+	}).Error)
+
+	token := buildMachineAccessToken(t, masterID, machineID, machineSignPub, machineSignPriv)
+	out := fetchKeyringState(t, srv, masterID, token)
+	assert.Equal(t, masterID.String(), out.MasterID)
+	assert.Equal(t, 1, out.Seq)
+	require.Len(t, out.Keys, 1)
+}
+
+func TestKeyringGet_MasterIDMismatch_Forbidden(t *testing.T) {
+	srv := newTestServer(t)
+	masterID, signPub, _, signPriv := seedMasterIdentity(t, srv.db, 1, "head")
+
+	// Build token for masterID but request a different master's keyring
+	otherMasterID := uuid.New()
+	require.NoError(t, srv.db.Create(&dao.MasterIdentity{
+		ID:              otherMasterID,
+		CreatedAt:       time.Now(),
+		KeyringSeq:      1,
+		KeyringHeadHash: "head",
+	}).Error)
+
+	token := buildConnectToken(t, masterID, signPub, signPriv)
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/v1/keyring/"+otherMasterID.String(), nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
 }
 
 func TestKeyringUpdate_ChainValidation(t *testing.T) {

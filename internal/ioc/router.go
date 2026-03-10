@@ -14,6 +14,7 @@ func SetupRouter(
 	keyringHandler *api.KeyringHandler,
 	wsHandler *api.WSHandler,
 	deviceHandler *api.DeviceHandler,
+	tokenAuth *middleware.TokenAuthMiddleware,
 	cfg *config.Config,
 ) (*gin.Engine, error) {
 	router := gin.New()
@@ -41,8 +42,8 @@ func SetupRouter(
 
 	// Keyring routes
 	keyring := v1.Group("/keyring")
-	keyring.GET(":master_id", readRL.Middleware(), keyringHandler.Get)
-	keyring.GET(":master_id/updates", readRL.Middleware(), keyringHandler.ListUpdates)
+	keyring.GET(":master_id", readRL.Middleware(), tokenAuth.RequireMasterAccess(), keyringHandler.Get)
+	keyring.GET(":master_id/updates", readRL.Middleware(), tokenAuth.RequireMasterAccess(), keyringHandler.ListUpdates)
 	keyring.POST(":master_id/update", writeRL.Middleware(), keyringHandler.Update)
 
 	// Device routes

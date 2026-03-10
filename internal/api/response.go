@@ -22,4 +22,5 @@ const (
 	CodeInvalidPublicKey = errs.CodeInvalidPublicKey
 	CodeRevoked          = errs.CodeRevoked
 	CodeRateLimited      = errs.CodeRateLimited
+	CodeUnauthorized     = errs.CodeUnauthorized
 )

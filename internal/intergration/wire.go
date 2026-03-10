@@ -69,6 +69,7 @@ var testHandlerSet = wire.NewSet(
 	ioc.InitWSHandler,
 	ioc.InitDeviceHandler,
 	ioc.InitWSConnLimiter,
+	ioc.InitTokenAuthMiddleware,
 )
 
 // Use production SetupRouter so rate-limit middleware and SetTrustedProxies

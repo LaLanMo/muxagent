@@ -19,9 +19,10 @@ import (
 )
 
 type mockAuthService struct {
-	createFn  func(ctx context.Context, machineID uuid.UUID, machineSignPub, machineEncPub []byte) (*domain.AuthRequest, error)
-	statusFn  func(ctx context.Context, requestID uuid.UUID) (*service.AuthStatus, error)
-	approveFn func(ctx context.Context, requestID uuid.UUID, input service.AuthApproveInput) (*service.AuthStatus, error)
+	createFn      func(ctx context.Context, machineID uuid.UUID, machineSignPub, machineEncPub []byte) (*domain.AuthRequest, error)
+	statusFn      func(ctx context.Context, requestID uuid.UUID) (*service.AuthStatus, error)
+	approveFn     func(ctx context.Context, requestID uuid.UUID, input service.AuthApproveInput) (*service.AuthStatus, error)
+	lastPollToken []byte
 }
 
 func (m *mockAuthService) CreateAuthRequest(ctx context.Context, machineID uuid.UUID, machineSignPub, machineEncPub []byte, hostname string) (*domain.AuthRequest, error) {
@@ -31,7 +32,8 @@ func (m *mockAuthService) CreateAuthRequest(ctx context.Context, machineID uuid.
 	return nil, nil
 }
 
-func (m *mockAuthService) GetAuthStatus(ctx context.Context, requestID uuid.UUID) (*service.AuthStatus, error) {
+func (m *mockAuthService) GetAuthStatus(ctx context.Context, requestID uuid.UUID, pollToken []byte) (*service.AuthStatus, error) {
+	m.lastPollToken = pollToken
 	if m.statusFn != nil {
 		return m.statusFn(ctx, requestID)
 	}
@@ -299,4 +301,47 @@ func performRequest(router http.Handler, method, path string, body []byte) *http
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	return rec
+}
+
+func TestAuthHandler_HandleAuthStatus_PollTokenExtraction(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	reqID := uuid.NewString()
+
+	tests := []struct {
+		name             string
+		authHeader       string
+		wantNilPollToken bool
+	}{
+		{"no header", "", true},
+		{"not bearer prefix", "Basic abc123", true},
+		{"invalid base64", "Bearer !!!invalid!!!", true},
+		{"valid bearer", "Bearer " + base64.RawURLEncoding.EncodeToString([]byte("some-token")), false},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			mockSvc := &mockAuthService{
+				statusFn: func(ctx context.Context, requestID uuid.UUID) (*service.AuthStatus, error) {
+					return &service.AuthStatus{State: service.AuthStatusPending}, nil
+				},
+			}
+			handler := NewAuthHandler(mockSvc, "https://relay.test")
+			router := ginTestRouter(handler)
+
+			req := httptest.NewRequest(http.MethodGet, "/v1/auth/"+reqID, nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			rec := httptest.NewRecorder()
+			router.ServeHTTP(rec, req)
+			require.Equal(t, http.StatusOK, rec.Code)
+
+			if tt.wantNilPollToken {
+				assert.Nil(t, mockSvc.lastPollToken)
+			} else {
+				assert.NotNil(t, mockSvc.lastPollToken)
+			}
+		})
+	}
 }

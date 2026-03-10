@@ -32,6 +32,8 @@ type AuthStatus struct {
 	Keyring                            *KeyringState   `json:"keyring,omitempty"`
 	RelayPubKey                        string          `json:"relay_pub_key,omitempty"`
 	RelaySignature                     string          `json:"relay_signature,omitempty"`
+
+	pollToken []byte // unexported, not serialized — for internal gating only
 }
 
 type AuthStatusState string
@@ -46,6 +48,7 @@ type AuthRequestResult struct {
 	RequestID string    `json:"request_id"`
 	QRURL     string    `json:"qr_url"`
 	ExpiresAt time.Time `json:"expires_at"`
+	PollToken string    `json:"poll_token"`
 }
 
 type KeyringAction string

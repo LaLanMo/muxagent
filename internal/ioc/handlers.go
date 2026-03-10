@@ -26,6 +26,10 @@ func InitDeviceHandler(tokenService service.TokenService, deviceTokens repositor
 	return api.NewDeviceHandler(tokenService, deviceTokens)
 }
 
+func InitTokenAuthMiddleware(tokenService service.TokenService) *middleware.TokenAuthMiddleware {
+	return middleware.NewTokenAuthMiddleware(tokenService)
+}
+
 func InitWSConnLimiter(cfg *config.Config) *middleware.WSConnLimiter {
 	rl := cfg.RateLimit.WithDefaults()
 	return middleware.NewWSConnLimiter(rl.MaxWSConnsPerIP, rl.MaxWSConnsTotal)

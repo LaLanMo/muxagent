@@ -20,6 +20,7 @@ type AuthRequest struct {
 	CreatedAt                          time.Time `gorm:"autoCreateTime"`
 	ExpiresAt                          time.Time `gorm:"not null"`
 	RelayChallenge                     []byte    `gorm:"type:bytea"`
+	PollToken                          []byte    `gorm:"type:bytea"`
 	ApprovedAt                         *time.Time
 	ApprovedByMasterSignKeyFingerprint *string
 	ApprovalSignature                  []byte `gorm:"type:bytea"`
@@ -32,6 +33,7 @@ type AuthRequestDAO interface {
 	Update(ctx context.Context, req *AuthRequest) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	DeleteExpired(ctx context.Context, cutoff time.Time) error
+	NullifyExpiredPollTokens(ctx context.Context, cutoff time.Time) error
 }
 
 type gormAuthRequestDAO struct {
@@ -80,4 +82,10 @@ func (d *gormAuthRequestDAO) DeleteByID(ctx context.Context, id uuid.UUID) error
 
 func (d *gormAuthRequestDAO) DeleteExpired(ctx context.Context, cutoff time.Time) error {
 	return d.db.WithContext(ctx).Delete(&AuthRequest{}, "expires_at < ? AND approved_at IS NULL", cutoff).Error
+}
+
+func (d *gormAuthRequestDAO) NullifyExpiredPollTokens(ctx context.Context, cutoff time.Time) error {
+	return d.db.WithContext(ctx).Model(&AuthRequest{}).
+		Where("approved_at IS NOT NULL AND expires_at < ? AND poll_token IS NOT NULL", cutoff).
+		Update("poll_token", nil).Error
 }

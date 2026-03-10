@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/LaLanMo/muxagent-relay/internal/service"
 	"github.com/gin-gonic/gin"
@@ -75,6 +76,7 @@ func (h *AuthHandler) AuthRequest(c *gin.Context) {
 		RequestID: req.ID.String(),
 		QRURL:     buildQRURL(req.ID.String(), h.relayURL),
 		ExpiresAt: req.ExpiresAt,
+		PollToken: base64.RawURLEncoding.EncodeToString(req.PollToken),
 	}
 	c.JSON(http.StatusCreated, Envelope{Code: CodeSuccess, Message: "success", Data: toAuthRequestResponse(output)})
 }
@@ -86,7 +88,16 @@ func (h *AuthHandler) AuthStatus(c *gin.Context) {
 		return
 	}
 
-	status, err := h.authService.GetAuthStatus(c.Request.Context(), reqID)
+	var pollToken []byte
+	if authHeader := c.GetHeader("Authorization"); authHeader != "" {
+		if token, ok := strings.CutPrefix(authHeader, "Bearer "); ok {
+			if decoded, err := base64.RawURLEncoding.DecodeString(token); err == nil {
+				pollToken = decoded
+			}
+		}
+	}
+
+	status, err := h.authService.GetAuthStatus(c.Request.Context(), reqID, pollToken)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrAuthRequestNotFound):
@@ -122,6 +133,7 @@ type AuthRequestResponse struct {
 	RequestID string `json:"request_id"`
 	QRURL     string `json:"qr_url"`
 	ExpiresAt int64  `json:"expires_at"`
+	PollToken string `json:"poll_token"`
 }
 
 type AuthStatusResponse struct {
@@ -147,6 +159,7 @@ func toAuthRequestResponse(out service.AuthRequestResult) AuthRequestResponse {
 		RequestID: out.RequestID,
 		QRURL:     out.QRURL,
 		ExpiresAt: out.ExpiresAt.Unix(),
+		PollToken: out.PollToken,
 	}
 }
 

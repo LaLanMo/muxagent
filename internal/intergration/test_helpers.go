@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -97,6 +98,24 @@ func signKeyringUpdate(privateKey ed25519.PrivateKey, payload crypto.KeyringUpda
 	return base64.StdEncoding.EncodeToString(sig)
 }
 
+func buildConnectToken(t *testing.T, masterID uuid.UUID, signPub ed25519.PublicKey, signPriv ed25519.PrivateKey) string {
+	t.Helper()
+	fingerprint := crypto.HashKeyFingerprint(signPub)
+	expiresAt := time.Now().Add(5 * time.Minute).Unix()
+	payload := fmt.Sprintf("muxagent-connect-token-v1|%s|%s|%d", masterID.String(), fingerprint, expiresAt)
+	sig := ed25519.Sign(signPriv, []byte(payload))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(sig)
+}
+
+func buildMachineAccessToken(t *testing.T, masterID, machineID uuid.UUID, machineSignPub ed25519.PublicKey, machineSignPriv ed25519.PrivateKey) string {
+	t.Helper()
+	fingerprint := crypto.HashKeyFingerprint(machineSignPub)
+	expiresAt := time.Now().Add(5 * time.Minute).Unix()
+	payload := fmt.Sprintf("muxagent-machine-access-v1|%s|%s|%s|%d", masterID.String(), machineID.String(), fingerprint, expiresAt)
+	sig := ed25519.Sign(machineSignPriv, []byte(payload))
+	return base64.RawURLEncoding.EncodeToString([]byte(payload)) + "." + base64.RawURLEncoding.EncodeToString(sig)
+}
+
 func newJSONRequest(method, url string, body interface{}) *http.Request {
 	var buf bytes.Buffer
 	_ = json.NewEncoder(&buf).Encode(body)
@@ -123,9 +142,14 @@ func decodeEnvelopeData[T any](t *testing.T, env api.Envelope) T {
 	return out
 }
 
-func fetchAuthStatus(t *testing.T, srv *testServer, requestID string) api.AuthStatusResponse {
+func fetchAuthStatus(t *testing.T, srv *testServer, requestID string, pollToken ...string) api.AuthStatusResponse {
 	t.Helper()
-	resp, err := http.Get(srv.server.URL + "/v1/auth/" + requestID)
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/v1/auth/"+requestID, nil)
+	require.NoError(t, err)
+	if len(pollToken) > 0 && pollToken[0] != "" {
+		req.Header.Set("Authorization", "Bearer "+pollToken[0])
+	}
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	env := decodeEnvelope(t, resp)
@@ -152,9 +176,12 @@ func authRequestFromStatus(t *testing.T, status api.AuthStatusResponse) domain.A
 	}
 }
 
-func fetchKeyringState(t *testing.T, srv *testServer, masterID uuid.UUID) api.KeyringStateResponse {
+func fetchKeyringState(t *testing.T, srv *testServer, masterID uuid.UUID, accessToken string) api.KeyringStateResponse {
 	t.Helper()
-	resp, err := http.Get(srv.server.URL + "/v1/keyring/" + masterID.String())
+	req, err := http.NewRequest(http.MethodGet, srv.server.URL+"/v1/keyring/"+masterID.String(), nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	env := decodeEnvelope(t, resp)

@@ -67,6 +67,10 @@ func (m *authRequestRepoMock) DeleteExpired(ctx context.Context, cutoff time.Tim
 	return nil
 }
 
+func (m *authRequestRepoMock) NullifyExpiredPollTokens(ctx context.Context, cutoff time.Time) error {
+	return nil
+}
+
 type masterKeyRepoMock struct {
 	findByFingerprintFn       func(ctx context.Context, fingerprint string) (domain.MasterKey, error)
 	findByMasterFingerprintFn func(ctx context.Context, masterID uuid.UUID, fingerprint string) (domain.MasterKey, error)
@@ -163,10 +167,15 @@ func TestAuthService_GetAuthStatus(t *testing.T) {
 	require.NoError(t, err)
 	masterFingerprint := crypto.HashKeyFingerprint(masterSignPub)
 
+	testPollToken := make([]byte, 32)
+	_, err = rand.Read(testPollToken)
+	require.NoError(t, err)
+
 	tests := []struct {
 		name         string
 		authReq      domain.AuthRequest
 		authErr      error
+		pollToken    []byte
 		masterKey    domain.MasterKey
 		masterKeyErr error
 		identity     domain.MasterIdentity
@@ -207,10 +216,12 @@ func TestAuthService_GetAuthStatus(t *testing.T) {
 				ID:                                 requestID,
 				MachineID:                          machineID,
 				ExpiresAt:                          now.Add(1 * time.Minute),
+				PollToken:                          testPollToken,
 				ApprovedAt:                         ptrTime(now.Add(-1 * time.Minute)),
 				ApprovedByMasterSignKeyFingerprint: ptrString(masterFingerprint),
 				ApprovalSignature:                  []byte("sig"),
 			},
+			pollToken: testPollToken,
 			masterKey: domain.MasterKey{
 				MasterID:                 masterID,
 				MasterSignKeyFingerprint: masterFingerprint,
@@ -239,10 +250,12 @@ func TestAuthService_GetAuthStatus(t *testing.T) {
 				ID:                                 requestID,
 				MachineID:                          machineID,
 				ExpiresAt:                          now.Add(1 * time.Minute),
+				PollToken:                          testPollToken,
 				ApprovedAt:                         ptrTime(now.Add(-1 * time.Minute)),
 				ApprovedByMasterSignKeyFingerprint: ptrString(masterFingerprint),
 				ApprovalSignature:                  []byte("sig"),
 			},
+			pollToken:    testPollToken,
 			masterKeyErr: repository.ErrMasterKeyNotFound,
 			wantState:    AuthStatusApproved,
 		},
@@ -293,7 +306,7 @@ func TestAuthService_GetAuthStatus(t *testing.T) {
 				relaySignPub:     relayPub,
 			}
 
-			status, err := svc.GetAuthStatus(context.Background(), requestID)
+			status, err := svc.GetAuthStatus(context.Background(), requestID, tt.pollToken)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, tt.wantErr)
@@ -315,6 +328,143 @@ func TestAuthService_GetAuthStatus(t *testing.T) {
 				require.NoError(t, err)
 				payload := BuildAuthStatusSignaturePayload(status, requestID.String())
 				assert.True(t, crypto.VerifySignature(relayPubBytes, payload, sig))
+			}
+		})
+	}
+}
+
+func TestAuthService_GetAuthStatus_PollTokenGating(t *testing.T) {
+	relayPub, relayPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	now := time.Now()
+	requestID := uuid.New()
+	machineID := uuid.New()
+	masterID := uuid.New()
+	masterSignPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	masterFingerprint := crypto.HashKeyFingerprint(masterSignPub)
+
+	correctPollToken := make([]byte, 32)
+	_, err = rand.Read(correctPollToken)
+	require.NoError(t, err)
+
+	wrongPollToken := make([]byte, 32)
+	_, err = rand.Read(wrongPollToken)
+	require.NoError(t, err)
+
+	baseAuthReq := domain.AuthRequest{
+		ID:                                 requestID,
+		MachineID:                          machineID,
+		MachineSignPub:                     []byte("sign"),
+		MachineEncPub:                      []byte("enc"),
+		ExpiresAt:                          now.Add(5 * time.Minute),
+		PollToken:                          correctPollToken,
+		ApprovedAt:                         ptrTime(now.Add(-1 * time.Minute)),
+		ApprovedByMasterSignKeyFingerprint: ptrString(masterFingerprint),
+		ApprovalSignature:                  []byte("sig"),
+	}
+
+	tests := []struct {
+		name         string
+		authReq      domain.AuthRequest
+		pollToken    []byte
+		wantStripped bool
+	}{
+		{
+			name:         "correct poll token - full response",
+			authReq:      baseAuthReq,
+			pollToken:    correctPollToken,
+			wantStripped: false,
+		},
+		{
+			name:         "no poll token - stripped",
+			authReq:      baseAuthReq,
+			pollToken:    nil,
+			wantStripped: true,
+		},
+		{
+			name:         "wrong poll token - stripped",
+			authReq:      baseAuthReq,
+			pollToken:    wrongPollToken,
+			wantStripped: true,
+		},
+		{
+			name: "correct poll token but expired - stripped",
+			authReq: func() domain.AuthRequest {
+				r := baseAuthReq
+				r.ExpiresAt = now.Add(-1 * time.Minute)
+				return r
+			}(),
+			pollToken:    correctPollToken,
+			wantStripped: true,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			authRepo := &authRequestRepoMock{
+				findByIDFn: func(ctx context.Context, id uuid.UUID) (domain.AuthRequest, error) {
+					return tt.authReq, nil
+				},
+			}
+			masterKeyRepo := &masterKeyRepoMock{
+				findByFingerprintFn: func(ctx context.Context, fingerprint string) (domain.MasterKey, error) {
+					return domain.MasterKey{
+						MasterID:                 masterID,
+						MasterSignKeyFingerprint: masterFingerprint,
+						MasterSignPub:            masterSignPub,
+						MasterEncPub:             []byte("enc"),
+					}, nil
+				},
+				listByMasterIDFn: func(ctx context.Context, id uuid.UUID) ([]domain.MasterKey, error) {
+					return []domain.MasterKey{{
+						MasterSignKeyFingerprint: masterFingerprint,
+						MasterSignPub:            masterSignPub,
+						MasterEncPub:             []byte("enc"),
+					}}, nil
+				},
+			}
+			masterIdentityRepo := &masterIdentityRepoMock{
+				findByIDFn: func(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+					return domain.MasterIdentity{
+						ID:              masterID,
+						KeyringSeq:      1,
+						KeyringHeadHash: "head",
+					}, nil
+				},
+			}
+
+			svc := &AuthServiceImpl{
+				authRequests:     authRepo,
+				masterKeys:       masterKeyRepo,
+				masterIdentities: masterIdentityRepo,
+				machines:         noopMachineRepo{},
+				keyringUpdates:   noopKeyringUpdateRepo{},
+				txRunner:         noopTxRunner{},
+				relaySignPriv:    relayPriv,
+				relaySignPub:     relayPub,
+			}
+
+			status, err := svc.GetAuthStatus(context.Background(), requestID, tt.pollToken)
+			require.NoError(t, err)
+			assert.Equal(t, AuthStatusApproved, status.State)
+
+			if tt.wantStripped {
+				assert.Empty(t, status.MasterID)
+				assert.Nil(t, status.Keyring)
+				assert.Empty(t, status.RelayPubKey)
+				assert.Empty(t, status.RelaySignature)
+				assert.Empty(t, status.ApprovalSignature)
+				assert.Empty(t, status.ApprovedByMasterSignKeyFingerprint)
+			} else {
+				assert.Equal(t, masterID.String(), status.MasterID)
+				require.NotNil(t, status.Keyring)
+				assert.NotEmpty(t, status.RelayPubKey)
+				assert.NotEmpty(t, status.RelaySignature)
+				assert.NotEmpty(t, status.ApprovalSignature)
+				assert.NotEmpty(t, status.ApprovedByMasterSignKeyFingerprint)
 			}
 		})
 	}

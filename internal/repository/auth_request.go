@@ -17,6 +17,7 @@ type AuthRequestRepository interface {
 	Update(ctx context.Context, req *domain.AuthRequest) error
 	DeleteByID(ctx context.Context, id uuid.UUID) error
 	DeleteExpired(ctx context.Context, cutoff time.Time) error
+	NullifyExpiredPollTokens(ctx context.Context, cutoff time.Time) error
 }
 
 type authRequestRepository struct {
@@ -65,6 +66,10 @@ func (r *authRequestRepository) DeleteExpired(ctx context.Context, cutoff time.T
 	return r.dao.DeleteExpired(ctx, cutoff)
 }
 
+func (r *authRequestRepository) NullifyExpiredPollTokens(ctx context.Context, cutoff time.Time) error {
+	return r.dao.NullifyExpiredPollTokens(ctx, cutoff)
+}
+
 func toDomainAuthRequest(req dao.AuthRequest) domain.AuthRequest {
 	return domain.AuthRequest{
 		ID:                                 req.ID,
@@ -75,6 +80,7 @@ func toDomainAuthRequest(req dao.AuthRequest) domain.AuthRequest {
 		CreatedAt:                          req.CreatedAt,
 		ExpiresAt:                          req.ExpiresAt,
 		RelayChallenge:                     req.RelayChallenge,
+		PollToken:                          req.PollToken,
 		ApprovedAt:                         req.ApprovedAt,
 		ApprovedByMasterSignKeyFingerprint: req.ApprovedByMasterSignKeyFingerprint,
 		ApprovalSignature:                  req.ApprovalSignature,
@@ -91,6 +97,7 @@ func toDAOAuthRequest(req domain.AuthRequest) *dao.AuthRequest {
 		CreatedAt:                          req.CreatedAt,
 		ExpiresAt:                          req.ExpiresAt,
 		RelayChallenge:                     req.RelayChallenge,
+		PollToken:                          req.PollToken,
 		ApprovedAt:                         req.ApprovedAt,
 		ApprovedByMasterSignKeyFingerprint: req.ApprovedByMasterSignKeyFingerprint,
 		ApprovalSignature:                  req.ApprovalSignature,

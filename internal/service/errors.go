@@ -31,9 +31,10 @@ var (
 	ErrKeyringUpdateTargetMasterEncMismatch   = errors.New("keyring_update.target_master_enc_pub mismatch")
 	ErrKeyringUpdateSignerFingerprintMismatch = errors.New("keyring_update.signer_master_sign_key_fingerprint mismatch")
 
-	ErrInvalidConnectToken  = errors.New("invalid connect_token")
-	ErrInvalidMachineToken  = errors.New("invalid machine_token")
-	ErrTokenExpired         = errors.New("token expired")
+	ErrInvalidConnectToken      = errors.New("invalid connect_token")
+	ErrInvalidMachineToken      = errors.New("invalid machine_token")
+	ErrInvalidMachineAccessToken = errors.New("invalid machine_access_token")
+	ErrTokenExpired             = errors.New("token expired")
 	ErrMachineBusy          = errors.New("machine already has an active session")
 	ErrMachineNotConnected  = errors.New("machine not connected")
 	ErrUnauthorizedMachine  = errors.New("machine does not belong to master identity")

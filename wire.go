@@ -72,6 +72,7 @@ var handlerSet = wire.NewSet(
 
 var middlewareSet = wire.NewSet(
 	ioc.InitWSConnLimiter,
+	ioc.InitTokenAuthMiddleware,
 )
 
 var routerSet = wire.NewSet(

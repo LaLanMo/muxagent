@@ -114,7 +114,7 @@ func TestTokenService_VerifyConnectToken(t *testing.T) {
 					return tt.repoKey, nil
 				},
 			}
-			svc := NewTokenService(repo)
+			svc := NewTokenService(repo, &machineRepoMock{})
 			claims, err := svc.VerifyConnectToken(context.Background(), tt.token)
 			if tt.wantErr != nil {
 				require.Error(t, err)
@@ -126,6 +126,125 @@ func TestTokenService_VerifyConnectToken(t *testing.T) {
 				assert.Equal(t, masterID, claims.MasterID)
 				assert.Equal(t, fingerprint, claims.MasterSignKeyFingerprint)
 			}
+		})
+	}
+}
+
+func TestTokenService_VerifyMachineAccessToken(t *testing.T) {
+	masterID := uuid.New()
+	machineID := uuid.New()
+	machineSignPub, machineSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	fingerprint := crypto.HashKeyFingerprint(machineSignPub)
+	expiresAt := time.Now().Add(time.Hour).UTC().Unix()
+
+	sign := func(msg string, priv ed25519.PrivateKey) string {
+		sig := ed25519.Sign(priv, []byte(msg))
+		return base64.RawURLEncoding.EncodeToString([]byte(msg)) + "." + base64.RawURLEncoding.EncodeToString(sig)
+	}
+
+	validPayload := TokenPrefixMachineAccess + "|" + masterID.String() + "|" + machineID.String() + "|" + fingerprint + "|" + strconv.FormatInt(expiresAt, 10)
+	validToken := sign(validPayload, machineSignPriv)
+
+	validMachine := domain.Machine{
+		ID:                        machineID,
+		MasterID:                  masterID,
+		MachineSignKeyFingerprint: fingerprint,
+		MachineSignPub:            machineSignPub,
+	}
+
+	tests := []struct {
+		name       string
+		token      string
+		machine    domain.Machine
+		machineErr error
+		wantErr    error
+	}{
+		{
+			name:    "valid",
+			token:   validToken,
+			machine: validMachine,
+		},
+		{
+			name:    "invalid prefix",
+			token:   sign("bad-prefix|"+masterID.String()+"|"+machineID.String()+"|"+fingerprint+"|"+strconv.FormatInt(expiresAt, 10), machineSignPriv),
+			wantErr: ErrInvalidTokenFormat,
+		},
+		{
+			name:    "expired",
+			token:   sign(TokenPrefixMachineAccess+"|"+masterID.String()+"|"+machineID.String()+"|"+fingerprint+"|"+strconv.FormatInt(time.Now().Add(-time.Hour).Unix(), 10), machineSignPriv),
+			wantErr: ErrTokenExpired,
+		},
+		{
+			name:       "machine not found",
+			token:      validToken,
+			machineErr: repository.ErrMachineNotFound,
+			wantErr:    ErrInvalidMachineAccessToken,
+		},
+		{
+			name:  "master ID mismatch",
+			token: validToken,
+			machine: domain.Machine{
+				ID:                        machineID,
+				MasterID:                  uuid.New(),
+				MachineSignKeyFingerprint: fingerprint,
+				MachineSignPub:            machineSignPub,
+			},
+			wantErr: ErrInvalidMachineAccessToken,
+		},
+		{
+			name:  "fingerprint mismatch",
+			token: validToken,
+			machine: domain.Machine{
+				ID:                        machineID,
+				MasterID:                  masterID,
+				MachineSignKeyFingerprint: "wrong-fingerprint",
+				MachineSignPub:            machineSignPub,
+			},
+			wantErr: ErrInvalidMachineAccessToken,
+		},
+		{
+			name:  "machine revoked",
+			token: validToken,
+			machine: domain.Machine{
+				ID:                        machineID,
+				MasterID:                  masterID,
+				MachineSignKeyFingerprint: fingerprint,
+				MachineSignPub:            machineSignPub,
+				RevokedAt:                 ptrTime(time.Now()),
+			},
+			wantErr: ErrMachineRevoked,
+		},
+		{
+			name:    "invalid signature",
+			token:   sign(validPayload, ed25519.NewKeyFromSeed(make([]byte, ed25519.SeedSize))),
+			machine: validMachine,
+			wantErr: ErrInvalidMachineAccessToken,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			machineRepo := &machineRepoMock{
+				findFn: func(ctx context.Context, id uuid.UUID) (domain.Machine, error) {
+					if tt.machineErr != nil {
+						return domain.Machine{}, tt.machineErr
+					}
+					return tt.machine, nil
+				},
+			}
+			svc := NewTokenService(&masterKeyRepoStub{}, machineRepo)
+			claims, err := svc.VerifyMachineAccessToken(context.Background(), tt.token)
+			if tt.wantErr != nil {
+				require.Error(t, err)
+				assert.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, masterID, claims.MasterID)
+			assert.Equal(t, machineID, claims.MachineID)
+			assert.Equal(t, fingerprint, claims.Fingerprint)
 		})
 	}
 }
@@ -197,7 +316,7 @@ func TestTokenService_VerifyMachineToken(t *testing.T) {
 					return tt.repoKey, nil
 				},
 			}
-			svc := NewTokenService(repo)
+			svc := NewTokenService(repo, &machineRepoMock{})
 			claims, err := svc.VerifyMachineToken(context.Background(), tt.token)
 			if tt.wantErr != nil {
 				require.Error(t, err)

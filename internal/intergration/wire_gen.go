@@ -43,7 +43,7 @@ func InitTestContainer() (*testContainer, error) {
 	authHandler := initTestAuthHandler(authService)
 	keyringService := service.NewKeyringService(masterIdentityRepository, masterKeyRepository, keyringUpdateRepository, txRunner)
 	keyringHandler := ioc.InitKeyringHandler(keyringService)
-	tokenService := service.NewTokenService(masterKeyRepository)
+	tokenService := service.NewTokenService(masterKeyRepository, machineRepository)
 	wsHub := service.NewWSHub()
 	sessionRegistry := service.NewSessionRegistry()
 	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
@@ -56,7 +56,8 @@ func InitTestContainer() (*testContainer, error) {
 	wsConnLimiter := ioc.InitWSConnLimiter(config)
 	wsHandler := ioc.InitWSHandler(wsService, wsConnLimiter)
 	deviceHandler := ioc.InitDeviceHandler(tokenService, deviceTokenRepository)
-	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, config)
+	tokenAuthMiddleware := ioc.InitTokenAuthMiddleware(tokenService)
+	engine, err := ioc.SetupRouter(authHandler, keyringHandler, wsHandler, deviceHandler, tokenAuthMiddleware, config)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +88,7 @@ var testRepositorySet = wire.NewSet(repository.NewAuthRequestRepository, reposit
 var testServiceSet = wire.NewSet(service.NewWSHub, service.NewSessionRegistry, service.NewTokenService, service.NewWSService, service.NewAuthService, service.NewKeyringService, initTestNilFCMClient, service.NewPushService, ioc.InitWSServiceConfig)
 
 var testHandlerSet = wire.NewSet(
-	initTestAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler, ioc.InitDeviceHandler, ioc.InitWSConnLimiter,
+	initTestAuthHandler, ioc.InitKeyringHandler, ioc.InitWSHandler, ioc.InitDeviceHandler, ioc.InitWSConnLimiter, ioc.InitTokenAuthMiddleware,
 )
 
 // Use production SetupRouter so rate-limit middleware and SetTrustedProxies

@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	TokenPrefixConnect = "muxagent-connect-token-v1"
-	TokenPrefixMachine = "muxagent-machine-token-v1"
+	TokenPrefixConnect       = "muxagent-connect-token-v1"
+	TokenPrefixMachine       = "muxagent-machine-token-v1"
+	TokenPrefixMachineAccess = "muxagent-machine-access-v1"
 )
 
 type ConnectTokenClaims struct {
@@ -31,17 +32,26 @@ type MachineTokenClaims struct {
 	ExpiresAt                time.Time
 }
 
+type MachineAccessTokenClaims struct {
+	MasterID    uuid.UUID
+	MachineID   uuid.UUID
+	Fingerprint string
+	ExpiresAt   time.Time
+}
+
 type TokenService interface {
 	VerifyConnectToken(ctx context.Context, token string) (ConnectTokenClaims, error)
 	VerifyMachineToken(ctx context.Context, token string) (MachineTokenClaims, error)
+	VerifyMachineAccessToken(ctx context.Context, token string) (MachineAccessTokenClaims, error)
 }
 
 type tokenServiceImpl struct {
 	masterKeys repository.MasterKeyRepository
+	machines   repository.MachineRepository
 }
 
-func NewTokenService(masterKeys repository.MasterKeyRepository) TokenService {
-	return &tokenServiceImpl{masterKeys: masterKeys}
+func NewTokenService(masterKeys repository.MasterKeyRepository, machines repository.MachineRepository) TokenService {
+	return &tokenServiceImpl{masterKeys: masterKeys, machines: machines}
 }
 
 func (s *tokenServiceImpl) VerifyConnectToken(ctx context.Context, token string) (ConnectTokenClaims, error) {
@@ -108,6 +118,60 @@ func (s *tokenServiceImpl) VerifyMachineToken(ctx context.Context, token string)
 		MachineID:                machineID,
 		MasterSignKeyFingerprint: fingerprint,
 		ExpiresAt:                expiresAt,
+	}, nil
+}
+
+func (s *tokenServiceImpl) VerifyMachineAccessToken(ctx context.Context, token string) (MachineAccessTokenClaims, error) {
+	payload, sig, err := decodeToken(token)
+	if err != nil {
+		return MachineAccessTokenClaims{}, err
+	}
+	parts := strings.Split(payload, "|")
+	if len(parts) != 5 || parts[0] != TokenPrefixMachineAccess {
+		return MachineAccessTokenClaims{}, ErrInvalidTokenFormat
+	}
+	masterID, err := uuid.Parse(parts[1])
+	if err != nil {
+		return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+	}
+	machineID, err := uuid.Parse(parts[2])
+	if err != nil {
+		return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+	}
+	fingerprint := parts[3]
+	expiresAt, err := parseUnix(parts[4])
+	if err != nil {
+		return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+	}
+	if time.Now().After(expiresAt) {
+		return MachineAccessTokenClaims{}, ErrTokenExpired
+	}
+
+	machine, err := s.machines.FindByID(ctx, machineID)
+	if err != nil {
+		if errors.Is(err, repository.ErrMachineNotFound) {
+			return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+		}
+		return MachineAccessTokenClaims{}, err
+	}
+	if machine.MasterID != masterID {
+		return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+	}
+	if machine.MachineSignKeyFingerprint != fingerprint {
+		return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+	}
+	if machine.RevokedAt != nil {
+		return MachineAccessTokenClaims{}, ErrMachineRevoked
+	}
+	if !crypto.VerifySignature(machine.MachineSignPub, []byte(payload), sig) {
+		return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
+	}
+
+	return MachineAccessTokenClaims{
+		MasterID:    masterID,
+		MachineID:   machineID,
+		Fingerprint: fingerprint,
+		ExpiresAt:   expiresAt,
 	}, nil
 }
 

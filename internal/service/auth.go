@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"errors"
 	"strconv"
@@ -24,7 +25,7 @@ const (
 
 type AuthService interface {
 	CreateAuthRequest(ctx context.Context, machineID uuid.UUID, machineSignPub, machineEncPub []byte, hostname string) (*domain.AuthRequest, error)
-	GetAuthStatus(ctx context.Context, requestID uuid.UUID) (*AuthStatus, error)
+	GetAuthStatus(ctx context.Context, requestID uuid.UUID, pollToken []byte) (*AuthStatus, error)
 	ApproveAuthRequest(ctx context.Context, requestID uuid.UUID, input AuthApproveInput) (*AuthStatus, error)
 	StartCleanup() func()
 }
@@ -76,6 +77,7 @@ func (s *AuthServiceImpl) StartCleanup() func() {
 			case <-ticker.C:
 				cutoff := time.Now().Add(-time.Minute)
 				_ = s.authRequests.DeleteExpired(context.Background(), cutoff)
+				_ = s.authRequests.NullifyExpiredPollTokens(context.Background(), cutoff)
 			}
 		}
 	}()
@@ -87,6 +89,10 @@ func (s *AuthServiceImpl) CreateAuthRequest(ctx context.Context, machineID uuid.
 	if _, err := rand.Read(challenge); err != nil {
 		return nil, err
 	}
+	pollToken := make([]byte, 32)
+	if _, err := rand.Read(pollToken); err != nil {
+		return nil, err
+	}
 	now := time.Now()
 	req := &domain.AuthRequest{
 		ID:             uuid.New(),
@@ -96,6 +102,7 @@ func (s *AuthServiceImpl) CreateAuthRequest(ctx context.Context, machineID uuid.
 		Hostname:       hostname,
 		ExpiresAt:      now.Add(AuthRequestTTL),
 		RelayChallenge: challenge,
+		PollToken:      pollToken,
 	}
 	if err := s.authRequests.Create(ctx, req); err != nil {
 		return nil, err
@@ -103,8 +110,24 @@ func (s *AuthServiceImpl) CreateAuthRequest(ctx context.Context, machineID uuid.
 	return req, nil
 }
 
-func (s *AuthServiceImpl) GetAuthStatus(ctx context.Context, requestID uuid.UUID) (*AuthStatus, error) {
-	return s.getAuthStatus(ctx, s.authRequests, s.masterKeys, s.masterIdentities, requestID)
+func (s *AuthServiceImpl) GetAuthStatus(ctx context.Context, requestID uuid.UUID, pollToken []byte) (*AuthStatus, error) {
+	status, err := s.getAuthStatus(ctx, s.authRequests, s.masterKeys, s.masterIdentities, requestID)
+	if err != nil {
+		return nil, err
+	}
+	if status.State == AuthStatusApproved {
+		expired := time.Now().After(status.ExpiresAt)
+		if expired || len(pollToken) == 0 || subtle.ConstantTimeCompare(pollToken, status.pollToken) != 1 {
+			// Strip sensitive post-approval fields
+			status.Keyring = nil
+			status.MasterID = ""
+			status.RelayPubKey = ""
+			status.RelaySignature = ""
+			status.ApprovalSignature = ""
+			status.ApprovedByMasterSignKeyFingerprint = ""
+		}
+	}
+	return status, nil
 }
 
 func (s *AuthServiceImpl) getAuthStatus(
@@ -139,6 +162,7 @@ func (s *AuthServiceImpl) getAuthStatus(
 		MachineHostname: authReq.Hostname,
 		RelayChallenge:  base64.StdEncoding.EncodeToString(authReq.RelayChallenge),
 		ExpiresAt:       authReq.ExpiresAt,
+		pollToken:       authReq.PollToken,
 	}
 
 	if authReq.ApprovedAt != nil && authReq.ApprovedByMasterSignKeyFingerprint != nil {
@@ -212,7 +236,7 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 			if masterKey.RevokedAt != nil {
 				return ErrMasterKeyRevoked
 			}
-			if !equalBytes(masterKey.MasterEncPub, input.MasterEncPub) {
+			if subtle.ConstantTimeCompare(masterKey.MasterEncPub, input.MasterEncPub) != 1 {
 				return ErrMasterEncPubMismatch
 			}
 			masterID = masterKey.MasterID
@@ -434,10 +458,10 @@ func validateInitialKeyringUpdate(update *KeyringUpdateInput, masterID uuid.UUID
 	if update.Action != KeyringActionAdd {
 		return ErrKeyringUpdateActionInvalid
 	}
-	if !equalBytes(update.TargetMasterSignPub, masterSignPub) {
+	if subtle.ConstantTimeCompare(update.TargetMasterSignPub, masterSignPub) != 1 {
 		return ErrKeyringUpdateTargetMasterSignMismatch
 	}
-	if !equalBytes(update.TargetMasterEncPub, masterEncPub) {
+	if subtle.ConstantTimeCompare(update.TargetMasterEncPub, masterEncPub) != 1 {
 		return ErrKeyringUpdateTargetMasterEncMismatch
 	}
 	computedTarget := crypto.HashKeyFingerprint(masterSignPub)
@@ -445,18 +469,6 @@ func validateInitialKeyringUpdate(update *KeyringUpdateInput, masterID uuid.UUID
 		return ErrKeyringUpdateSignerFingerprintMismatch
 	}
 	return nil
-}
-
-func equalBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func sortMasterKeys(keys []MasterKeyState) {

@@ -51,7 +51,7 @@ func TestE2E_FirstDevicePairing(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Step 5: CLI polls status
-	status := fetchAuthStatus(t, srv, authReqDomain.ID.String())
+	status := fetchAuthStatus(t, srv, authReqDomain.ID.String(), out.PollToken)
 	require.NotNil(t, status.Keyring)
 	assert.Equal(t, 1, status.Keyring.Seq)
 	assert.Len(t, status.Keyring.Keys, 1)
@@ -185,7 +185,8 @@ func TestE2E_AddSecondMaster(t *testing.T) {
 	master2SignPub, master2SignPriv := generateEd25519Keypair(t)
 	master2EncPub, _ := generateX25519Keypair(t)
 
-	keyring := fetchKeyringState(t, srv, masterID)
+	connectToken := buildConnectToken(t, masterID, masterSignPub, masterSignPriv)
+	keyring := fetchKeyringState(t, srv, masterID, connectToken)
 	updateInput := buildKeyringUpdateInput(t, masterID, keyring.Seq+1, keyring.HeadHash, "add",
 		master2SignPub, master2EncPub, masterSignPub, masterSignPriv)
 	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", updateInput)
@@ -193,7 +194,7 @@ func TestE2E_AddSecondMaster(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	keyringAfter := fetchKeyringState(t, srv, masterID)
+	keyringAfter := fetchKeyringState(t, srv, masterID, connectToken)
 	assert.Equal(t, keyring.Seq+1, keyringAfter.Seq)
 	var found bool
 	for _, key := range keyringAfter.Keys {
@@ -276,7 +277,8 @@ func TestE2E_RevokeMaster(t *testing.T) {
 	// Add second master
 	master2SignPub, master2SignPriv := generateEd25519Keypair(t)
 	master2EncPub, _ := generateX25519Keypair(t)
-	keyring := fetchKeyringState(t, srv, masterID)
+	connectToken := buildConnectToken(t, masterID, masterSignPub, masterSignPriv)
+	keyring := fetchKeyringState(t, srv, masterID, connectToken)
 	addInput := buildKeyringUpdateInput(t, masterID, keyring.Seq+1, keyring.HeadHash, "add",
 		master2SignPub, master2EncPub, masterSignPub, masterSignPriv)
 	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", addInput)
@@ -285,7 +287,7 @@ func TestE2E_RevokeMaster(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
 	// Revoke master2
-	keyring = fetchKeyringState(t, srv, masterID)
+	keyring = fetchKeyringState(t, srv, masterID, connectToken)
 	revokeInput := buildKeyringUpdateInput(t, masterID, keyring.Seq+1, keyring.HeadHash, "revoke",
 		master2SignPub, nil, masterSignPub, masterSignPriv)
 	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", revokeInput)
@@ -293,7 +295,7 @@ func TestE2E_RevokeMaster(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	keyring = fetchKeyringState(t, srv, masterID)
+	keyring = fetchKeyringState(t, srv, masterID, connectToken)
 	var revoked bool
 	for _, key := range keyring.Keys {
 		if key.MasterSignKeyFingerprint == crypto.HashKeyFingerprint(master2SignPub) {

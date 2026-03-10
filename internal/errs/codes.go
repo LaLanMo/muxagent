@@ -12,4 +12,5 @@ const (
 	CodeInvalidPublicKey = 1008
 	CodeRevoked          = 1009
 	CodeRateLimited      = 1010
+	CodeUnauthorized     = 1011
 )

@@ -28,8 +28,9 @@ func testWSServiceConfig() WSServiceConfig {
 }
 
 type tokenServiceMock struct {
-	verifyConnectFn func(ctx context.Context, token string) (ConnectTokenClaims, error)
-	verifyMachineFn func(ctx context.Context, token string) (MachineTokenClaims, error)
+	verifyConnectFn       func(ctx context.Context, token string) (ConnectTokenClaims, error)
+	verifyMachineFn       func(ctx context.Context, token string) (MachineTokenClaims, error)
+	verifyMachineAccessFn func(ctx context.Context, token string) (MachineAccessTokenClaims, error)
 }
 
 func (m *tokenServiceMock) VerifyConnectToken(ctx context.Context, token string) (ConnectTokenClaims, error) {
@@ -44,6 +45,13 @@ func (m *tokenServiceMock) VerifyMachineToken(ctx context.Context, token string)
 		return m.verifyMachineFn(ctx, token)
 	}
 	return MachineTokenClaims{}, ErrInvalidMachineToken
+}
+
+func (m *tokenServiceMock) VerifyMachineAccessToken(ctx context.Context, token string) (MachineAccessTokenClaims, error) {
+	if m.verifyMachineAccessFn != nil {
+		return m.verifyMachineAccessFn(ctx, token)
+	}
+	return MachineAccessTokenClaims{}, ErrInvalidMachineAccessToken
 }
 
 type machineRepoMock struct {

@@ -257,11 +257,8 @@ func TestAuthStatus_Approved_MasterKeyMissing(t *testing.T) {
 	// Delete master key to simulate missing record.
 	require.NoError(t, srv.db.Delete(&dao.MasterKey{}, "master_sign_key_fingerprint = ?", crypto.HashKeyFingerprint(masterSignPub)).Error)
 
-	resp, err = http.Get(srv.server.URL + "/v1/auth/" + authReq.ID.String())
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	env := decodeEnvelope(t, resp)
-	out := decodeEnvelopeData[api.AuthStatusResponse](t, env)
+	pollTokenB64 := base64.RawURLEncoding.EncodeToString(authReq.PollToken)
+	out := fetchAuthStatus(t, srv, authReq.ID.String(), pollTokenB64)
 
 	assert.Equal(t, service.AuthStatusApproved, out.State)
 	assert.Empty(t, out.MasterID)
