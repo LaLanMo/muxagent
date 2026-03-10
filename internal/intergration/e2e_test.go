@@ -189,7 +189,7 @@ func TestE2E_AddSecondMaster(t *testing.T) {
 	keyring := fetchKeyringState(t, srv, masterID, connectToken)
 	updateInput := buildKeyringUpdateInput(t, masterID, keyring.Seq+1, keyring.HeadHash, "add",
 		master2SignPub, master2EncPub, masterSignPub, masterSignPriv)
-	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", updateInput)
+	req = newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", updateInput, connectToken)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -281,7 +281,7 @@ func TestE2E_RevokeMaster(t *testing.T) {
 	keyring := fetchKeyringState(t, srv, masterID, connectToken)
 	addInput := buildKeyringUpdateInput(t, masterID, keyring.Seq+1, keyring.HeadHash, "add",
 		master2SignPub, master2EncPub, masterSignPub, masterSignPriv)
-	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", addInput)
+	req = newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", addInput, connectToken)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
@@ -290,7 +290,7 @@ func TestE2E_RevokeMaster(t *testing.T) {
 	keyring = fetchKeyringState(t, srv, masterID, connectToken)
 	revokeInput := buildKeyringUpdateInput(t, masterID, keyring.Seq+1, keyring.HeadHash, "revoke",
 		master2SignPub, nil, masterSignPub, masterSignPriv)
-	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", revokeInput)
+	req = newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", revokeInput, connectToken)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)

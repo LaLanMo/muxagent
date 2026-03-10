@@ -106,7 +106,7 @@ func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UU
 		if input.Action != KeyringActionAdd && input.Action != KeyringActionRevoke {
 			return reject(ErrInvalidAction)
 		}
-		identity, err := repos.MasterIdentities.FindByID(ctx, masterID)
+		identity, err := repos.MasterIdentities.FindByIDForUpdate(ctx, masterID)
 		if err != nil {
 			if errors.Is(err, repository.ErrMasterIdentityNotFound) {
 				return reject(ErrMasterIdentityNotFound)
@@ -162,6 +162,9 @@ func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UU
 			Signature:                      input.Signature,
 		}
 		if err := repos.KeyringUpdates.Create(ctx, update); err != nil {
+			if errors.Is(err, repository.ErrDuplicateKey) {
+				return reject(ErrKeyringUpdateConflict)
+			}
 			return err
 		}
 

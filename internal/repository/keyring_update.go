@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/LaLanMo/muxagent-relay/internal/domain"
 	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
@@ -22,7 +23,13 @@ func NewKeyringUpdateRepository(dao dao.KeyringUpdateDAO) KeyringUpdateRepositor
 }
 
 func (r *keyringUpdateRepository) Create(ctx context.Context, update *domain.KeyringUpdate) error {
-	return r.dao.Create(ctx, toDAOKeyringUpdate(*update))
+	if err := r.dao.Create(ctx, toDAOKeyringUpdate(*update)); err != nil {
+		if errors.Is(err, dao.ErrDuplicateKey) {
+			return ErrDuplicateKey
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *keyringUpdateRepository) ListByMasterIDFromSeq(ctx context.Context, masterID uuid.UUID, fromSeq int, limit int) ([]domain.KeyringUpdate, error) {

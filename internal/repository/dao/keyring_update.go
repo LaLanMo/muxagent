@@ -11,8 +11,8 @@ import (
 // KeyringUpdate is an append-only signed update for a MasterIdentity keyring.
 type KeyringUpdate struct {
 	ID                             uuid.UUID `gorm:"type:uuid;primaryKey"`
-	MasterID                       uuid.UUID `gorm:"type:uuid;index"`
-	Seq                            int
+	MasterID                       uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_keyring_master_seq"`
+	Seq                            int       `gorm:"uniqueIndex:idx_keyring_master_seq"`
 	PrevHash                       string
 	UpdateHash                     string
 	Action                         string
@@ -38,7 +38,7 @@ func NewGormKeyringUpdateDAO(db *gorm.DB) KeyringUpdateDAO {
 }
 
 func (d *gormKeyringUpdateDAO) Create(ctx context.Context, update *KeyringUpdate) error {
-	return d.db.WithContext(ctx).Create(update).Error
+	return normalizeDBError(d.db.WithContext(ctx).Create(update).Error)
 }
 
 func (d *gormKeyringUpdateDAO) ListByMasterIDFromSeq(ctx context.Context, masterID uuid.UUID, fromSeq int, limit int) ([]KeyringUpdate, error) {

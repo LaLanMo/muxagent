@@ -221,19 +221,18 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			}
 		case WSRoleMachine:
 			if machineID != uuid.Nil {
-				if mc, ok := s.hub.GetMachine(machineID); ok {
+				if mc, ok := s.hub.UnregisterMachineIfCurrent(machineID, lc); ok {
 					s.notifyMachineStatus(mc.MasterID, machineID, mc.Hostname, false)
-				}
-				if cID, ok := s.sessions.GetSessionClient(machineID); ok {
-					if cc, ok := s.hub.GetClient(cID); ok {
-						_ = cc.conn.WriteJSON(sessionEndMessage{
-							Type:      WSTypeSessionEnd,
-							MachineID: machineID.String(),
-						})
+					if cID, ok := s.sessions.GetSessionClient(machineID); ok {
+						if cc, ok := s.hub.GetClient(cID); ok {
+							_ = cc.conn.WriteJSON(sessionEndMessage{
+								Type:      WSTypeSessionEnd,
+								MachineID: machineID.String(),
+							})
+						}
 					}
+					s.sessions.EndSession(machineID)
 				}
-				s.hub.UnregisterMachine(machineID)
-				s.sessions.EndSession(machineID)
 			}
 		}
 	}()
@@ -328,6 +327,12 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				}
 				if machine.RevokedAt != nil {
 					if sendWSError(lc, ErrMachineRevoked.Error()) != nil {
+						return
+					}
+					continue
+				}
+				if err := validateWSHostname(msg.Hostname); err != nil {
+					if sendWSError(lc, err.Error()) != nil {
 						return
 					}
 					continue
@@ -447,7 +452,10 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			role = WSRoleMachine
 			machineID = pendingMachineID
 			_ = conn.SetReadDeadline(heartbeatDeadline()) // registered: lift register timeout
-			s.hub.RegisterMachine(machineID, pendingMachineMasterID, pendingHostname, lc)
+			replaced := s.hub.RegisterMachine(machineID, pendingMachineMasterID, pendingHostname, lc)
+			if replaced != nil && replaced.conn != nil {
+				_ = replaced.conn.Close()
+			}
 			logging.Audit(
 				ctx,
 				slog.LevelInfo,
@@ -466,7 +474,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				Type:      WSTypeRegistered,
 				MachineID: machineID.String(),
 			}); err != nil {
-				s.hub.UnregisterMachine(machineID)
+				s.hub.UnregisterMachineIfCurrent(machineID, lc)
 				return
 			}
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // MasterIdentity represents a long-lived identity (keyring).
@@ -21,6 +22,7 @@ type MasterIdentity struct {
 type MasterIdentityDAO interface {
 	Create(ctx context.Context, identity *MasterIdentity) error
 	FindByID(ctx context.Context, id uuid.UUID) (*MasterIdentity, error)
+	FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*MasterIdentity, error)
 	UpdateKeyringState(ctx context.Context, id uuid.UUID, seq int, headHash string) error
 }
 
@@ -39,6 +41,19 @@ func (d *gormMasterIdentityDAO) Create(ctx context.Context, identity *MasterIden
 func (d *gormMasterIdentityDAO) FindByID(ctx context.Context, id uuid.UUID) (*MasterIdentity, error) {
 	var out MasterIdentity
 	if err := d.db.WithContext(ctx).First(&out, "id = ?", id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrRecordNotFound
+		}
+		return nil, err
+	}
+	return &out, nil
+}
+
+func (d *gormMasterIdentityDAO) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (*MasterIdentity, error) {
+	var out MasterIdentity
+	if err := d.db.WithContext(ctx).
+		Clauses(clause.Locking{Strength: "UPDATE"}).
+		First(&out, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrRecordNotFound
 		}

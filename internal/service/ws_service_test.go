@@ -511,3 +511,143 @@ func TestWSService_RejectRPCWithoutActiveSession(t *testing.T) {
 	assert.Equal(t, WSTypeError, errMsg.Type)
 	assert.NotEmpty(t, errMsg.Error)
 }
+
+func registerMachineWS(t *testing.T, conn *websocket.Conn, machineID uuid.UUID, machineSignPriv ed25519.PrivateKey, hostname string) {
+	t.Helper()
+	require.NoError(t, conn.WriteJSON(registerMessage{
+		Type:      WSTypeRegister,
+		Role:      WSRoleMachine,
+		MachineID: machineID.String(),
+		Hostname:  hostname,
+	}))
+
+	var challenge challengeMessage
+	readJSON(t, conn, &challenge)
+	signedMsg := crypto.BuildMachineAuthMessage(machineID.String(), challenge.Nonce)
+	sig := ed25519.Sign(machineSignPriv, []byte(signedMsg))
+	require.NoError(t, conn.WriteJSON(challengeResponseMessage{
+		Type:      WSTypeChallengeResponse,
+		Signature: base64.StdEncoding.EncodeToString(sig),
+	}))
+
+	var registered registeredMessage
+	readJSON(t, conn, &registered)
+	assert.Equal(t, WSTypeRegistered, registered.Type)
+	assert.Equal(t, machineID.String(), registered.MachineID)
+}
+
+func TestWSService_RegisterRevokedMachineRejected(t *testing.T) {
+	masterID := uuid.New()
+	machineID := uuid.New()
+	machineSignPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	revokedAt := time.Now()
+
+	machineRepo := &machineRepoMock{
+		findFn: func(ctx context.Context, id uuid.UUID) (domain.Machine, error) {
+			return domain.Machine{
+				ID:             machineID,
+				MasterID:       masterID,
+				MachineSignPub: machineSignPub,
+				RevokedAt:      &revokedAt,
+			}, nil
+		},
+	}
+
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	wsURL := newWSServer(t, svc)
+
+	machineConn := dialWS(t, wsURL)
+	require.NoError(t, machineConn.WriteJSON(registerMessage{
+		Type:      WSTypeRegister,
+		Role:      WSRoleMachine,
+		MachineID: machineID.String(),
+		Hostname:  "host",
+	}))
+
+	var errMsg errorMessage
+	readJSON(t, machineConn, &errMsg)
+	assert.Equal(t, WSTypeError, errMsg.Type)
+	assert.Equal(t, ErrMachineRevoked.Error(), errMsg.Error)
+}
+
+func TestWSService_RegisterMachineHostnameTooLongRejected(t *testing.T) {
+	masterID := uuid.New()
+	machineID := uuid.New()
+	machineSignPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	machineRepo := &machineRepoMock{
+		findFn: func(ctx context.Context, id uuid.UUID) (domain.Machine, error) {
+			return domain.Machine{
+				ID:             machineID,
+				MasterID:       masterID,
+				MachineSignPub: machineSignPub,
+			}, nil
+		},
+	}
+
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	wsURL := newWSServer(t, svc)
+
+	machineConn := dialWS(t, wsURL)
+	require.NoError(t, machineConn.WriteJSON(registerMessage{
+		Type:      WSTypeRegister,
+		Role:      WSRoleMachine,
+		MachineID: machineID.String(),
+		Hostname:  strings.Repeat("a", MaxHostnameBytes+1),
+	}))
+
+	var errMsg errorMessage
+	readJSON(t, machineConn, &errMsg)
+	assert.Equal(t, WSTypeError, errMsg.Type)
+	assert.Equal(t, "hostname too long", errMsg.Error)
+}
+
+func TestWSService_DuplicateMachineRegistrationReplacesOldConnection(t *testing.T) {
+	masterID := uuid.New()
+	machineID := uuid.New()
+	machineSignPub, machineSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	hub := NewWSHub()
+	machineRepo := &machineRepoMock{
+		findFn: func(ctx context.Context, id uuid.UUID) (domain.Machine, error) {
+			return domain.Machine{
+				ID:             machineID,
+				MasterID:       masterID,
+				MachineSignPub: machineSignPub,
+			}, nil
+		},
+	}
+
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, hub, NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	wsURL := newWSServer(t, svc)
+
+	firstConn := dialWS(t, wsURL)
+	registerMachineWS(t, firstConn, machineID, machineSignPriv, "host-1")
+
+	secondConn := dialWS(t, wsURL)
+	registerMachineWS(t, secondConn, machineID, machineSignPriv, "host-2")
+
+	require.Eventually(t, func() bool {
+		current, ok := hub.GetMachine(machineID)
+		return ok && current.Hostname == "host-2"
+	}, time.Second, 10*time.Millisecond)
+
+	require.Eventually(t, func() bool {
+		_ = firstConn.SetReadDeadline(time.Now().Add(20 * time.Millisecond))
+		_, _, err := firstConn.ReadMessage()
+		return err != nil
+	}, time.Second, 10*time.Millisecond)
+
+	current, ok := hub.GetMachine(machineID)
+	require.True(t, ok)
+	assert.Equal(t, "host-2", current.Hostname)
+
+	require.NoError(t, secondConn.Close())
+	require.Eventually(t, func() bool {
+		_, ok := hub.GetMachine(machineID)
+		return !ok
+	}, time.Second, 10*time.Millisecond)
+}

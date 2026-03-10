@@ -250,9 +250,10 @@ func TestKeyringUpdate_ChainValidation(t *testing.T) {
 			masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 5, "head")
 			targetSignPub, _ := generateEd25519Keypair(t)
 			targetEncPub, _ := generateX25519Keypair(t)
+			token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 
 			input := buildKeyringUpdateInput(t, masterID, tc.seq, tc.prevHash, "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
-			req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+			req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantStatus, resp.StatusCode)
@@ -294,25 +295,44 @@ func TestKeyringUpdate_ChainValidation(t *testing.T) {
 	}
 }
 
-func TestKeyringUpdate_ConcurrentUpdate(t *testing.T) {
+func TestKeyringUpdate_StaleUpdateConflict(t *testing.T) {
 	srv := newTestServer(t)
 
 	masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 	targetSignPub, _ := generateEd25519Keypair(t)
 	targetEncPub, _ := generateX25519Keypair(t)
+	token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 
-	first := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", first)
+	input := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// stale update with same prev_hash
-	stale := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
-	req = newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", stale)
+	req = newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err = http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusConflict, resp.StatusCode)
+
+	payload := crypto.KeyringUpdatePayload{
+		MasterID:                       masterID.String(),
+		Seq:                            input.Seq,
+		PrevHash:                       input.PrevHash,
+		Action:                         input.Action,
+		TargetMasterSignPub:            input.TargetMasterSignPub,
+		TargetMasterEncPub:             input.TargetMasterEncPub,
+		SignerMasterSignKeyFingerprint: input.SignerMasterSignKeyFingerprint,
+	}
+	expectedHash := crypto.HashBytes([]byte(crypto.BuildKeyringUpdateMessage(payload)))
+
+	var count int64
+	require.NoError(t, srv.db.Model(&dao.KeyringUpdate{}).Count(&count).Error)
+	assert.Equal(t, int64(1), count)
+
+	var identity dao.MasterIdentity
+	require.NoError(t, srv.db.First(&identity, "id = ?", masterID).Error)
+	assert.Equal(t, 2, identity.KeyringSeq)
+	assert.Equal(t, expectedHash, identity.KeyringHeadHash)
 }
 
 func TestKeyringUpdate_InvalidSignature(t *testing.T) {
@@ -321,10 +341,11 @@ func TestKeyringUpdate_InvalidSignature(t *testing.T) {
 	masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 	targetSignPub, _ := generateEd25519Keypair(t)
 	targetEncPub, _ := generateX25519Keypair(t)
+	token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 
 	input := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
 	input.Signature = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{7}, ed25519.SignatureSize))
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -339,9 +360,10 @@ func TestKeyringUpdate_InvalidSignature_Decode(t *testing.T) {
 	masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 	targetSignPub, _ := generateEd25519Keypair(t)
 	targetEncPub, _ := generateX25519Keypair(t)
+	token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 	input := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
 	input.Signature = "!!!"
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -356,6 +378,7 @@ func TestKeyringUpdate_SignerNotFound(t *testing.T) {
 	masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 	targetSignPub, _ := generateEd25519Keypair(t)
 	targetEncPub, _ := generateX25519Keypair(t)
+	token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 	input := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
 	input.SignerMasterSignKeyFingerprint = "missing"
 	input.Signature = signKeyringUpdate(signerPriv, crypto.KeyringUpdatePayload{
@@ -367,7 +390,7 @@ func TestKeyringUpdate_SignerNotFound(t *testing.T) {
 		TargetMasterEncPub:             input.TargetMasterEncPub,
 		SignerMasterSignKeyFingerprint: input.SignerMasterSignKeyFingerprint,
 	})
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -383,12 +406,25 @@ func TestKeyringUpdate_SignerRevoked(t *testing.T) {
 	targetSignPub, _ := generateEd25519Keypair(t)
 	targetEncPub, _ := generateX25519Keypair(t)
 
+	authSignPub, authSignPriv := generateEd25519Keypair(t)
+	authEncPub, _ := generateX25519Keypair(t)
+	require.NoError(t, srv.db.Create(&dao.MasterKey{
+		ID:                       uuid.New(),
+		MasterID:                 masterID,
+		MasterSignKeyFingerprint: crypto.HashKeyFingerprint(authSignPub),
+		MasterSignPub:            authSignPub,
+		MasterEncPub:             authEncPub,
+		CreatedAt:                time.Now(),
+		KeyringSeqAdded:          1,
+	}).Error)
+	token := buildConnectToken(t, masterID, authSignPub, authSignPriv)
+
 	require.NoError(t, srv.db.Model(&dao.MasterKey{}).
 		Where("master_id = ? AND master_sign_key_fingerprint = ?", masterID, crypto.HashKeyFingerprint(signerSignPub)).
 		Update("revoked_at", time.Now()).Error)
 
 	input := buildKeyringUpdateInput(t, masterID, 2, "head", "add", targetSignPub, targetEncPub, signerSignPub, signerPriv)
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -400,7 +436,8 @@ func TestKeyringUpdate_SignerRevoked(t *testing.T) {
 func TestKeyringUpdate_SignerDifferentMaster(t *testing.T) {
 	srv := newTestServer(t)
 
-	masterID, _, _, _ := seedMasterIdentity(t, srv.db, 1, "head")
+	masterID, masterSignPub, _, masterSignPriv := seedMasterIdentity(t, srv.db, 1, "head")
+	token := buildConnectToken(t, masterID, masterSignPub, masterSignPriv)
 
 	otherID := uuid.New()
 	otherSignPub, otherSignPriv := generateEd25519Keypair(t)
@@ -435,7 +472,7 @@ func TestKeyringUpdate_SignerDifferentMaster(t *testing.T) {
 		SignerMasterSignKeyFingerprint: input.SignerMasterSignKeyFingerprint,
 	})
 
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
@@ -527,12 +564,13 @@ func TestKeyringUpdate_AddCases(t *testing.T) {
 			masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 			targetSignPub, _ := generateEd25519Keypair(t)
 			targetEncPub, _ := generateX25519Keypair(t)
+			token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 			if tc.setup != nil {
 				tc.setup(t, srv, masterID, targetSignPub, targetEncPub)
 			}
 
 			input := tc.input(t, masterID, targetSignPub, targetEncPub, signerSignPub, signerPriv)
-			req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+			req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantStatus, resp.StatusCode)
@@ -683,10 +721,11 @@ func TestKeyringUpdate_RevokeCases(t *testing.T) {
 			masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 			targetSignPub, _ := generateEd25519Keypair(t)
 			targetEncPub, _ := generateX25519Keypair(t)
+			token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 			oldRevokedAt := tc.setup(t, srv, masterID, targetSignPub, targetEncPub)
 
 			input := tc.input(t, masterID, targetSignPub, signerSignPub, signerPriv)
-			req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+			req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 			require.Equal(t, tc.wantStatus, resp.StatusCode)
@@ -714,9 +753,10 @@ func TestKeyringUpdate_InvalidAction(t *testing.T) {
 	masterID, signerSignPub, _, signerPriv := seedMasterIdentity(t, srv.db, 1, "head")
 	targetSignPub, _ := generateEd25519Keypair(t)
 	targetEncPub, _ := generateX25519Keypair(t)
+	token := buildConnectToken(t, masterID, signerSignPub, signerPriv)
 
 	input := buildKeyringUpdateInput(t, masterID, 2, "head", "invalid", targetSignPub, targetEncPub, signerSignPub, signerPriv)
-	req := newJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input)
+	req := newBearerJSONRequest(http.MethodPost, srv.server.URL+"/v1/keyring/"+masterID.String()+"/update", input, token)
 	resp, err := http.DefaultClient.Do(req)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)

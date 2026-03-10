@@ -124,6 +124,10 @@ func (m *masterIdentityRepoMock) FindByID(ctx context.Context, id uuid.UUID) (do
 	return domain.MasterIdentity{}, repository.ErrMasterIdentityNotFound
 }
 
+func (m *masterIdentityRepoMock) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+	return m.FindByID(ctx, id)
+}
+
 func (m *masterIdentityRepoMock) UpdateKeyringState(ctx context.Context, id uuid.UUID, seq int, headHash string) error {
 	if m.updateKeyringFn != nil {
 		return m.updateKeyringFn(ctx, id, seq, headHash)

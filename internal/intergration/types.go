@@ -4,6 +4,7 @@ type authRequestInput struct {
 	MachineID      string `json:"machine_id"`
 	MachineSignPub string `json:"machine_sign_pub"`
 	MachineEncPub  string `json:"machine_enc_pub"`
+	Hostname       string `json:"hostname,omitempty"`
 }
 
 type keyringUpdateInput struct {

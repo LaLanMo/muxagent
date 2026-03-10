@@ -34,6 +34,7 @@ func SetupRouter(
 	wsUpgradeRL := middleware.NewIPRateLimiter(rl.WSUpgradePerIPPerMin)
 
 	v1 := router.Group("/v1")
+	v1.Use(middleware.LimitRequestBody(cfg.HTTP.MaxJSONBodyBytes))
 
 	// Auth routes
 	auth := v1.Group("/auth")
@@ -45,7 +46,7 @@ func SetupRouter(
 	keyring := v1.Group("/keyring")
 	keyring.GET(":master_id", readRL.Middleware(), tokenAuth.RequireMasterAccess(), keyringHandler.Get)
 	keyring.GET(":master_id/updates", readRL.Middleware(), tokenAuth.RequireMasterAccess(), keyringHandler.ListUpdates)
-	keyring.POST(":master_id/update", writeRL.Middleware(), keyringHandler.Update)
+	keyring.POST(":master_id/update", writeRL.Middleware(), tokenAuth.RequireMasterAccess(), keyringHandler.Update)
 
 	// Device routes
 	device := v1.Group("/device")

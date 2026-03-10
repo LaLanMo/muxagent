@@ -23,8 +23,9 @@ type testDBBundle struct {
 }
 
 func initTestDB() (*testDBBundle, error) {
-	dbConn, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent),
+	dbConn, err := gorm.Open(sqlite.Open("file::memory:?cache=shared&_busy_timeout=5000"), &gorm.Config{
+		Logger:         logger.Default.LogMode(logger.Silent),
+		TranslateError: true,
 	})
 	if err != nil {
 		return nil, err
@@ -69,6 +70,14 @@ func initTestNilFCMClient() *messaging.Client {
 // throttled, while still exercising the production SetupRouter wiring.
 func initTestConfig() *config.Config {
 	return &config.Config{
+		HTTP: config.HTTPConfig{
+			ReadHeaderTimeoutSec: 5,
+			ReadTimeoutSec:       15,
+			WriteTimeoutSec:      30,
+			IdleTimeoutSec:       60,
+			MaxHeaderBytes:       16 * 1024,
+			MaxJSONBodyBytes:     64 * 1024,
+		},
 		RateLimit: config.RateLimitConfig{
 			AuthCreatePerIPPerMin:       1000,
 			ReadPerIPPerMin:             1000,

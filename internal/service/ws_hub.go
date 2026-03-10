@@ -28,6 +28,12 @@ func (lc *lockedConn) WriteJSON(v any) error {
 	return lc.conn.WriteJSON(v)
 }
 
+func (lc *lockedConn) Close() error {
+	lc.mu.Lock()
+	defer lc.mu.Unlock()
+	return lc.conn.Close()
+}
+
 type clientConn struct {
 	ID                       uuid.UUID
 	MasterID                 uuid.UUID
@@ -72,21 +78,36 @@ func (h *WSHub) UnregisterClient(id uuid.UUID) {
 	h.mu.Unlock()
 }
 
-func (h *WSHub) RegisterMachine(id uuid.UUID, masterID uuid.UUID, hostname string, conn *lockedConn) {
+func (h *WSHub) RegisterMachine(id uuid.UUID, masterID uuid.UUID, hostname string, conn *lockedConn) *machineConn {
 	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	previous := h.machines[id]
 	h.machines[id] = &machineConn{
 		ID:       id,
 		MasterID: masterID,
 		Hostname: hostname,
 		conn:     conn,
 	}
-	h.mu.Unlock()
+	return previous
 }
 
 func (h *WSHub) UnregisterMachine(id uuid.UUID) {
 	h.mu.Lock()
 	delete(h.machines, id)
 	h.mu.Unlock()
+}
+
+func (h *WSHub) UnregisterMachineIfCurrent(id uuid.UUID, conn *lockedConn) (*machineConn, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	current, ok := h.machines[id]
+	if !ok || current.conn != conn {
+		return nil, false
+	}
+	delete(h.machines, id)
+	return current, true
 }
 
 func (h *WSHub) GetClient(id uuid.UUID) (*clientConn, bool) {

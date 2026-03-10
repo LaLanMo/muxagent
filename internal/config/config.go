@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -23,7 +26,17 @@ type Config struct {
 	Firebase struct {
 		CredentialsFile string `mapstructure:"credentials_file"`
 	} `mapstructure:"firebase"`
+	HTTP      HTTPConfig      `mapstructure:"http"`
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
+}
+
+type HTTPConfig struct {
+	ReadHeaderTimeoutSec int   `mapstructure:"read_header_timeout_sec"`
+	ReadTimeoutSec       int   `mapstructure:"read_timeout_sec"`
+	WriteTimeoutSec      int   `mapstructure:"write_timeout_sec"`
+	IdleTimeoutSec       int   `mapstructure:"idle_timeout_sec"`
+	MaxHeaderBytes       int   `mapstructure:"max_header_bytes"`
+	MaxJSONBodyBytes     int64 `mapstructure:"max_json_body_bytes"`
 }
 
 type RateLimitConfig struct {
@@ -76,6 +89,28 @@ func (c RateLimitConfig) WithDefaults() RateLimitConfig {
 	return c
 }
 
+func (c HTTPConfig) WithDefaults() HTTPConfig {
+	if c.ReadHeaderTimeoutSec <= 0 {
+		c.ReadHeaderTimeoutSec = 5
+	}
+	if c.ReadTimeoutSec <= 0 {
+		c.ReadTimeoutSec = 15
+	}
+	if c.WriteTimeoutSec <= 0 {
+		c.WriteTimeoutSec = 30
+	}
+	if c.IdleTimeoutSec <= 0 {
+		c.IdleTimeoutSec = 60
+	}
+	if c.MaxHeaderBytes <= 0 {
+		c.MaxHeaderBytes = 16 * 1024
+	}
+	if c.MaxJSONBodyBytes <= 0 {
+		c.MaxJSONBodyBytes = 64 * 1024
+	}
+	return c
+}
+
 func Load() (*Config, error) {
 	v := viper.New()
 	v.SetConfigType("json")
@@ -97,6 +132,11 @@ func Load() (*Config, error) {
 	if err := v.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+	config.RateLimit = config.RateLimit.WithDefaults()
+	config.HTTP = config.HTTP.WithDefaults()
+	if err := config.Validate(); err != nil {
+		return nil, err
+	}
 
 	return &config, nil
 }
@@ -110,4 +150,38 @@ func (c *Config) GetDatabaseDSN() string {
 		c.Database.DBName,
 		c.Database.SSLMode,
 	)
+}
+
+func (c *Config) Validate() error {
+	if strings.TrimSpace(c.Relay.PublicBaseURL) == "" {
+		return fmt.Errorf("relay.public_base_url is required")
+	}
+
+	publicURL, err := url.Parse(c.Relay.PublicBaseURL)
+	if err != nil {
+		return fmt.Errorf("invalid relay.public_base_url: %w", err)
+	}
+	if publicURL.Scheme == "" || publicURL.Hostname() == "" {
+		return fmt.Errorf("invalid relay.public_base_url: missing scheme or host")
+	}
+
+	loopback := isLoopbackHost(publicURL.Hostname())
+	if !loopback {
+		if !strings.EqualFold(publicURL.Scheme, "https") {
+			return fmt.Errorf("relay.public_base_url must use https for non-loopback hosts")
+		}
+		if len(c.RateLimit.TrustedProxies) == 0 {
+			return fmt.Errorf("rate_limit.trusted_proxies must be configured for non-loopback relay.public_base_url")
+		}
+	}
+
+	return nil
+}
+
+func isLoopbackHost(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

@@ -36,7 +36,7 @@ type upsertTokenInput struct {
 func (h *DeviceHandler) UpsertToken(c *gin.Context) {
 	var input upsertTokenInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid JSON"})
+		writeJSONDecodeError(c, err)
 		return
 	}
 	if input.ConnectToken == "" || input.FCMToken == "" || input.Platform == "" {
@@ -72,7 +72,7 @@ type deleteTokenInput struct {
 func (h *DeviceHandler) DeleteToken(c *gin.Context) {
 	var input deleteTokenInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid JSON"})
+		writeJSONDecodeError(c, err)
 		return
 	}
 	if input.ConnectToken == "" || input.FCMToken == "" {

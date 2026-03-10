@@ -181,6 +181,56 @@ func TestKeyringHandler_HandleGet(t *testing.T) {
 	}
 }
 
+func TestKeyringHandler_ListUpdates_ClampsQueryBounds(t *testing.T) {
+	masterID := uuid.New()
+	cases := []struct {
+		name      string
+		query     string
+		wantFrom  int
+		wantLimit int
+	}{
+		{
+			name:      "negative from_seq becomes zero",
+			query:     "?from_seq=-1",
+			wantFrom:  0,
+			wantLimit: 200,
+		},
+		{
+			name:      "non-positive limit becomes one",
+			query:     "?limit=0",
+			wantFrom:  0,
+			wantLimit: 1,
+		},
+		{
+			name:      "large limit is capped",
+			query:     "?from_seq=7&limit=100000",
+			wantFrom:  7,
+			wantLimit: 1000,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewKeyringHandler(&mockKeyringService{
+				updatesFn: func(ctx context.Context, gotMasterID uuid.UUID, fromSeq int, limit int) ([]domain.KeyringUpdate, error) {
+					assert.Equal(t, masterID, gotMasterID)
+					assert.Equal(t, tt.wantFrom, fromSeq)
+					assert.Equal(t, tt.wantLimit, limit)
+					return []domain.KeyringUpdate{}, nil
+				},
+				getFn: func(ctx context.Context, gotMasterID uuid.UUID) (*service.KeyringState, error) {
+					assert.Equal(t, masterID, gotMasterID)
+					return &service.KeyringState{MasterID: masterID.String()}, nil
+				},
+			})
+			router := ginTestKeyringRouter(handler)
+
+			resp := performRequest(router, http.MethodGet, "/v1/keyring/"+masterID.String()+"/updates"+tt.query, nil)
+			require.Equal(t, http.StatusOK, resp.Code)
+		})
+	}
+}
+
 func ginTestKeyringRouter(handler *KeyringHandler) *gin.Engine {
 	router := gin.New()
 	v1 := router.Group("/v1")

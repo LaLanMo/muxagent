@@ -127,7 +127,9 @@ func (h *KeyringHandler) ListUpdates(c *gin.Context) {
 	fromSeq := 0
 	if v := c.Query("from_seq"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
-			fromSeq = parsed
+			if parsed > 0 {
+				fromSeq = parsed
+			}
 		} else {
 			c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid from_seq"})
 			return
@@ -136,7 +138,14 @@ func (h *KeyringHandler) ListUpdates(c *gin.Context) {
 	limit := 200
 	if v := c.Query("limit"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
-			limit = parsed
+			switch {
+			case parsed < 1:
+				limit = 1
+			case parsed > 1000:
+				limit = 1000
+			default:
+				limit = parsed
+			}
 		} else {
 			c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid limit"})
 			return
@@ -202,7 +211,7 @@ func (h *KeyringHandler) Update(c *gin.Context) {
 
 	var input keyringUpdateRequest
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid JSON"})
+		writeJSONDecodeError(c, err)
 		return
 	}
 

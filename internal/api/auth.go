@@ -44,7 +44,11 @@ type authRequestInput struct {
 func (h *AuthHandler) AuthRequest(c *gin.Context) {
 	var input authRequestInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid JSON"})
+		writeJSONDecodeError(c, err)
+		return
+	}
+	if err := validateHostname(input.Hostname); err != nil {
+		c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: err.Error()})
 		return
 	}
 
@@ -202,7 +206,7 @@ func (h *AuthHandler) ApproveAuth(c *gin.Context) {
 
 	var input authApproveInput
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, Envelope{Code: CodeInvalidRequest, Message: "invalid JSON"})
+		writeJSONDecodeError(c, err)
 		return
 	}
 

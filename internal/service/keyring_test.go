@@ -5,6 +5,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -32,6 +34,10 @@ func (m *keyringMasterIdentityRepoMock) FindByID(ctx context.Context, id uuid.UU
 		return m.findByIDFn(ctx, id)
 	}
 	return domain.MasterIdentity{}, repository.ErrMasterIdentityNotFound
+}
+
+func (m *keyringMasterIdentityRepoMock) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+	return m.FindByID(ctx, id)
 }
 
 func (m *keyringMasterIdentityRepoMock) UpdateKeyringState(ctx context.Context, id uuid.UUID, seq int, headHash string) error {
@@ -262,4 +268,119 @@ func TestKeyringService_UpdateKeyring_LogsRejectedUpdate(t *testing.T) {
 	assert.Equal(t, ErrInvalidAction.Error(), entry["reason"])
 	assert.Equal(t, masterID.String(), entry["master_id"])
 	assert.Equal(t, "203.0.113.77", entry["client_ip"])
+}
+
+func TestKeyringService_UpdateKeyring_ConcurrentConflict(t *testing.T) {
+	masterID := uuid.New()
+	signerPub, signerPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	targetPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	targetEncPub := []byte("enc")
+
+	payload := crypto.KeyringUpdatePayload{
+		MasterID:                       masterID.String(),
+		Seq:                            2,
+		PrevHash:                       "head",
+		Action:                         string(KeyringActionAdd),
+		TargetMasterSignPub:            base64.StdEncoding.EncodeToString(targetPub),
+		TargetMasterEncPub:             base64.StdEncoding.EncodeToString(targetEncPub),
+		SignerMasterSignKeyFingerprint: crypto.HashKeyFingerprint(signerPub),
+	}
+	input := KeyringUpdateInput{
+		MasterID:                       payload.MasterID,
+		Seq:                            payload.Seq,
+		PrevHash:                       payload.PrevHash,
+		Action:                         KeyringActionAdd,
+		TargetMasterSignPub:            targetPub,
+		TargetMasterEncPub:             targetEncPub,
+		SignerMasterSignKeyFingerprint: payload.SignerMasterSignKeyFingerprint,
+		Signature:                      ed25519.Sign(signerPriv, []byte(crypto.BuildKeyringUpdateMessage(payload))),
+	}
+	expectedHash := crypto.HashBytes([]byte(crypto.BuildKeyringUpdateMessage(payload)))
+
+	var mu sync.Mutex
+	identity := domain.MasterIdentity{ID: masterID, KeyringSeq: 1, KeyringHeadHash: "head"}
+	updateStateCalls := 0
+	created := false
+	var createStarted sync.WaitGroup
+	createStarted.Add(2)
+	releaseCreate := make(chan struct{})
+
+	repos := repository.TxRepositories{
+		MasterIdentities: &keyringMasterIdentityRepoMock{
+			findByIDFn: func(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+				mu.Lock()
+				defer mu.Unlock()
+				return identity, nil
+			},
+			updateKeyringFn: func(ctx context.Context, id uuid.UUID, seq int, headHash string) error {
+				mu.Lock()
+				defer mu.Unlock()
+				identity.KeyringSeq = seq
+				identity.KeyringHeadHash = headHash
+				updateStateCalls++
+				return nil
+			},
+		},
+		MasterKeys: &keyringMasterKeyRepoMock{
+			findByMasterFingerprintFn: func(ctx context.Context, masterID uuid.UUID, fingerprint string) (domain.MasterKey, error) {
+				return domain.MasterKey{MasterSignPub: signerPub}, nil
+			},
+			findByFingerprintFn: func(ctx context.Context, fingerprint string) (domain.MasterKey, error) {
+				return domain.MasterKey{}, repository.ErrMasterKeyNotFound
+			},
+		},
+		KeyringUpdates: &keyringUpdateRepoMock{
+			createFn: func(ctx context.Context, update *domain.KeyringUpdate) error {
+				createStarted.Done()
+				<-releaseCreate
+				mu.Lock()
+				defer mu.Unlock()
+				if created {
+					return repository.ErrDuplicateKey
+				}
+				created = true
+				return nil
+			},
+		},
+	}
+
+	svc := NewKeyringService(repos.MasterIdentities, repos.MasterKeys, repos.KeyringUpdates, txRunnerMock{repos: repos})
+
+	errs := make(chan error, 2)
+	for range 2 {
+		go func() {
+			errs <- svc.UpdateKeyring(context.Background(), masterID, input)
+		}()
+	}
+
+	createStarted.Wait()
+	close(releaseCreate)
+
+	var got []error
+	for range 2 {
+		got = append(got, <-errs)
+	}
+
+	var successCount int
+	var conflictCount int
+	for _, err := range got {
+		switch {
+		case err == nil:
+			successCount++
+		case errors.Is(err, ErrKeyringUpdateConflict):
+			conflictCount++
+		default:
+			t.Fatalf("unexpected error: %v", err)
+		}
+	}
+	assert.Equal(t, 1, successCount)
+	assert.Equal(t, 1, conflictCount)
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, 1, updateStateCalls)
+	assert.Equal(t, 2, identity.KeyringSeq)
+	assert.Equal(t, expectedHash, identity.KeyringHeadHash)
 }

@@ -124,6 +124,14 @@ func newJSONRequest(method, url string, body interface{}) *http.Request {
 	return req
 }
 
+func newBearerJSONRequest(method, url string, body interface{}, token string) *http.Request {
+	req := newJSONRequest(method, url, body)
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	return req
+}
+
 func decodeEnvelope(t *testing.T, resp *http.Response) api.Envelope {
 	t.Helper()
 	defer resp.Body.Close()

@@ -2,7 +2,9 @@ package main
 
 import (
 	"log/slog"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/LaLanMo/muxagent-relay/internal/config"
 	"github.com/LaLanMo/muxagent-relay/internal/logging"
@@ -34,7 +36,17 @@ func main() {
 		slog.String("keyring_path", "/v1/keyring/*"),
 	)
 
-	if err := app.Router.Run(cfg.Relay.ListenAddr); err != nil {
+	srv := &http.Server{
+		Addr:              cfg.Relay.ListenAddr,
+		Handler:           app.Router,
+		ReadHeaderTimeout: time.Duration(cfg.HTTP.ReadHeaderTimeoutSec) * time.Second,
+		ReadTimeout:       time.Duration(cfg.HTTP.ReadTimeoutSec) * time.Second,
+		WriteTimeout:      time.Duration(cfg.HTTP.WriteTimeoutSec) * time.Second,
+		IdleTimeout:       time.Duration(cfg.HTTP.IdleTimeoutSec) * time.Second,
+		MaxHeaderBytes:    cfg.HTTP.MaxHeaderBytes,
+	}
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		slog.Error("relay server exited", slog.Any("err", err))
 		os.Exit(1)
 	}

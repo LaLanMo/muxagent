@@ -14,6 +14,14 @@
   "firebase": {
     "credentials_file": ""
   },
+  "http": {
+    "read_header_timeout_sec": 5,
+    "read_timeout_sec": 15,
+    "write_timeout_sec": 30,
+    "idle_timeout_sec": 60,
+    "max_header_bytes": 16384,
+    "max_json_body_bytes": 65536
+  },
   "rate_limit": {
     "auth_create_per_ip_per_min": 20,
     "read_per_ip_per_min": 200,

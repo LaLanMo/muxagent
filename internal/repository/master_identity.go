@@ -12,6 +12,7 @@ import (
 type MasterIdentityRepository interface {
 	Create(ctx context.Context, identity *domain.MasterIdentity) error
 	FindByID(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error)
+	FindByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error)
 	UpdateKeyringState(ctx context.Context, id uuid.UUID, seq int, headHash string) error
 }
 
@@ -29,6 +30,17 @@ func (r *masterIdentityRepository) Create(ctx context.Context, identity *domain.
 
 func (r *masterIdentityRepository) FindByID(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
 	identity, err := r.dao.FindByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, dao.ErrRecordNotFound) {
+			return domain.MasterIdentity{}, ErrMasterIdentityNotFound
+		}
+		return domain.MasterIdentity{}, err
+	}
+	return toDomainMasterIdentity(*identity), nil
+}
+
+func (r *masterIdentityRepository) FindByIDForUpdate(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+	identity, err := r.dao.FindByIDForUpdate(ctx, id)
 	if err != nil {
 		if errors.Is(err, dao.ErrRecordNotFound) {
 			return domain.MasterIdentity{}, ErrMasterIdentityNotFound

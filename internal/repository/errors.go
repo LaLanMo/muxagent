@@ -8,4 +8,5 @@ var (
 	ErrMasterKeyNotFound      = errors.New("master key not found")
 	ErrMachineNotFound        = errors.New("machine not found")
 	ErrKeyringUpdateNotFound  = errors.New("keyring update not found")
+	ErrDuplicateKey           = errors.New("duplicate key")
 )
