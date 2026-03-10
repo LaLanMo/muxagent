@@ -10,7 +10,9 @@ import (
 
 	"github.com/LaLanMo/muxagent-relay/internal/domain"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent-relay/internal/testutil"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -235,4 +237,29 @@ func TestKeyringService_UpdateKeyring(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestKeyringService_UpdateKeyring_LogsRejectedUpdate(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
+	masterID := uuid.New()
+	svc := NewKeyringService(
+		&keyringMasterIdentityRepoMock{},
+		&keyringMasterKeyRepoMock{},
+		&keyringUpdateRepoMock{},
+		txRunnerMock{repos: repository.TxRepositories{}},
+	)
+
+	ctx := logging.WithClientIP(context.Background(), "203.0.113.77")
+	err := svc.UpdateKeyring(ctx, masterID, KeyringUpdateInput{
+		Action: KeyringAction("noop"),
+	})
+	require.ErrorIs(t, err, ErrInvalidAction)
+
+	entry := testutil.FindEntryByEvent(testutil.ParseLogEntries(t, buf), logging.EventKeyringUpdateRejected)
+	require.NotNil(t, entry)
+	assert.Equal(t, logging.ResultRejected, entry["result"])
+	assert.Equal(t, ErrInvalidAction.Error(), entry["reason"])
+	assert.Equal(t, masterID.String(), entry["master_id"])
+	assert.Equal(t, "203.0.113.77", entry["client_ip"])
 }

@@ -9,8 +9,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/middleware"
 	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent-relay/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -68,6 +70,8 @@ func TestWSHandler_AllowsHandshakeWithoutOrigin(t *testing.T) {
 }
 
 func TestWSHandler_RejectsHandshakeWithOrigin(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
 	var called atomic.Bool
 	srv := newWSHandlerTestServer(t, &mockWSService{
 		handleFn: func(ctx context.Context, conn *websocket.Conn) {
@@ -86,6 +90,17 @@ func TestWSHandler_RejectsHandshakeWithOrigin(t *testing.T) {
 	require.NotNil(t, resp)
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	assert.False(t, called.Load())
+
+	require.Eventually(t, func() bool {
+		return strings.Contains(buf.String(), logging.EventWSUpgradeRejected)
+	}, time.Second, 10*time.Millisecond)
+
+	entry := testutil.FindEntryByEvent(testutil.ParseLogEntries(t, buf), logging.EventWSUpgradeRejected)
+	require.NotNil(t, entry)
+	assert.Equal(t, logging.ResultDenied, entry["result"])
+	assert.Equal(t, "origin not allowed", entry["reason"])
+	assert.NotEmpty(t, entry["client_ip"])
+	assert.NotContains(t, buf.String(), "https://evil.example")
 }
 
 func TestWSHandler_RejectedOriginDoesNotConsumeConnectionLimit(t *testing.T) {

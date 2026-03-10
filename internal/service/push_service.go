@@ -2,7 +2,7 @@ package service
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"firebase.google.com/go/v4/messaging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
@@ -70,10 +70,10 @@ func (s *pushServiceImpl) SendPushIfOffline(ctx context.Context, masterID uuid.U
 		if _, err := s.fcm.Send(ctx, msg); err != nil {
 			if messaging.IsUnregistered(err) {
 				if delErr := s.deviceTokens.DeleteByToken(ctx, dt.Token); delErr != nil {
-					log.Printf("failed to delete stale device token: %v", delErr)
+					slog.Warn("failed to delete stale device token", slog.Any("err", delErr), slog.String("master_id", masterID.String()))
 				}
 			} else {
-				log.Printf("FCM send failed: %v", err)
+				slog.Warn("fcm send failed", slog.Any("err", err), slog.String("master_id", masterID.String()), slog.String("event", hint.Event))
 			}
 		}
 	}

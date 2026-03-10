@@ -6,9 +6,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -131,6 +133,14 @@ type machineStatusMessage struct {
 	Type      WSType `json:"type"`
 	MachineID string `json:"machine_id"`
 	Hostname  string `json:"hostname"`
+}
+
+func (s *wsServiceImpl) logRegistrationRejected(ctx context.Context, reason string, attrs ...slog.Attr) {
+	logging.Audit(ctx, slog.LevelWarn, logging.EventWSRegistrationDenied, logging.ResultRejected, reason, attrs...)
+}
+
+func (s *wsServiceImpl) logSessionRejected(ctx context.Context, reason string, attrs ...slog.Attr) {
+	logging.Audit(ctx, slog.LevelWarn, logging.EventWSSessionRejected, logging.ResultRejected, reason, attrs...)
 }
 
 func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Conn) {
@@ -350,6 +360,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				}
 				claims, err := s.tokenService.VerifyConnectToken(ctx, msg.ConnectToken)
 				if err != nil {
+					s.logRegistrationRejected(ctx, err.Error())
 					if sendWSError(lc, err.Error()) != nil {
 						return
 					}
@@ -360,6 +371,16 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				clientClaims = claims
 				_ = conn.SetReadDeadline(heartbeatDeadline()) // registered: lift register timeout
 				s.hub.RegisterClient(clientID, claims.MasterID, claims.MasterSignKeyFingerprint, lc)
+				logging.Audit(
+					ctx,
+					slog.LevelInfo,
+					logging.EventWSClientRegistered,
+					logging.ResultSuccess,
+					"",
+					slog.String("client_id", clientID.String()),
+					slog.String("master_id", claims.MasterID.String()),
+					slog.String("master_sign_key_fingerprint", claims.MasterSignKeyFingerprint),
+				)
 				if err := lc.WriteJSON(registeredMessage{
 					Type:     WSTypeRegistered,
 					MasterID: claims.MasterID.String(),
@@ -409,6 +430,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			nonceB64 := base64.StdEncoding.EncodeToString(pendingNonce)
 			signedMsg := crypto.BuildMachineAuthMessage(pendingMachineID.String(), nonceB64)
 			if !crypto.VerifySignature(pendingMachineSignPub, []byte(signedMsg), sigBytes) {
+				s.logRegistrationRejected(ctx, "invalid signature", slog.String("machine_id", pendingMachineID.String()))
 				if sendWSError(lc, "invalid signature") != nil {
 					return
 				}
@@ -426,6 +448,15 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 			machineID = pendingMachineID
 			_ = conn.SetReadDeadline(heartbeatDeadline()) // registered: lift register timeout
 			s.hub.RegisterMachine(machineID, pendingMachineMasterID, pendingHostname, lc)
+			logging.Audit(
+				ctx,
+				slog.LevelInfo,
+				logging.EventWSMachineRegistered,
+				logging.ResultSuccess,
+				"",
+				slog.String("machine_id", machineID.String()),
+				slog.String("master_id", pendingMachineMasterID.String()),
+			)
 			s.notifyMachineStatus(pendingMachineMasterID, machineID, pendingHostname, true)
 
 			pendingNonce = nil
@@ -460,6 +491,11 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				continue
 			}
 			if err := s.handleSessionInit(ctx, clientID, clientClaims, msg, raw); err != nil {
+				sessionAttrs := []slog.Attr{slog.String("client_id", clientID.String())}
+				if machineID, parseErr := uuid.Parse(msg.MachineID); parseErr == nil {
+					sessionAttrs = append(sessionAttrs, slog.String("machine_id", machineID.String()))
+				}
+				s.logSessionRejected(ctx, err.Error(), sessionAttrs...)
 				if sendWSError(lc, err.Error()) != nil {
 					return
 				}
@@ -486,6 +522,7 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				continue
 			}
 			if err := s.handleSessionAck(ctx, machineID, msg, raw); err != nil {
+				s.logSessionRejected(ctx, err.Error(), slog.String("machine_id", machineID.String()))
 				if sendWSError(lc, err.Error()) != nil {
 					return
 				}
@@ -512,6 +549,11 @@ func (s *wsServiceImpl) HandleConnection(ctx context.Context, conn *websocket.Co
 				continue
 			}
 			if err := s.handleSessionEnd(ctx, clientID, msg, raw); err != nil {
+				sessionAttrs := []slog.Attr{slog.String("client_id", clientID.String())}
+				if machineID, parseErr := uuid.Parse(msg.MachineID); parseErr == nil {
+					sessionAttrs = append(sessionAttrs, slog.String("machine_id", machineID.String()))
+				}
+				s.logSessionRejected(ctx, err.Error(), sessionAttrs...)
 				if sendWSError(lc, err.Error()) != nil {
 					return
 				}
@@ -628,6 +670,15 @@ func (s *wsServiceImpl) handleSessionAck(ctx context.Context, machineID uuid.UUI
 	if err := s.sessions.ActivateSession(machineID); err != nil {
 		return err
 	}
+	logging.Audit(
+		ctx,
+		slog.LevelInfo,
+		logging.EventWSSessionStarted,
+		logging.ResultSuccess,
+		"",
+		slog.String("client_id", clientID.String()),
+		slog.String("machine_id", machineID.String()),
+	)
 	clientConn, ok := s.hub.GetClient(clientID)
 	if !ok {
 		s.sessions.EndSession(machineID)
@@ -653,6 +704,15 @@ func (s *wsServiceImpl) handleSessionEnd(ctx context.Context, clientID uuid.UUID
 		return ErrUnauthorizedSession
 	}
 	s.sessions.EndSession(machineID)
+	logging.Audit(
+		ctx,
+		slog.LevelInfo,
+		logging.EventWSSessionEnded,
+		logging.ResultSuccess,
+		"client requested",
+		slog.String("client_id", clientID.String()),
+		slog.String("machine_id", machineID.String()),
+	)
 	if machineConn, ok := s.hub.GetMachine(machineID); ok {
 		_ = machineConn.conn.WriteMessage(websocket.TextMessage, raw)
 	}

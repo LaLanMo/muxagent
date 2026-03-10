@@ -7,11 +7,13 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"errors"
+	"log/slog"
 	"strconv"
 	"time"
 
 	"github.com/LaLanMo/muxagent-relay/internal/domain"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
 	"github.com/google/uuid"
 )
@@ -107,6 +109,15 @@ func (s *AuthServiceImpl) CreateAuthRequest(ctx context.Context, machineID uuid.
 	if err := s.authRequests.Create(ctx, req); err != nil {
 		return nil, err
 	}
+	logging.Audit(
+		ctx,
+		slog.LevelInfo,
+		logging.EventAuthRequestCreated,
+		logging.ResultSuccess,
+		"",
+		slog.String("auth_request_id", req.ID.String()),
+		slog.String("machine_id", machineID.String()),
+	)
 	return req, nil
 }
 
@@ -200,6 +211,24 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 			return err
 		}
 
+		baseAttrs := []slog.Attr{
+			slog.String("auth_request_id", requestID.String()),
+			slog.String("machine_id", authReq.MachineID.String()),
+		}
+		reject := func(reasonErr error, attrs ...slog.Attr) error {
+			logAttrs := append([]slog.Attr{}, baseAttrs...)
+			logAttrs = append(logAttrs, attrs...)
+			logging.Audit(
+				ctx,
+				slog.LevelWarn,
+				logging.EventAuthRequestRejected,
+				logging.ResultRejected,
+				reasonErr.Error(),
+				logAttrs...,
+			)
+			return reasonErr
+		}
+
 		if authReq.ApprovedAt != nil {
 			status, err := s.getAuthStatus(ctx, repos.AuthRequests, repos.MasterKeys, repos.MasterIdentities, requestID)
 			if err != nil {
@@ -210,7 +239,7 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 		}
 
 		if time.Now().After(authReq.ExpiresAt) {
-			return ErrAuthRequestExpired
+			return reject(ErrAuthRequestExpired)
 		}
 
 		approvalMsg := crypto.BuildApprovalMessage(
@@ -221,7 +250,8 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 			authReq.ExpiresAt.Unix(),
 		)
 		if !crypto.VerifySignature(input.MasterSignPub, []byte(approvalMsg), input.ApprovalSignature) {
-			return ErrInvalidMasterApprovalSignature
+			fingerprint := crypto.HashKeyFingerprint(input.MasterSignPub)
+			return reject(ErrInvalidMasterApprovalSignature, slog.String("master_sign_key_fingerprint", fingerprint))
 		}
 
 		masterSignKeyFingerprint := crypto.HashKeyFingerprint(input.MasterSignPub)
@@ -234,42 +264,62 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 		var masterID uuid.UUID
 		if masterExists {
 			if masterKey.RevokedAt != nil {
-				return ErrMasterKeyRevoked
+				return reject(
+					ErrMasterKeyRevoked,
+					slog.String("master_id", masterKey.MasterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			}
 			if subtle.ConstantTimeCompare(masterKey.MasterEncPub, input.MasterEncPub) != 1 {
-				return ErrMasterEncPubMismatch
+				return reject(
+					ErrMasterEncPubMismatch,
+					slog.String("master_id", masterKey.MasterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			}
 			masterID = masterKey.MasterID
 			if input.MasterID != "" {
 				if parsed, err := uuid.Parse(input.MasterID); err == nil && parsed != masterID {
-					return ErrMasterIDMismatch
+					return reject(
+						ErrMasterIDMismatch,
+						slog.String("master_id", masterID.String()),
+						slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+					)
 				}
 			}
 		} else {
 			if input.KeyringUpdate == nil {
-				return ErrKeyringUpdateRequired
+				return reject(ErrKeyringUpdateRequired, slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint))
 			}
 			masterIDStr := input.MasterID
 			if masterIDStr == "" {
 				if input.KeyringUpdate.MasterID == "" {
-					return ErrKeyringUpdateMasterIDMissing
+					return reject(ErrKeyringUpdateMasterIDMissing, slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint))
 				}
 				masterIDStr = input.KeyringUpdate.MasterID
 			}
 			parsedMasterID, err := uuid.Parse(masterIDStr)
 			if err != nil {
-				return ErrInvalidMasterID
+				return reject(ErrInvalidMasterID, slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint))
 			}
 			masterID = parsedMasterID
 
 			if _, err := repos.MasterIdentities.FindByID(ctx, masterID); err == nil {
-				return ErrMasterIdentityExists
+				return reject(
+					ErrMasterIdentityExists,
+					slog.String("master_id", masterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			} else if !errors.Is(err, repository.ErrMasterIdentityNotFound) {
 				return err
 			}
 
 			if err := validateInitialKeyringUpdate(input.KeyringUpdate, masterID, input.MasterSignPub, input.MasterEncPub); err != nil {
-				return err
+				return reject(
+					err,
+					slog.String("master_id", masterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			}
 
 			updateMsg := crypto.BuildKeyringUpdateMessage(crypto.KeyringUpdatePayload{
@@ -282,7 +332,11 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 				SignerMasterSignKeyFingerprint: input.KeyringUpdate.SignerMasterSignKeyFingerprint,
 			})
 			if !crypto.VerifySignature(input.MasterSignPub, []byte(updateMsg), input.KeyringUpdate.Signature) {
-				return ErrInvalidKeyringUpdateSignature
+				return reject(
+					ErrInvalidKeyringUpdateSignature,
+					slog.String("master_id", masterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			}
 
 			updateHash := crypto.HashBytes([]byte(updateMsg))
@@ -330,10 +384,18 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 		existingMachine, err := repos.Machines.FindByID(ctx, authReq.MachineID)
 		if err == nil {
 			if existingMachine.MasterID != masterID {
-				return ErrMachineAlreadyBound
+				return reject(
+					ErrMachineAlreadyBound,
+					slog.String("master_id", masterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			}
 			if existingMachine.RevokedAt != nil {
-				return ErrMachineRevoked
+				return reject(
+					ErrMachineRevoked,
+					slog.String("master_id", masterID.String()),
+					slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+				)
 			}
 		} else if !errors.Is(err, repository.ErrMachineNotFound) {
 			return err
@@ -364,6 +426,18 @@ func (s *AuthServiceImpl) ApproveAuthRequest(ctx context.Context, requestID uuid
 			return err
 		}
 		output = status
+		logging.Audit(
+			ctx,
+			slog.LevelInfo,
+			logging.EventAuthRequestApproved,
+			logging.ResultSuccess,
+			"",
+			append(
+				baseAttrs,
+				slog.String("master_id", masterID.String()),
+				slog.String("master_sign_key_fingerprint", masterSignKeyFingerprint),
+			)...,
+		)
 		return nil
 	})
 	if err != nil {

@@ -1,31 +1,41 @@
 package main
 
 import (
-	"log"
+	"log/slog"
+	"os"
 
 	"github.com/LaLanMo/muxagent-relay/internal/config"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 )
 
 func main() {
+	logging.InitDefaultLogger()
+
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to load config", slog.Any("err", err))
+		os.Exit(1)
 	}
 	app, err := InitApp(cfg)
 	if err != nil {
-		log.Fatal(err)
+		slog.Error("failed to initialize app", slog.Any("err", err))
+		os.Exit(1)
 	}
 	if app.AuthCleanup != nil {
 		defer app.AuthCleanup()
 	}
 
-	log.Printf("Relay server on %s", cfg.Relay.ListenAddr)
-	log.Println("  - Machine connections: /ws")
-	log.Println("  - Client connections:  /ws")
-	log.Println("  - Auth endpoints:      /v1/auth/*")
-	log.Println("  - Keyring endpoints:   /v1/keyring/*")
+	slog.Info(
+		"relay server starting",
+		slog.String("listen_addr", cfg.Relay.ListenAddr),
+		slog.String("machine_ws_path", "/ws"),
+		slog.String("client_ws_path", "/ws"),
+		slog.String("auth_path", "/v1/auth/*"),
+		slog.String("keyring_path", "/v1/keyring/*"),
+	)
 
 	if err := app.Router.Run(cfg.Relay.ListenAddr); err != nil {
-		log.Fatal(err)
+		slog.Error("relay server exited", slog.Any("err", err))
+		os.Exit(1)
 	}
 }

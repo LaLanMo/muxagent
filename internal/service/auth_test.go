@@ -10,7 +10,9 @@ import (
 
 	"github.com/LaLanMo/muxagent-relay/internal/domain"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent-relay/internal/testutil"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -471,6 +473,8 @@ func TestAuthService_GetAuthStatus_PollTokenGating(t *testing.T) {
 }
 
 func TestAuthService_ApproveAuthRequest_ExistingMasterEncPubMismatch(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
 	relayPub, relayPriv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 
@@ -526,13 +530,25 @@ func TestAuthService_ApproveAuthRequest_ExistingMasterEncPubMismatch(t *testing.
 		relaySignPub:  relayPub,
 	}
 
-	status, err := svc.ApproveAuthRequest(context.Background(), requestID, AuthApproveInput{
+	ctx := logging.WithClientIP(context.Background(), "198.51.100.21")
+	status, err := svc.ApproveAuthRequest(ctx, requestID, AuthApproveInput{
 		MasterSignPub:     masterSignPub,
 		MasterEncPub:      inputMasterEncPub,
 		ApprovalSignature: signApproval(t, authReq, masterSignPriv),
 	})
 	require.ErrorIs(t, err, ErrMasterEncPubMismatch)
 	assert.Nil(t, status)
+
+	entry := testutil.FindEntryByEvent(testutil.ParseLogEntries(t, buf), logging.EventAuthRequestRejected)
+	require.NotNil(t, entry)
+	assert.Equal(t, logging.ResultRejected, entry["result"])
+	assert.Equal(t, ErrMasterEncPubMismatch.Error(), entry["reason"])
+	assert.Equal(t, requestID.String(), entry["auth_request_id"])
+	assert.Equal(t, machineID.String(), entry["machine_id"])
+	assert.Equal(t, masterID.String(), entry["master_id"])
+	assert.Equal(t, masterFingerprint, entry["master_sign_key_fingerprint"])
+	assert.Equal(t, "198.51.100.21", entry["client_ip"])
+	assert.NotContains(t, buf.String(), base64.StdEncoding.EncodeToString(inputMasterEncPub))
 }
 
 func TestAuthService_ApproveAuthRequest_InitialKeyringTargetMasterEncMismatch(t *testing.T) {
@@ -620,6 +636,118 @@ func TestAuthService_ApproveAuthRequest_InitialKeyringTargetMasterEncMismatch(t 
 	})
 	require.ErrorIs(t, err, ErrKeyringUpdateTargetMasterEncMismatch)
 	assert.Nil(t, status)
+}
+
+func TestAuthService_ApproveAuthRequest_LogsApprovalSuccess(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
+	relayPub, relayPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	requestID := uuid.New()
+	machineID := uuid.New()
+	masterID := uuid.New()
+
+	machineSignPub, _, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	authReq := domain.AuthRequest{
+		ID:             requestID,
+		MachineID:      machineID,
+		MachineSignPub: machineSignPub,
+		MachineEncPub:  randomBytes(t, 32),
+		ExpiresAt:      time.Now().Add(5 * time.Minute),
+		RelayChallenge: randomBytes(t, 32),
+	}
+
+	masterSignPub, masterSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	masterEncPub := randomBytes(t, 32)
+	masterFingerprint := crypto.HashKeyFingerprint(masterSignPub)
+
+	updatedAuthReq := authReq
+	authRepo := &authRequestRepoMock{
+		findByIDFn: func(ctx context.Context, id uuid.UUID) (domain.AuthRequest, error) {
+			require.Equal(t, requestID, id)
+			return updatedAuthReq, nil
+		},
+		findByIDForTxFn: func(ctx context.Context, id uuid.UUID) (domain.AuthRequest, error) {
+			require.Equal(t, requestID, id)
+			return updatedAuthReq, nil
+		},
+		updateFn: func(ctx context.Context, req *domain.AuthRequest) error {
+			updatedAuthReq = *req
+			return nil
+		},
+	}
+	masterKeyRepo := &masterKeyRepoMock{
+		findByFingerprintFn: func(ctx context.Context, fingerprint string) (domain.MasterKey, error) {
+			require.Equal(t, masterFingerprint, fingerprint)
+			return domain.MasterKey{
+				MasterID:                 masterID,
+				MasterSignKeyFingerprint: masterFingerprint,
+				MasterSignPub:            masterSignPub,
+				MasterEncPub:             masterEncPub,
+			}, nil
+		},
+		listByMasterIDFn: func(ctx context.Context, id uuid.UUID) ([]domain.MasterKey, error) {
+			require.Equal(t, masterID, id)
+			return []domain.MasterKey{{
+				MasterID:                 masterID,
+				MasterSignKeyFingerprint: masterFingerprint,
+				MasterSignPub:            masterSignPub,
+				MasterEncPub:             masterEncPub,
+			}}, nil
+		},
+	}
+	masterIdentityRepo := &masterIdentityRepoMock{
+		findByIDFn: func(ctx context.Context, id uuid.UUID) (domain.MasterIdentity, error) {
+			require.Equal(t, masterID, id)
+			return domain.MasterIdentity{
+				ID:              masterID,
+				KeyringSeq:      1,
+				KeyringHeadHash: "head",
+			}, nil
+		},
+	}
+
+	svc := &AuthServiceImpl{
+		authRequests:     authRepo,
+		masterKeys:       masterKeyRepo,
+		masterIdentities: masterIdentityRepo,
+		machines:         noopMachineRepo{},
+		keyringUpdates:   noopKeyringUpdateRepo{},
+		txRunner: txRunnerMock{repos: repository.TxRepositories{
+			AuthRequests:     authRepo,
+			MasterIdentities: masterIdentityRepo,
+			MasterKeys:       masterKeyRepo,
+			Machines:         noopMachineRepo{},
+			KeyringUpdates:   noopKeyringUpdateRepo{},
+		}},
+		relaySignPriv: relayPriv,
+		relaySignPub:  relayPub,
+	}
+
+	ctx := logging.WithClientIP(context.Background(), "198.51.100.22")
+	status, err := svc.ApproveAuthRequest(ctx, requestID, AuthApproveInput{
+		MasterSignPub:     masterSignPub,
+		MasterEncPub:      masterEncPub,
+		ApprovalSignature: signApproval(t, authReq, masterSignPriv),
+	})
+	require.NoError(t, err)
+	require.NotNil(t, status)
+	assert.Equal(t, AuthStatusApproved, status.State)
+	assert.Equal(t, masterID.String(), status.MasterID)
+
+	entry := testutil.FindEntryByEvent(testutil.ParseLogEntries(t, buf), logging.EventAuthRequestApproved)
+	require.NotNil(t, entry)
+	assert.Equal(t, logging.ResultSuccess, entry["result"])
+	assert.Equal(t, requestID.String(), entry["auth_request_id"])
+	assert.Equal(t, machineID.String(), entry["machine_id"])
+	assert.Equal(t, masterID.String(), entry["master_id"])
+	assert.Equal(t, masterFingerprint, entry["master_sign_key_fingerprint"])
+	assert.Equal(t, "198.51.100.22", entry["client_ip"])
+	assert.NotContains(t, buf.String(), base64.StdEncoding.EncodeToString(masterEncPub))
+	assert.NotContains(t, buf.String(), base64.StdEncoding.EncodeToString(authReq.RelayChallenge))
 }
 
 func signApproval(t *testing.T, authReq domain.AuthRequest, signerPriv ed25519.PrivateKey) []byte {

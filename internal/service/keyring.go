@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/LaLanMo/muxagent-relay/internal/domain"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
 	"github.com/google/uuid"
 )
@@ -81,13 +83,33 @@ func (s *KeyringServiceImpl) GetKeyringUpdates(ctx context.Context, masterID uui
 
 func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UUID, input KeyringUpdateInput) error {
 	return s.txRunner.InTx(ctx, func(repos repository.TxRepositories) error {
+		baseAttrs := []slog.Attr{
+			slog.String("master_id", masterID.String()),
+		}
+		if input.SignerMasterSignKeyFingerprint != "" {
+			baseAttrs = append(baseAttrs, slog.String("master_sign_key_fingerprint", input.SignerMasterSignKeyFingerprint))
+		}
+		reject := func(reasonErr error, attrs ...slog.Attr) error {
+			logAttrs := append([]slog.Attr{}, baseAttrs...)
+			logAttrs = append(logAttrs, attrs...)
+			logging.Audit(
+				ctx,
+				slog.LevelWarn,
+				logging.EventKeyringUpdateRejected,
+				logging.ResultRejected,
+				reasonErr.Error(),
+				logAttrs...,
+			)
+			return reasonErr
+		}
+
 		if input.Action != KeyringActionAdd && input.Action != KeyringActionRevoke {
-			return ErrInvalidAction
+			return reject(ErrInvalidAction)
 		}
 		identity, err := repos.MasterIdentities.FindByID(ctx, masterID)
 		if err != nil {
 			if errors.Is(err, repository.ErrMasterIdentityNotFound) {
-				return ErrMasterIdentityNotFound
+				return reject(ErrMasterIdentityNotFound)
 			}
 			return err
 		}
@@ -106,23 +128,23 @@ func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UU
 		})
 
 		if input.Seq != identity.KeyringSeq+1 || input.PrevHash != identity.KeyringHeadHash {
-			return ErrKeyringUpdateConflict
+			return reject(ErrKeyringUpdateConflict)
 		}
 
 		signerKey, err := repos.MasterKeys.FindByMasterAndFingerprint(ctx, masterID, input.SignerMasterSignKeyFingerprint)
 		if err != nil {
 			if errors.Is(err, repository.ErrMasterKeyNotFound) {
-				return ErrSignerMasterKeyNotFound
+				return reject(ErrSignerMasterKeyNotFound)
 			}
 			return err
 		}
 
 		if signerKey.RevokedAt != nil {
-			return ErrSignerMasterKeyNotFound
+			return reject(ErrSignerMasterKeyNotFound)
 		}
 
 		if !crypto.VerifySignature(signerKey.MasterSignPub, []byte(updateMsg), input.Signature) {
-			return ErrInvalidKeyringUpdateSignature
+			return reject(ErrInvalidKeyringUpdateSignature)
 		}
 
 		updateHash := crypto.HashBytes([]byte(updateMsg))
@@ -146,7 +168,7 @@ func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UU
 		if input.Action == KeyringActionAdd {
 			fingerprint := crypto.HashKeyFingerprint(input.TargetMasterSignPub)
 			if _, err := repos.MasterKeys.FindByFingerprint(ctx, fingerprint); err == nil {
-				return ErrMasterKeyAlreadyExists
+				return reject(ErrMasterKeyAlreadyExists)
 			} else if !errors.Is(err, repository.ErrMasterKeyNotFound) {
 				return err
 			}
@@ -166,7 +188,7 @@ func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UU
 			fingerprint := crypto.HashKeyFingerprint(input.TargetMasterSignPub)
 			if _, err := repos.MasterKeys.FindByMasterAndFingerprint(ctx, masterID, fingerprint); err != nil {
 				if errors.Is(err, repository.ErrMasterKeyNotFound) {
-					return ErrMasterKeyNotFoundForRevoke
+					return reject(ErrMasterKeyNotFoundForRevoke)
 				}
 				return err
 			}
@@ -178,6 +200,14 @@ func (s *KeyringServiceImpl) UpdateKeyring(ctx context.Context, masterID uuid.UU
 		if err := repos.MasterIdentities.UpdateKeyringState(ctx, masterID, input.Seq, updateHash); err != nil {
 			return err
 		}
+		logging.Audit(
+			ctx,
+			slog.LevelInfo,
+			logging.EventKeyringUpdateApplied,
+			logging.ResultSuccess,
+			"",
+			baseAttrs...,
+		)
 		return nil
 	})
 }

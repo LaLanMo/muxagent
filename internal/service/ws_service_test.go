@@ -13,7 +13,9 @@ import (
 
 	"github.com/LaLanMo/muxagent-relay/internal/domain"
 	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent-relay/internal/testutil"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/assert"
@@ -104,6 +106,8 @@ func readJSON(t *testing.T, conn *websocket.Conn, v any) {
 }
 
 func TestWSService_RegisterMachineAndClient(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
 	masterID := uuid.New()
 	machineID := uuid.New()
 	machineSignPub, machineSignPriv, err := ed25519.GenerateKey(rand.Reader)
@@ -167,6 +171,132 @@ func TestWSService_RegisterMachineAndClient(t *testing.T) {
 	readJSON(t, clientConn, &clientRegistered)
 	assert.Equal(t, WSTypeRegistered, clientRegistered.Type)
 	assert.Equal(t, masterID.String(), clientRegistered.MasterID)
+
+	require.Eventually(t, func() bool {
+		logs := buf.String()
+		return strings.Contains(logs, logging.EventWSMachineRegistered) &&
+			strings.Contains(logs, logging.EventWSClientRegistered)
+	}, time.Second, 10*time.Millisecond)
+
+	entries := testutil.ParseLogEntries(t, buf)
+	machineEntry := testutil.FindEntryByEvent(entries, logging.EventWSMachineRegistered)
+	require.NotNil(t, machineEntry)
+	assert.Equal(t, logging.ResultSuccess, machineEntry["result"])
+	assert.Equal(t, machineID.String(), machineEntry["machine_id"])
+	assert.Equal(t, masterID.String(), machineEntry["master_id"])
+
+	clientEntry := testutil.FindEntryByEvent(entries, logging.EventWSClientRegistered)
+	require.NotNil(t, clientEntry)
+	assert.Equal(t, logging.ResultSuccess, clientEntry["result"])
+	assert.Equal(t, masterID.String(), clientEntry["master_id"])
+	assert.Equal(t, "fp", clientEntry["master_sign_key_fingerprint"])
+	assert.NotEmpty(t, clientEntry["client_id"])
+	assert.NotContains(t, buf.String(), "connect")
+}
+
+func TestWSService_RegisterClientWithInvalidToken_LogsRejected(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
+	tokens := &tokenServiceMock{
+		verifyConnectFn: func(ctx context.Context, token string) (ConnectTokenClaims, error) {
+			return ConnectTokenClaims{}, ErrInvalidConnectToken
+		},
+	}
+
+	svc := NewWSService(
+		&machineRepoMock{},
+		&masterKeyRepoMock{},
+		tokens,
+		NewWSHub(),
+		NewSessionRegistry(),
+		NewPushService(nil, NewWSHub(), nil),
+		testWSServiceConfig(),
+	)
+	wsURL := newWSServer(t, svc)
+
+	clientConn := dialWS(t, wsURL)
+	require.NoError(t, clientConn.WriteJSON(registerMessage{
+		Type:         WSTypeRegister,
+		Role:         WSRoleClient,
+		ConnectToken: "bad-connect-token",
+	}))
+
+	var errMsg errorMessage
+	readJSON(t, clientConn, &errMsg)
+	assert.Equal(t, WSTypeError, errMsg.Type)
+	assert.Equal(t, ErrInvalidConnectToken.Error(), errMsg.Error)
+
+	require.Eventually(t, func() bool {
+		return strings.Contains(buf.String(), logging.EventWSRegistrationDenied)
+	}, time.Second, 10*time.Millisecond)
+
+	entry := testutil.FindEntryByEvent(testutil.ParseLogEntries(t, buf), logging.EventWSRegistrationDenied)
+	require.NotNil(t, entry)
+	assert.Equal(t, logging.ResultRejected, entry["result"])
+	assert.Equal(t, ErrInvalidConnectToken.Error(), entry["reason"])
+	assert.NotContains(t, buf.String(), "bad-connect-token")
+}
+
+func TestWSService_InvalidSessionInit_LogsRejected(t *testing.T) {
+	buf := testutil.CaptureSlog(t)
+
+	masterID := uuid.New()
+	machineID := uuid.New()
+	tokens := &tokenServiceMock{
+		verifyConnectFn: func(ctx context.Context, token string) (ConnectTokenClaims, error) {
+			if token != "connect" {
+				return ConnectTokenClaims{}, ErrInvalidConnectToken
+			}
+			return ConnectTokenClaims{MasterID: masterID, MasterSignKeyFingerprint: "fp"}, nil
+		},
+		verifyMachineFn: func(ctx context.Context, token string) (MachineTokenClaims, error) {
+			return MachineTokenClaims{}, ErrInvalidMachineToken
+		},
+	}
+
+	svc := NewWSService(
+		&machineRepoMock{},
+		&masterKeyRepoMock{},
+		tokens,
+		NewWSHub(),
+		NewSessionRegistry(),
+		NewPushService(nil, NewWSHub(), nil),
+		testWSServiceConfig(),
+	)
+	wsURL := newWSServer(t, svc)
+
+	clientConn := dialWS(t, wsURL)
+	require.NoError(t, clientConn.WriteJSON(registerMessage{
+		Type:         WSTypeRegister,
+		Role:         WSRoleClient,
+		ConnectToken: "connect",
+	}))
+	readJSON(t, clientConn, &registeredMessage{})
+
+	require.NoError(t, clientConn.WriteJSON(sessionInitMessage{
+		Type:               WSTypeSessionInit,
+		MachineID:          machineID.String(),
+		MachineToken:       "bad-machine-token",
+		ClientEphemeralPub: "client-ephemeral",
+		Signature:          "sig",
+	}))
+
+	var errMsg errorMessage
+	readJSON(t, clientConn, &errMsg)
+	assert.Equal(t, WSTypeError, errMsg.Type)
+	assert.Equal(t, ErrInvalidMachineToken.Error(), errMsg.Error)
+
+	require.Eventually(t, func() bool {
+		return strings.Contains(buf.String(), logging.EventWSSessionRejected)
+	}, time.Second, 10*time.Millisecond)
+
+	entry := testutil.FindEntryByEvent(testutil.ParseLogEntries(t, buf), logging.EventWSSessionRejected)
+	require.NotNil(t, entry)
+	assert.Equal(t, logging.ResultRejected, entry["result"])
+	assert.Equal(t, ErrInvalidMachineToken.Error(), entry["reason"])
+	assert.Equal(t, machineID.String(), entry["machine_id"])
+	assert.NotEmpty(t, entry["client_id"])
+	assert.NotContains(t, buf.String(), "bad-machine-token")
 }
 
 func TestWSService_SessionInitAckRouting(t *testing.T) {

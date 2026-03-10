@@ -19,6 +19,7 @@ func SetupRouter(
 ) (*gin.Engine, error) {
 	router := gin.New()
 	router.Use(gin.Recovery())
+	router.Use(middleware.AccessLog())
 
 	rl := cfg.RateLimit.WithDefaults()
 

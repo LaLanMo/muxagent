@@ -2,10 +2,12 @@ package middleware
 
 import (
 	"encoding/base64"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/LaLanMo/muxagent-relay/internal/errs"
+	"github.com/LaLanMo/muxagent-relay/internal/logging"
 	"github.com/LaLanMo/muxagent-relay/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -30,8 +32,12 @@ func NewTokenAuthMiddleware(tokenService service.TokenService) *TokenAuthMiddlew
 // machine_access_token whose MasterID matches the :master_id path parameter.
 func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := logging.WithClientIP(c.Request.Context(), c.ClientIP())
+		c.Request = c.Request.WithContext(ctx)
+
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			logging.Audit(ctx, slog.LevelWarn, logging.EventAuthzDenied, logging.ResultDenied, "authorization required")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, authEnvelope{
 				Code:    errs.CodeUnauthorized,
 				Message: "authorization required",
@@ -41,6 +47,7 @@ func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 
 		token, ok := strings.CutPrefix(authHeader, "Bearer ")
 		if !ok || token == "" {
+			logging.Audit(ctx, slog.LevelWarn, logging.EventAuthzDenied, logging.ResultDenied, "invalid authorization header")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, authEnvelope{
 				Code:    errs.CodeUnauthorized,
 				Message: "invalid authorization header",
@@ -71,6 +78,7 @@ func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 					})
 					return
 				}
+				logging.Audit(ctx, slog.LevelWarn, logging.EventAuthzDenied, logging.ResultDenied, "invalid token")
 				c.AbortWithStatusJSON(http.StatusUnauthorized, authEnvelope{
 					Code:    errs.CodeUnauthorized,
 					Message: "invalid token",
@@ -78,6 +86,14 @@ func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 				return
 			}
 			if claims.MasterID != masterIDParam {
+				logging.Audit(
+					ctx,
+					slog.LevelWarn,
+					logging.EventAuthzDenied,
+					logging.ResultDenied,
+					"token master_id mismatch",
+					slog.String("master_id", masterIDParam.String()),
+				)
 				c.AbortWithStatusJSON(http.StatusForbidden, authEnvelope{
 					Code:    errs.CodeUnauthorized,
 					Message: "token master_id mismatch",
@@ -95,6 +111,7 @@ func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 					})
 					return
 				}
+				logging.Audit(ctx, slog.LevelWarn, logging.EventAuthzDenied, logging.ResultDenied, "invalid token")
 				c.AbortWithStatusJSON(http.StatusUnauthorized, authEnvelope{
 					Code:    errs.CodeUnauthorized,
 					Message: "invalid token",
@@ -102,6 +119,14 @@ func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 				return
 			}
 			if claims.MasterID != masterIDParam {
+				logging.Audit(
+					ctx,
+					slog.LevelWarn,
+					logging.EventAuthzDenied,
+					logging.ResultDenied,
+					"token master_id mismatch",
+					slog.String("master_id", masterIDParam.String()),
+				)
 				c.AbortWithStatusJSON(http.StatusForbidden, authEnvelope{
 					Code:    errs.CodeUnauthorized,
 					Message: "token master_id mismatch",
@@ -110,6 +135,7 @@ func (m *TokenAuthMiddleware) RequireMasterAccess() gin.HandlerFunc {
 			}
 
 		default:
+			logging.Audit(ctx, slog.LevelWarn, logging.EventAuthzDenied, logging.ResultDenied, "invalid token")
 			c.AbortWithStatusJSON(http.StatusUnauthorized, authEnvelope{
 				Code:    errs.CodeUnauthorized,
 				Message: "invalid token",

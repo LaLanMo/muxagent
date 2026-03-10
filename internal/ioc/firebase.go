@@ -2,7 +2,7 @@ package ioc
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
@@ -12,12 +12,12 @@ import (
 
 func InitFirebaseApp(cfg *config.Config) *firebase.App {
 	if cfg.Firebase.CredentialsFile == "" {
-		log.Println("Firebase credentials not configured, push notifications disabled")
+		slog.Info("firebase disabled", slog.String("reason", "credentials_not_configured"))
 		return nil
 	}
 	app, err := firebase.NewApp(context.Background(), nil, option.WithCredentialsFile(cfg.Firebase.CredentialsFile))
 	if err != nil {
-		log.Printf("Failed to initialize Firebase: %v, push notifications disabled", err)
+		slog.Warn("firebase init failed", slog.Any("err", err), slog.String("reason", "init_failed"))
 		return nil
 	}
 	return app
@@ -29,7 +29,7 @@ func InitFCMClient(app *firebase.App) *messaging.Client {
 	}
 	client, err := app.Messaging(context.Background())
 	if err != nil {
-		log.Printf("Failed to initialize FCM client: %v, push notifications disabled", err)
+		slog.Warn("fcm client init failed", slog.Any("err", err), slog.String("reason", "init_failed"))
 		return nil
 	}
 	return client
