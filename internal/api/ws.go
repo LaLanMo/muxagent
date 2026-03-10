@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/LaLanMo/muxagent-relay/internal/middleware"
 	"github.com/LaLanMo/muxagent-relay/internal/service"
@@ -9,8 +10,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Relay only supports native clients. Any non-empty Origin indicates a
+// browser-style request and is rejected at the upgrade boundary.
+func allowWSOrigin(r *http.Request) bool {
+	return strings.TrimSpace(r.Header.Get("Origin")) == ""
+}
+
 var wsUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
+	CheckOrigin: allowWSOrigin,
 }
 
 type WSHandler struct {
