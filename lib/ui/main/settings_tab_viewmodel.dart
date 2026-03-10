@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
 import '../../data/services/local/crypto_service.dart';
@@ -65,6 +66,10 @@ class SettingsTabViewModel extends GetxController {
     } finally {
       connectingMachines.remove(machine.machineId);
     }
+  }
+
+  void openPrivacyPolicy() {
+    launchUrl(Uri.parse('https://soloflux.ai/privacy'));
   }
 
   void showPasteUrlDialog() async {

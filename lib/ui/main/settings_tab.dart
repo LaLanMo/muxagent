@@ -77,6 +77,13 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                     ),
                     hasBorder: true,
                   ),
+                  _buildSettingsRow(
+                    icon: LucideIcons.shield,
+                    label: 'Privacy Policy',
+                    trailing: Icon(LucideIcons.chevronRight,
+                        size: 16, color: AppTheme.textMuted),
+                    onTap: controller.openPrivacyPolicy,
+                  ),
                   // _buildSettingsRow(
                   //   icon: LucideIcons.zap,
                   //   label: "What's New",
