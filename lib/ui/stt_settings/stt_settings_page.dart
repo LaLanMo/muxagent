@@ -52,6 +52,24 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                       hint: 'sk-...',
                       obscure: true,
                     ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          LucideIcons.lock,
+                          size: 11,
+                          color: AppTheme.textTertiary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Stored securely in device keychain',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 16),
 
                     // Model
