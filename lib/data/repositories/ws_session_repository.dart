@@ -79,4 +79,8 @@ class WsSessionRepository {
   }
 
   Future<void> close() => _relay.close();
+
+  Future<void> resetConnection({Object? reason}) {
+    return _relay.resetConnection(reason: reason);
+  }
 }

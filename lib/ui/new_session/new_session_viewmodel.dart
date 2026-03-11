@@ -19,6 +19,8 @@ import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
 
 class NewSessionViewModel extends GetxController {
+  static const _createSessionTimeout = Duration(seconds: 15);
+
   final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
@@ -29,10 +31,10 @@ class NewSessionViewModel extends GetxController {
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
     required TranscribeAudioUseCase transcribe,
-  })  : _machineRepo = machineRepo,
-        _wsRepo = wsRepo,
-        _eventRepo = eventRepo,
-        _transcribe = transcribe;
+  }) : _machineRepo = machineRepo,
+       _wsRepo = wsRepo,
+       _eventRepo = eventRepo,
+       _transcribe = transcribe;
 
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
@@ -102,7 +104,7 @@ class NewSessionViewModel extends GetxController {
         ..addAll(ids);
       // Clear selection if selected machine went offline
       final sel = selectedMachine.value;
-      if (sel != null && !ids.contains(sel.machineId)) {
+      if (sel != null && !ids.contains(sel.machineId) && !isLoading.value) {
         selectedMachine.value = null;
       }
     });
@@ -183,11 +185,14 @@ class NewSessionViewModel extends GetxController {
     final path =
         '${Directory.systemTemp.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     try {
-      await _voiceRecorder!.start(const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        sampleRate: 16000,
-        numChannels: 1,
-      ), path: path);
+      await _voiceRecorder!.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
     } catch (e) {
       AppToast.show('Failed to start recording');
       isVoiceRecording.value = false;
@@ -265,6 +270,10 @@ class NewSessionViewModel extends GetxController {
     isLoading.value = true;
 
     try {
+      if (!_wsRepo.relayConnected.value) {
+        await _wsRepo.resetConnection(reason: 'relay disconnected');
+      }
+
       // Ensure connected
       await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
       if (!_wsRepo.hasSession(machine.machineId)) {
@@ -287,9 +296,8 @@ class NewSessionViewModel extends GetxController {
         if (useWorktree.value) 'useWorktree': true,
       };
 
-      final createResult = await _wsRepo.callRpc(
-        machineId: machine.machineId,
-        method: 'session.create',
+      final createResult = await _createSessionWithRecovery(
+        machine: machine,
         params: createParams,
       );
 
@@ -299,11 +307,17 @@ class NewSessionViewModel extends GetxController {
       }
       final runtime = createResult['runtime'] as String? ?? '';
       final configOptions = createResult['configOptions'] as List<dynamic>?;
-      debugPrint('[NewSessionVM] createResult keys: ${createResult.keys.toList()}');
-      debugPrint('[NewSessionVM] configOptions type: ${configOptions.runtimeType}');
+      debugPrint(
+        '[NewSessionVM] createResult keys: ${createResult.keys.toList()}',
+      );
+      debugPrint(
+        '[NewSessionVM] configOptions type: ${configOptions.runtimeType}',
+      );
       if (configOptions != null) {
         for (final item in configOptions) {
-          debugPrint('[NewSessionVM]   item type: ${item.runtimeType} keys: ${item is Map ? (item as Map).keys.toList() : "N/A"}');
+          debugPrint(
+            '[NewSessionVM]   item type: ${item.runtimeType} keys: ${item is Map ? item.keys.toList() : "N/A"}',
+          );
         }
       }
 
@@ -343,5 +357,48 @@ class NewSessionViewModel extends GetxController {
     } finally {
       isLoading.value = false;
     }
+  }
+
+  Future<Map<String, dynamic>> _createSessionWithRecovery({
+    required PairedMachine machine,
+    required Map<String, dynamic> params,
+  }) async {
+    try {
+      return await _callCreateSession(machine.machineId, params);
+    } on TimeoutException {
+      await _recoverRelaySession(machine, 'session.create timeout');
+      try {
+        return await _callCreateSession(machine.machineId, params);
+      } on TimeoutException {
+        throw Exception(
+          'Session create timed out after reconnect. Relay session appears stale.',
+        );
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>> _callCreateSession(
+    String machineId,
+    Map<String, dynamic> params,
+  ) {
+    return _wsRepo
+        .callRpc(machineId: machineId, method: 'session.create', params: params)
+        .timeout(
+          _createSessionTimeout,
+          onTimeout: () => throw TimeoutException(
+            'session.create timeout',
+            _createSessionTimeout,
+          ),
+        );
+  }
+
+  Future<void> _recoverRelaySession(
+    PairedMachine machine,
+    Object reason,
+  ) async {
+    await _wsRepo.resetConnection(reason: reason);
+    await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
+    await _wsRepo.startSession(machine: machine);
+    selectedMachine.value = machine;
   }
 }

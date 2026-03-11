@@ -8,10 +8,12 @@ typedef WsDoneHandler = void Function();
 
 /// Lightweight WebSocket wrapper used by higher-level clients.
 class BaseWsClient {
+  static const _keepAliveInterval = Duration(seconds: 20);
+
   WebSocket? _socket;
   StreamSubscription? _subscription;
 
-  bool get isConnected => _socket != null;
+  bool get isConnected => _socket?.readyState == WebSocket.open;
 
   Future<void> connect(
     String url, {
@@ -23,6 +25,7 @@ class BaseWsClient {
       return;
     }
     final socket = await WebSocket.connect(url);
+    socket.pingInterval = _keepAliveInterval;
     _socket = socket;
     _subscription = socket.listen(
       (data) {
@@ -42,18 +45,12 @@ class BaseWsClient {
   }
 
   void sendJson(Map<String, dynamic> payload) {
-    final socket = _socket;
-    if (socket == null) {
-      throw Exception('socket not connected');
-    }
+    final socket = _requireOpenSocket();
     socket.add(jsonEncode(payload));
   }
 
   void sendRaw(String payload) {
-    final socket = _socket;
-    if (socket == null) {
-      throw Exception('socket not connected');
-    }
+    final socket = _requireOpenSocket();
     socket.add(payload);
   }
 
@@ -66,5 +63,14 @@ class BaseWsClient {
   void _clearConnection() {
     _subscription = null;
     _socket = null;
+  }
+
+  WebSocket _requireOpenSocket() {
+    final socket = _socket;
+    if (socket == null || socket.readyState != WebSocket.open) {
+      _clearConnection();
+      throw Exception('socket not connected');
+    }
+    return socket;
   }
 }

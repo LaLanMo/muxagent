@@ -191,10 +191,20 @@ class RelayWsClient {
     return completer.future;
   }
 
-  Future<void> close() async {
+  Future<void> resetConnection({Object? reason}) async {
+    final error = reason ?? 'connection reset';
     relayConnected.value = false;
+    final completer = _registeredCompleter;
+    if (completer != null && !completer.isCompleted) {
+      completer.completeError(error);
+    }
+    _registeredCompleter = null;
     await _ws.close();
-    _sessions.endAll(null);
+    _sessions.endAll(error);
+  }
+
+  Future<void> close() async {
+    await resetConnection();
     await _events.close();
     await _errors.close();
     await _machineStatus.close();
