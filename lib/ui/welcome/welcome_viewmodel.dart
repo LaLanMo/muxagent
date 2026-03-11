@@ -7,6 +7,10 @@ import '../../data/models/auth_request.dart';
 import '../../routing/routes.dart';
 import '../../utils/app_toast.dart';
 
+const welcomeInstallScriptUrl =
+    'https://raw.githubusercontent.com/LaLanMo/muxagent-cli/main/install.sh';
+const welcomeInstallCommand = 'curl -fsSL $welcomeInstallScriptUrl | sh';
+
 class WelcomeViewModel extends GetxController {
   final urlController = TextEditingController();
   final urlError = RxnString();
@@ -56,9 +60,7 @@ class WelcomeViewModel extends GetxController {
   }
 
   void onCopyCommand() {
-    Clipboard.setData(
-      const ClipboardData(text: 'curl -sL muxagent.com/install.sh | bash'),
-    );
+    Clipboard.setData(const ClipboardData(text: welcomeInstallCommand));
     AppToast.show('Installation command copied');
   }
 }
