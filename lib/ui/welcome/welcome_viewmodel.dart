@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
 import '../../routing/routes.dart';
+import '../../utils/app_toast.dart';
 
 class WelcomeViewModel extends GetxController {
   final urlController = TextEditingController();
@@ -43,5 +46,19 @@ class WelcomeViewModel extends GetxController {
 
   void clearUrlError() {
     urlError.value = null;
+  }
+
+  void onGithubPressed() {
+    launchUrl(
+      Uri.parse('https://github.com/LaLanMo/muxagent-cli'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  void onCopyCommand() {
+    Clipboard.setData(
+      const ClipboardData(text: 'curl -sL muxagent.com/install.sh | bash'),
+    );
+    AppToast.show('Installation command copied');
   }
 }
