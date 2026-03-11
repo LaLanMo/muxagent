@@ -34,9 +34,9 @@ class ChatViewModel extends GetxController {
     required EventRepository eventRepo,
     required WsSessionRepository wsRepo,
     required TranscribeAudioUseCase transcribe,
-  })  : _eventRepo = eventRepo,
-        _wsRepo = wsRepo,
-        _transcribe = transcribe;
+  }) : _eventRepo = eventRepo,
+       _wsRepo = wsRepo,
+       _transcribe = transcribe;
 
   late final String machineId;
   late final String sessionId;
@@ -129,10 +129,14 @@ class ChatViewModel extends GetxController {
       // New sessions are already created via session.create — skip load.
       // Apply configOptions from the create response (synchronous, no event timing issues).
       final configOptions = args['configOptions'] as List<dynamic>?;
-      debugPrint('[ChatVM] new session configOptions: ${configOptions?.length} items');
+      debugPrint(
+        '[ChatVM] new session configOptions: ${configOptions?.length} items',
+      );
       if (configOptions != null) {
         for (final item in configOptions) {
-          debugPrint('[ChatVM]   item type=${item.runtimeType} keys=${item is Map ? (item as Map).keys.toList() : "N/A"}');
+          debugPrint(
+            '[ChatVM]   item type=${item.runtimeType} keys=${item is Map ? item.keys.toList() : "N/A"}',
+          );
           if (item is Map) debugPrint('[ChatVM]   item=$item');
         }
       }
@@ -161,7 +165,9 @@ class ChatViewModel extends GetxController {
   }
 
   void _applyConfigOptions(List<dynamic> configOptions) {
-    debugPrint('[ChatVM] _applyConfigOptions called with ${configOptions.length} items');
+    debugPrint(
+      '[ChatVM] _applyConfigOptions called with ${configOptions.length} items',
+    );
     for (final raw in configOptions) {
       debugPrint('[ChatVM]   raw item type: ${raw.runtimeType}, value: $raw');
       if (raw is! Map<String, dynamic>) continue;
@@ -198,10 +204,14 @@ class ChatViewModel extends GetxController {
         params: params,
       );
       final configOptions = result['configOptions'] as List<dynamic>?;
-      debugPrint('[ChatVM] load session configOptions: ${configOptions?.length} items');
+      debugPrint(
+        '[ChatVM] load session configOptions: ${configOptions?.length} items',
+      );
       if (configOptions != null) {
         for (final item in configOptions) {
-          debugPrint('[ChatVM] load item type=${item.runtimeType} keys=${item is Map ? (item as Map).keys.toList() : "N/A"}');
+          debugPrint(
+            '[ChatVM] load item type=${item.runtimeType} keys=${item is Map ? item.keys.toList() : "N/A"}',
+          );
         }
         _applyConfigOptions(configOptions);
       }
@@ -270,7 +280,7 @@ class ChatViewModel extends GetxController {
 
       case EventType.runFinished:
         _hasOptimisticUserMsg = false;
-        sessionStatus.value = SessionStatus.done;
+        sessionStatus.value = SessionStatus.idle;
         usageVersion.value++;
 
       case EventType.runFailed:
@@ -281,7 +291,9 @@ class ChatViewModel extends GetxController {
             id: 'error-${event.at.millisecondsSinceEpoch}',
             sessionId: sessionId,
             role: MessageRole.agent,
-            parts: [MessagePart(type: PartType.text, text: event.error!.message)],
+            parts: [
+              MessagePart(type: PartType.text, text: event.error!.message),
+            ],
             createdAt: event.at,
           );
           chatState.finalizeMessage(errorMsg);
@@ -359,7 +371,9 @@ class ChatViewModel extends GetxController {
     final configId = modelConfigId.value;
     if (configId.isEmpty) return;
 
-    debugPrint('[ChatVM] changeModel: $currentModel → $value (configId=$configId)');
+    debugPrint(
+      '[ChatVM] changeModel: $currentModel → $value (configId=$configId)',
+    );
     final previous = currentModel.value;
     currentModel.value = value;
 
@@ -367,11 +381,7 @@ class ChatViewModel extends GetxController {
       final result = await _wsRepo.callRpc(
         machineId: machineId,
         method: 'session.setConfigOption',
-        params: {
-          'sessionId': sessionId,
-          'configId': configId,
-          'value': value,
-        },
+        params: {'sessionId': sessionId, 'configId': configId, 'value': value},
       );
       debugPrint('[ChatVM] changeModel success: $result');
     } catch (e) {
@@ -545,11 +555,14 @@ class ChatViewModel extends GetxController {
     final path =
         '${Directory.systemTemp.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     try {
-      await _voiceRecorder!.start(const RecordConfig(
-        encoder: AudioEncoder.aacLc,
-        sampleRate: 16000,
-        numChannels: 1,
-      ), path: path);
+      await _voiceRecorder!.start(
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          sampleRate: 16000,
+          numChannels: 1,
+        ),
+        path: path,
+      );
     } catch (e) {
       AppToast.show('Failed to start recording');
       isVoiceRecording.value = false;
@@ -784,13 +797,15 @@ class ChatViewModel extends GetxController {
     // Build optimistic message parts
     final parts = <MessagePart>[];
     for (var i = 0; i < previewsToSend.length; i++) {
-      parts.add(MessagePart(
-        type: PartType.media,
-        media: MediaPart(
-          base64: base64Encode(previewsToSend[i]),
-          mimeType: mimeTypesToSend[i],
+      parts.add(
+        MessagePart(
+          type: PartType.media,
+          media: MediaPart(
+            base64: base64Encode(previewsToSend[i]),
+            mimeType: mimeTypesToSend[i],
+          ),
         ),
-      ));
+      );
     }
     if (trimmed.isNotEmpty) {
       parts.add(MessagePart(type: PartType.text, text: trimmed));

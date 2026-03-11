@@ -11,6 +11,7 @@ import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
 import '../services/ws/models/ws_models.dart';
+import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
 
 class EventRepository {
@@ -57,6 +58,10 @@ class EventRepository {
   }
 
   void _onWsEvent(WsEvent wsEvent) {
+    if (wsEvent.type != WsMessageType.event.value) {
+      return;
+    }
+
     final payload = wsEvent.payload;
     final machineId =
         payload['machineId'] as String? ??
@@ -67,7 +72,8 @@ class EventRepository {
     if (event.type == null) return;
 
     // Track sequence number per machine for resync
-    if (machineId.isNotEmpty && event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
+    if (machineId.isNotEmpty &&
+        event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
       _lastSeqByMachine[machineId] = event.seq;
     }
 
@@ -146,8 +152,7 @@ class EventRepository {
               (d['contextSize'] as num?)?.toInt() ?? usage.contextSize;
           if (d['costAmount'] != null) {
             usage.costAmount = (d['costAmount'] as num).toDouble();
-            usage.costCurrency =
-                d['costCurrency'] as String? ?? 'USD';
+            usage.costCurrency = d['costCurrency'] as String? ?? 'USD';
           }
           // Update in-memory session
           final existing = sessions[sessionId];
@@ -166,7 +171,7 @@ class EventRepository {
         if (existing != null) {
           existing.updatedAt = event.at;
           existing.status = event.type == EventType.runFinished
-              ? SessionStatus.done
+              ? SessionStatus.idle
               : SessionStatus.error;
 
           // Mark unread if user is not currently viewing this session
@@ -178,8 +183,7 @@ class EventRepository {
           final totalTokens =
               (event.data?['totalTokens'] as num?)?.toInt() ?? 0;
           if (totalTokens > 0) {
-            final usage =
-                _liveUsage.putIfAbsent(sessionId, () => UsageInfo());
+            final usage = _liveUsage.putIfAbsent(sessionId, () => UsageInfo());
             usage.totalTokens = totalTokens;
             usage.inputTokens =
                 (event.data?['inputTokens'] as num?)?.toInt() ?? 0;
@@ -321,16 +325,15 @@ class EventRepository {
   }
 
   /// Reconcile stale running/waitingApproval sessions after reconnect.
-  /// Uses session.resolve to check which sessions the daemon still knows about.
-  /// Sessions returned → idle (exists but not running).
-  /// Sessions NOT returned → done (unknown to this daemon instance).
+  /// Uses session.resolve to consume the daemon's authoritative status snapshot.
+  /// Sessions not returned are considered gone from this daemon instance.
   Future<void> reconcileSessionStatus(String machineId) async {
     // Collect all running/waitingApproval sessions for this machine
     final stale = sessions.values.where((s) {
       final mid = s.metadata?['machineId'] as String? ?? '';
       return mid == machineId &&
           (s.status == SessionStatus.running ||
-           s.status == SessionStatus.waitingApproval);
+              s.status == SessionStatus.waitingApproval);
     }).toList();
 
     if (stale.isEmpty) return;
@@ -343,21 +346,20 @@ class EventRepository {
       );
 
       final list = result['sessions'] as List<dynamic>? ?? [];
-      final resolvedIds = <String>{};
+      final resolvedStatuses = <String, SessionStatus>{};
       for (final item in list) {
         if (item is Map) {
           final id = (item['sessionId'] as String?) ?? '';
-          if (id.isNotEmpty) resolvedIds.add(id);
+          if (id.isEmpty) continue;
+          resolvedStatuses[id] = SessionStatus.fromValue(
+            item['status'] as String? ?? 'idle',
+          );
         }
       }
 
       var changed = false;
       for (final session in stale) {
-        // Active sessions briefly marked idle will self-correct
-        // when runFinished/runFailed events arrive.
-        final newStatus = resolvedIds.contains(session.id)
-            ? SessionStatus.idle   // daemon knows it, but it's at rest
-            : SessionStatus.done;  // daemon doesn't know it (previous lifetime)
+        final newStatus = resolvedStatuses[session.id] ?? SessionStatus.done;
 
         if (session.status != newStatus) {
           session.status = newStatus;
@@ -373,9 +375,7 @@ class EventRepository {
             'is_read': session.isRead ? 1 : 0,
           });
           // Clear stale approvals for this session
-          pendingApprovals.removeWhere(
-            (_, a) => a.sessionId == session.id,
-          );
+          pendingApprovals.removeWhere((_, a) => a.sessionId == session.id);
           changed = true;
         }
       }
@@ -466,6 +466,9 @@ class EventRepository {
 
         final title = json['title'] as String? ?? '';
         final sessionCwd = json['cwd'] as String? ?? '';
+        final status = SessionStatus.fromValue(
+          json['status'] as String? ?? 'idle',
+        );
         final updatedAt = _parseRpcTime(json['updatedAt']) ?? DateTime.now();
         final existing = sessions[sessionId];
 
@@ -473,7 +476,7 @@ class EventRepository {
           final session = AgentSession(
             id: sessionId,
             title: title,
-            status: SessionStatus.idle,
+            status: status,
             createdAt: updatedAt,
             updatedAt: updatedAt,
             metadata: {'machineId': machineId, 'cwd': sessionCwd},
