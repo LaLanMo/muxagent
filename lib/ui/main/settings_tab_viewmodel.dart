@@ -22,8 +22,8 @@ class SettingsTabViewModel extends GetxController {
     required this.activeSessionIds,
     required this.relayConnected,
     required Future<void> Function(PairedMachine) connectMachine,
-  })  : _crypto = crypto,
-        _connectMachine = connectMachine;
+  }) : _crypto = crypto,
+       _connectMachine = connectMachine;
 
   final hasMasterKey = false.obs;
   final connectingMachines = <String>{}.obs;
@@ -57,7 +57,9 @@ class SettingsTabViewModel extends GetxController {
     try {
       await _connectMachine(machine);
       if (isMachineConnected(machine.machineId)) {
-        uiEffect.value = ShowToast('Connected to ${machine.hostname ?? 'machine'}');
+        uiEffect.value = ShowToast(
+          'Connected to ${machine.hostname ?? 'machine'}',
+        );
       } else {
         uiEffect.value = ShowToast('Failed to connect');
       }
@@ -69,7 +71,7 @@ class SettingsTabViewModel extends GetxController {
   }
 
   void openPrivacyPolicy() {
-    launchUrl(Uri.parse('https://soloflux.ai/privacy'));
+    launchUrl(Uri.parse('https://muxagent.com/en/privacy'));
   }
 
   void showPasteUrlDialog() async {
@@ -97,10 +99,7 @@ class SettingsTabViewModel extends GetxController {
           textCapitalization: TextCapitalization.none,
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           TextButton(
             onPressed: () {
               final url = textController.text.trim();
