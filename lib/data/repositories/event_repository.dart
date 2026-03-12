@@ -125,6 +125,7 @@ class EventRepository {
             mergedMetadata['machineId'] = event.machineId;
           }
           incoming.metadata = mergedMetadata.isEmpty ? null : mergedMetadata;
+          incoming.isRead = existing?.isRead ?? incoming.isRead;
           sessions[sessionId] = incoming;
 
           // Persist title, status, model changes
