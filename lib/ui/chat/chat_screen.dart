@@ -360,7 +360,7 @@ class ChatScreen extends GetView<ChatViewModel> {
           ),
           const SizedBox(width: 5),
           Text(
-            mode.label.toLowerCase(),
+            mode.label,
             style: GoogleFonts.inter(
               fontSize: 12,
               fontWeight: FontWeight.w500,

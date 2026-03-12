@@ -37,6 +37,33 @@ class NewSessionViewModel extends GetxController {
        _eventRepo = eventRepo,
        _transcribe = transcribe;
 
+  static RuntimeOption? resolveSelectedRuntime({
+    required List<RuntimeOption> options,
+    RuntimeOption? current,
+  }) {
+    if (current != null) {
+      for (final option in options) {
+        if (option.id == current.id) {
+          return option;
+        }
+      }
+    }
+
+    if (options.length == 1) {
+      return options.first;
+    }
+
+    final claudeCode = options.firstWhereOrNull(
+      (option) => option.id == 'claude-code',
+    );
+    final hasCodex = options.any((option) => option.id == 'codex');
+    if (claudeCode != null && hasCodex) {
+      return claudeCode;
+    }
+
+    return null;
+  }
+
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
   final isLoading = false.obs;
@@ -194,25 +221,10 @@ class NewSessionViewModel extends GetxController {
       final visible = all.where((item) => item.ready).toList();
       final options = visible.isNotEmpty ? visible : all;
       availableRuntimes.value = options;
-
-      final current = selectedRuntime.value;
-      if (current != null) {
-        for (final option in options) {
-          if (option.id == current.id) {
-            selectedRuntime.value = option;
-            return;
-          }
-        }
-      }
-
-      final defaultRuntime = result['defaultRuntime'] as String? ?? '';
-      for (final option in options) {
-        if (option.id == defaultRuntime) {
-          selectedRuntime.value = option;
-          return;
-        }
-      }
-      selectedRuntime.value = options.isNotEmpty ? options.first : null;
+      selectedRuntime.value = resolveSelectedRuntime(
+        options: options,
+        current: selectedRuntime.value,
+      );
     } catch (e) {
       if (token != _runtimeLoadToken) return;
       availableRuntimes.clear();
@@ -370,11 +382,19 @@ class NewSessionViewModel extends GetxController {
           'Working directory must be an absolute path or start with ~',
         );
       }
+      // Require explicit runtime selection (unless only one and auto-selected)
+      final selectedRuntimeId = selectedRuntime.value?.id ?? '';
+      if (selectedRuntimeId.isEmpty) {
+        throw Exception('Please select a runtime');
+      }
+
       final createParams = <String, dynamic>{
         'cwd': cwd,
         if (useWorktree.value) 'useWorktree': true,
-        if (selectedRuntime.value != null) 'runtime': selectedRuntime.value!.id,
-        if (selectedMode.value != null) 'permissionMode': selectedMode.value!.id,
+        // Always send runtime explicitly
+        'runtime': selectedRuntimeId,
+        if (selectedMode.value != null)
+          'permissionMode': selectedMode.value!.id,
       };
 
       final createResult = await _createSessionWithRecovery(
@@ -402,10 +422,9 @@ class NewSessionViewModel extends GetxController {
         }
       }
 
-      final initialMode =
-          _extractCurrentMode(configOptions).isNotEmpty
-              ? _extractCurrentMode(configOptions)
-              : (selectedMode.value?.id ?? '');
+      final initialMode = _extractCurrentMode(configOptions).isNotEmpty
+          ? _extractCurrentMode(configOptions)
+          : (selectedMode.value?.id ?? '');
 
       // Register session in EventRepository
       await _eventRepo.registerSession(
@@ -502,7 +521,7 @@ class NewSessionViewModel extends GetxController {
   }
 
   void _syncModesForRuntime(RuntimeOption? runtime) {
-    final options = runtime?.modeOptions ?? const <ModeOption>[];
+    final options = _orderedModesForRuntime(runtime);
     availableModes.value = options;
     if (options.isEmpty) {
       selectedMode.value = null;
@@ -519,9 +538,23 @@ class NewSessionViewModel extends GetxController {
       }
     }
 
-    final defaultModeId = runtime?.defaultModeId ?? '';
+    final defaultModeId = _defaultModeIdForRuntime(runtime);
     selectedMode.value =
         options.firstWhereOrNull((option) => option.id == defaultModeId) ??
         options.first;
+  }
+
+  List<ModeOption> _orderedModesForRuntime(RuntimeOption? runtime) {
+    return ModeOption.orderedForRuntime(
+      runtime?.id ?? '',
+      runtime?.modeOptions ?? const <ModeOption>[],
+    );
+  }
+
+  String _defaultModeIdForRuntime(RuntimeOption? runtime) {
+    if ((runtime?.id ?? '') == 'codex') {
+      return 'full-access';
+    }
+    return runtime?.defaultModeId ?? '';
   }
 }

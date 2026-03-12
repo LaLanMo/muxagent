@@ -4,7 +4,6 @@ class RuntimeOption {
   final String id;
   final String label;
   final bool ready;
-  final bool isDefault;
   final String defaultModeId;
   final List<ModeOption> modeOptions;
 
@@ -12,7 +11,6 @@ class RuntimeOption {
     required this.id,
     required this.label,
     required this.ready,
-    required this.isDefault,
     required this.defaultModeId,
     required this.modeOptions,
   });
@@ -39,7 +37,6 @@ class RuntimeOption {
       id: json['id'] as String? ?? '',
       label: json['label'] as String? ?? '',
       ready: json['ready'] as bool? ?? false,
-      isDefault: json['default'] as bool? ?? false,
       defaultModeId: defaultModeId,
       modeOptions: modeOptions,
     );

@@ -189,9 +189,10 @@ class ChatViewModel extends GetxController {
             .toList();
       } else if (category == 'mode') {
         final rawValues = raw['options'] as List? ?? [];
-        availableModes.value = rawValues
-            .map((v) => ModeOption.fromJson(v as Map<String, dynamic>))
-            .toList();
+        availableModes.value = ModeOption.orderedForRuntime(
+          runtimeId.value,
+          rawValues.map((v) => ModeOption.fromJson(v as Map<String, dynamic>)),
+        );
         currentMode.value = _resolveMode(raw['currentValue'] as String?);
       }
     }
@@ -202,13 +203,17 @@ class ChatViewModel extends GetxController {
       if (cwd.isEmpty) {
         throw Exception('missing cwd for session.load');
       }
+      if (runtimeId.value.isEmpty) {
+        throw Exception('missing runtime for session.load');
+      }
       final session = _eventRepo.sessionById(sessionId);
       final mode = session?.mode ?? '';
       final model = session?.model ?? '';
       final params = <String, dynamic>{
         'sessionId': sessionId,
         'cwd': cwd,
-        if (runtimeId.value.isNotEmpty) 'runtime': runtimeId.value,
+        // Always send runtime explicitly
+        'runtime': runtimeId.value,
         if (mode.isNotEmpty && mode != 'default') 'permissionMode': mode,
         if (model.isNotEmpty && model != 'default') 'model': model,
       };
@@ -235,6 +240,7 @@ class ChatViewModel extends GetxController {
       }
     } catch (e) {
       debugPrint('Failed to load session: $e');
+      AppToast.show('$e');
     } finally {
       isLoading.value = false;
       _scheduleScrollStateSync();
@@ -392,6 +398,9 @@ class ChatViewModel extends GetxController {
     if (id.isEmpty) return null;
     for (final mode in availableModes) {
       if (mode.id == id) return mode;
+    }
+    if (!ModeOption.isVisibleForRuntime(runtimeId.value, id)) {
+      return availableModes.isNotEmpty ? availableModes.first : null;
     }
     return ModeOption.fromId(id);
   }

@@ -3,29 +3,64 @@ class ModeOption {
   final String label;
   final String? description;
 
-  const ModeOption({
-    required this.id,
-    required this.label,
-    this.description,
-  });
+  const ModeOption({required this.id, required this.label, this.description});
 
   factory ModeOption.fromJson(Map<String, dynamic> json) {
     final id = json['value'] as String? ?? json['id'] as String? ?? '';
-    final label =
-        json['name'] as String? ?? json['label'] as String? ?? _fallbackLabel(id);
+    final upstreamLabel = json['name'] as String? ?? json['label'] as String?;
     return ModeOption(
       id: id,
-      label: label,
+      label: _displayLabel(id, upstreamLabel),
       description: json['description'] as String?,
     );
   }
 
   factory ModeOption.fromId(String? id) {
     final value = id ?? '';
-    return ModeOption(id: value, label: _fallbackLabel(value));
+    return ModeOption(id: value, label: _displayLabel(value, null));
   }
 
-  static String _fallbackLabel(String id) {
+  static List<ModeOption> orderedForRuntime(
+    String runtimeId,
+    Iterable<ModeOption> modes,
+  ) {
+    final visible = [
+      for (final mode in modes)
+        if (isVisibleForRuntime(runtimeId, mode.id)) mode,
+    ];
+
+    final order = switch (runtimeId) {
+      'claude-code' => const {
+        'bypassPermissions': 0,
+        'default': 1,
+        'acceptEdits': 2,
+        'plan': 3,
+      },
+      'codex' => const {'full-access': 0, 'auto': 1, 'read-only': 2},
+      _ => const <String, int>{},
+    };
+
+    visible.sort((a, b) {
+      final rankA = order[a.id] ?? 999;
+      final rankB = order[b.id] ?? 999;
+      if (rankA != rankB) {
+        return rankA.compareTo(rankB);
+      }
+      return a.label.compareTo(b.label);
+    });
+    return visible;
+  }
+
+  static bool isVisibleForRuntime(String runtimeId, String modeId) {
+    if (runtimeId == 'claude-code' && modeId == 'dontAsk') {
+      return false;
+    }
+    return true;
+  }
+
+  // Keep app copy consistent even when runtimes use different labels
+  // for the same known permission mode.
+  static String _displayLabel(String id, String? upstreamLabel) {
     switch (id) {
       case 'default':
       case 'auto':
@@ -37,23 +72,27 @@ class ModeOption {
       case 'dontAsk':
         return "Don't Ask";
       case 'bypassPermissions':
-        return 'Bypass Permissions';
+        return 'Skip Perms';
       case 'read-only':
         return 'Read Only';
       case 'full-access':
         return 'Full Access';
       default:
-        if (id.isEmpty) return 'Default';
-        return id
-            .replaceAll('-', ' ')
-            .replaceAllMapped(
-              RegExp(r'([a-z])([A-Z])'),
-              (match) => '${match[1]} ${match[2]}',
-            )
-            .split(' ')
-            .where((part) => part.isNotEmpty)
-            .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-            .join(' ');
+        return upstreamLabel ?? _fallbackLabel(id);
     }
+  }
+
+  static String _fallbackLabel(String id) {
+    if (id.isEmpty) return 'Default';
+    return id
+        .replaceAll('-', ' ')
+        .replaceAllMapped(
+          RegExp(r'([a-z])([A-Z])'),
+          (match) => '${match[1]} ${match[2]}',
+        )
+        .split(' ')
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' ');
   }
 }

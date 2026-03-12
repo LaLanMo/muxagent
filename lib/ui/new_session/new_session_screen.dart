@@ -5,6 +5,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
 import '../../config/theme.dart';
+import '../../domain/mode_option.dart';
+import '../../domain/runtime_option.dart';
 import '../common/ui_effect_listener.dart';
 import 'new_session_viewmodel.dart';
 
@@ -65,22 +67,16 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Machine Section: gap 8, vertical
-                              _buildFieldLabel('Machine'),
-                              const SizedBox(height: 8),
-                              Obx(() => _buildMachineSelector()),
-                              const SizedBox(height: 24),
-
                               // Runtime Section
                               _buildFieldLabel('Runtime'),
                               const SizedBox(height: 8),
                               Obx(() => _buildRuntimeSelector()),
                               const SizedBox(height: 24),
 
-                              // Mode Section
-                              _buildFieldLabel('Mode'),
+                              // Machine Section: gap 8, vertical
+                              _buildFieldLabel('Machine'),
                               const SizedBox(height: 8),
-                              Obx(() => _buildModeSelector()),
+                              Obx(() => _buildMachineSelector()),
                               const SizedBox(height: 24),
 
                               // Directory Section: gap 8, vertical
@@ -89,16 +85,22 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                               _buildDirectorySection(),
                               const SizedBox(height: 24),
 
-                              // Git Worktree Section
-                              _buildFieldLabel('Git Worktree'),
-                              const SizedBox(height: 8),
-                              Obx(() => _buildWorktreeToggle()),
-                              const SizedBox(height: 24),
-
                               // Prompt Section: gap 8, vertical
                               _buildFieldLabel('Initial Prompt'),
                               const SizedBox(height: 8),
                               _buildPromptInput(),
+                              const SizedBox(height: 24),
+
+                              // Mode Section
+                              _buildFieldLabel('Permission Mode'),
+                              const SizedBox(height: 8),
+                              Obx(() => _buildModeSelector()),
+                              const SizedBox(height: 24),
+
+                              // Git Worktree Section
+                              _buildFieldLabel('Git Worktree'),
+                              const SizedBox(height: 8),
+                              Obx(() => _buildWorktreeToggle()),
                             ],
                           ),
                         ),
@@ -231,36 +233,32 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
-          'Use daemon default runtime',
+          'No runtimes available',
           style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
         ),
       );
     }
 
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((runtime) {
-        final isSelected = controller.selectedRuntime.value?.id == runtime.id;
-        return GestureDetector(
-          onTap: () => controller.selectRuntime(runtime),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primary : AppTheme.inputFill,
-              borderRadius: BorderRadius.circular(10),
+    final selectionEnabled = options.length > 1;
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.inputFill,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            _buildRuntimeRow(
+              runtime: options[i],
+              isSelected:
+                  controller.selectedRuntime.value?.id == options[i].id,
+              enabled: selectionEnabled,
             ),
-            child: Text(
-              runtime.label,
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected ? Colors.white : AppTheme.textSecondary,
-              ),
-            ),
-          ),
-        );
-      }).toList(),
+            if (i != options.length - 1)
+              const Divider(height: 1, thickness: 1, color: AppTheme.border),
+          ],
+        ],
+      ),
     );
   }
 
@@ -282,47 +280,181 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     }
 
     final selected = controller.selectedMode.value;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: options.map((mode) {
-            final isSelected = selected?.id == mode.id;
-            return GestureDetector(
-              onTap: () => controller.selectMode(mode),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isSelected ? AppTheme.primary : AppTheme.inputFill,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  mode.label,
-                  style: GoogleFonts.inter(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? Colors.white : AppTheme.textSecondary,
-                  ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 8.0;
+        final halfWidth = (constraints.maxWidth - gap) / 2;
+        final children = <Widget>[];
+
+        for (var i = 0; i < options.length; i++) {
+          final mode = options[i];
+          children.add(
+            SizedBox(
+              width: halfWidth,
+              child: _buildModeCard(
+                mode: mode,
+                isSelected: selected?.id == mode.id,
+              ),
+            ),
+          );
+        }
+
+        return Wrap(spacing: gap, runSpacing: gap, children: children);
+      },
+    );
+  }
+
+  Widget _buildRuntimeRow({
+    required RuntimeOption runtime,
+    required bool isSelected,
+    required bool enabled,
+  }) {
+    final canTap = enabled && runtime.ready;
+    final labelColor = canTap ? AppTheme.textPrimary : AppTheme.textSecondary;
+
+    return GestureDetector(
+      onTap: canTap ? () => controller.selectRuntime(runtime) : null,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: Row(
+          children: [
+            _buildRuntimeIcon(runtime.id),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                runtime.label,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: labelColor,
                 ),
               ),
-            );
-          }).toList(),
-        ),
-        if (selected?.description?.isNotEmpty == true) ...[
-          const SizedBox(height: 8),
-          Text(
-            selected!.description!,
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              color: AppTheme.textTertiary,
-              height: 1.4,
             ),
-          ),
-        ],
-      ],
+            _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
+          ],
+        ),
+      ),
     );
+  }
+
+  Widget _buildRuntimeIcon(String runtimeId) {
+    final assetPath = switch (runtimeId) {
+      'claude-code' => 'assets/anthropic-icon.png',
+      'codex' => 'assets/openai-icon.png',
+      _ => '',
+    };
+
+    if (assetPath.isEmpty) {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(5),
+        ),
+        child: const Icon(
+          LucideIcons.cpu,
+          size: 14,
+          color: AppTheme.textSecondary,
+        ),
+      );
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(5),
+      child: Image.asset(assetPath, width: 20, height: 20, fit: BoxFit.cover),
+    );
+  }
+
+  Widget _buildRuntimeRadio({required bool isSelected, required bool enabled}) {
+    if (isSelected) {
+      return Container(
+        width: 20,
+        height: 20,
+        decoration: BoxDecoration(
+          color: AppTheme.primary,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        alignment: Alignment.center,
+        child: Container(
+          width: 8,
+          height: 8,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: enabled ? AppTheme.textMuted : AppTheme.border,
+          width: 1.5,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeCard({required ModeOption mode, required bool isSelected}) {
+    final accent = _modeAccent(mode.id);
+    return GestureDetector(
+      onTap: () => controller.selectMode(mode),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                mode.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _modeAccent(String modeId) {
+    switch (modeId) {
+      case 'bypassPermissions':
+      case 'dontAsk':
+      case 'full-access':
+        return const Color(0xFFF87171);
+      case 'acceptEdits':
+        return const Color(0xFF2563EB);
+      case 'plan':
+        return const Color(0xFF7C3AED);
+      case 'default':
+      case 'auto':
+      case 'read-only':
+      default:
+        return const Color(0xFF9DA1A8);
+    }
   }
 
   void _showMachinePicker() {
@@ -734,22 +866,23 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   // Create Button: cornerRadius 8, fill #1D1D1F, height 48, center
   // Text: "Start Session", Inter 15 w600 #FFFFFF
   Widget _buildCreateButton() {
-    return Obx(
-      () => GestureDetector(
-        onTap:
-            controller.selectedMachine.value != null &&
-                !controller.isLoading.value
-            ? controller.startSession
-            : null,
+    return Obx(() {
+      final hasMachine = controller.selectedMachine.value != null;
+      final runtimes = controller.availableRuntimes;
+      final hasRuntimeSelection =
+          runtimes.isNotEmpty &&
+          ((runtimes.length == 1) ||
+              (controller.selectedRuntime.value != null));
+      final canCreate =
+          hasMachine && hasRuntimeSelection && !controller.isLoading.value;
+
+      return GestureDetector(
+        onTap: canCreate ? controller.startSession : null,
         child: Container(
           width: double.infinity,
           height: 48,
           decoration: BoxDecoration(
-            color:
-                controller.selectedMachine.value != null &&
-                    !controller.isLoading.value
-                ? AppTheme.primary
-                : AppTheme.border,
+            color: canCreate ? AppTheme.primary : AppTheme.border,
             borderRadius: BorderRadius.circular(8),
           ),
           alignment: Alignment.center,
@@ -767,13 +900,11 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   style: GoogleFonts.inter(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
-                    color: controller.selectedMachine.value != null
-                        ? Colors.white
-                        : AppTheme.textTertiary,
+                    color: canCreate ? Colors.white : AppTheme.textTertiary,
                   ),
                 ),
         ),
-      ),
-    );
+      );
+    });
   }
 }
