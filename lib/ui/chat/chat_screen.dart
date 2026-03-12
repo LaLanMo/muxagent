@@ -33,7 +33,8 @@ class ChatScreen extends GetView<ChatViewModel> {
 
           // Mode dropdown panel
           Obx(() {
-            if (!controller.hasModeOptions || !controller.showModeDropdown.value) {
+            if (!controller.hasModeOptions ||
+                !controller.showModeDropdown.value) {
               return const SizedBox.shrink();
             }
             return _buildModeDropdown();
@@ -259,12 +260,20 @@ class ChatScreen extends GetView<ChatViewModel> {
                 ),
               ),
               const SizedBox(width: 12),
-              GestureDetector(
-                onTap: () => Get.toNamed(Routes.sessionSettings),
-                child: const Icon(
-                  LucideIcons.settings,
-                  size: 20,
-                  color: AppTheme.textSecondary,
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => Get.toNamed(Routes.sessionSettings),
+                  child: const Align(
+                    alignment: Alignment.centerRight,
+                    child: Icon(
+                      LucideIcons.settings,
+                      size: 20,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
                 ),
               ),
             ],
