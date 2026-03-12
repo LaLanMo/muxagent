@@ -16,87 +16,112 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     return UiEffectListener(
       effects: controller.uiEffect,
       child: Column(
-      children: [
-        // Header – height 56, padding [0, 16], alignItems center
-        Container(
-          height: 56,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'Settings',
-            style: GoogleFonts.inter(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: AppTheme.textPrimary,
+        children: [
+          // Header – height 56, padding [0, 16], alignItems center
+          Container(
+            height: 56,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Settings',
+              style: GoogleFonts.inter(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
+              ),
             ),
           ),
-        ),
-        // Body – vertical, clip, fill_container height
-        Expanded(
-          child: ClipRect(
-            child: SingleChildScrollView(
-              child: Obx(() => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildSectionLabel('MACHINES'),
-                  ..._buildMachineRows(),
-                  _buildSectionLabel('PAIRING'),
-                  _buildSettingsRow(
-                    icon: LucideIcons.qrCode,
-                    label: 'Scan QR',
-                    trailing: Icon(LucideIcons.chevronRight,
-                        size: 16, color: AppTheme.textMuted),
-                    onTap: controller.navigateToScan,
-                    hasBorder: true,
-                  ),
-                  _buildSettingsRow(
-                    icon: LucideIcons.link,
-                    label: 'Enter URL',
-                    trailing: Icon(LucideIcons.chevronRight,
-                        size: 16, color: AppTheme.textMuted),
-                    onTap: controller.showPasteUrlDialog,
-                  ),
-                  _buildSectionLabel('VOICE'),
-                  _buildSettingsRow(
-                    icon: LucideIcons.mic,
-                    label: 'Speech to Text',
-                    trailing: Icon(LucideIcons.chevronRight,
-                        size: 16, color: AppTheme.textMuted),
-                    onTap: controller.navigateToSttSettings,
-                  ),
-                  _buildSectionLabel('ABOUT'),
-                  _buildSettingsRow(
-                    icon: LucideIcons.info,
-                    label: 'Version',
-                    trailing: Text(
-                      '1.0.0',
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        color: AppTheme.textTertiary,
+          // Body – vertical, clip, fill_container height
+          Expanded(
+            child: ClipRect(
+              child: SingleChildScrollView(
+                child: Obx(
+                  () => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildSectionLabel('MACHINES'),
+                      ..._buildMachineRows(),
+                      _buildSectionLabel('PAIRING'),
+                      _buildSettingsRow(
+                        icon: LucideIcons.qrCode,
+                        label: 'Scan QR',
+                        trailing: Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                        onTap: controller.navigateToScan,
+                        hasBorder: true,
                       ),
-                    ),
-                    hasBorder: true,
+                      _buildSettingsRow(
+                        icon: LucideIcons.link,
+                        label: 'Enter URL',
+                        trailing: Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                        onTap: controller.showPasteUrlDialog,
+                      ),
+                      _buildSectionLabel('VOICE'),
+                      _buildSettingsRow(
+                        icon: LucideIcons.mic,
+                        label: 'Speech to Text',
+                        trailing: Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                        onTap: controller.navigateToSttSettings,
+                      ),
+                      _buildSectionLabel('ABOUT'),
+                      _buildSettingsRow(
+                        icon: LucideIcons.info,
+                        label: 'Version',
+                        trailing: Text(
+                          '1.0.0',
+                          style: GoogleFonts.inter(
+                            fontSize: 15,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ),
+                        hasBorder: true,
+                      ),
+                      _buildSettingsRow(
+                        icon: LucideIcons.shield,
+                        label: 'Privacy Policy',
+                        trailing: Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                        onTap: controller.openPrivacyPolicy,
+                        hasBorder: true,
+                      ),
+                      _buildSettingsRow(
+                        icon: LucideIcons.fileText,
+                        label: 'Terms of Use',
+                        trailing: Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                        onTap: controller.openTermsOfUse,
+                      ),
+                      // _buildSettingsRow(
+                      //   icon: LucideIcons.zap,
+                      //   label: "What's New",
+                      //   trailing: Icon(LucideIcons.chevronRight,
+                      //       size: 16, color: AppTheme.textMuted),
+                      // ),
+                      const SizedBox(height: 24),
+                    ],
                   ),
-                  _buildSettingsRow(
-                    icon: LucideIcons.shield,
-                    label: 'Privacy Policy',
-                    trailing: Icon(LucideIcons.chevronRight,
-                        size: 16, color: AppTheme.textMuted),
-                    onTap: controller.openPrivacyPolicy,
-                  ),
-                  // _buildSettingsRow(
-                  //   icon: LucideIcons.zap,
-                  //   label: "What's New",
-                  //   trailing: Icon(LucideIcons.chevronRight,
-                  //       size: 16, color: AppTheme.textMuted),
-                  // ),
-                  const SizedBox(height: 24),
-                ],
-              )),
+                ),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -130,26 +155,27 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   // Machine row: padding [14, 16], gap 12, alignItems center, bottom border #E5E7EB
   Widget _buildMachineRow(PairedMachine machine) {
     final connected = controller.isMachineConnected(machine.machineId);
-    final connecting = controller.connectingMachines.contains(machine.machineId);
+    final connecting = controller.connectingMachines.contains(
+      machine.machineId,
+    );
     final serverLost = !controller.relayConnected.value;
     final hostname = machine.hostname ?? 'Unknown host';
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: (connected || connecting) ? null : () => controller.connectMachine(machine),
+      onTap: (connected || connecting)
+          ? null
+          : () => controller.connectMachine(machine),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppTheme.border),
-          ),
+          border: Border(bottom: BorderSide(color: AppTheme.border)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Monitor icon 20x20 #6B6F76
-            Icon(LucideIcons.monitor,
-                size: 20, color: AppTheme.textSecondary),
+            Icon(LucideIcons.monitor, size: 20, color: AppTheme.textSecondary),
             const SizedBox(width: 12),
             // Machine name: Inter 15 normal #1D1D1F, fill_container
             Expanded(
@@ -176,7 +202,11 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               ),
             ),
             // Status pill
-            _buildStatusPill(connected, connecting: connecting, serverLost: serverLost),
+            _buildStatusPill(
+              connected,
+              connecting: connecting,
+              serverLost: serverLost,
+            ),
           ],
         ),
       ),
@@ -184,7 +214,11 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   }
 
   // Status pill: cornerRadius 8, gap 5, padding [3, 8]
-  Widget _buildStatusPill(bool online, {bool connecting = false, bool serverLost = false}) {
+  Widget _buildStatusPill(
+    bool online, {
+    bool connecting = false,
+    bool serverLost = false,
+  }) {
     final Color pillColor;
     final Color dotColor;
     final String textStr;
@@ -263,9 +297,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: hasBorder
             ? const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppTheme.border),
-                ),
+                border: Border(bottom: BorderSide(color: AppTheme.border)),
               )
             : null,
         child: Row(
