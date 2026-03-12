@@ -9,7 +9,7 @@ import '../../config/theme.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/message.dart';
-import '../../domain/permission_mode.dart';
+import '../../domain/mode_option.dart';
 import '../../domain/plan_entry.dart';
 import '../../domain/tool_activity.dart';
 import 'chat_viewmodel.dart';
@@ -33,7 +33,7 @@ class ChatScreen extends GetView<ChatViewModel> {
 
           // Mode dropdown panel
           Obx(() {
-            if (!controller.showModeDropdown.value) {
+            if (!controller.hasModeOptions || !controller.showModeDropdown.value) {
               return const SizedBox.shrink();
             }
             return _buildModeDropdown();
@@ -69,8 +69,9 @@ class ChatScreen extends GetView<ChatViewModel> {
                   // Pre-build message widgets so we can count unlinked approvals
                   final isRunning =
                       controller.sessionStatus.value == SessionStatus.running;
-                  final messageWidgets =
-                      allMessages.asMap().entries.map((entry) {
+                  final messageWidgets = allMessages.asMap().entries.map((
+                    entry,
+                  ) {
                     final isLast = entry.key == allMessages.length - 1;
                     return _buildMessageItem(
                       entry.value,
@@ -114,12 +115,16 @@ class ChatScreen extends GetView<ChatViewModel> {
                             ? PlanApprovalCard(
                                 approval: approval,
                                 onReply: (optionId) => controller.replyApproval(
-                                    approval.id, optionId),
+                                  approval.id,
+                                  optionId,
+                                ),
                               )
                             : PermissionCard(
                                 approval: approval,
                                 onReply: (optionId) => controller.replyApproval(
-                                    approval.id, optionId),
+                                  approval.id,
+                                  optionId,
+                                ),
                               ),
                       );
                     },
@@ -169,10 +174,9 @@ class ChatScreen extends GetView<ChatViewModel> {
           }),
 
           // Input bar
-          Obx(
-            () {
-              final previews = controller.pendingPreviews.toList();
-              return ChatInputBar(
+          Obx(() {
+            final previews = controller.pendingPreviews.toList();
+            return ChatInputBar(
               controller: controller.inputController,
               sessionStatus: controller.sessionStatus.value,
               onSend: () =>
@@ -187,8 +191,7 @@ class ChatScreen extends GetView<ChatViewModel> {
               onMicStart: controller.startVoiceInput,
               onMicStop: controller.stopVoiceInput,
             );
-            },
-          ),
+          }),
         ],
       ),
     );
@@ -205,66 +208,68 @@ class ChatScreen extends GetView<ChatViewModel> {
           decoration: const BoxDecoration(
             border: Border(bottom: BorderSide(color: AppTheme.border)),
           ),
-        child: Row(
-          children: [
-            GestureDetector(
-              onTap: () => Get.back(),
-              child: const Icon(
-                LucideIcons.chevronLeft,
-                size: 22,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Obx(
-                () => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (controller.cwd.isNotEmpty)
-                      Text(
-                        controller.cwd,
-                        style: AppFonts.code(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppTheme.textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        _buildStatusPill(controller.sessionStatus.value),
-                        const SizedBox(width: 6),
-                        GestureDetector(
-                          onTap: controller.toggleModeDropdown,
-                          child: _buildModePill(
-                            controller.currentMode.value ??
-                                PermissionMode.defaultMode,
-                            showChevron: true,
-                            isOpen: controller.showModeDropdown.value,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: () => Get.back(),
+                child: const Icon(
+                  LucideIcons.chevronLeft,
+                  size: 22,
+                  color: AppTheme.textSecondary,
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            GestureDetector(
-              onTap: () => Get.toNamed(Routes.sessionSettings),
-              child: const Icon(
-                LucideIcons.settings,
-                size: 20,
-                color: AppTheme.textSecondary,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Obx(
+                  () => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (controller.cwd.isNotEmpty)
+                        Text(
+                          controller.cwd,
+                          style: AppFonts.code(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          _buildStatusPill(controller.sessionStatus.value),
+                          if (controller.hasModeOptions &&
+                              controller.currentMode.value != null) ...[
+                            const SizedBox(width: 6),
+                            GestureDetector(
+                              onTap: controller.toggleModeDropdown,
+                              child: _buildModePill(
+                                controller.currentMode.value!,
+                                showChevron: true,
+                                isOpen: controller.showModeDropdown.value,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => Get.toNamed(Routes.sessionSettings),
+                child: const Icon(
+                  LucideIcons.settings,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
       ),
     );
   }
@@ -323,11 +328,11 @@ class ChatScreen extends GetView<ChatViewModel> {
   }
 
   Widget _buildModePill(
-    PermissionMode mode, {
+    ModeOption mode, {
     bool showChevron = false,
     bool isOpen = false,
   }) {
-    final dotColor = mode.color;
+    final dotColor = _modeColor(mode);
     final bgColor = _modeBgColor(mode);
 
     return Container(
@@ -366,15 +371,12 @@ class ChatScreen extends GetView<ChatViewModel> {
     );
   }
 
-  static const _dropdownModes = [
-    PermissionMode.bypassPermissions,
-    PermissionMode.defaultMode,
-    PermissionMode.acceptEdits,
-    PermissionMode.plan,
-  ];
-
   Widget _buildModeDropdown() {
-    final current = controller.currentMode.value ?? PermissionMode.defaultMode;
+    final modes = controller.availableModes.toList();
+    if (modes.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final current = controller.currentMode.value ?? modes.first;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -390,15 +392,17 @@ class ChatScreen extends GetView<ChatViewModel> {
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Column(
-        children:
-            _dropdownModes.map((m) => _buildModeRow(m, m == current)).toList(),
+        children: modes
+            .map((m) => _buildModeRow(m, m.id == current.id))
+            .toList(),
       ),
     );
   }
 
-  Widget _buildModeRow(PermissionMode mode, bool isSelected) {
+  Widget _buildModeRow(ModeOption mode, bool isSelected) {
     final bgColor = isSelected ? _modeBgColor(mode) : Colors.transparent;
-    final textColor = isSelected ? mode.color : AppTheme.textPrimary;
+    final accentColor = _modeColor(mode);
+    final textColor = isSelected ? accentColor : AppTheme.textPrimary;
 
     return GestureDetector(
       onTap: () => controller.changeMode(mode),
@@ -414,8 +418,10 @@ class ChatScreen extends GetView<ChatViewModel> {
             Container(
               width: 6,
               height: 6,
-              decoration:
-                  BoxDecoration(color: mode.color, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: accentColor,
+                shape: BoxShape.circle,
+              ),
             ),
             const SizedBox(width: 10),
             Text(
@@ -428,7 +434,7 @@ class ChatScreen extends GetView<ChatViewModel> {
             ),
             if (isSelected) ...[
               const SizedBox(width: 6),
-              Icon(LucideIcons.check, size: 14, color: mode.color),
+              Icon(LucideIcons.check, size: 14, color: accentColor),
             ],
             const Spacer(),
             Flexible(
@@ -437,7 +443,7 @@ class ChatScreen extends GetView<ChatViewModel> {
                 style: GoogleFonts.inter(
                   fontSize: 12,
                   color: isSelected
-                      ? mode.color.withValues(alpha: 0.7)
+                      ? accentColor.withValues(alpha: 0.7)
                       : AppTheme.textTertiary,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -449,29 +455,57 @@ class ChatScreen extends GetView<ChatViewModel> {
     );
   }
 
-  static Color _modeBgColor(PermissionMode mode) {
-    switch (mode) {
-      case PermissionMode.bypassPermissions:
+  static Color _modeColor(ModeOption mode) {
+    switch (mode.id) {
+      case 'bypassPermissions':
+      case 'full-access':
+        return AppTheme.errorText;
+      case 'acceptEdits':
+        return AppTheme.primary;
+      case 'plan':
+        return const Color(0xFF7C3AED);
+      case 'dontAsk':
+        return AppTheme.warning;
+      case 'read-only':
+        return AppTheme.textSecondary;
+      default:
+        return AppTheme.textSecondary;
+    }
+  }
+
+  static Color _modeBgColor(ModeOption mode) {
+    switch (mode.id) {
+      case 'bypassPermissions':
+      case 'full-access':
         return AppTheme.modeSkipBg;
-      case PermissionMode.plan:
+      case 'plan':
         return AppTheme.modePlanBg;
-      case PermissionMode.acceptEdits:
+      case 'acceptEdits':
         return AppTheme.modeAcceptBg;
+      case 'read-only':
+        return AppTheme.inputFill;
       default:
         return AppTheme.idleBg;
     }
   }
 
-  static String _modeDescription(PermissionMode mode) {
-    switch (mode) {
-      case PermissionMode.bypassPermissions:
+  static String _modeDescription(ModeOption mode) {
+    if (mode.description?.isNotEmpty == true) {
+      return mode.description!;
+    }
+    switch (mode.id) {
+      case 'bypassPermissions':
+      case 'full-access':
         return 'No safety checks';
-      case PermissionMode.defaultMode:
+      case 'default':
+      case 'auto':
         return 'Ask for each action';
-      case PermissionMode.acceptEdits:
+      case 'acceptEdits':
         return 'Auto-approve edits';
-      case PermissionMode.plan:
+      case 'plan':
         return 'Plan before coding';
+      case 'read-only':
+        return 'Read only until approved';
       default:
         return '';
     }
@@ -495,10 +529,7 @@ class ChatScreen extends GetView<ChatViewModel> {
         widgets.add(
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
-            child: ChatMessageBubble(
-              parts: contentParts,
-              isUser: true,
-            ),
+            child: ChatMessageBubble(parts: contentParts, isUser: true),
           ),
         );
       }
@@ -550,15 +581,11 @@ class ChatScreen extends GetView<ChatViewModel> {
         case PartType.tool:
           flushReasoning();
           if (part.tool != null && !part.tool!.isChildTool) {
-            final childTools =
-                controller.chatState.childToolsOf(part.tool!.id);
+            final childTools = controller.chatState.childToolsOf(part.tool!.id);
             widgets.add(
               Padding(
                 padding: const EdgeInsets.only(bottom: 16),
-                child: ToolCallCard(
-                  tool: part.tool!,
-                  childTools: childTools,
-                ),
+                child: ToolCallCard(tool: part.tool!, childTools: childTools),
               ),
             );
             // If this tool has a pending approval, render it inline
@@ -577,12 +604,16 @@ class ChatScreen extends GetView<ChatViewModel> {
                       ? PlanApprovalCard(
                           approval: linkedApproval,
                           onReply: (optionId) => controller.replyApproval(
-                              linkedApproval.id, optionId),
+                            linkedApproval.id,
+                            optionId,
+                          ),
                         )
                       : PermissionCard(
                           approval: linkedApproval,
                           onReply: (optionId) => controller.replyApproval(
-                              linkedApproval.id, optionId),
+                            linkedApproval.id,
+                            optionId,
+                          ),
                         ),
                 ),
               );
@@ -603,7 +634,6 @@ class ChatScreen extends GetView<ChatViewModel> {
       children: widgets,
     );
   }
-
 
   Widget _buildConnectionBanner(ConnState state) {
     if (state == ConnState.connected) return const SizedBox.shrink();
@@ -785,7 +815,11 @@ class _PlanPanelState extends State<_PlanPanel> {
       textColor = AppTheme.textTertiary;
       fontWeight = FontWeight.normal;
     } else if (entry.isInProgress) {
-      icon = const Icon(LucideIcons.loader, size: 14, color: AppTheme.statusConnecting);
+      icon = const Icon(
+        LucideIcons.loader,
+        size: 14,
+        color: AppTheme.statusConnecting,
+      );
       textColor = AppTheme.textPrimary;
       fontWeight = FontWeight.w500;
     } else {

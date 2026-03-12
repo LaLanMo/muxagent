@@ -35,7 +35,7 @@ class WsSessionRepository {
   }
 
   Future<void> ensureConnected({required String relayHttpUrl}) async {
-    if (_relay.isConnected) {
+    if (_relay.relayConnected.value) {
       return;
     }
     await _relay.connect(relayHttpUrl: relayHttpUrl);

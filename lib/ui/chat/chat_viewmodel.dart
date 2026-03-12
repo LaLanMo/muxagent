@@ -16,8 +16,8 @@ import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/fs_entry.dart';
 import '../../domain/model_info.dart';
+import '../../domain/mode_option.dart';
 import '../../domain/message.dart';
-import '../../domain/permission_mode.dart';
 import '../../domain/plan_entry.dart';
 import '../../domain/usage_info.dart';
 import '../../usecases/transcribe_audio.dart';
@@ -47,7 +47,9 @@ class ChatViewModel extends GetxController {
   final approvals = <String, ApprovalRequest>{}.obs;
   final planEntries = <PlanEntry>[].obs;
   final sessionStatus = SessionStatus.idle.obs;
-  final currentMode = Rxn<PermissionMode>();
+  final currentMode = Rxn<ModeOption>();
+  final availableModes = <ModeOption>[].obs;
+  final runtimeId = ''.obs;
   final connState = ConnState.connected.obs;
   final sessionTitle = ''.obs;
   final isLoading = true.obs;
@@ -71,6 +73,9 @@ class ChatViewModel extends GetxController {
 
   /// Live usage info for this session (cost, tokens, context window).
   UsageInfo? get usageInfo => _eventRepo.liveUsageFor(sessionId);
+
+  bool get hasModeOptions =>
+      availableModes.isNotEmpty || currentMode.value != null;
 
   String _browsePath = '';
   int _atPosition = -1;
@@ -103,8 +108,10 @@ class ChatViewModel extends GetxController {
     final existing = _eventRepo.sessionById(sessionId);
     if (existing != null) {
       sessionStatus.value = existing.status;
-      currentMode.value = PermissionMode.fromId(existing.mode);
+      currentMode.value = _resolveMode(existing.mode);
+      runtimeId.value = existing.metadata?['runtime'] as String? ?? '';
     }
+    runtimeId.value = (args['runtime'] as String?) ?? runtimeId.value;
 
     _eventRepo.markViewing(sessionId);
     _eventRepo.markAsRead(sessionId);
@@ -180,6 +187,12 @@ class ChatViewModel extends GetxController {
         availableModels.value = rawValues
             .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
             .toList();
+      } else if (category == 'mode') {
+        final rawValues = raw['options'] as List? ?? [];
+        availableModes.value = rawValues
+            .map((v) => ModeOption.fromJson(v as Map<String, dynamic>))
+            .toList();
+        currentMode.value = _resolveMode(raw['currentValue'] as String?);
       }
     }
   }
@@ -195,6 +208,7 @@ class ChatViewModel extends GetxController {
       final params = <String, dynamic>{
         'sessionId': sessionId,
         'cwd': cwd,
+        if (runtimeId.value.isNotEmpty) 'runtime': runtimeId.value,
         if (mode.isNotEmpty && mode != 'default') 'permissionMode': mode,
         if (model.isNotEmpty && model != 'default') 'model': model,
       };
@@ -204,6 +218,10 @@ class ChatViewModel extends GetxController {
         params: params,
       );
       final configOptions = result['configOptions'] as List<dynamic>?;
+      final loadedRuntime = result['runtime'] as String? ?? '';
+      if (loadedRuntime.isNotEmpty) {
+        runtimeId.value = loadedRuntime;
+      }
       debugPrint(
         '[ChatVM] load session configOptions: ${configOptions?.length} items',
       );
@@ -312,7 +330,7 @@ class ChatViewModel extends GetxController {
 
       case EventType.modeChanged:
         final modeId = event.data?['currentModeId'] as String?;
-        currentMode.value = PermissionMode.fromId(modeId);
+        currentMode.value = _resolveMode(modeId);
 
       case EventType.modelChanged:
         if (event.data != null) {
@@ -345,11 +363,14 @@ class ChatViewModel extends GetxController {
     _syncScrollState();
   }
 
-  void toggleModeDropdown() => showModeDropdown.toggle();
+  void toggleModeDropdown() {
+    if (availableModes.isEmpty) return;
+    showModeDropdown.toggle();
+  }
 
-  Future<void> changeMode(PermissionMode mode) async {
+  Future<void> changeMode(ModeOption mode) async {
     showModeDropdown.value = false;
-    if (mode == currentMode.value) return;
+    if (mode.id == currentMode.value?.id) return;
 
     final previous = currentMode.value;
     currentMode.value = mode;
@@ -364,6 +385,15 @@ class ChatViewModel extends GetxController {
       debugPrint('[ChatVM] changeMode failed: $e');
       currentMode.value = previous;
     }
+  }
+
+  ModeOption? _resolveMode(String? modeID) {
+    final id = modeID ?? '';
+    if (id.isEmpty) return null;
+    for (final mode in availableModes) {
+      if (mode.id == id) return mode;
+    }
+    return ModeOption.fromId(id);
   }
 
   Future<void> changeModel(String value) async {

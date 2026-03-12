@@ -27,6 +27,7 @@ class RelayWsClient {
   final BaseWsClient _ws = BaseWsClient();
   final relayConnected = false.obs;
   Completer<void>? _registeredCompleter;
+  Future<void>? _connectFuture;
   final _events = StreamController<WsEvent>.broadcast();
   final _errors = StreamController<WsErrorMessage>.broadcast();
   final _machineStatus = StreamController<WsMachineStatus>.broadcast();
@@ -49,9 +50,37 @@ class RelayWsClient {
   bool get isConnected => _ws.isConnected;
 
   Future<void> connect({required String relayHttpUrl}) async {
+    if (relayConnected.value) {
+      return;
+    }
+    if (_connectFuture != null) {
+      return _connectFuture!;
+    }
+    final pendingRegistration = _registeredCompleter;
+    if (_ws.isConnected && pendingRegistration != null) {
+      return pendingRegistration.future;
+    }
+
+    final future = _connectInternal(relayHttpUrl);
+    _connectFuture = future;
+    try {
+      await future;
+    } finally {
+      if (identical(_connectFuture, future)) {
+        _connectFuture = null;
+      }
+    }
+  }
+
+  Future<void> _connectInternal(String relayHttpUrl) async {
+    if (_ws.isConnected && !relayConnected.value) {
+      await resetConnection(reason: 'stale relay registration');
+    }
+
     if (_ws.isConnected) {
       return;
     }
+
     final masterKey = await _crypto.loadMasterKey();
     if (masterKey == null) {
       throw Exception('Master key not configured');
@@ -80,6 +109,8 @@ class RelayWsClient {
     );
 
     _registeredCompleter = Completer<void>();
+    debugPrint('[WS] connect masterId=${masterKey.id}');
+    debugPrint('[WS] connect token=$connectToken');
     debugPrint('[WS] sending register as client to $wsUrl');
     _ws.sendJson(
       WsRegister(

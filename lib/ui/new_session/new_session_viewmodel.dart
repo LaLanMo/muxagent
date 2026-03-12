@@ -12,8 +12,9 @@ import '../../data/repositories/ws_session_repository.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import '../../domain/enums.dart';
+import '../../domain/mode_option.dart';
 import '../../domain/paired_machine.dart';
-import '../../domain/permission_mode.dart';
+import '../../domain/runtime_option.dart';
 import '../../domain/session.dart';
 import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
@@ -41,7 +42,11 @@ class NewSessionViewModel extends GetxController {
   final isLoading = false.obs;
   final activeSessionIds = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
-  final selectedMode = PermissionMode.bypassPermissions.obs;
+  final availableRuntimes = <RuntimeOption>[].obs;
+  final selectedRuntime = Rxn<RuntimeOption>();
+  final isLoadingRuntimes = false.obs;
+  final availableModes = <ModeOption>[].obs;
+  final selectedMode = Rxn<ModeOption>();
   final useWorktree = false.obs;
 
   final hasSttConfig = false.obs;
@@ -58,6 +63,7 @@ class NewSessionViewModel extends GetxController {
   final cwdFocusNode = FocusNode();
 
   StreamSubscription<Set<String>>? _sessionSub;
+  int _runtimeLoadToken = 0;
 
   @override
   void onInit() {
@@ -81,7 +87,11 @@ class NewSessionViewModel extends GetxController {
 
     cwdController.addListener(_filterCwds);
 
-    ever(selectedMachine, (_) => _loadRecentCwds());
+    ever(selectedMachine, (machine) {
+      _loadRecentCwds();
+      _loadRuntimes(machine);
+    });
+    ever(selectedRuntime, _syncModesForRuntime);
   }
 
   @override
@@ -134,7 +144,9 @@ class NewSessionViewModel extends GetxController {
     selectedMachine.value = machine;
   }
 
-  void selectMode(PermissionMode mode) => selectedMode.value = mode;
+  void selectRuntime(RuntimeOption runtime) => selectedRuntime.value = runtime;
+
+  void selectMode(ModeOption mode) => selectedMode.value = mode;
 
   void toggleWorktree() => useWorktree.value = !useWorktree.value;
 
@@ -143,6 +155,74 @@ class NewSessionViewModel extends GetxController {
     final list = await SessionDatabase.recentCwds(machineId: machineId);
     recentCwds.value = list;
     _filterCwds();
+  }
+
+  Future<void> _loadRuntimes(PairedMachine? machine) async {
+    final token = ++_runtimeLoadToken;
+    if (machine == null) {
+      availableRuntimes.clear();
+      selectedRuntime.value = null;
+      availableModes.clear();
+      selectedMode.value = null;
+      isLoadingRuntimes.value = false;
+      return;
+    }
+
+    isLoadingRuntimes.value = true;
+    try {
+      if (!_wsRepo.relayConnected.value) {
+        await _wsRepo.resetConnection(reason: 'runtime.list reconnect');
+      }
+      await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
+      if (!_wsRepo.hasSession(machine.machineId)) {
+        await _wsRepo.startSession(machine: machine);
+      }
+
+      final result = await _wsRepo.callRpc(
+        machineId: machine.machineId,
+        method: 'runtime.list',
+      );
+      if (token != _runtimeLoadToken) return;
+
+      final raw = result['runtimes'] as List<dynamic>? ?? const [];
+      final all = raw
+          .whereType<Map>()
+          .map(
+            (item) => RuntimeOption.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
+      final visible = all.where((item) => item.ready).toList();
+      final options = visible.isNotEmpty ? visible : all;
+      availableRuntimes.value = options;
+
+      final current = selectedRuntime.value;
+      if (current != null) {
+        for (final option in options) {
+          if (option.id == current.id) {
+            selectedRuntime.value = option;
+            return;
+          }
+        }
+      }
+
+      final defaultRuntime = result['defaultRuntime'] as String? ?? '';
+      for (final option in options) {
+        if (option.id == defaultRuntime) {
+          selectedRuntime.value = option;
+          return;
+        }
+      }
+      selectedRuntime.value = options.isNotEmpty ? options.first : null;
+    } catch (e) {
+      if (token != _runtimeLoadToken) return;
+      availableRuntimes.clear();
+      selectedRuntime.value = null;
+      debugPrint('[NewSessionVM] load runtimes failed: $e');
+    } finally {
+      if (token == _runtimeLoadToken) {
+        isLoadingRuntimes.value = false;
+      }
+    }
   }
 
   void _filterCwds() {
@@ -292,8 +372,9 @@ class NewSessionViewModel extends GetxController {
       }
       final createParams = <String, dynamic>{
         'cwd': cwd,
-        'permissionMode': selectedMode.value.id,
         if (useWorktree.value) 'useWorktree': true,
+        if (selectedRuntime.value != null) 'runtime': selectedRuntime.value!.id,
+        if (selectedMode.value != null) 'permissionMode': selectedMode.value!.id,
       };
 
       final createResult = await _createSessionWithRecovery(
@@ -321,8 +402,13 @@ class NewSessionViewModel extends GetxController {
         }
       }
 
+      final initialMode =
+          _extractCurrentMode(configOptions).isNotEmpty
+              ? _extractCurrentMode(configOptions)
+              : (selectedMode.value?.id ?? '');
+
       // Register session in EventRepository
-      _eventRepo.registerSession(
+      await _eventRepo.registerSession(
         AgentSession(
           id: sessionId,
           title: '',
@@ -333,7 +419,7 @@ class NewSessionViewModel extends GetxController {
             'machineId': machine.machineId,
             'runtime': runtime,
             'cwd': cwd,
-            'mode': selectedMode.value.id,
+            'mode': initialMode,
           },
         ),
       );
@@ -345,6 +431,7 @@ class NewSessionViewModel extends GetxController {
         arguments: {
           'sessionId': sessionId,
           'machineId': machine.machineId,
+          'runtime': runtime,
           'cwd': cwd,
           'sessionTitle': '',
           'isNewSession': true,
@@ -400,5 +487,41 @@ class NewSessionViewModel extends GetxController {
     await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
     await _wsRepo.startSession(machine: machine);
     selectedMachine.value = machine;
+  }
+
+  String _extractCurrentMode(List<dynamic>? configOptions) {
+    if (configOptions == null) return '';
+    for (final item in configOptions) {
+      if (item is! Map) continue;
+      final raw = Map<String, dynamic>.from(item);
+      if ((raw['category'] as String? ?? '') == 'mode') {
+        return raw['currentValue'] as String? ?? '';
+      }
+    }
+    return '';
+  }
+
+  void _syncModesForRuntime(RuntimeOption? runtime) {
+    final options = runtime?.modeOptions ?? const <ModeOption>[];
+    availableModes.value = options;
+    if (options.isEmpty) {
+      selectedMode.value = null;
+      return;
+    }
+
+    final current = selectedMode.value;
+    if (current != null) {
+      for (final option in options) {
+        if (option.id == current.id) {
+          selectedMode.value = option;
+          return;
+        }
+      }
+    }
+
+    final defaultModeId = runtime?.defaultModeId ?? '';
+    selectedMode.value =
+        options.firstWhereOrNull((option) => option.id == defaultModeId) ??
+        options.first;
   }
 }

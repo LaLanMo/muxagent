@@ -221,8 +221,13 @@ class EventRepository {
           if (event.type == EventType.runFinished &&
               existing.title.isEmpty &&
               event.machineId.isNotEmpty) {
+            final runtime = existing.metadata?['runtime'] as String? ?? '';
             unawaited(
-              backfillMissingTitles(event.machineId, sessionIds: [sessionId]),
+              backfillMissingTitles(
+                event.machineId,
+                sessionIds: [sessionId],
+                runtime: runtime,
+              ),
             );
           }
         }
@@ -453,7 +458,10 @@ class EventRepository {
       final result = await _wsRepo.callRpc(
         machineId: machineId,
         method: 'session.resolve',
-        params: {'sessionIds': targetIds},
+        params: {
+          'sessionIds': targetIds,
+          if (runtime != null && runtime.isNotEmpty) 'runtime': runtime,
+        },
       );
       final list = result['sessions'] as List<dynamic>? ?? [];
       var changed = false;
@@ -551,9 +559,9 @@ class EventRepository {
   }
 
   /// Register a session created via RPC (before any events arrive).
-  void registerSession(AgentSession session) {
+  Future<void> registerSession(AgentSession session) async {
     sessions[session.id] = session;
-    SessionDatabase.insertSession(session);
+    await SessionDatabase.insertSession(session);
     _sessionsChangedController.add(null);
   }
 

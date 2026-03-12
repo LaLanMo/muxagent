@@ -18,57 +18,57 @@ class InitialBinding extends Bindings {
   @override
   void dependencies() {
     // Services
-    Get.lazyPut<CryptoService>(() => CryptoService(), fenix: true);
-    Get.lazyPut<RelayService>(() => RelayService(), fenix: true);
-    Get.lazyPut<PairedMachineRepository>(
-      () => PairedMachineRepository(),
-      fenix: true,
+    Get.put<CryptoService>(CryptoService(), permanent: true);
+    Get.put<RelayService>(RelayService(), permanent: true);
+    Get.put<PairedMachineRepository>(
+      PairedMachineRepository(),
+      permanent: true,
     );
-    Get.lazyPut<TokenService>(
-      () => TokenService(crypto: Get.find<CryptoService>()),
-      fenix: true,
+    Get.put<TokenService>(
+      TokenService(crypto: Get.find<CryptoService>()),
+      permanent: true,
     );
-    Get.lazyPut<SessionManager>(
-      () => SessionManager(rpcTimeout: const Duration(minutes: 5)),
-      fenix: true,
+    Get.put<SessionManager>(
+      SessionManager(rpcTimeout: const Duration(minutes: 5)),
+      permanent: true,
     );
-    Get.lazyPut<RelayWsClient>(
-      () => RelayWsClient(
+    Get.put<RelayWsClient>(
+      RelayWsClient(
         crypto: Get.find<CryptoService>(),
         tokens: Get.find<TokenService>(),
         sessions: Get.find<SessionManager>(),
       ),
-      fenix: true,
+      permanent: true,
     );
-    Get.lazyPut<WsSessionRepository>(
-      () => WsSessionRepository(
+    Get.put<WsSessionRepository>(
+      WsSessionRepository(
         relay: Get.find<RelayWsClient>(),
         sessions: Get.find<SessionManager>(),
       ),
-      fenix: true,
+      permanent: true,
     );
 
     // Repositories
-    Get.lazyPut<AuthRepository>(
-      () => AuthRepository(
+    Get.put<AuthRepository>(
+      AuthRepository(
         api: Get.find<RelayService>(),
         crypto: Get.find<CryptoService>(),
         machines: Get.find<PairedMachineRepository>(),
       ),
-      fenix: true,
+      permanent: true,
     );
-    Get.lazyPut<EventRepository>(
-      () => EventRepository(wsRepo: Get.find<WsSessionRepository>()),
-      fenix: true,
+    Get.put<EventRepository>(
+      EventRepository(wsRepo: Get.find<WsSessionRepository>()),
+      permanent: true,
     );
-    Get.lazyPut<PushNotificationService>(
-      () => PushNotificationService(
+    Get.put<PushNotificationService>(
+      PushNotificationService(
         relay: Get.find<RelayService>(),
         tokens: Get.find<TokenService>(),
         crypto: Get.find<CryptoService>(),
         machines: Get.find<PairedMachineRepository>(),
       ),
-      fenix: true,
+      permanent: true,
     );
 
     // Speech-to-text

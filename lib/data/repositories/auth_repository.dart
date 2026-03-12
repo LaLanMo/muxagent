@@ -1,4 +1,5 @@
 import 'package:get/get.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../domain/master_key.dart';
 import '../../domain/paired_machine.dart';
@@ -28,8 +29,13 @@ class AuthRepository {
 
   /// Approve an auth request - sends our master public key to the relay
   Future<void> approve(AuthRequest request) async {
+    debugPrint('[AuthRepo] approve start request=${request.id}');
     final masterKey = await _crypto.getOrCreateMasterKey();
+    debugPrint('[AuthRepo] master key ready id=${masterKey.id}');
     final status = await _api.getAuthStatus(request.relayUrl, request.id);
+    debugPrint(
+      '[AuthRepo] auth status loaded machineId=${status.machineId} hostname=${status.machineHostname}',
+    );
 
     if (status.machineSignPub == null ||
         status.machineEncPub == null ||
@@ -51,6 +57,7 @@ class AuthRepository {
       approvalMessage,
       masterKey,
     );
+    debugPrint('[AuthRepo] approval signature ready');
     final signerMasterSignKeyFingerprint = await _crypto.computeKeyId(
       masterKey.signPublicKey,
     );
@@ -63,6 +70,7 @@ class AuthRepository {
       keyringUpdate['message'] as String,
       masterKey,
     );
+    debugPrint('[AuthRepo] keyring signature ready');
 
     await _api.approveAuthRequest(
       request.relayUrl,
@@ -82,6 +90,7 @@ class AuthRepository {
         'signature': keyringSignature,
       },
     );
+    debugPrint('[AuthRepo] relay approve request completed');
 
     await _machines.saveMachine(
       PairedMachine(
@@ -92,6 +101,7 @@ class AuthRepository {
         hostname: status.machineHostname,
       ),
     );
+    debugPrint('[AuthRepo] paired machine saved machineId=${status.machineId}');
 
     // Register push token with the new machine's relay.
     try {

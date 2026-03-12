@@ -5,7 +5,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
 import '../../config/theme.dart';
-import '../../domain/permission_mode.dart';
 import '../common/ui_effect_listener.dart';
 import 'new_session_viewmodel.dart';
 
@@ -20,100 +19,107 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         effects: controller.uiEffect,
         child: SafeArea(
           child: Column(
-          children: [
-            // Header: height 56, padding [0, 16], gap 12, alignItems center,
-            // bottom border #E5E7EB
-            Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: const BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: AppTheme.border),
+            children: [
+              // Header: height 56, padding [0, 16], gap 12, alignItems center,
+              // bottom border #E5E7EB
+              Container(
+                height: 56,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: AppTheme.border)),
                 ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // X icon 24x24 #6B6F76
-                  GestureDetector(
-                    onTap: () => Get.back(),
-                    child: const Icon(LucideIcons.x,
-                        size: 24, color: AppTheme.textSecondary),
-                  ),
-                  const SizedBox(width: 12),
-                  // Title: Inter 17 w600 #1D1D1F
-                  Text(
-                    'New Session',
-                    style: GoogleFonts.inter(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Body: padding [24, 16], gap 24, vertical, fill_container
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child: Column(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Expanded(
-                      child: SingleChildScrollView(
-                        padding: const EdgeInsets.only(top: 24),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Machine Section: gap 8, vertical
-                            _buildFieldLabel('Machine'),
-                            const SizedBox(height: 8),
-                            Obx(() => _buildMachineSelector()),
-                            const SizedBox(height: 24),
-
-                            // Directory Section: gap 8, vertical
-                            _buildFieldLabel('Working Directory'),
-                            const SizedBox(height: 8),
-                            _buildDirectorySection(),
-                            const SizedBox(height: 24),
-
-                            // Permission Mode Section: gap 8, vertical
-                            _buildFieldLabel('Permission Mode'),
-                            const SizedBox(height: 8),
-                            Obx(() => _buildPermissionModeGrid()),
-                            const SizedBox(height: 24),
-
-                            // Git Worktree Section
-                            _buildFieldLabel('Git Worktree'),
-                            const SizedBox(height: 8),
-                            Obx(() => _buildWorktreeToggle()),
-                            const SizedBox(height: 24),
-
-                            // Prompt Section: gap 8, vertical
-                            _buildFieldLabel('Initial Prompt'),
-                            const SizedBox(height: 8),
-                            _buildPromptInput(),
-                          ],
-                        ),
+                    // X icon 24x24 #6B6F76
+                    GestureDetector(
+                      onTap: () => Get.back(),
+                      child: const Icon(
+                        LucideIcons.x,
+                        size: 24,
+                        color: AppTheme.textSecondary,
                       ),
                     ),
-
-                    // Create Button: pinned at bottom
-                    Padding(
-                      padding: EdgeInsets.only(
-                        top: 16,
-                        bottom: MediaQuery.of(Get.context!).padding.bottom > 0
-                            ? 16
-                            : 24,
+                    const SizedBox(width: 12),
+                    // Title: Inter 17 w600 #1D1D1F
+                    Text(
+                      'New Session',
+                      style: GoogleFonts.inter(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
                       ),
-                      child: _buildCreateButton(),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
+              // Body: padding [24, 16], gap 24, vertical, fill_container
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.only(top: 24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Machine Section: gap 8, vertical
+                              _buildFieldLabel('Machine'),
+                              const SizedBox(height: 8),
+                              Obx(() => _buildMachineSelector()),
+                              const SizedBox(height: 24),
+
+                              // Runtime Section
+                              _buildFieldLabel('Runtime'),
+                              const SizedBox(height: 8),
+                              Obx(() => _buildRuntimeSelector()),
+                              const SizedBox(height: 24),
+
+                              // Mode Section
+                              _buildFieldLabel('Mode'),
+                              const SizedBox(height: 8),
+                              Obx(() => _buildModeSelector()),
+                              const SizedBox(height: 24),
+
+                              // Directory Section: gap 8, vertical
+                              _buildFieldLabel('Working Directory'),
+                              const SizedBox(height: 8),
+                              _buildDirectorySection(),
+                              const SizedBox(height: 24),
+
+                              // Git Worktree Section
+                              _buildFieldLabel('Git Worktree'),
+                              const SizedBox(height: 8),
+                              Obx(() => _buildWorktreeToggle()),
+                              const SizedBox(height: 24),
+
+                              // Prompt Section: gap 8, vertical
+                              _buildFieldLabel('Initial Prompt'),
+                              const SizedBox(height: 8),
+                              _buildPromptInput(),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Create Button: pinned at bottom
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: 16,
+                          bottom: MediaQuery.of(Get.context!).padding.bottom > 0
+                              ? 16
+                              : 24,
+                        ),
+                        child: _buildCreateButton(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -136,8 +142,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     final selected = controller.selectedMachine.value;
     final hostname = selected != null
         ? (selected.hostname?.isNotEmpty == true
-            ? selected.hostname!
-            : 'Unknown host')
+              ? selected.hostname!
+              : 'Unknown host')
         : 'Select a machine';
 
     return GestureDetector(
@@ -152,8 +158,11 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Monitor icon 16x16 #808690
-            const Icon(LucideIcons.monitor,
-                size: 16, color: AppTheme.textTertiary),
+            const Icon(
+              LucideIcons.monitor,
+              size: 16,
+              color: AppTheme.textTertiary,
+            ),
             const SizedBox(width: 8),
             // Machine name: Inter 14 normal #1D1D1F
             Expanded(
@@ -169,76 +178,150 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               ),
             ),
             // Chevron-right 16x16 #C8CBD0
-            const Icon(LucideIcons.chevronRight,
-                size: 16, color: AppTheme.textMuted),
+            const Icon(
+              LucideIcons.chevronRight,
+              size: 16,
+              color: AppTheme.textMuted,
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Permission mode 2x2 grid
-  Widget _buildPermissionModeGrid() {
-    const modes = [
-      PermissionMode.bypassPermissions,
-      PermissionMode.defaultMode,
-      PermissionMode.acceptEdits,
-      PermissionMode.plan,
-    ];
-
-    return Column(
-      children: [
-        for (var row = 0; row < 2; row++)
-          Padding(
-            padding: EdgeInsets.only(top: row > 0 ? 8 : 0),
-            child: Row(
-              children: [
-                for (var col = 0; col < 2; col++) ...[
-                  if (col > 0) const SizedBox(width: 8),
-                  Expanded(
-                    child: _buildModeChip(modes[row * 2 + col]),
-                  ),
-                ],
-              ],
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildModeChip(PermissionMode mode) {
-    final isSelected = controller.selectedMode.value == mode;
-    return GestureDetector(
-      onTap: () => controller.selectMode(mode),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  Widget _buildRuntimeSelector() {
+    if (controller.isLoadingRuntimes.value) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(10),
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: mode.color,
-                shape: BoxShape.circle,
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppTheme.primary,
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Text(
-              mode.label,
+              'Loading runtimes...',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final options = controller.availableRuntimes;
+    if (options.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          'Use daemon default runtime',
+          style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+        ),
+      );
+    }
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: options.map((runtime) {
+        final isSelected = controller.selectedRuntime.value?.id == runtime.id;
+        return GestureDetector(
+          onTap: () => controller.selectRuntime(runtime),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primary : AppTheme.inputFill,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              runtime.label,
               style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 color: isSelected ? Colors.white : AppTheme.textSecondary,
               ),
             ),
-          ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildModeSelector() {
+    final options = controller.availableModes;
+    if (options.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(8),
         ),
-      ),
+        child: Text(
+          'Use runtime default mode',
+          style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+        ),
+      );
+    }
+
+    final selected = controller.selectedMode.value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: options.map((mode) {
+            final isSelected = selected?.id == mode.id;
+            return GestureDetector(
+              onTap: () => controller.selectMode(mode),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isSelected ? AppTheme.primary : AppTheme.inputFill,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  mode.label,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        if (selected?.description?.isNotEmpty == true) ...[
+          const SizedBox(height: 8),
+          Text(
+            selected!.description!,
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: AppTheme.textTertiary,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -268,25 +351,23 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             ),
             const Divider(height: 1),
             ...controller.machines.map((machine) {
-              final isOnline =
-                  controller.isMachineConnected(machine.machineId);
+              final isOnline = controller.isMachineConnected(machine.machineId);
               final name = machine.hostname ?? 'Unknown host';
               return ListTile(
                 enabled: isOnline,
-                leading: const Icon(LucideIcons.monitor,
-                    size: 20, color: AppTheme.textSecondary),
+                leading: const Icon(
+                  LucideIcons.monitor,
+                  size: 20,
+                  color: AppTheme.textSecondary,
+                ),
                 title: Text(
                   name,
                   style: GoogleFonts.inter(
                     fontSize: 15,
-                    color: isOnline
-                        ? AppTheme.textPrimary
-                        : AppTheme.textMuted,
+                    color: isOnline ? AppTheme.textPrimary : AppTheme.textMuted,
                   ),
                 ),
-                trailing: isOnline
-                    ? _statusDot(true)
-                    : _statusDot(false),
+                trailing: isOnline ? _statusDot(true) : _statusDot(false),
                 onTap: isOnline
                     ? () {
                         controller.selectMachine(machine);
@@ -306,9 +387,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-        color: online
-            ? AppTheme.successText
-            : AppTheme.textTertiary,
+        color: online ? AppTheme.successText : AppTheme.textTertiary,
         shape: BoxShape.circle,
       ),
     );
@@ -327,9 +406,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         decoration: BoxDecoration(
           color: AppTheme.inputFill,
           borderRadius: BorderRadius.circular(8),
-          border: isOpen
-              ? Border.all(color: AppTheme.primary, width: 2)
-              : null,
+          border: isOpen ? Border.all(color: AppTheme.primary, width: 2) : null,
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(
@@ -337,13 +414,15 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           children: [
             // Input row — always at index 0 to preserve focus
             Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Icon(LucideIcons.folder,
-                      size: 16, color: AppTheme.textTertiary),
+                  const Icon(
+                    LucideIcons.folder,
+                    size: 16,
+                    color: AppTheme.textTertiary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: TextField(
@@ -378,8 +457,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             ),
             // Dropdown — conditionally shown below the input
             if (isOpen) ...[
-              const Divider(
-                  height: 1, thickness: 1, color: AppTheme.border),
+              const Divider(height: 1, thickness: 1, color: AppTheme.border),
               // Nested Obx: only this rebuilds when filteredCwds changes,
               // keeping the TextField above stable.
               Obx(() {
@@ -394,8 +472,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return Padding(
-                          padding:
-                              const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
                           child: Text(
                             'RECENT',
                             style: GoogleFonts.inter(
@@ -416,17 +493,20 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                               ? AppTheme.hoverBg
                               : Colors.transparent,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           child: Row(
                             children: [
-                              const Icon(LucideIcons.folder,
-                                  size: 14,
-                                  color: Color(0xFF9CA0A8)),
+                              const Icon(
+                                LucideIcons.folder,
+                                size: 14,
+                                color: Color(0xFF9CA0A8),
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       cwd.path,
@@ -654,42 +734,46 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   // Create Button: cornerRadius 8, fill #1D1D1F, height 48, center
   // Text: "Start Session", Inter 15 w600 #FFFFFF
   Widget _buildCreateButton() {
-    return Obx(() => GestureDetector(
-      onTap: controller.selectedMachine.value != null &&
-              !controller.isLoading.value
-          ? controller.startSession
-          : null,
-      child: Container(
-        width: double.infinity,
-        height: 48,
-        decoration: BoxDecoration(
-          color: controller.selectedMachine.value != null &&
-                  !controller.isLoading.value
-              ? AppTheme.primary
-              : AppTheme.border,
-          borderRadius: BorderRadius.circular(8),
+    return Obx(
+      () => GestureDetector(
+        onTap:
+            controller.selectedMachine.value != null &&
+                !controller.isLoading.value
+            ? controller.startSession
+            : null,
+        child: Container(
+          width: double.infinity,
+          height: 48,
+          decoration: BoxDecoration(
+            color:
+                controller.selectedMachine.value != null &&
+                    !controller.isLoading.value
+                ? AppTheme.primary
+                : AppTheme.border,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          alignment: Alignment.center,
+          child: controller.isLoading.value
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Text(
+                  'Start Session',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: controller.selectedMachine.value != null
+                        ? Colors.white
+                        : AppTheme.textTertiary,
+                  ),
+                ),
         ),
-        alignment: Alignment.center,
-        child: controller.isLoading.value
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Text(
-                'Start Session',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: controller.selectedMachine.value != null
-                      ? Colors.white
-                      : AppTheme.textTertiary,
-                ),
-              ),
       ),
-    ));
+    );
   }
 }
