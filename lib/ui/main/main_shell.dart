@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../../config/theme.dart';
-
 import '../common/pill_tab_bar.dart';
 import 'active_tab.dart';
 import 'history_tab.dart';

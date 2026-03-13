@@ -7,6 +7,7 @@ import '../../domain/enums.dart';
 import '../../config/theme.dart';
 import '../../domain/session.dart';
 import '../../utils/app_toast.dart';
+import '../common/relay_status_pill.dart';
 import 'active_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
 
@@ -35,6 +36,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                   color: AppTheme.textPrimary,
                 ),
               ),
+              const RelayStatusPill(),
             ],
           ),
         ),

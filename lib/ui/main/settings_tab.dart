@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
 import '../../domain/paired_machine.dart';
+import '../common/relay_status_pill.dart';
 import '../common/ui_effect_listener.dart';
 import 'settings_tab_viewmodel.dart';
 
@@ -21,14 +22,20 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Settings',
-              style: GoogleFonts.inter(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: AppTheme.textPrimary,
-              ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text(
+                  'Settings',
+                  style: GoogleFonts.inter(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                const RelayStatusPill(),
+              ],
             ),
           ),
           // Body – vertical, clip, fill_container height

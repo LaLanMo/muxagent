@@ -7,6 +7,7 @@ import '../../data/repositories/event_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/session.dart';
 import '../../utils/app_toast.dart';
+import '../common/relay_status_pill.dart';
 import 'history_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
 
@@ -23,14 +24,20 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'History',
-            style: GoogleFonts.inter(
-              fontSize: 28,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'History',
+                style: GoogleFonts.inter(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              const RelayStatusPill(),
+            ],
           ),
         ),
         // Filter chips

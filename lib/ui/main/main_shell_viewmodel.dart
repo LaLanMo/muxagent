@@ -8,6 +8,7 @@ import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/models/ws_models.dart';
 import '../../data/services/ws/ws_types.dart';
+import '../../domain/enums.dart';
 import '../../domain/paired_machine.dart';
 import '../../routing/routes.dart';
 
@@ -25,6 +26,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
         _eventRepo = eventRepo;
 
   RxBool get relayConnected => _wsRepo.relayConnected;
+  Rx<ConnState> get relayConnectionState => _wsRepo.connectionState;
 
   final tabIndex = 0.obs;
   final machines = <PairedMachine>[].obs;
