@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/event_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
+import '../data/repositories/runtime_preference_repository.dart';
 import '../data/repositories/session_manager.dart';
 import '../data/repositories/stt_repository.dart';
 import '../data/repositories/ws_session_repository.dart';
@@ -22,6 +23,10 @@ class InitialBinding extends Bindings {
     Get.put<RelayService>(RelayService(), permanent: true);
     Get.put<PairedMachineRepository>(
       PairedMachineRepository(),
+      permanent: true,
+    );
+    Get.put<RuntimePreferenceRepository>(
+      RuntimePreferenceRepository(),
       permanent: true,
     );
     Get.put<TokenService>(
