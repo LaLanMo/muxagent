@@ -8,6 +8,7 @@ import 'package:record/record.dart';
 import '../../data/local/session_database.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
+import '../../data/repositories/runtime_preference_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
@@ -25,21 +26,25 @@ class NewSessionViewModel extends GetxController {
   final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
+  final RuntimePreferenceRepository _runtimePrefs;
   final TranscribeAudioUseCase _transcribe;
 
   NewSessionViewModel({
     required PairedMachineRepository machineRepo,
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
+    required RuntimePreferenceRepository runtimePrefs,
     required TranscribeAudioUseCase transcribe,
   }) : _machineRepo = machineRepo,
        _wsRepo = wsRepo,
        _eventRepo = eventRepo,
+       _runtimePrefs = runtimePrefs,
        _transcribe = transcribe;
 
   static RuntimeOption? resolveSelectedRuntime({
     required List<RuntimeOption> options,
     RuntimeOption? current,
+    String? rememberedRuntimeId,
   }) {
     if (current != null) {
       for (final option in options) {
@@ -49,19 +54,55 @@ class NewSessionViewModel extends GetxController {
       }
     }
 
-    if (options.length == 1) {
-      return options.first;
+    if (rememberedRuntimeId != null && rememberedRuntimeId.isNotEmpty) {
+      for (final option in options) {
+        if (option.id == rememberedRuntimeId) {
+          return option;
+        }
+      }
     }
 
-    final claudeCode = options.firstWhereOrNull(
-      (option) => option.id == 'claude-code',
+    if (options.isEmpty) return null;
+    return options.first;
+  }
+
+  static ModeOption? resolveSelectedMode({
+    required String runtimeId,
+    required List<ModeOption> options,
+    ModeOption? current,
+    String? currentRuntimeId,
+    String? rememberedModeId,
+    String? runtimeDefaultModeId,
+  }) {
+    if (options.isEmpty) return null;
+
+    if (current != null && currentRuntimeId == runtimeId) {
+      for (final option in options) {
+        if (option.id == current.id) {
+          return option;
+        }
+      }
+    }
+
+    if (rememberedModeId != null && rememberedModeId.isNotEmpty) {
+      for (final option in options) {
+        if (option.id == rememberedModeId) {
+          return option;
+        }
+      }
+    }
+
+    final defaultModeId = _defaultModeIdForRuntimeId(
+      runtimeId: runtimeId,
+      runtimeDefaultModeId: runtimeDefaultModeId,
     );
-    final hasCodex = options.any((option) => option.id == 'codex');
-    if (claudeCode != null && hasCodex) {
-      return claudeCode;
+    for (final option in options) {
+      if (option.id == defaultModeId) {
+        return option;
+      }
     }
 
-    return null;
+    return options.first;
   }
 
   final machines = <PairedMachine>[].obs;
@@ -91,6 +132,8 @@ class NewSessionViewModel extends GetxController {
 
   StreamSubscription<Set<String>>? _sessionSub;
   int _runtimeLoadToken = 0;
+  final _rememberedModeIds = <String, String>{};
+  String _selectedModeRuntimeId = '';
 
   @override
   void onInit() {
@@ -171,9 +214,17 @@ class NewSessionViewModel extends GetxController {
     selectedMachine.value = machine;
   }
 
-  void selectRuntime(RuntimeOption runtime) => selectedRuntime.value = runtime;
+  void selectRuntime(RuntimeOption runtime) {
+    selectedRuntime.value = runtime;
+    unawaited(_rememberRuntimeSelection(runtime.id));
+  }
 
-  void selectMode(ModeOption mode) => selectedMode.value = mode;
+  void selectMode(ModeOption mode) {
+    selectedMode.value = mode;
+    final runtimeId = selectedRuntime.value?.id ?? '';
+    _selectedModeRuntimeId = runtimeId;
+    unawaited(_rememberModeSelection(runtimeId: runtimeId, modeId: mode.id));
+  }
 
   void toggleWorktree() => useWorktree.value = !useWorktree.value;
 
@@ -191,6 +242,8 @@ class NewSessionViewModel extends GetxController {
       selectedRuntime.value = null;
       availableModes.clear();
       selectedMode.value = null;
+      _rememberedModeIds.clear();
+      _selectedModeRuntimeId = '';
       isLoadingRuntimes.value = false;
       return;
     }
@@ -220,15 +273,26 @@ class NewSessionViewModel extends GetxController {
           .toList();
       final visible = all.where((item) => item.ready).toList();
       final options = visible.isNotEmpty ? visible : all;
+      final rememberedRuntimeId = await _runtimePrefs
+          .getLastSelectedRuntimeId();
+      final rememberedModeIds = await _runtimePrefs.getLastSelectedModeIds(
+        options.map((option) => option.id),
+      );
+      if (token != _runtimeLoadToken) return;
+      _rememberedModeIds
+        ..clear()
+        ..addAll(rememberedModeIds);
       availableRuntimes.value = options;
       selectedRuntime.value = resolveSelectedRuntime(
         options: options,
         current: selectedRuntime.value,
+        rememberedRuntimeId: rememberedRuntimeId,
       );
     } catch (e) {
       if (token != _runtimeLoadToken) return;
       availableRuntimes.clear();
       selectedRuntime.value = null;
+      _rememberedModeIds.clear();
       debugPrint('[NewSessionVM] load runtimes failed: $e');
     } finally {
       if (token == _runtimeLoadToken) {
@@ -382,7 +446,7 @@ class NewSessionViewModel extends GetxController {
           'Working directory must be an absolute path or start with ~',
         );
       }
-      // Require explicit runtime selection (unless only one and auto-selected)
+      // Runtime is auto-selected during load when at least one option exists.
       final selectedRuntimeId = selectedRuntime.value?.id ?? '';
       if (selectedRuntimeId.isEmpty) {
         throw Exception('Please select a runtime');
@@ -407,6 +471,9 @@ class NewSessionViewModel extends GetxController {
         throw Exception('Failed to create session: no sessionId returned');
       }
       final runtime = createResult['runtime'] as String? ?? '';
+      await _rememberRuntimeSelection(
+        runtime.isNotEmpty ? runtime : selectedRuntimeId,
+      );
       final configOptions = createResult['configOptions'] as List<dynamic>?;
       debugPrint(
         '[NewSessionVM] createResult keys: ${createResult.keys.toList()}',
@@ -425,6 +492,10 @@ class NewSessionViewModel extends GetxController {
       final initialMode = _extractCurrentMode(configOptions).isNotEmpty
           ? _extractCurrentMode(configOptions)
           : (selectedMode.value?.id ?? '');
+      await _rememberModeSelection(
+        runtimeId: runtime.isNotEmpty ? runtime : selectedRuntimeId,
+        modeId: initialMode,
+      );
 
       // Register session in EventRepository
       await _eventRepo.registerSession(
@@ -520,28 +591,51 @@ class NewSessionViewModel extends GetxController {
     return '';
   }
 
+  Future<void> _rememberRuntimeSelection(String runtimeId) async {
+    if (runtimeId.isEmpty) return;
+    try {
+      await _runtimePrefs.setLastSelectedRuntimeId(runtimeId);
+    } catch (e) {
+      debugPrint('[NewSessionVM] failed to store runtime preference: $e');
+    }
+  }
+
+  Future<void> _rememberModeSelection({
+    required String runtimeId,
+    required String modeId,
+  }) async {
+    if (runtimeId.isEmpty || modeId.isEmpty) return;
+    _rememberedModeIds[runtimeId] = modeId;
+    try {
+      await _runtimePrefs.setLastSelectedModeId(
+        runtimeId: runtimeId,
+        modeId: modeId,
+      );
+    } catch (e) {
+      debugPrint('[NewSessionVM] failed to store mode preference: $e');
+    }
+  }
+
   void _syncModesForRuntime(RuntimeOption? runtime) {
     final options = _orderedModesForRuntime(runtime);
     availableModes.value = options;
     if (options.isEmpty) {
       selectedMode.value = null;
+      _selectedModeRuntimeId = runtime?.id ?? '';
       return;
     }
 
-    final current = selectedMode.value;
-    if (current != null) {
-      for (final option in options) {
-        if (option.id == current.id) {
-          selectedMode.value = option;
-          return;
-        }
-      }
-    }
+    final runtimeId = runtime?.id ?? '';
 
-    final defaultModeId = _defaultModeIdForRuntime(runtime);
-    selectedMode.value =
-        options.firstWhereOrNull((option) => option.id == defaultModeId) ??
-        options.first;
+    selectedMode.value = resolveSelectedMode(
+      runtimeId: runtimeId,
+      options: options,
+      current: selectedMode.value,
+      currentRuntimeId: _selectedModeRuntimeId,
+      rememberedModeId: _rememberedModeIds[runtimeId],
+      runtimeDefaultModeId: runtime?.defaultModeId,
+    );
+    _selectedModeRuntimeId = runtimeId;
   }
 
   List<ModeOption> _orderedModesForRuntime(RuntimeOption? runtime) {
@@ -551,10 +645,17 @@ class NewSessionViewModel extends GetxController {
     );
   }
 
-  String _defaultModeIdForRuntime(RuntimeOption? runtime) {
-    if ((runtime?.id ?? '') == 'codex') {
-      return 'full-access';
+  static String _defaultModeIdForRuntimeId({
+    required String runtimeId,
+    String? runtimeDefaultModeId,
+  }) {
+    switch (runtimeId) {
+      case 'claude-code':
+        return 'bypassPermissions';
+      case 'codex':
+        return 'full-access';
+      default:
+        return runtimeDefaultModeId ?? '';
     }
-    return runtime?.defaultModeId ?? '';
   }
 }
