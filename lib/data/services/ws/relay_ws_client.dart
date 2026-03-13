@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 
+import '../../../domain/enums.dart';
 import '../../../domain/master_key.dart';
 import '../../../domain/paired_machine.dart';
 
@@ -26,6 +27,7 @@ class RelayWsClient {
 
   final BaseWsClient _ws = BaseWsClient();
   final relayConnected = false.obs;
+  final connectionState = ConnState.disconnected.obs;
   Completer<void>? _registeredCompleter;
   Future<void>? _connectFuture;
   final _events = StreamController<WsEvent>.broadcast();
@@ -51,15 +53,19 @@ class RelayWsClient {
 
   Future<void> connect({required String relayHttpUrl}) async {
     if (relayConnected.value) {
+      connectionState.value = ConnState.connected;
       return;
     }
     if (_connectFuture != null) {
+      connectionState.value = ConnState.reconnecting;
       return _connectFuture!;
     }
     final pendingRegistration = _registeredCompleter;
     if (_ws.isConnected && pendingRegistration != null) {
+      connectionState.value = ConnState.reconnecting;
       return pendingRegistration.future;
     }
+    connectionState.value = ConnState.reconnecting;
 
     final future = _connectInternal(relayHttpUrl);
     _connectFuture = future;
@@ -93,11 +99,13 @@ class RelayWsClient {
       onMessage: _handleMessage,
       onError: (err) {
         relayConnected.value = false;
+        connectionState.value = ConnState.disconnected;
         _registeredCompleter?.completeError(err);
         _sessions.endAll(err);
       },
       onDone: () {
         relayConnected.value = false;
+        connectionState.value = ConnState.disconnected;
         _registeredCompleter?.completeError('socket closed');
         _sessions.endAll('socket closed');
       },
@@ -225,6 +233,7 @@ class RelayWsClient {
   Future<void> resetConnection({Object? reason}) async {
     final error = reason ?? 'connection reset';
     relayConnected.value = false;
+    connectionState.value = ConnState.disconnected;
     final completer = _registeredCompleter;
     if (completer != null && !completer.isCompleted) {
       completer.completeError(error);
@@ -257,6 +266,7 @@ class RelayWsClient {
       switch (type) {
         case WsMessageType.registered:
           relayConnected.value = true;
+          connectionState.value = ConnState.connected;
           _registeredCompleter?.complete();
           _registeredCompleter = null;
           return;

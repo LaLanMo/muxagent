@@ -90,6 +90,7 @@ class ChatViewModel extends GetxController {
   int _scrollRequestId = 0;
 
   StreamSubscription<AgentEvent>? _eventSub;
+  Worker? _connStateWorker;
 
   @override
   void onInit() {
@@ -115,10 +116,12 @@ class ChatViewModel extends GetxController {
 
     _eventRepo.markViewing(sessionId);
     _eventRepo.markAsRead(sessionId);
+    connState.value = _wsRepo.connectionState.value;
 
     scrollController.addListener(_onScrollChanged);
     inputController.addListener(_detectMention);
     _subscribeEvents();
+    _subscribeConnectionState();
     _checkSttConfig();
 
     // Restore pending approvals for this session
@@ -167,8 +170,17 @@ class ChatViewModel extends GetxController {
 
   void _subscribeEvents() {
     _eventSub = _eventRepo.events
-        .where((e) => e.sessionId == sessionId)
+        .where(
+          (e) =>
+              e.sessionId == sessionId || e.type == EventType.connectionState,
+        )
         .listen(_handleEvent);
+  }
+
+  void _subscribeConnectionState() {
+    _connStateWorker = ever<ConnState>(_wsRepo.connectionState, (state) {
+      connState.value = state;
+    });
   }
 
   void _applyConfigOptions(List<dynamic> configOptions) {
@@ -968,6 +980,7 @@ class ChatViewModel extends GetxController {
   void onClose() {
     _eventRepo.markNotViewing(sessionId);
     _eventSub?.cancel();
+    _connStateWorker?.dispose();
     _searchDebounce?.cancel();
     scrollController.dispose();
     inputController.removeListener(_detectMention);
