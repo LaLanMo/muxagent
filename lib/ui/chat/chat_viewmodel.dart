@@ -570,6 +570,8 @@ class ChatViewModel extends GetxController {
     if (remaining <= 0) return;
     final images = await ImagePicker().pickMultiImage(
       limit: remaining,
+      maxWidth: 2000,
+      maxHeight: 2000,
       requestFullMetadata: false,
     );
     for (final img in images) {
