@@ -11,6 +11,8 @@ import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../data/services/ws/models/acp_session_models.dart';
+import '../../data/services/ws/session_config_mapper.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
@@ -19,6 +21,7 @@ import '../../domain/model_info.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/message.dart';
 import '../../domain/plan_entry.dart';
+import '../../domain/session_config_snapshot.dart';
 import '../../domain/usage_info.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
@@ -137,21 +140,9 @@ class ChatViewModel extends GetxController {
 
     if (isNewSession) {
       // New sessions are already created via session.create — skip load.
-      // Apply configOptions from the create response (synchronous, no event timing issues).
-      final configOptions = args['configOptions'] as List<dynamic>?;
-      debugPrint(
-        '[ChatVM] new session configOptions: ${configOptions?.length} items',
-      );
-      if (configOptions != null) {
-        for (final item in configOptions) {
-          debugPrint(
-            '[ChatVM]   item type=${item.runtimeType} keys=${item is Map ? item.keys.toList() : "N/A"}',
-          );
-          if (item is Map) debugPrint('[ChatVM]   item=$item');
-        }
-      }
-      if (configOptions != null) {
-        _applyConfigOptions(configOptions);
+      final configSnapshot = args['configSnapshot'] as SessionConfigSnapshot?;
+      if (configSnapshot != null) {
+        _applyConfigSnapshot(configSnapshot);
       }
       isLoading.value = false;
       _scheduleScrollStateSync();
@@ -183,31 +174,12 @@ class ChatViewModel extends GetxController {
     });
   }
 
-  void _applyConfigOptions(List<dynamic> configOptions) {
-    debugPrint(
-      '[ChatVM] _applyConfigOptions called with ${configOptions.length} items',
-    );
-    for (final raw in configOptions) {
-      debugPrint('[ChatVM]   raw item type: ${raw.runtimeType}, value: $raw');
-      if (raw is! Map<String, dynamic>) continue;
-      final category = raw['category'] as String? ?? '';
-      debugPrint('[ChatVM]   category: $category');
-      if (category == 'model') {
-        modelConfigId.value = raw['id'] as String? ?? '';
-        currentModel.value = raw['currentValue'] as String?;
-        final rawValues = raw['options'] as List? ?? [];
-        availableModels.value = rawValues
-            .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
-            .toList();
-      } else if (category == 'mode') {
-        final rawValues = raw['options'] as List? ?? [];
-        availableModes.value = ModeOption.orderedForRuntime(
-          runtimeId.value,
-          rawValues.map((v) => ModeOption.fromJson(v as Map<String, dynamic>)),
-        );
-        currentMode.value = _resolveMode(raw['currentValue'] as String?);
-      }
-    }
+  void _applyConfigSnapshot(SessionConfigSnapshot snapshot) {
+    modelConfigId.value = snapshot.modelConfigId ?? '';
+    currentModel.value = snapshot.currentModel;
+    availableModels.value = snapshot.availableModels;
+    availableModes.value = snapshot.availableModes;
+    currentMode.value = snapshot.currentMode;
   }
 
   Future<void> _loadSession() async {
@@ -234,22 +206,17 @@ class ChatViewModel extends GetxController {
         method: 'session.load',
         params: params,
       );
-      final configOptions = result['configOptions'] as List<dynamic>?;
-      final loadedRuntime = result['runtime'] as String? ?? '';
+      final response = AppSessionLoadResponseDto.fromJson(result);
+      final loadedRuntime = response.app.runtime;
       if (loadedRuntime.isNotEmpty) {
         runtimeId.value = loadedRuntime;
       }
-      debugPrint(
-        '[ChatVM] load session configOptions: ${configOptions?.length} items',
+      final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
+        runtimeId: runtimeId.value,
+        configOptions: response.acp.configOptions ?? const [],
+        modes: response.acp.modes,
       );
-      if (configOptions != null) {
-        for (final item in configOptions) {
-          debugPrint(
-            '[ChatVM] load item type=${item.runtimeType} keys=${item is Map ? item.keys.toList() : "N/A"}',
-          );
-        }
-        _applyConfigOptions(configOptions);
-      }
+      _applyConfigSnapshot(snapshot);
     } catch (e) {
       debugPrint('Failed to load session: $e');
       AppToast.show('$e');
@@ -347,16 +314,21 @@ class ChatViewModel extends GetxController {
         }
 
       case EventType.modeChanged:
-        final modeId = event.data?['currentModeId'] as String?;
-        currentMode.value = _resolveMode(modeId);
+        currentMode.value = _resolveMode(event.modeChange?.currentModeId);
 
       case EventType.modelChanged:
-        if (event.data != null) {
-          currentModel.value = event.data!['currentValue'] as String?;
-          modelConfigId.value = event.data!['configId'] as String? ?? '';
-          final rawValues = event.data!['values'] as List? ?? [];
-          availableModels.value = rawValues
-              .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
+        if (event.configChange != null) {
+          final configChange = event.configChange!;
+          currentModel.value = configChange.currentValue;
+          modelConfigId.value = configChange.configId;
+          availableModels.value = configChange.values
+              .map(
+                (value) => ModelInfo(
+                  value: value.value,
+                  name: value.name,
+                  description: value.description,
+                ),
+              )
               .toList();
         }
 

@@ -11,6 +11,7 @@ import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
 import '../services/ws/approval_event_mapper.dart';
+import '../services/ws/session_config_event_mapper.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
@@ -74,6 +75,8 @@ class EventRepository {
     final event = switch (eventType) {
       EventType.approvalRequested || EventType.approvalReplied =>
         ApprovalEventMapper.parseEvent(payload, machineId),
+      EventType.modeChanged || EventType.modelChanged =>
+        SessionConfigEventMapper.parseEvent(payload, machineId),
       _ => AgentEvent.fromJson(payload, machineId),
     };
     if (event.type == null) return;
@@ -262,8 +265,8 @@ class EventRepository {
         }
       case EventType.modeChanged:
         final existing = sessions[sessionId];
-        if (existing != null && event.data != null) {
-          final modeId = event.data!['currentModeId'] as String?;
+        if (existing != null) {
+          final modeId = event.modeChange?.currentModeId;
           if (modeId != null) {
             final metadata = <String, dynamic>{...?existing.metadata};
             metadata['mode'] = modeId;
@@ -275,8 +278,8 @@ class EventRepository {
         }
       case EventType.modelChanged:
         final existing = sessions[sessionId];
-        if (existing != null && event.data != null) {
-          final currentValue = event.data!['currentValue'] as String?;
+        if (existing != null) {
+          final currentValue = event.configChange?.currentValue;
           if (currentValue != null) {
             existing.model = currentValue;
             existing.updatedAt = event.at;
@@ -320,6 +323,8 @@ class EventRepository {
           final event = switch (eventType) {
             EventType.approvalRequested || EventType.approvalReplied =>
               ApprovalEventMapper.parseEvent(eventJson, machineId),
+            EventType.modeChanged || EventType.modelChanged =>
+              SessionConfigEventMapper.parseEvent(eventJson, machineId),
             _ => AgentEvent.fromJson(eventJson, machineId),
           };
           if (event.type == null) continue;

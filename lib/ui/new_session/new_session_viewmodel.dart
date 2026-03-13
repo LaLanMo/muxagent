@@ -10,6 +10,8 @@ import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/runtime_preference_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../data/services/ws/models/acp_session_models.dart';
+import '../../data/services/ws/session_config_mapper.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import '../../domain/enums.dart';
@@ -264,12 +266,9 @@ class NewSessionViewModel extends GetxController {
       );
       if (token != _runtimeLoadToken) return;
 
-      final raw = result['runtimes'] as List<dynamic>? ?? const [];
-      final all = raw
-          .whereType<Map>()
-          .map(
-            (item) => RuntimeOption.fromJson(Map<String, dynamic>.from(item)),
-          )
+      final response = AppRuntimeListResponseDto.fromJson(result);
+      final all = response.runtimes
+          .map(SessionConfigMapper.runtimeOptionFromDto)
           .toList();
       final visible = all.where((item) => item.ready).toList();
       final options = visible.isNotEmpty ? visible : all;
@@ -466,32 +465,23 @@ class NewSessionViewModel extends GetxController {
         params: createParams,
       );
 
-      final sessionId = createResult['sessionId'] as String?;
-      if (sessionId == null || sessionId.isEmpty) {
+      final createResponse = AppSessionCreateResponseDto.fromJson(createResult);
+      final sessionId = createResponse.acp.sessionId;
+      if (sessionId.isEmpty) {
         throw Exception('Failed to create session: no sessionId returned');
       }
-      final runtime = createResult['runtime'] as String? ?? '';
+      final runtime = createResponse.app.runtime;
       await _rememberRuntimeSelection(
         runtime.isNotEmpty ? runtime : selectedRuntimeId,
       );
-      final configOptions = createResult['configOptions'] as List<dynamic>?;
-      debugPrint(
-        '[NewSessionVM] createResult keys: ${createResult.keys.toList()}',
+      final configSnapshot = SessionConfigMapper.snapshotFromConfigOptions(
+        runtimeId: runtime,
+        configOptions: createResponse.acp.configOptions ?? const [],
+        modes: createResponse.acp.modes,
       );
-      debugPrint(
-        '[NewSessionVM] configOptions type: ${configOptions.runtimeType}',
-      );
-      if (configOptions != null) {
-        for (final item in configOptions) {
-          debugPrint(
-            '[NewSessionVM]   item type: ${item.runtimeType} keys: ${item is Map ? item.keys.toList() : "N/A"}',
-          );
-        }
-      }
 
-      final initialMode = _extractCurrentMode(configOptions).isNotEmpty
-          ? _extractCurrentMode(configOptions)
-          : (selectedMode.value?.id ?? '');
+      final initialMode =
+          configSnapshot.currentMode?.id ?? (selectedMode.value?.id ?? '');
       await _rememberModeSelection(
         runtimeId: runtime.isNotEmpty ? runtime : selectedRuntimeId,
         modeId: initialMode,
@@ -508,7 +498,7 @@ class NewSessionViewModel extends GetxController {
           metadata: {
             'machineId': machine.machineId,
             'runtime': runtime,
-            'cwd': cwd,
+            'cwd': createResponse.app.cwd,
             'mode': initialMode,
           },
         ),
@@ -522,10 +512,10 @@ class NewSessionViewModel extends GetxController {
           'sessionId': sessionId,
           'machineId': machine.machineId,
           'runtime': runtime,
-          'cwd': cwd,
+          'cwd': createResponse.app.cwd,
           'sessionTitle': '',
           'isNewSession': true,
-          if (configOptions != null) 'configOptions': configOptions,
+          'configSnapshot': configSnapshot,
           if (prompt.isNotEmpty) 'initialPrompt': prompt,
         },
       );
@@ -577,18 +567,6 @@ class NewSessionViewModel extends GetxController {
     await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
     await _wsRepo.startSession(machine: machine);
     selectedMachine.value = machine;
-  }
-
-  String _extractCurrentMode(List<dynamic>? configOptions) {
-    if (configOptions == null) return '';
-    for (final item in configOptions) {
-      if (item is! Map) continue;
-      final raw = Map<String, dynamic>.from(item);
-      if ((raw['category'] as String? ?? '') == 'mode') {
-        return raw['currentValue'] as String? ?? '';
-      }
-    }
-    return '';
   }
 
   Future<void> _rememberRuntimeSelection(String runtimeId) async {

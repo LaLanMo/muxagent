@@ -1,6 +1,7 @@
 import 'approval.dart';
 import 'enums.dart';
 import 'message.dart';
+import 'session_config_change.dart';
 import 'session.dart';
 
 class MessagePartEvent {
@@ -172,6 +173,8 @@ class AgentEvent {
   final AgentSession? session;
   final SessionError? error;
   final Map<String, dynamic>? data;
+  final SessionModeChange? modeChange;
+  final SessionConfigChange? configChange;
 
   AgentEvent({
     this.type,
@@ -186,6 +189,8 @@ class AgentEvent {
     this.session,
     this.error,
     this.data,
+    this.modeChange,
+    this.configChange,
   });
 
   factory AgentEvent.fromJson(Map<String, dynamic> json, String machineId) {
@@ -216,6 +221,8 @@ class AgentEvent {
           ? SessionError.fromJson(json['error'] as Map<String, dynamic>)
           : null,
       data: json['data'] as Map<String, dynamic>?,
+      modeChange: null,
+      configChange: null,
     );
   }
 }
