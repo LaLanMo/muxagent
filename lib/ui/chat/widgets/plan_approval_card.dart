@@ -44,12 +44,16 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
 
   @override
   Widget build(BuildContext context) {
+    final resolved = widget.approval.resolved;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
         color: Colors.white,
-        border: const Border(
-          left: BorderSide(color: AppTheme.planAccent, width: 3),
+        border: Border(
+          left: BorderSide(
+            color: resolved ? AppTheme.textTertiary : AppTheme.planAccent,
+            width: 3,
+          ),
         ),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -61,15 +65,17 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                const Icon(LucideIcons.fileText,
-                    color: AppTheme.planAccent, size: 16),
+                Icon(LucideIcons.fileText,
+                    color: resolved ? AppTheme.textTertiary : AppTheme.planAccent, size: 16),
                 const SizedBox(width: 8),
                 Text(
-                  'Review Plan',
+                  widget.approval.resolved ? 'Plan (Rejected)' : 'Review Plan',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: widget.approval.resolved
+                        ? AppTheme.textSecondary
+                        : AppTheme.textPrimary,
                   ),
                 ),
               ],
@@ -147,16 +153,18 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
             ),
           ],
 
-          // Action section
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: AppTheme.border),
-          ),
-
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: _buildButtonsView(),
-          ),
+          // Action section (hidden after resolved)
+          if (!widget.approval.resolved) ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Divider(height: 1, color: AppTheme.border),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: _buildButtonsView(),
+            ),
+          ] else
+            const SizedBox(height: 12),
         ],
       ),
     );

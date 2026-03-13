@@ -36,6 +36,7 @@ class ApprovalRequest {
   final Map<String, dynamic>? input;
   final List<PermOption> options;
   final DateTime createdAt;
+  bool resolved;
 
   ApprovalRequest({
     required this.id,
@@ -47,6 +48,7 @@ class ApprovalRequest {
     this.input,
     required this.options,
     required this.createdAt,
+    this.resolved = false,
   });
 
   factory ApprovalRequest.fromJson(Map<String, dynamic> json) {

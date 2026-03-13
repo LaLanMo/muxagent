@@ -160,7 +160,13 @@ class ChatState {
   }
 
   void resolveApproval(String id) {
-    approvals.remove(id);
+    final approval = approvals[id];
+    if (approval != null && approval.kind == 'switch_mode') {
+      // Keep plan approvals visible but mark as resolved (hides buttons)
+      approval.resolved = true;
+    } else {
+      approvals.remove(id);
+    }
   }
 
   void updatePlan(List<PlanEntry> entries) {
