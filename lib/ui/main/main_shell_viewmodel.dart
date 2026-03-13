@@ -11,7 +11,7 @@ import '../../data/services/ws/ws_types.dart';
 import '../../domain/paired_machine.dart';
 import '../../routing/routes.dart';
 
-class MainShellViewModel extends GetxController {
+class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
@@ -32,10 +32,12 @@ class MainShellViewModel extends GetxController {
 
   StreamSubscription<Set<String>>? _sessionSub;
   StreamSubscription<WsMachineStatus>? _machineStatusSub;
+  bool _isReconnecting = false;
 
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     _loadMachines();
     _subscribeToActiveSessions();
     _subscribeToMachineStatus();
@@ -43,9 +45,35 @@ class MainShellViewModel extends GetxController {
 
   @override
   void onClose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sessionSub?.cancel();
     _machineStatusSub?.cancel();
     super.onClose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _reconnectAllMachines();
+    }
+  }
+
+  Future<void> _reconnectAllMachines() async {
+    if (_isReconnecting) return;
+    _isReconnecting = true;
+    try {
+      // Detect TCP half-open: relay thinks connected but socket is dead
+      if (_wsRepo.relayConnected.value && !_wsRepo.isConnected) {
+        await _wsRepo.resetConnection(reason: 'stale connection on resume');
+      }
+      for (final machine in machines) {
+        if (!_wsRepo.hasSession(machine.machineId)) {
+          await _connectMachine(machine);
+        }
+      }
+    } finally {
+      _isReconnecting = false;
+    }
   }
 
   void switchTab(int index) {
