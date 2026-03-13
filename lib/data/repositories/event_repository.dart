@@ -10,6 +10,7 @@ import '../../domain/event.dart';
 import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
+import '../services/ws/approval_event_mapper.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
@@ -67,8 +68,14 @@ class EventRepository {
         payload['machineId'] as String? ??
         payload['machine_id'] as String? ??
         '';
+    final eventType = EventType.fromValue(payload['type'] as String?);
+    if (eventType == null) return;
 
-    final event = AgentEvent.fromJson(payload, machineId);
+    final event = switch (eventType) {
+      EventType.approvalRequested || EventType.approvalReplied =>
+        ApprovalEventMapper.parseEvent(payload, machineId),
+      _ => AgentEvent.fromJson(payload, machineId),
+    };
     if (event.type == null) return;
 
     // Track sequence number per machine for resync
@@ -308,7 +315,13 @@ class EventRepository {
       final events = result['events'] as List<dynamic>? ?? [];
       for (final eventJson in events) {
         if (eventJson is Map<String, dynamic>) {
-          final event = AgentEvent.fromJson(eventJson, machineId);
+          final eventType = EventType.fromValue(eventJson['type'] as String?);
+          if (eventType == null) continue;
+          final event = switch (eventType) {
+            EventType.approvalRequested || EventType.approvalReplied =>
+              ApprovalEventMapper.parseEvent(eventJson, machineId),
+            _ => AgentEvent.fromJson(eventJson, machineId),
+          };
           if (event.type == null) continue;
           if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
             _lastSeqByMachine[machineId] = event.seq;
@@ -404,7 +417,9 @@ class EventRepository {
       );
       final list = result['approvals'] as List<dynamic>? ?? [];
       for (final json in list) {
-        final approval = ApprovalRequest.fromJson(json as Map<String, dynamic>);
+        final approval = ApprovalEventMapper.parseApproval(
+          json as Map<String, dynamic>,
+        );
         pendingApprovals[approval.id] = approval;
         // Also update session status
         final session = sessions[approval.sessionId];

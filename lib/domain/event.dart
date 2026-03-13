@@ -208,9 +208,7 @@ class AgentEvent {
       tool: json['tool'] != null
           ? ToolEvent.fromJson(json['tool'] as Map<String, dynamic>)
           : null,
-      approval: json['approval'] != null
-          ? ApprovalRequest.fromJson(json['approval'] as Map<String, dynamic>)
-          : null,
+      approval: null,
       session: json['session'] != null
           ? AgentSession.fromJson(json['session'] as Map<String, dynamic>)
           : null,
