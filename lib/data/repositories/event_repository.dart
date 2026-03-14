@@ -14,12 +14,10 @@ import '../services/ws/approval_event_mapper.dart';
 import '../services/ws/lifecycle_event_mapper.dart';
 import '../services/ws/message_event_mapper.dart';
 import '../services/ws/plan_event_mapper.dart';
-import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/run_event_mapper.dart';
 import '../services/ws/session_config_event_mapper.dart';
 import '../services/ws/tool_event_mapper.dart';
 import '../services/ws/usage_event_mapper.dart';
-import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
@@ -300,12 +298,10 @@ class EventRepository {
     if (lastSeq == 0) return; // No events seen yet, nothing to resync
 
     try {
-      final result = await _wsRepo.callRpc(
+      final response = await _wsRepo.resyncEvents(
         machineId: machineId,
-        method: 'events.resync',
-        params: {'lastSeq': lastSeq},
+        lastSeq: lastSeq,
       );
-      final response = RpcResyncResponseDto.fromJson(result);
       for (final eventJson in response.events) {
         final event = _parseEvent(eventJson, machineId);
         if (event == null || event.type == null) continue;
@@ -386,14 +382,9 @@ class EventRepository {
     if (stale.isEmpty) return;
 
     try {
-      final result = await _wsRepo.callRpc(
+      final resolvedSessions = await _wsRepo.resolveSessions(
         machineId: machineId,
-        method: 'session.resolve',
-        params: {'sessionIds': stale.map((s) => s.id).toList()},
-      );
-      final response = RpcSessionResolveResponseDto.fromJson(result);
-      final resolvedSessions = RpcResultMapper.toResolvedSessions(
-        response.sessions,
+        sessionIds: stale.map((s) => s.id),
       );
       final resolvedStatuses = <String, SessionStatus>{};
       for (final item in resolvedSessions) {
@@ -434,13 +425,9 @@ class EventRepository {
   /// Fetch pending approvals from daemon via RPC (fallback for ring buffer overflow).
   Future<void> fetchPendingApprovals(String machineId) async {
     try {
-      final result = await _wsRepo.callRpc(
+      final approvals = await _wsRepo.listPendingApprovals(
         machineId: machineId,
-        method: 'approvals.pending',
-        params: {},
       );
-      final response = RpcPendingApprovalsResponseDto.fromJson(result);
-      final approvals = RpcResultMapper.toPendingApprovals(response.approvals);
       for (final approval in approvals) {
         pendingApprovals[approval.id] = approval;
         // Also update session status
@@ -492,17 +479,10 @@ class EventRepository {
         return;
       }
 
-      final result = await _wsRepo.callRpc(
+      final resolvedSessions = await _wsRepo.resolveSessions(
         machineId: machineId,
-        method: 'session.resolve',
-        params: {
-          'sessionIds': targetIds,
-          if (runtime != null && runtime.isNotEmpty) 'runtime': runtime,
-        },
-      );
-      final response = RpcSessionResolveResponseDto.fromJson(result);
-      final resolvedSessions = RpcResultMapper.toResolvedSessions(
-        response.sessions,
+        sessionIds: targetIds,
+        runtime: runtime,
       );
       var changed = false;
 

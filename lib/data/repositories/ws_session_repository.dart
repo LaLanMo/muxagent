@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
+import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/fs_entry.dart';
 import '../../domain/paired_machine.dart';
@@ -9,6 +10,13 @@ import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/relay_ws_client.dart';
 import 'session_manager.dart';
+
+class ResyncBatch {
+  final List<Map<String, dynamic>> events;
+  final bool complete;
+
+  const ResyncBatch({required this.events, required this.complete});
+}
 
 class WsSessionRepository {
   final RelayWsClient _relay;
@@ -133,6 +141,48 @@ class WsSessionRepository {
     );
     final response = RpcFsSearchResponseDto.fromJson(result);
     return RpcResultMapper.toFsEntries(response.results);
+  }
+
+  Future<ResyncBatch> resyncEvents({
+    required String machineId,
+    required int lastSeq,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'events.resync',
+      params: {'lastSeq': lastSeq},
+    );
+    final response = RpcResyncResponseDto.fromJson(result);
+    return ResyncBatch(events: response.events, complete: response.complete);
+  }
+
+  Future<List<ResolvedSessionSnapshot>> resolveSessions({
+    required String machineId,
+    required Iterable<String> sessionIds,
+    String? runtime,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'session.resolve',
+      params: {
+        'sessionIds': sessionIds.toList(),
+        if (runtime != null && runtime.isNotEmpty) 'runtime': runtime,
+      },
+    );
+    final response = RpcSessionResolveResponseDto.fromJson(result);
+    return RpcResultMapper.toResolvedSessions(response.sessions);
+  }
+
+  Future<List<ApprovalRequest>> listPendingApprovals({
+    required String machineId,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'approvals.pending',
+      params: const {},
+    );
+    final response = RpcPendingApprovalsResponseDto.fromJson(result);
+    return RpcResultMapper.toPendingApprovals(response.approvals);
   }
 
   Future<Map<String, dynamic>> callRpc({

@@ -165,5 +165,99 @@ void main() {
       expect(relay.lastParams, {'sessionId': 'sid-1', 'query': 'AG'});
       expect(searched.single.name, 'AGENTS.md');
     });
+
+    test('event maintenance helpers own rpc methods and mapping', () async {
+      final relay = FakeRelayWsClient(
+        nextPayload: {
+          'result': {
+            'events': [
+              {'type': 'message.delta', 'sessionId': 'sid-1', 'seq': 9},
+            ],
+            'complete': true,
+          },
+        },
+      );
+      final repo = WsSessionRepository(
+        relay: relay,
+        sessions: SessionManager(),
+      );
+
+      final resync = await repo.resyncEvents(
+        machineId: 'machine-1',
+        lastSeq: 8,
+      );
+
+      expect(relay.lastMethod, 'events.resync');
+      expect(relay.lastParams, {'lastSeq': 8});
+      expect(resync.complete, isTrue);
+      expect(resync.events.single['seq'], 9);
+
+      relay.nextPayload = {
+        'result': {
+          'sessions': [
+            {
+              'sessionId': 'sid-1',
+              'title': 'Hello',
+              'cwd': '/workspace',
+              'status': 'waiting_approval',
+            },
+          ],
+        },
+      };
+
+      final sessions = await repo.resolveSessions(
+        machineId: 'machine-1',
+        sessionIds: ['sid-1'],
+        runtime: 'codex',
+      );
+
+      expect(relay.lastMethod, 'session.resolve');
+      expect(relay.lastParams, {
+        'sessionIds': ['sid-1'],
+        'runtime': 'codex',
+      });
+      expect(sessions.single.title, 'Hello');
+      expect(sessions.single.status.value, 'waiting_approval');
+
+      relay.nextPayload = {
+        'result': {
+          'approvals': [
+            {
+              'app': {
+                'requestId': 'req-1',
+                'createdAt': '2026-03-14T02:00:00.000Z',
+                'runtime': 'codex',
+                'toolCallId': 'call-1',
+                'toolKind': 'execute',
+                'title': 'Run touch hello.txt',
+                'bodyText': 'Create hello.txt',
+              },
+              'acp': {
+                'sessionId': 'sid-1',
+                'toolCall': {
+                  'toolCallId': 'call-1',
+                  'title': 'Run touch hello.txt',
+                  'kind': 'execute',
+                  'status': 'pending',
+                  'rawInput': {
+                    'command': ['touch', 'hello.txt'],
+                  },
+                },
+                'options': [
+                  {'optionId': 'allow', 'name': 'Allow', 'kind': 'allow_once'},
+                ],
+              },
+            },
+          ],
+        },
+      };
+
+      final approvals = await repo.listPendingApprovals(machineId: 'machine-1');
+
+      expect(relay.lastMethod, 'approvals.pending');
+      expect(relay.lastParams, isEmpty);
+      expect(approvals.single.id, 'req-1');
+      expect(approvals.single.sessionId, 'sid-1');
+    });
   });
 }
