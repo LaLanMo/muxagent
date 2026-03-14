@@ -11,6 +11,7 @@ import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
 import '../services/ws/approval_event_mapper.dart';
+import '../services/ws/lifecycle_event_mapper.dart';
 import '../services/ws/message_event_mapper.dart';
 import '../services/ws/plan_event_mapper.dart';
 import '../services/ws/run_event_mapper.dart';
@@ -87,6 +88,14 @@ class EventRepository {
       EventType.messageDelta ||
       EventType.reasoning => MessageEventMapper.parseEvent(payload, machineId),
       EventType.planUpdated => PlanEventMapper.parseEvent(payload, machineId),
+      EventType.sessionStatus => LifecycleEventMapper.parseSessionStatus(
+        payload,
+        machineId,
+      ),
+      EventType.runFailed => LifecycleEventMapper.parseRunFailed(
+        payload,
+        machineId,
+      ),
       EventType.runFinished => RunEventMapper.parseRunFinished(
         payload,
         machineId,
@@ -342,6 +351,14 @@ class EventRepository {
             ),
             EventType.messageDelta || EventType.reasoning =>
               MessageEventMapper.parseEvent(eventJson, machineId),
+            EventType.sessionStatus => LifecycleEventMapper.parseSessionStatus(
+              eventJson,
+              machineId,
+            ),
+            EventType.runFailed => LifecycleEventMapper.parseRunFailed(
+              eventJson,
+              machineId,
+            ),
             EventType.runFinished => RunEventMapper.parseRunFinished(
               eventJson,
               machineId,
