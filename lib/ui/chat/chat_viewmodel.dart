@@ -12,6 +12,8 @@ import 'package:record/record.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/models/acp_session_models.dart';
+import '../../data/services/ws/models/rpc_result_models.dart';
+import '../../data/services/ws/rpc_result_mapper.dart';
 import '../../data/services/ws/session_config_mapper.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
@@ -715,11 +717,8 @@ class ChatViewModel extends GetxController {
         method: 'fs.list',
         params: {'sessionId': sessionId, 'path': path},
       );
-      final raw = result['entries'] as List? ?? [];
-      final entries = raw
-          .map((e) => FsEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-      filePickerEntries.value = entries;
+      final response = RpcFsListResponseDto.fromJson(result);
+      filePickerEntries.value = RpcResultMapper.toFsEntries(response.entries);
     } catch (e) {
       debugPrint('[ChatVM] fs.list failed: $e');
       filePickerEntries.clear();
@@ -736,11 +735,8 @@ class ChatViewModel extends GetxController {
         method: 'fs.search',
         params: {'sessionId': sessionId, 'query': query},
       );
-      final raw = result['results'] as List? ?? [];
-      final entries = raw
-          .map((e) => FsEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-      filePickerEntries.value = entries;
+      final response = RpcFsSearchResponseDto.fromJson(result);
+      filePickerEntries.value = RpcResultMapper.toFsEntries(response.results);
     } catch (e) {
       debugPrint('[ChatVM] fs.search failed: $e');
       filePickerEntries.clear();

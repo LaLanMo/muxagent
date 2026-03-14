@@ -14,10 +14,12 @@ import '../services/ws/approval_event_mapper.dart';
 import '../services/ws/lifecycle_event_mapper.dart';
 import '../services/ws/message_event_mapper.dart';
 import '../services/ws/plan_event_mapper.dart';
+import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/run_event_mapper.dart';
 import '../services/ws/session_config_event_mapper.dart';
 import '../services/ws/tool_event_mapper.dart';
 import '../services/ws/usage_event_mapper.dart';
+import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
@@ -303,20 +305,17 @@ class EventRepository {
         method: 'events.resync',
         params: {'lastSeq': lastSeq},
       );
-
-      final events = result['events'] as List<dynamic>? ?? [];
-      for (final eventJson in events) {
-        if (eventJson is Map<String, dynamic>) {
-          final event = _parseEvent(eventJson, machineId);
-          if (event == null || event.type == null) continue;
-          if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
-            _lastSeqByMachine[machineId] = event.seq;
-          }
-          _processEvent(event);
+      final response = RpcResyncResponseDto.fromJson(result);
+      for (final eventJson in response.events) {
+        final event = _parseEvent(eventJson, machineId);
+        if (event == null || event.type == null) continue;
+        if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
+          _lastSeqByMachine[machineId] = event.seq;
         }
+        _processEvent(event);
       }
 
-      final complete = result['complete'] as bool? ?? true;
+      final complete = response.complete;
       if (!complete) {
         // Gap too large — event buffer overflowed.
         // Affected sessions should be fully reloaded via session.load.
@@ -392,17 +391,13 @@ class EventRepository {
         method: 'session.resolve',
         params: {'sessionIds': stale.map((s) => s.id).toList()},
       );
-
-      final list = result['sessions'] as List<dynamic>? ?? [];
+      final response = RpcSessionResolveResponseDto.fromJson(result);
+      final resolvedSessions = RpcResultMapper.toResolvedSessions(
+        response.sessions,
+      );
       final resolvedStatuses = <String, SessionStatus>{};
-      for (final item in list) {
-        if (item is Map) {
-          final id = (item['sessionId'] as String?) ?? '';
-          if (id.isEmpty) continue;
-          resolvedStatuses[id] = SessionStatus.fromValue(
-            item['status'] as String? ?? 'idle',
-          );
-        }
+      for (final item in resolvedSessions) {
+        resolvedStatuses[item.sessionId] = item.status;
       }
 
       var changed = false;
@@ -444,11 +439,9 @@ class EventRepository {
         method: 'approvals.pending',
         params: {},
       );
-      final list = result['approvals'] as List<dynamic>? ?? [];
-      for (final json in list) {
-        final approval = ApprovalEventMapper.parseApproval(
-          json as Map<String, dynamic>,
-        );
+      final response = RpcPendingApprovalsResponseDto.fromJson(result);
+      final approvals = RpcResultMapper.toPendingApprovals(response.approvals);
+      for (final approval in approvals) {
         pendingApprovals[approval.id] = approval;
         // Also update session status
         final session = sessions[approval.sessionId];
@@ -460,7 +453,7 @@ class EventRepository {
           });
         }
       }
-      if (list.isNotEmpty) {
+      if (approvals.isNotEmpty) {
         _sessionsChangedController.add(null);
       }
     } catch (e) {
@@ -507,22 +500,18 @@ class EventRepository {
           if (runtime != null && runtime.isNotEmpty) 'runtime': runtime,
         },
       );
-      final list = result['sessions'] as List<dynamic>? ?? [];
+      final response = RpcSessionResolveResponseDto.fromJson(result);
+      final resolvedSessions = RpcResultMapper.toResolvedSessions(
+        response.sessions,
+      );
       var changed = false;
 
-      for (final item in list) {
-        if (item is! Map) continue;
-        final json = Map<String, dynamic>.from(item);
-
-        final sessionId = json['sessionId'] as String? ?? '';
-        if (sessionId.isEmpty) continue;
-
-        final title = json['title'] as String? ?? '';
-        final sessionCwd = json['cwd'] as String? ?? '';
-        final status = SessionStatus.fromValue(
-          json['status'] as String? ?? 'idle',
-        );
-        final updatedAt = _parseRpcTime(json['updatedAt']) ?? DateTime.now();
+      for (final item in resolvedSessions) {
+        final sessionId = item.sessionId;
+        final title = item.title;
+        final sessionCwd = item.cwd;
+        final status = item.status;
+        final updatedAt = item.updatedAt ?? DateTime.now();
         final existing = sessions[sessionId];
 
         if (existing == null) {
@@ -645,13 +634,5 @@ class EventRepository {
     _sub.cancel();
     _eventController.close();
     _sessionsChangedController.close();
-  }
-
-  DateTime? _parseRpcTime(Object? value) {
-    final raw = value as String?;
-    if (raw == null || raw.isEmpty) {
-      return null;
-    }
-    return DateTime.tryParse(raw);
   }
 }
