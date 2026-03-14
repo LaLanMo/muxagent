@@ -61,4 +61,34 @@ void main() {
     expect(event.configChange?.currentValue, 'gpt-5.4');
     expect(event.configChange?.values.single.name, 'gpt-5.4');
   });
+
+  test('maps mode.changed event when ACP source is config_option_update', () {
+    final event = SessionConfigEventMapper.parseEvent({
+      'type': 'mode.changed',
+      'sessionId': 'session-123',
+      'seq': 10,
+      'at': '2026-03-14T00:00:02.000Z',
+      'data': {
+        'app': {'currentModeId': 'read-only'},
+        'acp': {
+          'configOptions': [
+            {
+              'id': 'mode',
+              'name': 'Approval Preset',
+              'type': 'select',
+              'currentValue': 'read-only',
+              'category': 'mode',
+              'options': [
+                {'value': 'read-only', 'name': 'Read Only'},
+                {'value': 'auto', 'name': 'Default'},
+              ],
+            },
+          ],
+        },
+      },
+    }, 'machine-1');
+
+    expect(event.type, EventType.modeChanged);
+    expect(event.modeChange?.currentModeId, 'read-only');
+  });
 }

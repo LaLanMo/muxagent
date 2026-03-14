@@ -11,7 +11,10 @@ import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
 import '../services/ws/approval_event_mapper.dart';
+import '../services/ws/plan_event_mapper.dart';
 import '../services/ws/session_config_event_mapper.dart';
+import '../services/ws/tool_event_mapper.dart';
+import '../services/ws/usage_event_mapper.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
@@ -75,6 +78,12 @@ class EventRepository {
     final event = switch (eventType) {
       EventType.approvalRequested || EventType.approvalReplied =>
         ApprovalEventMapper.parseEvent(payload, machineId),
+      EventType.toolStarted ||
+      EventType.toolUpdated ||
+      EventType.toolCompleted ||
+      EventType.toolFailed => ToolEventMapper.parseEvent(payload, machineId),
+      EventType.planUpdated => PlanEventMapper.parseEvent(payload, machineId),
+      EventType.usageUpdate => UsageEventMapper.parseEvent(payload, machineId),
       EventType.modeChanged || EventType.modelChanged =>
         SessionConfigEventMapper.parseEvent(payload, machineId),
       _ => AgentEvent.fromJson(payload, machineId),
@@ -154,16 +163,14 @@ class EventRepository {
           _sessionsChangedController.add(null);
         }
       case EventType.usageUpdate:
-        if (event.data != null) {
+        if (event.usageUpdate != null) {
           final usage = _liveUsage.putIfAbsent(sessionId, () => UsageInfo());
-          final d = event.data!;
-          usage.contextUsed =
-              (d['contextUsed'] as num?)?.toInt() ?? usage.contextUsed;
-          usage.contextSize =
-              (d['contextSize'] as num?)?.toInt() ?? usage.contextSize;
-          if (d['costAmount'] != null) {
-            usage.costAmount = (d['costAmount'] as num).toDouble();
-            usage.costCurrency = d['costCurrency'] as String? ?? 'USD';
+          final update = event.usageUpdate!;
+          usage.contextUsed = update.contextUsed;
+          usage.contextSize = update.contextSize;
+          if (update.costAmount != null) {
+            usage.costAmount = update.costAmount!;
+            usage.costCurrency = update.costCurrency ?? 'USD';
           }
           // Update in-memory session
           final existing = sessions[sessionId];
@@ -323,6 +330,13 @@ class EventRepository {
           final event = switch (eventType) {
             EventType.approvalRequested || EventType.approvalReplied =>
               ApprovalEventMapper.parseEvent(eventJson, machineId),
+            EventType.toolStarted ||
+            EventType.toolUpdated ||
+            EventType.toolCompleted ||
+            EventType.toolFailed => ToolEventMapper.parseEvent(
+              eventJson,
+              machineId,
+            ),
             EventType.modeChanged || EventType.modelChanged =>
               SessionConfigEventMapper.parseEvent(eventJson, machineId),
             _ => AgentEvent.fromJson(eventJson, machineId),

@@ -26,7 +26,18 @@ class SessionConfigMapper {
   }) {
     String? modeConfigId;
     String? currentModeId = modes?.currentModeId;
-    var availableModes = const <ModeOption>[];
+    var availableModes = modes == null
+        ? const <ModeOption>[]
+        : ModeOption.orderedForRuntime(
+            runtimeId,
+            modes.availableModes.map(
+              (mode) => ModeOption(
+                id: mode.id,
+                label: mode.name,
+                description: mode.description,
+              ),
+            ),
+          );
 
     String? modelConfigId;
     String? currentModel;
@@ -36,7 +47,7 @@ class SessionConfigMapper {
       switch (option.category) {
         case 'mode':
           modeConfigId = option.id;
-          if ((currentModeId ?? '').isEmpty) {
+          if (option.currentValue.isNotEmpty) {
             currentModeId = option.currentValue;
           }
           final flattened = option.options.flatten();

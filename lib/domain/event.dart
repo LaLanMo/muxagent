@@ -1,6 +1,7 @@
 import 'approval.dart';
 import 'enums.dart';
 import 'message.dart';
+import 'plan_entry.dart';
 import 'session_config_change.dart';
 import 'session.dart';
 
@@ -63,6 +64,26 @@ class ToolLocation {
       line: (json['line'] as num?)?.toInt(),
     );
   }
+}
+
+class PlanUpdate {
+  final List<PlanEntry> entries;
+
+  const PlanUpdate({required this.entries});
+}
+
+class UsageUpdate {
+  final int contextUsed;
+  final int contextSize;
+  final double? costAmount;
+  final String? costCurrency;
+
+  const UsageUpdate({
+    required this.contextUsed,
+    required this.contextSize,
+    this.costAmount,
+    this.costCurrency,
+  });
 }
 
 class ToolEvent {
@@ -175,6 +196,8 @@ class AgentEvent {
   final Map<String, dynamic>? data;
   final SessionModeChange? modeChange;
   final SessionConfigChange? configChange;
+  final PlanUpdate? planUpdate;
+  final UsageUpdate? usageUpdate;
 
   AgentEvent({
     this.type,
@@ -191,6 +214,8 @@ class AgentEvent {
     this.data,
     this.modeChange,
     this.configChange,
+    this.planUpdate,
+    this.usageUpdate,
   });
 
   factory AgentEvent.fromJson(Map<String, dynamic> json, String machineId) {
@@ -223,6 +248,8 @@ class AgentEvent {
       data: json['data'] as Map<String, dynamic>?,
       modeChange: null,
       configChange: null,
+      planUpdate: null,
+      usageUpdate: null,
     );
   }
 }

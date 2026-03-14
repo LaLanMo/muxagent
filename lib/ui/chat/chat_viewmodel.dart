@@ -304,11 +304,8 @@ class ChatViewModel extends GetxController {
         }
 
       case EventType.planUpdated:
-        final rawEntries = event.data?['entries'] as List?;
-        if (rawEntries != null) {
-          final entries = rawEntries
-              .map((e) => PlanEntry.fromJson(e as Map<String, dynamic>))
-              .toList();
+        final entries = event.planUpdate?.entries;
+        if (entries != null) {
           chatState.updatePlan(entries);
           planEntries.value = entries;
         }

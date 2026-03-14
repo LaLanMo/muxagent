@@ -24,6 +24,12 @@ bool _requireBool(Map<String, dynamic> json, String key) {
   throw FormatException('Expected "$key" to be a bool');
 }
 
+num _requireNum(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  if (value is num) return value;
+  throw FormatException('Expected "$key" to be a number');
+}
+
 List<Map<String, dynamic>> _objectList(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value == null) return const [];
@@ -337,6 +343,98 @@ class AcpConfigOptionUpdateDto {
   }
 }
 
+class AcpPlanEntryDto {
+  final Map<String, dynamic>? meta;
+  final String content;
+  final String priority;
+  final String status;
+
+  const AcpPlanEntryDto({
+    required this.content,
+    required this.priority,
+    required this.status,
+    this.meta,
+  });
+
+  factory AcpPlanEntryDto.fromJson(Map<String, dynamic> json) {
+    return AcpPlanEntryDto(
+      meta: _nullableObject(json, '_meta'),
+      content: _requireString(json, 'content'),
+      priority: _requireString(json, 'priority'),
+      status: _requireString(json, 'status'),
+    );
+  }
+}
+
+class AcpPlanUpdateDto {
+  final Map<String, dynamic>? meta;
+  final String? sessionUpdate;
+  final List<AcpPlanEntryDto> entries;
+
+  const AcpPlanUpdateDto({
+    required this.entries,
+    this.sessionUpdate,
+    this.meta,
+  });
+
+  factory AcpPlanUpdateDto.fromJson(Map<String, dynamic> json) {
+    return AcpPlanUpdateDto(
+      meta: _nullableObject(json, '_meta'),
+      sessionUpdate: _nullableString(json, 'sessionUpdate'),
+      entries: _objectList(
+        json,
+        'entries',
+      ).map(AcpPlanEntryDto.fromJson).toList(),
+    );
+  }
+}
+
+class AcpUsageCostDto {
+  final double amount;
+  final String currency;
+
+  const AcpUsageCostDto({required this.amount, required this.currency});
+
+  factory AcpUsageCostDto.fromJson(Map<String, dynamic> json) {
+    return AcpUsageCostDto(
+      amount: _requireNum(json, 'amount').toDouble(),
+      currency: _requireString(json, 'currency'),
+    );
+  }
+}
+
+class AcpUsageUpdateDto {
+  final Map<String, dynamic>? meta;
+  final String? sessionUpdate;
+  final int used;
+  final int size;
+  final AcpUsageCostDto? cost;
+
+  const AcpUsageUpdateDto({
+    required this.used,
+    required this.size,
+    this.cost,
+    this.sessionUpdate,
+    this.meta,
+  });
+
+  factory AcpUsageUpdateDto.fromJson(Map<String, dynamic> json) {
+    return AcpUsageUpdateDto(
+      meta: _nullableObject(json, '_meta'),
+      sessionUpdate: _nullableString(json, 'sessionUpdate'),
+      used: _requireNum(json, 'used').toInt(),
+      size: _requireNum(json, 'size').toInt(),
+      cost: switch (json['cost']) {
+        null => null,
+        final Map value => AcpUsageCostDto.fromJson(
+          Map<String, dynamic>.from(value),
+        ),
+        _ => throw FormatException('Expected "cost" to be an object or null'),
+      },
+    );
+  }
+}
+
 class AppSessionCreateDto {
   final String runtime;
   final String cwd;
@@ -502,7 +600,7 @@ class AppSessionConfigChangeDto {
 
 class AppModeChangedEventDataDto {
   final AppSessionModeChangeDto app;
-  final AcpCurrentModeUpdateDto? acp;
+  final AcpModeChangeSourceDto? acp;
 
   const AppModeChangedEventDataDto({required this.app, this.acp});
 
@@ -513,11 +611,45 @@ class AppModeChangedEventDataDto {
       ),
       acp: switch (json['acp']) {
         null => null,
-        final Map value => AcpCurrentModeUpdateDto.fromJson(
+        final Map value => AcpModeChangeSourceDto.fromJson(
           Map<String, dynamic>.from(value),
         ),
         _ => throw FormatException('Expected "acp" to be an object or null'),
       },
+    );
+  }
+}
+
+class AcpModeChangeSourceDto {
+  final AcpCurrentModeUpdateDto? currentModeUpdate;
+  final AcpConfigOptionUpdateDto? configOptionUpdate;
+
+  const AcpModeChangeSourceDto._({
+    this.currentModeUpdate,
+    this.configOptionUpdate,
+  });
+
+  factory AcpModeChangeSourceDto.currentMode(AcpCurrentModeUpdateDto dto) {
+    return AcpModeChangeSourceDto._(currentModeUpdate: dto);
+  }
+
+  factory AcpModeChangeSourceDto.configOption(AcpConfigOptionUpdateDto dto) {
+    return AcpModeChangeSourceDto._(configOptionUpdate: dto);
+  }
+
+  factory AcpModeChangeSourceDto.fromJson(Map<String, dynamic> json) {
+    if (json.containsKey('currentModeId')) {
+      return AcpModeChangeSourceDto.currentMode(
+        AcpCurrentModeUpdateDto.fromJson(json),
+      );
+    }
+    if (json.containsKey('configOptions')) {
+      return AcpModeChangeSourceDto.configOption(
+        AcpConfigOptionUpdateDto.fromJson(json),
+      );
+    }
+    throw FormatException(
+      'Expected mode change ACP payload to be current_mode_update or config_option_update',
     );
   }
 }
