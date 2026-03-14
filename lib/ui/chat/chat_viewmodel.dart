@@ -161,10 +161,7 @@ class ChatViewModel extends GetxController {
 
   void _subscribeEvents() {
     _eventSub = _eventRepo.events
-        .where(
-          (e) =>
-              e.sessionId == sessionId || e.type == EventType.connectionState,
-        )
+        .where((e) => e.sessionId == sessionId)
         .listen(_handleEvent);
   }
 
@@ -328,10 +325,6 @@ class ChatViewModel extends GetxController {
               )
               .toList();
         }
-
-      case EventType.connectionState:
-        final state = event.data?['state'] as String? ?? 'connected';
-        connState.value = ConnState.fromValue(state);
 
       default:
         break;
