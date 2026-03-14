@@ -11,9 +11,6 @@ import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
-import '../../data/services/ws/models/acp_session_models.dart';
-import '../../data/services/ws/models/rpc_result_models.dart';
-import '../../data/services/ws/rpc_result_mapper.dart';
 import '../../data/services/ws/session_config_mapper.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
@@ -192,20 +189,14 @@ class ChatViewModel extends GetxController {
       final session = _eventRepo.sessionById(sessionId);
       final mode = session?.mode ?? '';
       final model = session?.model ?? '';
-      final params = <String, dynamic>{
-        'sessionId': sessionId,
-        'cwd': cwd,
-        // Always send runtime explicitly
-        'runtime': runtimeId.value,
-        if (mode.isNotEmpty && mode != 'default') 'permissionMode': mode,
-        if (model.isNotEmpty && model != 'default') 'model': model,
-      };
-      final result = await _wsRepo.callRpc(
+      final response = await _wsRepo.loadSession(
         machineId: machineId,
-        method: 'session.load',
-        params: params,
+        sessionId: sessionId,
+        cwd: cwd,
+        runtime: runtimeId.value,
+        permissionMode: mode.isNotEmpty && mode != 'default' ? mode : null,
+        model: model,
       );
-      final response = AppSessionLoadResponseDto.fromJson(result);
       final loadedRuntime = response.app.runtime;
       if (loadedRuntime.isNotEmpty) {
         runtimeId.value = loadedRuntime;
@@ -712,13 +703,11 @@ class ChatViewModel extends GetxController {
   Future<void> _fetchListing(String path) async {
     filePickerLoading.value = true;
     try {
-      final result = await _wsRepo.callRpc(
+      filePickerEntries.value = await _wsRepo.listFiles(
         machineId: machineId,
-        method: 'fs.list',
-        params: {'sessionId': sessionId, 'path': path},
+        sessionId: sessionId,
+        path: path,
       );
-      final response = RpcFsListResponseDto.fromJson(result);
-      filePickerEntries.value = RpcResultMapper.toFsEntries(response.entries);
     } catch (e) {
       debugPrint('[ChatVM] fs.list failed: $e');
       filePickerEntries.clear();
@@ -730,13 +719,11 @@ class ChatViewModel extends GetxController {
   Future<void> _fetchSearch(String query) async {
     filePickerLoading.value = true;
     try {
-      final result = await _wsRepo.callRpc(
+      filePickerEntries.value = await _wsRepo.searchFiles(
         machineId: machineId,
-        method: 'fs.search',
-        params: {'sessionId': sessionId, 'query': query},
+        sessionId: sessionId,
+        query: query,
       );
-      final response = RpcFsSearchResponseDto.fromJson(result);
-      filePickerEntries.value = RpcResultMapper.toFsEntries(response.results);
     } catch (e) {
       debugPrint('[ChatVM] fs.search failed: $e');
       filePickerEntries.clear();

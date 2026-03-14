@@ -260,13 +260,10 @@ class NewSessionViewModel extends GetxController {
         await _wsRepo.startSession(machine: machine);
       }
 
-      final result = await _wsRepo.callRpc(
-        machineId: machine.machineId,
-        method: 'runtime.list',
-      );
       if (token != _runtimeLoadToken) return;
 
-      final response = AppRuntimeListResponseDto.fromJson(result);
+      final response = await _wsRepo.listRuntimes(machineId: machine.machineId);
+      if (token != _runtimeLoadToken) return;
       final all = response.runtimes
           .map(SessionConfigMapper.runtimeOptionFromDto)
           .toList();
@@ -451,21 +448,14 @@ class NewSessionViewModel extends GetxController {
         throw Exception('Please select a runtime');
       }
 
-      final createParams = <String, dynamic>{
-        'cwd': cwd,
-        if (useWorktree.value) 'useWorktree': true,
-        // Always send runtime explicitly
-        'runtime': selectedRuntimeId,
-        if (selectedMode.value != null)
-          'permissionMode': selectedMode.value!.id,
-      };
-
-      final createResult = await _createSessionWithRecovery(
+      final createResponse = await _createSessionWithRecovery(
         machine: machine,
-        params: createParams,
+        cwd: cwd,
+        runtime: selectedRuntimeId,
+        permissionMode: selectedMode.value?.id,
+        useWorktree: useWorktree.value,
       );
 
-      final createResponse = AppSessionCreateResponseDto.fromJson(createResult);
       final sessionId = createResponse.acp.sessionId;
       if (sessionId.isEmpty) {
         throw Exception('Failed to create session: no sessionId returned');
@@ -526,16 +516,31 @@ class NewSessionViewModel extends GetxController {
     }
   }
 
-  Future<Map<String, dynamic>> _createSessionWithRecovery({
+  Future<AppSessionCreateResponseDto> _createSessionWithRecovery({
     required PairedMachine machine,
-    required Map<String, dynamic> params,
+    required String cwd,
+    required String runtime,
+    required bool useWorktree,
+    String? permissionMode,
   }) async {
     try {
-      return await _callCreateSession(machine.machineId, params);
+      return await _callCreateSession(
+        machineId: machine.machineId,
+        cwd: cwd,
+        runtime: runtime,
+        permissionMode: permissionMode,
+        useWorktree: useWorktree,
+      );
     } on TimeoutException {
       await _recoverRelaySession(machine, 'session.create timeout');
       try {
-        return await _callCreateSession(machine.machineId, params);
+        return await _callCreateSession(
+          machineId: machine.machineId,
+          cwd: cwd,
+          runtime: runtime,
+          permissionMode: permissionMode,
+          useWorktree: useWorktree,
+        );
       } on TimeoutException {
         throw Exception(
           'Session create timed out after reconnect. Relay session appears stale.',
@@ -544,12 +549,21 @@ class NewSessionViewModel extends GetxController {
     }
   }
 
-  Future<Map<String, dynamic>> _callCreateSession(
-    String machineId,
-    Map<String, dynamic> params,
-  ) {
+  Future<AppSessionCreateResponseDto> _callCreateSession({
+    required String machineId,
+    required String cwd,
+    required String runtime,
+    required bool useWorktree,
+    String? permissionMode,
+  }) {
     return _wsRepo
-        .callRpc(machineId: machineId, method: 'session.create', params: params)
+        .createSession(
+          machineId: machineId,
+          cwd: cwd,
+          runtime: runtime,
+          useWorktree: useWorktree,
+          permissionMode: permissionMode,
+        )
         .timeout(
           _createSessionTimeout,
           onTimeout: () => throw TimeoutException(
