@@ -1,6 +1,5 @@
 import 'approval.dart';
 import 'enums.dart';
-import 'message.dart';
 import 'plan_entry.dart';
 import 'session_config_change.dart';
 import 'session.dart';
@@ -21,19 +20,6 @@ class MessagePartEvent {
     this.partType = '',
     this.fullText = '',
   });
-
-  factory MessagePartEvent.fromJson(Map<String, dynamic> json) {
-    return MessagePartEvent(
-      partId: json['partId'] as String? ?? '',
-      messageId: json['messageId'] as String? ?? '',
-      role: json['role'] != null
-          ? MessageRole.fromValue(json['role'] as String)
-          : null,
-      delta: json['delta'] as String? ?? '',
-      partType: json['partType'] as String? ?? '',
-      fullText: json['fullText'] as String? ?? '',
-    );
-  }
 }
 
 class ToolDiff {
@@ -42,14 +28,6 @@ class ToolDiff {
   final String newText;
 
   ToolDiff({required this.path, this.oldText, required this.newText});
-
-  factory ToolDiff.fromJson(Map<String, dynamic> json) {
-    return ToolDiff(
-      path: json['path'] as String? ?? '',
-      oldText: json['oldText'] as String?,
-      newText: json['newText'] as String? ?? '',
-    );
-  }
 }
 
 class ToolLocation {
@@ -57,13 +35,6 @@ class ToolLocation {
   final int? line;
 
   ToolLocation({required this.path, this.line});
-
-  factory ToolLocation.fromJson(Map<String, dynamic> json) {
-    return ToolLocation(
-      path: json['path'] as String? ?? '',
-      line: (json['line'] as num?)?.toInt(),
-    );
-  }
 }
 
 class PlanUpdate {
@@ -134,30 +105,6 @@ class ToolEvent {
     this.metadata,
     this.locations,
   });
-
-  factory ToolEvent.fromJson(Map<String, dynamic> json) {
-    final diffsJson = json['diffs'] as List<dynamic>?;
-    final locsJson = json['locations'] as List<dynamic>?;
-    return ToolEvent(
-      partId: json['partId'] as String? ?? '',
-      messageId: json['messageId'] as String? ?? '',
-      callId: json['callId'] as String? ?? '',
-      name: json['name'] as String? ?? '',
-      kind: json['kind'] as String?,
-      title: json['title'] as String?,
-      status: ToolStatus.fromValue(json['status'] as String? ?? 'pending'),
-      input: json['input'] as Map<String, dynamic>?,
-      output: json['output'] as String?,
-      error: json['error'] as String?,
-      diffs: diffsJson
-          ?.map((e) => ToolDiff.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      metadata: json['metadata'] as Map<String, dynamic>?,
-      locations: locsJson
-          ?.map((e) => ToolLocation.fromJson(e as Map<String, dynamic>))
-          .toList(),
-    );
-  }
 }
 
 class SessionError {
@@ -165,13 +112,6 @@ class SessionError {
   final String message;
 
   SessionError({required this.code, required this.message});
-
-  factory SessionError.fromJson(Map<String, dynamic> json) {
-    return SessionError(
-      code: json['code'] as String? ?? '',
-      message: json['message'] as String? ?? '',
-    );
-  }
 }
 
 class ContentBlock {
@@ -206,12 +146,10 @@ class AgentEvent {
   final String machineId;
 
   final MessagePartEvent? messagePart;
-  final Message? message;
   final ToolEvent? tool;
   final ApprovalRequest? approval;
   final AgentSession? session;
   final SessionError? error;
-  final Map<String, dynamic>? data;
   final SessionModeChange? modeChange;
   final SessionConfigChange? configChange;
   final PlanUpdate? planUpdate;
@@ -225,52 +163,14 @@ class AgentEvent {
     required this.at,
     required this.machineId,
     this.messagePart,
-    this.message,
     this.tool,
     this.approval,
     this.session,
     this.error,
-    this.data,
     this.modeChange,
     this.configChange,
     this.planUpdate,
     this.usageUpdate,
     this.runFinished,
   });
-
-  factory AgentEvent.fromJson(Map<String, dynamic> json, String machineId) {
-    return AgentEvent(
-      type: EventType.fromValue(json['type'] as String?),
-      sessionId: json['sessionId'] as String?,
-      seq: (json['seq'] as num?)?.toInt() ?? 0,
-      at: json['at'] != null
-          ? DateTime.parse(json['at'] as String)
-          : DateTime.now(),
-      machineId: machineId,
-      messagePart: json['messagePart'] != null
-          ? MessagePartEvent.fromJson(
-              json['messagePart'] as Map<String, dynamic>,
-            )
-          : null,
-      message: json['message'] != null
-          ? Message.fromJson(json['message'] as Map<String, dynamic>)
-          : null,
-      tool: json['tool'] != null
-          ? ToolEvent.fromJson(json['tool'] as Map<String, dynamic>)
-          : null,
-      approval: null,
-      session: json['session'] != null
-          ? AgentSession.fromJson(json['session'] as Map<String, dynamic>)
-          : null,
-      error: json['error'] != null
-          ? SessionError.fromJson(json['error'] as Map<String, dynamic>)
-          : null,
-      data: json['data'] as Map<String, dynamic>?,
-      modeChange: null,
-      configChange: null,
-      planUpdate: null,
-      usageUpdate: null,
-      runFinished: null,
-    );
-  }
 }

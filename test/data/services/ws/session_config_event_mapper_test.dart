@@ -9,7 +9,7 @@ void main() {
       'sessionId': 'session-123',
       'seq': 4,
       'at': '2026-03-14T00:00:00.000Z',
-      'data': {
+      'modeChanged': {
         'app': {'currentModeId': 'auto'},
         'acp': {'currentModeId': 'auto'},
       },
@@ -26,7 +26,7 @@ void main() {
       'sessionId': 'session-123',
       'seq': 9,
       'at': '2026-03-14T00:00:01.000Z',
-      'data': {
+      'configChanged': {
         'app': {
           'configId': 'model',
           'category': 'model',
@@ -68,7 +68,7 @@ void main() {
       'sessionId': 'session-123',
       'seq': 10,
       'at': '2026-03-14T00:00:02.000Z',
-      'data': {
+      'modeChanged': {
         'app': {'currentModeId': 'read-only'},
         'acp': {
           'configOptions': [

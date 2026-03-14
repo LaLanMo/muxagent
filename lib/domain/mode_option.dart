@@ -17,16 +17,6 @@ class ModeOption {
     );
   }
 
-  factory ModeOption.fromJson(Map<String, dynamic> json) {
-    final id = json['value'] as String? ?? json['id'] as String? ?? '';
-    final upstreamLabel = json['name'] as String? ?? json['label'] as String?;
-    return ModeOption(
-      id: id,
-      label: _displayLabel(id, upstreamLabel),
-      description: json['description'] as String?,
-    );
-  }
-
   factory ModeOption.fromId(String? id) {
     final value = id ?? '';
     return ModeOption(id: value, label: _displayLabel(value, null));

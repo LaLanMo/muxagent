@@ -239,12 +239,6 @@ class ChatViewModel extends GetxController {
           _refreshMessages();
         }
 
-      case EventType.messageFinal:
-        if (event.message != null) {
-          chatState.finalizeMessage(event.message!);
-          _refreshMessages();
-        }
-
       case EventType.toolStarted:
       case EventType.toolUpdated:
       case EventType.toolCompleted:

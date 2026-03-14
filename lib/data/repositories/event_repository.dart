@@ -75,37 +75,8 @@ class EventRepository {
         payload['machineId'] as String? ??
         payload['machine_id'] as String? ??
         '';
-    final eventType = EventType.fromValue(payload['type'] as String?);
-    if (eventType == null) return;
-
-    final event = switch (eventType) {
-      EventType.approvalRequested || EventType.approvalReplied =>
-        ApprovalEventMapper.parseEvent(payload, machineId),
-      EventType.toolStarted ||
-      EventType.toolUpdated ||
-      EventType.toolCompleted ||
-      EventType.toolFailed => ToolEventMapper.parseEvent(payload, machineId),
-      EventType.messageDelta ||
-      EventType.reasoning => MessageEventMapper.parseEvent(payload, machineId),
-      EventType.planUpdated => PlanEventMapper.parseEvent(payload, machineId),
-      EventType.sessionStatus => LifecycleEventMapper.parseSessionStatus(
-        payload,
-        machineId,
-      ),
-      EventType.runFailed => LifecycleEventMapper.parseRunFailed(
-        payload,
-        machineId,
-      ),
-      EventType.runFinished => RunEventMapper.parseRunFinished(
-        payload,
-        machineId,
-      ),
-      EventType.usageUpdate => UsageEventMapper.parseEvent(payload, machineId),
-      EventType.modeChanged || EventType.modelChanged =>
-        SessionConfigEventMapper.parseEvent(payload, machineId),
-      _ => AgentEvent.fromJson(payload, machineId),
-    };
-    if (event.type == null) return;
+    final event = _parseEvent(payload, machineId);
+    if (event == null || event.type == null) return;
 
     // Track sequence number per machine for resync
     if (machineId.isNotEmpty &&
@@ -307,7 +278,6 @@ class EventRepository {
           }
         }
       case EventType.messageDelta:
-      case EventType.messageFinal:
       case EventType.toolStarted:
       case EventType.toolUpdated:
       case EventType.toolCompleted:
@@ -337,37 +307,8 @@ class EventRepository {
       final events = result['events'] as List<dynamic>? ?? [];
       for (final eventJson in events) {
         if (eventJson is Map<String, dynamic>) {
-          final eventType = EventType.fromValue(eventJson['type'] as String?);
-          if (eventType == null) continue;
-          final event = switch (eventType) {
-            EventType.approvalRequested || EventType.approvalReplied =>
-              ApprovalEventMapper.parseEvent(eventJson, machineId),
-            EventType.toolStarted ||
-            EventType.toolUpdated ||
-            EventType.toolCompleted ||
-            EventType.toolFailed => ToolEventMapper.parseEvent(
-              eventJson,
-              machineId,
-            ),
-            EventType.messageDelta || EventType.reasoning =>
-              MessageEventMapper.parseEvent(eventJson, machineId),
-            EventType.sessionStatus => LifecycleEventMapper.parseSessionStatus(
-              eventJson,
-              machineId,
-            ),
-            EventType.runFailed => LifecycleEventMapper.parseRunFailed(
-              eventJson,
-              machineId,
-            ),
-            EventType.runFinished => RunEventMapper.parseRunFinished(
-              eventJson,
-              machineId,
-            ),
-            EventType.modeChanged || EventType.modelChanged =>
-              SessionConfigEventMapper.parseEvent(eventJson, machineId),
-            _ => AgentEvent.fromJson(eventJson, machineId),
-          };
-          if (event.type == null) continue;
+          final event = _parseEvent(eventJson, machineId);
+          if (event == null || event.type == null) continue;
           if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
             _lastSeqByMachine[machineId] = event.seq;
           }
@@ -385,6 +326,49 @@ class EventRepository {
       }
     } catch (e) {
       debugPrint('[EventRepo] resync failed: $e');
+    }
+  }
+
+  AgentEvent? _parseEvent(Map<String, dynamic> payload, String machineId) {
+    final eventType = EventType.fromValue(payload['type'] as String?);
+    if (eventType == null) {
+      debugPrint('[EventRepo] unsupported event type: ${payload['type']}');
+      return null;
+    }
+
+    try {
+      return switch (eventType) {
+        EventType.approvalRequested || EventType.approvalReplied =>
+          ApprovalEventMapper.parseEvent(payload, machineId),
+        EventType.toolStarted ||
+        EventType.toolUpdated ||
+        EventType.toolCompleted ||
+        EventType.toolFailed => ToolEventMapper.parseEvent(payload, machineId),
+        EventType.messageDelta || EventType.reasoning =>
+          MessageEventMapper.parseEvent(payload, machineId),
+        EventType.planUpdated => PlanEventMapper.parseEvent(payload, machineId),
+        EventType.sessionStatus => LifecycleEventMapper.parseSessionStatus(
+          payload,
+          machineId,
+        ),
+        EventType.runFailed => LifecycleEventMapper.parseRunFailed(
+          payload,
+          machineId,
+        ),
+        EventType.runFinished => RunEventMapper.parseRunFinished(
+          payload,
+          machineId,
+        ),
+        EventType.usageUpdate => UsageEventMapper.parseEvent(
+          payload,
+          machineId,
+        ),
+        EventType.modeChanged || EventType.modelChanged =>
+          SessionConfigEventMapper.parseEvent(payload, machineId),
+      };
+    } catch (e) {
+      debugPrint('[EventRepo] failed to parse $eventType: $e');
+      return null;
     }
   }
 

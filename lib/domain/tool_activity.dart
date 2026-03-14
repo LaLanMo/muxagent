@@ -28,20 +28,6 @@ class ToolActivity {
     this.locations,
   });
 
-  factory ToolActivity.fromJson(Map<String, dynamic> json) {
-    return ToolActivity(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      kind: json['kind'] as String?,
-      status: ToolStatus.fromValue(json['status'] as String? ?? 'pending'),
-      title: json['title'] as String?,
-      input: json['input'] as Map<String, dynamic>?,
-      output: json['output'] as String?,
-      error: json['error'] as String?,
-      metadata: json['metadata'] as Map<String, dynamic>?,
-    );
-  }
-
   ToolKind get effectiveKind {
     if (kind != null) return ToolKind.fromValue(kind);
     final n = name.toLowerCase();
@@ -54,24 +40,23 @@ class ToolActivity {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'status': status.value,
-        if (kind != null) 'kind': kind,
-        if (title != null) 'title': title,
-        if (input != null) 'input': input,
-        if (output != null) 'output': output,
-        if (error != null) 'error': error,
-        if (metadata != null) 'metadata': metadata,
-      };
+    'id': id,
+    'name': name,
+    'status': status.value,
+    if (kind != null) 'kind': kind,
+    if (title != null) 'title': title,
+    if (input != null) 'input': input,
+    if (output != null) 'output': output,
+    if (error != null) 'error': error,
+    if (metadata != null) 'metadata': metadata,
+  };
 }
 
 extension ToolActivityMeta on ToolActivity {
   String? get parentToolCallId =>
       metadata?['claudeCode']?['parentToolUseId'] as String?;
 
-  String? get claudeToolName =>
-      metadata?['claudeCode']?['toolName'] as String?;
+  String? get claudeToolName => metadata?['claudeCode']?['toolName'] as String?;
 
   bool get isChildTool => parentToolCallId != null;
 }

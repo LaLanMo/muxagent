@@ -35,7 +35,6 @@ enum ToolStatus {
 
 enum EventType {
   messageDelta('message.delta'),
-  messageFinal('message.final'),
   toolStarted('tool.started'),
   toolUpdated('tool.updated'),
   toolCompleted('tool.completed'),
@@ -46,7 +45,6 @@ enum EventType {
   sessionStatus('session.status'),
   runFailed('run.failed'),
   runFinished('run.finished'),
-  connectionState('connection.state'),
   planUpdated('plan.updated'),
   modeChanged('mode.changed'),
   modelChanged('model.changed'),

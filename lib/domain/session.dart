@@ -27,31 +27,15 @@ class AgentSession {
     this.metadata,
   });
 
-  factory AgentSession.fromJson(Map<String, dynamic> json) {
-    return AgentSession(
-      id: json['id'] as String,
-      title: json['title'] as String? ?? '',
-      status: SessionStatus.fromValue(json['status'] as String? ?? 'idle'),
-      model: json['model'] as String?,
-      cost: json['cost'] != null
-          ? CostInfo.fromJson(json['cost'] as Map<String, dynamic>)
-          : null,
-      isRead: json['isRead'] as bool? ?? false,
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
-      metadata: json['metadata'] as Map<String, dynamic>?,
-    );
-  }
-
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'status': status.value,
-        if (model != null) 'model': model,
-        if (cost != null) 'cost': cost!.toJson(),
-        'isRead': isRead,
-        'createdAt': createdAt.toIso8601String(),
-        'updatedAt': updatedAt.toIso8601String(),
-        if (metadata != null) 'metadata': metadata,
-      };
+    'id': id,
+    'title': title,
+    'status': status.value,
+    if (model != null) 'model': model,
+    if (cost != null) 'cost': cost!.toJson(),
+    'isRead': isRead,
+    'createdAt': createdAt.toIso8601String(),
+    'updatedAt': updatedAt.toIso8601String(),
+    if (metadata != null) 'metadata': metadata,
+  };
 }
