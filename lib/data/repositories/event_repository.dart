@@ -11,7 +11,9 @@ import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
 import '../services/ws/approval_event_mapper.dart';
+import '../services/ws/message_event_mapper.dart';
 import '../services/ws/plan_event_mapper.dart';
+import '../services/ws/run_event_mapper.dart';
 import '../services/ws/session_config_event_mapper.dart';
 import '../services/ws/tool_event_mapper.dart';
 import '../services/ws/usage_event_mapper.dart';
@@ -82,7 +84,13 @@ class EventRepository {
       EventType.toolUpdated ||
       EventType.toolCompleted ||
       EventType.toolFailed => ToolEventMapper.parseEvent(payload, machineId),
+      EventType.messageDelta ||
+      EventType.reasoning => MessageEventMapper.parseEvent(payload, machineId),
       EventType.planUpdated => PlanEventMapper.parseEvent(payload, machineId),
+      EventType.runFinished => RunEventMapper.parseRunFinished(
+        payload,
+        machineId,
+      ),
       EventType.usageUpdate => UsageEventMapper.parseEvent(payload, machineId),
       EventType.modeChanged || EventType.modelChanged =>
         SessionConfigEventMapper.parseEvent(payload, machineId),
@@ -197,20 +205,15 @@ class EventRepository {
             existing.isRead = false;
           }
 
-          // Extract token usage from run.finished data
-          final totalTokens =
-              (event.data?['totalTokens'] as num?)?.toInt() ?? 0;
+          // Extract token usage from the explicit run.finished payload.
+          final totalTokens = event.runFinished?.totalTokens ?? 0;
           if (totalTokens > 0) {
             final usage = _liveUsage.putIfAbsent(sessionId, () => UsageInfo());
             usage.totalTokens = totalTokens;
-            usage.inputTokens =
-                (event.data?['inputTokens'] as num?)?.toInt() ?? 0;
-            usage.outputTokens =
-                (event.data?['outputTokens'] as num?)?.toInt() ?? 0;
-            usage.cachedReadTokens =
-                (event.data?['cachedReadTokens'] as num?)?.toInt() ?? 0;
-            usage.cachedWriteTokens =
-                (event.data?['cachedWriteTokens'] as num?)?.toInt() ?? 0;
+            usage.inputTokens = event.runFinished?.inputTokens ?? 0;
+            usage.outputTokens = event.runFinished?.outputTokens ?? 0;
+            usage.cachedReadTokens = event.runFinished?.cachedReadTokens ?? 0;
+            usage.cachedWriteTokens = event.runFinished?.cachedWriteTokens ?? 0;
           }
 
           // Persist status + cost
@@ -334,6 +337,12 @@ class EventRepository {
             EventType.toolUpdated ||
             EventType.toolCompleted ||
             EventType.toolFailed => ToolEventMapper.parseEvent(
+              eventJson,
+              machineId,
+            ),
+            EventType.messageDelta || EventType.reasoning =>
+              MessageEventMapper.parseEvent(eventJson, machineId),
+            EventType.runFinished => RunEventMapper.parseRunFinished(
               eventJson,
               machineId,
             ),

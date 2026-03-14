@@ -86,6 +86,24 @@ class UsageUpdate {
   });
 }
 
+class RunFinishedUpdate {
+  final String stopReason;
+  final int inputTokens;
+  final int outputTokens;
+  final int cachedReadTokens;
+  final int cachedWriteTokens;
+  final int totalTokens;
+
+  const RunFinishedUpdate({
+    required this.stopReason,
+    this.inputTokens = 0,
+    this.outputTokens = 0,
+    this.cachedReadTokens = 0,
+    this.cachedWriteTokens = 0,
+    this.totalTokens = 0,
+  });
+}
+
 class ToolEvent {
   final String partId;
   final String messageId;
@@ -198,6 +216,7 @@ class AgentEvent {
   final SessionConfigChange? configChange;
   final PlanUpdate? planUpdate;
   final UsageUpdate? usageUpdate;
+  final RunFinishedUpdate? runFinished;
 
   AgentEvent({
     this.type,
@@ -216,6 +235,7 @@ class AgentEvent {
     this.configChange,
     this.planUpdate,
     this.usageUpdate,
+    this.runFinished,
   });
 
   factory AgentEvent.fromJson(Map<String, dynamic> json, String machineId) {
@@ -250,6 +270,7 @@ class AgentEvent {
       configChange: null,
       planUpdate: null,
       usageUpdate: null,
+      runFinished: null,
     );
   }
 }
