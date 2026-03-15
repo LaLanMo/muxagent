@@ -105,7 +105,7 @@ class ChatState {
         output: event.output,
         error: event.error,
         diffs: event.diffs,
-        metadata: event.metadata,
+        claudeCode: event.claudeCode,
         locations: event.locations,
       );
       tools[event.callId] = tool;
@@ -117,7 +117,7 @@ class ChatState {
       if (event.title != null) tool.title = event.title;
       if (event.input != null) tool.input = event.input;
       if (event.diffs != null) tool.diffs = event.diffs;
-      if (event.metadata != null) tool.metadata = event.metadata;
+      if (event.claudeCode != null) tool.claudeCode = event.claudeCode;
       if (event.locations != null) tool.locations = event.locations;
     }
 

@@ -57,7 +57,11 @@ _$ToolAppDtoImpl _$$ToolAppDtoImplFromJson(Map<String, dynamic> json) =>
               ?.map((e) => ToolDiffDto.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const <ToolDiffDto>[],
-      metadata: json['metadata'] as Map<String, dynamic>?,
+      claudeCode: json['claude_code'] == null
+          ? null
+          : ClaudeCodeToolDto.fromJson(
+              json['claude_code'] as Map<String, dynamic>,
+            ),
       locations:
           (json['locations'] as List<dynamic>?)
               ?.map((e) => ToolLocationDto.fromJson(e as Map<String, dynamic>))
@@ -78,9 +82,23 @@ Map<String, dynamic> _$$ToolAppDtoImplToJson(_$ToolAppDtoImpl instance) =>
       'output': instance.output,
       'error': instance.error,
       'diffs': instance.diffs.map((e) => e.toJson()).toList(),
-      'metadata': instance.metadata,
+      'claude_code': instance.claudeCode?.toJson(),
       'locations': instance.locations.map((e) => e.toJson()).toList(),
     };
+
+_$ClaudeCodeToolDtoImpl _$$ClaudeCodeToolDtoImplFromJson(
+  Map<String, dynamic> json,
+) => _$ClaudeCodeToolDtoImpl(
+  parentToolUseId: json['parentToolUseId'] as String?,
+  toolName: json['toolName'] as String?,
+);
+
+Map<String, dynamic> _$$ClaudeCodeToolDtoImplToJson(
+  _$ClaudeCodeToolDtoImpl instance,
+) => <String, dynamic>{
+  'parentToolUseId': instance.parentToolUseId,
+  'toolName': instance.toolName,
+};
 
 _$ToolDiffDtoImpl _$$ToolDiffDtoImplFromJson(Map<String, dynamic> json) =>
     _$ToolDiffDtoImpl(

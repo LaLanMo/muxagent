@@ -46,12 +46,23 @@ class ToolAppDto with _$ToolAppDto {
     String? output,
     String? error,
     @Default(<ToolDiffDto>[]) List<ToolDiffDto> diffs,
-    Map<String, dynamic>? metadata,
+    ClaudeCodeToolDto? claudeCode,
     @Default(<ToolLocationDto>[]) List<ToolLocationDto> locations,
   }) = _ToolAppDto;
 
   factory ToolAppDto.fromJson(Map<String, dynamic> json) =>
       _$ToolAppDtoFromJson(json);
+}
+
+@freezed
+class ClaudeCodeToolDto with _$ClaudeCodeToolDto {
+  const factory ClaudeCodeToolDto({
+    @JsonKey(name: 'parentToolUseId') String? parentToolUseId,
+    @JsonKey(name: 'toolName') String? toolName,
+  }) = _ClaudeCodeToolDto;
+
+  factory ClaudeCodeToolDto.fromJson(Map<String, dynamic> json) =>
+      _$ClaudeCodeToolDtoFromJson(json);
 }
 
 @freezed

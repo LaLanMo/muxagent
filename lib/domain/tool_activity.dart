@@ -10,7 +10,7 @@ class ToolActivity {
   Map<String, dynamic>? input;
   String? output;
   String? error;
-  Map<String, dynamic>? metadata;
+  ClaudeCodeToolInfo? claudeCode;
   List<ToolDiff>? diffs;
   List<ToolLocation>? locations;
 
@@ -23,7 +23,7 @@ class ToolActivity {
     this.input,
     this.output,
     this.error,
-    this.metadata,
+    this.claudeCode,
     this.diffs,
     this.locations,
   });
@@ -48,15 +48,19 @@ class ToolActivity {
     if (input != null) 'input': input,
     if (output != null) 'output': output,
     if (error != null) 'error': error,
-    if (metadata != null) 'metadata': metadata,
+    if (claudeCode != null)
+      'claudeCode': {
+        if (claudeCode!.parentToolUseId != null)
+          'parentToolUseId': claudeCode!.parentToolUseId,
+        if (claudeCode!.toolName != null) 'toolName': claudeCode!.toolName,
+      },
   };
 }
 
 extension ToolActivityMeta on ToolActivity {
-  String? get parentToolCallId =>
-      metadata?['claudeCode']?['parentToolUseId'] as String?;
+  String? get parentToolCallId => claudeCode?.parentToolUseId;
 
-  String? get claudeToolName => metadata?['claudeCode']?['toolName'] as String?;
+  String? get claudeToolName => claudeCode?.toolName;
 
   bool get isChildTool => parentToolCallId != null;
 }

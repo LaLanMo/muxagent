@@ -51,7 +51,6 @@ class Message {
   final List<MessagePart> parts;
   CostInfo? cost;
   String? model;
-  Map<String, dynamic>? metadata;
   final DateTime createdAt;
 
   Message({
@@ -61,7 +60,6 @@ class Message {
     required this.parts,
     this.cost,
     this.model,
-    this.metadata,
     required this.createdAt,
   });
 
@@ -72,7 +70,6 @@ class Message {
     'parts': parts.map((p) => p.toJson()).toList(),
     if (cost != null) 'cost': cost!.toJson(),
     if (model != null) 'model': model,
-    if (metadata != null) 'metadata': metadata,
     'createdAt': createdAt.toIso8601String(),
   };
 }

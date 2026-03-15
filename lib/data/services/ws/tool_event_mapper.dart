@@ -24,7 +24,7 @@ class ToolEventMapper {
     final kind = _nonEmpty(app.kind) ?? _nonEmpty(acp?.kind);
     final title = _nonEmpty(app.title) ?? _nonEmpty(acp?.title);
     final name = _nonEmpty(app.name) ?? title ?? acp?.toolCallId ?? '';
-    final metadata = _mapOrNull(app.metadata) ?? _mapOrNull(acp?.meta);
+    final claudeCode = app.claudeCode ?? _claudeCodeFromMeta(acp?.meta);
 
     return ToolEvent(
       partId: app.partId,
@@ -46,7 +46,12 @@ class ToolEventMapper {
             ),
           )
           .toList(),
-      metadata: metadata,
+      claudeCode: claudeCode == null
+          ? null
+          : ClaudeCodeToolInfo(
+              parentToolUseId: _nonEmpty(claudeCode.parentToolUseId),
+              toolName: _nonEmpty(claudeCode.toolName),
+            ),
       locations: app.locations
           .map(
             (location) =>
@@ -54,11 +59,6 @@ class ToolEventMapper {
           )
           .toList(),
     );
-  }
-
-  static Map<String, dynamic>? _mapOrNull(Map<String, dynamic>? value) {
-    if (value == null || value.isEmpty) return null;
-    return Map<String, dynamic>.from(value);
   }
 
   static String? _nonEmpty(String? value) {
@@ -70,5 +70,23 @@ class ToolEventMapper {
   static String? _nullIfEmpty(String? value) {
     if (value == null) return null;
     return value.isEmpty ? null : value;
+  }
+
+  static Map<String, dynamic>? _mapOrNull(Map<String, dynamic>? value) {
+    if (value == null || value.isEmpty) return null;
+    return Map<String, dynamic>.from(value);
+  }
+
+  static ClaudeCodeToolDto? _claudeCodeFromMeta(Map<String, dynamic>? meta) {
+    if (meta == null || meta.isEmpty) return null;
+    final claudeCode = meta['claudeCode'];
+    if (claudeCode is! Map) return null;
+    final normalized = Map<String, dynamic>.from(
+      claudeCode.cast<Object?, Object?>().map(
+        (key, value) => MapEntry(key.toString(), value),
+      ),
+    );
+    if (normalized.isEmpty) return null;
+    return ClaudeCodeToolDto.fromJson(normalized);
   }
 }

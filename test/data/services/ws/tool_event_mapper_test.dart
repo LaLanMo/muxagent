@@ -22,9 +22,7 @@ void main() {
             'command': 'touch /workspace/claude-approval.txt',
             'description': 'Create empty file claude-approval.txt',
           },
-          'metadata': {
-            'claudeCode': {'toolName': 'Bash'},
-          },
+          'claudeCode': {'toolName': 'Bash'},
           'locations': [
             {'path': '/workspace/claude-approval.txt', 'line': 1},
           ],
@@ -65,7 +63,7 @@ void main() {
       event.tool!.input?['description'],
       'Create empty file claude-approval.txt',
     );
-    expect(event.tool!.metadata?['claudeCode']?['toolName'], 'Bash');
+    expect(event.tool!.claudeCode?.toolName, 'Bash');
     expect(event.tool!.locations, hasLength(1));
     expect(
       event.tool!.locations!.single.path,
@@ -104,7 +102,7 @@ void main() {
     expect(event.tool, isNotNull);
     expect(event.tool!.name, 'Terminal');
     expect(event.tool!.kind, 'execute');
-    expect(event.tool!.metadata?['claudeCode']?['toolName'], 'Bash');
+    expect(event.tool!.claudeCode?.toolName, 'Bash');
     expect(event.tool!.output, isNull);
   });
 }

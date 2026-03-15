@@ -505,7 +505,7 @@ mixin _$ToolAppDto {
   String? get output => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
   List<ToolDiffDto> get diffs => throw _privateConstructorUsedError;
-  Map<String, dynamic>? get metadata => throw _privateConstructorUsedError;
+  ClaudeCodeToolDto? get claudeCode => throw _privateConstructorUsedError;
   List<ToolLocationDto> get locations => throw _privateConstructorUsedError;
 
   /// Serializes this ToolAppDto to a JSON map.
@@ -537,9 +537,11 @@ abstract class $ToolAppDtoCopyWith<$Res> {
     String? output,
     String? error,
     List<ToolDiffDto> diffs,
-    Map<String, dynamic>? metadata,
+    ClaudeCodeToolDto? claudeCode,
     List<ToolLocationDto> locations,
   });
+
+  $ClaudeCodeToolDtoCopyWith<$Res>? get claudeCode;
 }
 
 /// @nodoc
@@ -568,7 +570,7 @@ class _$ToolAppDtoCopyWithImpl<$Res, $Val extends ToolAppDto>
     Object? output = freezed,
     Object? error = freezed,
     Object? diffs = null,
-    Object? metadata = freezed,
+    Object? claudeCode = freezed,
     Object? locations = null,
   }) {
     return _then(
@@ -617,10 +619,10 @@ class _$ToolAppDtoCopyWithImpl<$Res, $Val extends ToolAppDto>
                 ? _value.diffs
                 : diffs // ignore: cast_nullable_to_non_nullable
                       as List<ToolDiffDto>,
-            metadata: freezed == metadata
-                ? _value.metadata
-                : metadata // ignore: cast_nullable_to_non_nullable
-                      as Map<String, dynamic>?,
+            claudeCode: freezed == claudeCode
+                ? _value.claudeCode
+                : claudeCode // ignore: cast_nullable_to_non_nullable
+                      as ClaudeCodeToolDto?,
             locations: null == locations
                 ? _value.locations
                 : locations // ignore: cast_nullable_to_non_nullable
@@ -628,6 +630,20 @@ class _$ToolAppDtoCopyWithImpl<$Res, $Val extends ToolAppDto>
           )
           as $Val,
     );
+  }
+
+  /// Create a copy of ToolAppDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ClaudeCodeToolDtoCopyWith<$Res>? get claudeCode {
+    if (_value.claudeCode == null) {
+      return null;
+    }
+
+    return $ClaudeCodeToolDtoCopyWith<$Res>(_value.claudeCode!, (value) {
+      return _then(_value.copyWith(claudeCode: value) as $Val);
+    });
   }
 }
 
@@ -652,9 +668,12 @@ abstract class _$$ToolAppDtoImplCopyWith<$Res>
     String? output,
     String? error,
     List<ToolDiffDto> diffs,
-    Map<String, dynamic>? metadata,
+    ClaudeCodeToolDto? claudeCode,
     List<ToolLocationDto> locations,
   });
+
+  @override
+  $ClaudeCodeToolDtoCopyWith<$Res>? get claudeCode;
 }
 
 /// @nodoc
@@ -682,7 +701,7 @@ class __$$ToolAppDtoImplCopyWithImpl<$Res>
     Object? output = freezed,
     Object? error = freezed,
     Object? diffs = null,
-    Object? metadata = freezed,
+    Object? claudeCode = freezed,
     Object? locations = null,
   }) {
     return _then(
@@ -731,10 +750,10 @@ class __$$ToolAppDtoImplCopyWithImpl<$Res>
             ? _value._diffs
             : diffs // ignore: cast_nullable_to_non_nullable
                   as List<ToolDiffDto>,
-        metadata: freezed == metadata
-            ? _value._metadata
-            : metadata // ignore: cast_nullable_to_non_nullable
-                  as Map<String, dynamic>?,
+        claudeCode: freezed == claudeCode
+            ? _value.claudeCode
+            : claudeCode // ignore: cast_nullable_to_non_nullable
+                  as ClaudeCodeToolDto?,
         locations: null == locations
             ? _value._locations
             : locations // ignore: cast_nullable_to_non_nullable
@@ -759,11 +778,10 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
     this.output,
     this.error,
     final List<ToolDiffDto> diffs = const <ToolDiffDto>[],
-    final Map<String, dynamic>? metadata,
+    this.claudeCode,
     final List<ToolLocationDto> locations = const <ToolLocationDto>[],
   }) : _input = input,
        _diffs = diffs,
-       _metadata = metadata,
        _locations = locations;
 
   factory _$ToolAppDtoImpl.fromJson(Map<String, dynamic> json) =>
@@ -809,16 +827,8 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
     return EqualUnmodifiableListView(_diffs);
   }
 
-  final Map<String, dynamic>? _metadata;
   @override
-  Map<String, dynamic>? get metadata {
-    final value = _metadata;
-    if (value == null) return null;
-    if (_metadata is EqualUnmodifiableMapView) return _metadata;
-    // ignore: implicit_dynamic_type
-    return EqualUnmodifiableMapView(value);
-  }
-
+  final ClaudeCodeToolDto? claudeCode;
   final List<ToolLocationDto> _locations;
   @override
   @JsonKey()
@@ -830,7 +840,7 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
 
   @override
   String toString() {
-    return 'ToolAppDto(partId: $partId, messageId: $messageId, callId: $callId, name: $name, kind: $kind, title: $title, status: $status, input: $input, output: $output, error: $error, diffs: $diffs, metadata: $metadata, locations: $locations)';
+    return 'ToolAppDto(partId: $partId, messageId: $messageId, callId: $callId, name: $name, kind: $kind, title: $title, status: $status, input: $input, output: $output, error: $error, diffs: $diffs, claudeCode: $claudeCode, locations: $locations)';
   }
 
   @override
@@ -850,7 +860,8 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
             (identical(other.output, output) || other.output == output) &&
             (identical(other.error, error) || other.error == error) &&
             const DeepCollectionEquality().equals(other._diffs, _diffs) &&
-            const DeepCollectionEquality().equals(other._metadata, _metadata) &&
+            (identical(other.claudeCode, claudeCode) ||
+                other.claudeCode == claudeCode) &&
             const DeepCollectionEquality().equals(
               other._locations,
               _locations,
@@ -872,7 +883,7 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
     output,
     error,
     const DeepCollectionEquality().hash(_diffs),
-    const DeepCollectionEquality().hash(_metadata),
+    claudeCode,
     const DeepCollectionEquality().hash(_locations),
   );
 
@@ -903,7 +914,7 @@ abstract class _ToolAppDto implements ToolAppDto {
     final String? output,
     final String? error,
     final List<ToolDiffDto> diffs,
-    final Map<String, dynamic>? metadata,
+    final ClaudeCodeToolDto? claudeCode,
     final List<ToolLocationDto> locations,
   }) = _$ToolAppDtoImpl;
 
@@ -936,7 +947,7 @@ abstract class _ToolAppDto implements ToolAppDto {
   @override
   List<ToolDiffDto> get diffs;
   @override
-  Map<String, dynamic>? get metadata;
+  ClaudeCodeToolDto? get claudeCode;
   @override
   List<ToolLocationDto> get locations;
 
@@ -945,6 +956,194 @@ abstract class _ToolAppDto implements ToolAppDto {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$ToolAppDtoImplCopyWith<_$ToolAppDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+ClaudeCodeToolDto _$ClaudeCodeToolDtoFromJson(Map<String, dynamic> json) {
+  return _ClaudeCodeToolDto.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ClaudeCodeToolDto {
+  @JsonKey(name: 'parentToolUseId')
+  String? get parentToolUseId => throw _privateConstructorUsedError;
+  @JsonKey(name: 'toolName')
+  String? get toolName => throw _privateConstructorUsedError;
+
+  /// Serializes this ClaudeCodeToolDto to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ClaudeCodeToolDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ClaudeCodeToolDtoCopyWith<ClaudeCodeToolDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ClaudeCodeToolDtoCopyWith<$Res> {
+  factory $ClaudeCodeToolDtoCopyWith(
+    ClaudeCodeToolDto value,
+    $Res Function(ClaudeCodeToolDto) then,
+  ) = _$ClaudeCodeToolDtoCopyWithImpl<$Res, ClaudeCodeToolDto>;
+  @useResult
+  $Res call({
+    @JsonKey(name: 'parentToolUseId') String? parentToolUseId,
+    @JsonKey(name: 'toolName') String? toolName,
+  });
+}
+
+/// @nodoc
+class _$ClaudeCodeToolDtoCopyWithImpl<$Res, $Val extends ClaudeCodeToolDto>
+    implements $ClaudeCodeToolDtoCopyWith<$Res> {
+  _$ClaudeCodeToolDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ClaudeCodeToolDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? parentToolUseId = freezed, Object? toolName = freezed}) {
+    return _then(
+      _value.copyWith(
+            parentToolUseId: freezed == parentToolUseId
+                ? _value.parentToolUseId
+                : parentToolUseId // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            toolName: freezed == toolName
+                ? _value.toolName
+                : toolName // ignore: cast_nullable_to_non_nullable
+                      as String?,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$ClaudeCodeToolDtoImplCopyWith<$Res>
+    implements $ClaudeCodeToolDtoCopyWith<$Res> {
+  factory _$$ClaudeCodeToolDtoImplCopyWith(
+    _$ClaudeCodeToolDtoImpl value,
+    $Res Function(_$ClaudeCodeToolDtoImpl) then,
+  ) = __$$ClaudeCodeToolDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    @JsonKey(name: 'parentToolUseId') String? parentToolUseId,
+    @JsonKey(name: 'toolName') String? toolName,
+  });
+}
+
+/// @nodoc
+class __$$ClaudeCodeToolDtoImplCopyWithImpl<$Res>
+    extends _$ClaudeCodeToolDtoCopyWithImpl<$Res, _$ClaudeCodeToolDtoImpl>
+    implements _$$ClaudeCodeToolDtoImplCopyWith<$Res> {
+  __$$ClaudeCodeToolDtoImplCopyWithImpl(
+    _$ClaudeCodeToolDtoImpl _value,
+    $Res Function(_$ClaudeCodeToolDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ClaudeCodeToolDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? parentToolUseId = freezed, Object? toolName = freezed}) {
+    return _then(
+      _$ClaudeCodeToolDtoImpl(
+        parentToolUseId: freezed == parentToolUseId
+            ? _value.parentToolUseId
+            : parentToolUseId // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        toolName: freezed == toolName
+            ? _value.toolName
+            : toolName // ignore: cast_nullable_to_non_nullable
+                  as String?,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ClaudeCodeToolDtoImpl implements _ClaudeCodeToolDto {
+  const _$ClaudeCodeToolDtoImpl({
+    @JsonKey(name: 'parentToolUseId') this.parentToolUseId,
+    @JsonKey(name: 'toolName') this.toolName,
+  });
+
+  factory _$ClaudeCodeToolDtoImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ClaudeCodeToolDtoImplFromJson(json);
+
+  @override
+  @JsonKey(name: 'parentToolUseId')
+  final String? parentToolUseId;
+  @override
+  @JsonKey(name: 'toolName')
+  final String? toolName;
+
+  @override
+  String toString() {
+    return 'ClaudeCodeToolDto(parentToolUseId: $parentToolUseId, toolName: $toolName)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ClaudeCodeToolDtoImpl &&
+            (identical(other.parentToolUseId, parentToolUseId) ||
+                other.parentToolUseId == parentToolUseId) &&
+            (identical(other.toolName, toolName) ||
+                other.toolName == toolName));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, parentToolUseId, toolName);
+
+  /// Create a copy of ClaudeCodeToolDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ClaudeCodeToolDtoImplCopyWith<_$ClaudeCodeToolDtoImpl> get copyWith =>
+      __$$ClaudeCodeToolDtoImplCopyWithImpl<_$ClaudeCodeToolDtoImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ClaudeCodeToolDtoImplToJson(this);
+  }
+}
+
+abstract class _ClaudeCodeToolDto implements ClaudeCodeToolDto {
+  const factory _ClaudeCodeToolDto({
+    @JsonKey(name: 'parentToolUseId') final String? parentToolUseId,
+    @JsonKey(name: 'toolName') final String? toolName,
+  }) = _$ClaudeCodeToolDtoImpl;
+
+  factory _ClaudeCodeToolDto.fromJson(Map<String, dynamic> json) =
+      _$ClaudeCodeToolDtoImpl.fromJson;
+
+  @override
+  @JsonKey(name: 'parentToolUseId')
+  String? get parentToolUseId;
+  @override
+  @JsonKey(name: 'toolName')
+  String? get toolName;
+
+  /// Create a copy of ClaudeCodeToolDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ClaudeCodeToolDtoImplCopyWith<_$ClaudeCodeToolDtoImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

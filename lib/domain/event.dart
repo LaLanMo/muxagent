@@ -37,6 +37,13 @@ class ToolLocation {
   ToolLocation({required this.path, this.line});
 }
 
+class ClaudeCodeToolInfo {
+  final String? parentToolUseId;
+  final String? toolName;
+
+  const ClaudeCodeToolInfo({this.parentToolUseId, this.toolName});
+}
+
 class PlanUpdate {
   final List<PlanEntry> entries;
 
@@ -87,7 +94,7 @@ class ToolEvent {
   final String? output;
   final String? error;
   final List<ToolDiff>? diffs;
-  final Map<String, dynamic>? metadata;
+  final ClaudeCodeToolInfo? claudeCode;
   final List<ToolLocation>? locations;
 
   ToolEvent({
@@ -102,7 +109,7 @@ class ToolEvent {
     this.output,
     this.error,
     this.diffs,
-    this.metadata,
+    this.claudeCode,
     this.locations,
   });
 }
