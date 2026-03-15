@@ -112,7 +112,7 @@ class ChatViewModel extends GetxController {
     if (existing != null) {
       sessionStatus.value = existing.status;
       currentMode.value = _resolveMode(existing.mode);
-      runtimeId.value = existing.metadata?['runtime'] as String? ?? '';
+      runtimeId.value = existing.runtime;
     }
     runtimeId.value = (args['runtime'] as String?) ?? runtimeId.value;
 

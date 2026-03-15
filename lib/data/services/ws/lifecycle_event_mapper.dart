@@ -5,6 +5,11 @@ import '../../../domain/cost_info.dart';
 import 'models/lifecycle_event_models.dart';
 
 class LifecycleEventMapper {
+  static String _metadataString(Map<String, dynamic>? metadata, String key) {
+    final value = metadata?[key];
+    return value is String ? value : '';
+  }
+
   static AgentEvent parseSessionStatus(
     Map<String, dynamic> payload,
     String machineId,
@@ -30,9 +35,15 @@ class LifecycleEventMapper {
                 costCurrency: app.cost!.costCurrency,
                 totalTokens: app.cost!.totalTokens,
               ),
+        machineId: _metadataString(app.metadata, 'machineId'),
+        runtime: _metadataString(app.metadata, 'runtime'),
+        cwd: _metadataString(app.metadata, 'cwd'),
+        mode: switch (_metadataString(app.metadata, 'mode')) {
+          final String value when value.isNotEmpty => value,
+          _ => null,
+        },
         createdAt: app.createdAt,
         updatedAt: app.updatedAt,
-        metadata: app.metadata,
       ),
     );
   }

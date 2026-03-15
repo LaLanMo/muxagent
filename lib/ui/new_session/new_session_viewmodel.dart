@@ -483,14 +483,12 @@ class NewSessionViewModel extends GetxController {
           id: sessionId,
           title: '',
           status: SessionStatus.idle,
+          machineId: machine.machineId,
+          runtime: runtime.isNotEmpty ? runtime : selectedRuntimeId,
+          cwd: createResponse.app.cwd,
+          mode: initialMode.isNotEmpty ? initialMode : null,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
-          metadata: {
-            'machineId': machine.machineId,
-            'runtime': runtime,
-            'cwd': createResponse.app.cwd,
-            'mode': initialMode,
-          },
         ),
       );
 

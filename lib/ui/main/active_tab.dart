@@ -68,11 +68,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Check icon: lucide circle-check, 48x48, #C8CBD0
-            Icon(
-              LucideIcons.checkCircle,
-              size: 48,
-              color: AppTheme.textMuted,
-            ),
+            Icon(LucideIcons.checkCircle, size: 48, color: AppTheme.textMuted),
             const SizedBox(height: 16),
             // Title: "All clear", Inter 20px w500 #6B6F76
             Text(
@@ -179,10 +175,8 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   Widget _buildStatusPill(bool connected) {
-    final dotColor =
-        connected ? AppTheme.successText : AppTheme.textTertiary;
-    final bgColor =
-        connected ? AppTheme.successBg : AppTheme.idleBg;
+    final dotColor = connected ? AppTheme.successText : AppTheme.textTertiary;
+    final bgColor = connected ? AppTheme.successBg : AppTheme.idleBg;
     final label = connected ? 'online' : 'offline';
 
     return Container(
@@ -198,10 +192,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: dotColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
           const SizedBox(width: 5),
           // Text: Inter 11px w500
@@ -227,8 +218,9 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     final approvalSessions = sessions
         .where((s) => s.status == SessionStatus.waitingApproval)
         .toList();
-    final runningSessions =
-        sessions.where((s) => s.status == SessionStatus.running).toList();
+    final runningSessions = sessions
+        .where((s) => s.status == SessionStatus.running)
+        .toList();
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       clipBehavior: Clip.hardEdge,
@@ -245,7 +237,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   Widget _buildSection(
-      String label, Color statusColor, List<AgentSession> sessions) {
+    String label,
+    Color statusColor,
+    List<AgentSession> sessions,
+  ) {
     return Padding(
       // 32px top padding before each section
       padding: const EdgeInsets.only(top: 32),
@@ -278,8 +273,8 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   Widget _buildSessionRow(AgentSession session, Color statusColor) {
-    final machineId = session.metadata?['machineId'] as String? ?? '';
-    final cwd = session.metadata?['cwd'] as String? ?? '';
+    final machineId = session.machineId;
+    final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
     final isIdle = session.status == SessionStatus.idle;
 
@@ -296,9 +291,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: const BoxDecoration(
           // Bottom border: stroke inside #E5E7EB, thickness bottom 1
-          border: Border(
-            bottom: BorderSide(color: AppTheme.border, width: 1),
-          ),
+          border: Border(bottom: BorderSide(color: AppTheme.border, width: 1)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -365,10 +358,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         height: 12,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(
-            color: AppTheme.textMuted,
-            width: 1.5,
-          ),
+          border: Border.all(color: AppTheme.textMuted, width: 1.5),
         ),
       );
     }
@@ -376,16 +366,14 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     return Container(
       width: 12,
       height: 12,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 
   String _buildMachineDurationText(String machineId, AgentSession session) {
-    final machineName =
-        machineId.isNotEmpty ? shell.machineDisplayName(machineId) : '';
+    final machineName = machineId.isNotEmpty
+        ? shell.machineDisplayName(machineId)
+        : '';
     final duration = _formatDuration(session.updatedAt);
 
     if (machineName.isNotEmpty && duration.isNotEmpty) {

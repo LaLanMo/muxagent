@@ -57,6 +57,41 @@ class EventRepository {
 
   int lastSeqFor(String machineId) => _lastSeqByMachine[machineId] ?? 0;
 
+  static String _preferNonEmpty(String primary, String fallback) {
+    return primary.isNotEmpty ? primary : fallback;
+  }
+
+  static String? _preferMode(String? primary, String? fallback) {
+    if (primary != null && primary.isNotEmpty) return primary;
+    if (fallback != null && fallback.isNotEmpty) return fallback;
+    return null;
+  }
+
+  AgentSession _mergeSessionSnapshot(
+    AgentSession? existing,
+    AgentSession incoming,
+    String eventMachineId,
+  ) {
+    if (existing != null) {
+      if (incoming.title.isEmpty) {
+        incoming.title = existing.title;
+      }
+      incoming.model ??= existing.model;
+      incoming.cost ??= existing.cost;
+      incoming.runtime = _preferNonEmpty(incoming.runtime, existing.runtime);
+      incoming.cwd = _preferNonEmpty(incoming.cwd, existing.cwd);
+      incoming.mode = _preferMode(incoming.mode, existing.mode);
+      incoming.isRead = existing.isRead;
+    }
+
+    incoming.machineId = _preferNonEmpty(
+      eventMachineId,
+      _preferNonEmpty(incoming.machineId, existing?.machineId ?? ''),
+    );
+
+    return incoming;
+  }
+
   /// Load all sessions from SQLite into memory. Call once at startup.
   Future<void> init() async {
     final rows = await SessionDatabase.loadAll();
@@ -120,24 +155,19 @@ class EventRepository {
       case EventType.sessionStatus:
         if (event.session != null) {
           final existing = sessions[sessionId];
-          final incoming = event.session!;
-          final mergedMetadata = <String, dynamic>{};
-          if (existing?.metadata != null) {
-            mergedMetadata.addAll(existing!.metadata!);
-          }
-          if (incoming.metadata != null) {
-            mergedMetadata.addAll(incoming.metadata!);
-          }
-          if (event.machineId.isNotEmpty) {
-            mergedMetadata['machineId'] = event.machineId;
-          }
-          incoming.metadata = mergedMetadata.isEmpty ? null : mergedMetadata;
-          incoming.isRead = existing?.isRead ?? incoming.isRead;
+          final incoming = _mergeSessionSnapshot(
+            existing,
+            event.session!,
+            event.machineId,
+          );
           sessions[sessionId] = incoming;
 
           // Persist title, status, model changes
           final dbFields = <String, dynamic>{
             'updated_at': incoming.updatedAt.toIso8601String(),
+            'machine_id': incoming.machineId,
+            'runtime': incoming.runtime,
+            'cwd': incoming.cwd,
           };
           if (incoming.title.isNotEmpty) {
             dbFields['title'] = incoming.title;
@@ -145,6 +175,9 @@ class EventRepository {
           dbFields['status'] = incoming.status.value;
           if (incoming.model != null) {
             dbFields['model'] = incoming.model;
+          }
+          if (incoming.mode != null) {
+            dbFields['mode'] = incoming.mode;
           }
           SessionDatabase.updateFields(sessionId, dbFields);
 
@@ -221,7 +254,7 @@ class EventRepository {
           if (event.type == EventType.runFinished &&
               existing.title.isEmpty &&
               event.machineId.isNotEmpty) {
-            final runtime = existing.metadata?['runtime'] as String? ?? '';
+            final runtime = existing.runtime;
             unawaited(
               backfillMissingTitles(
                 event.machineId,
@@ -258,9 +291,7 @@ class EventRepository {
         if (existing != null) {
           final modeId = event.modeChange?.currentModeId;
           if (modeId != null) {
-            final metadata = <String, dynamic>{...?existing.metadata};
-            metadata['mode'] = modeId;
-            existing.metadata = metadata;
+            existing.mode = modeId;
             existing.updatedAt = event.at;
             SessionDatabase.updateFields(sessionId, {'mode': modeId});
             _sessionsChangedController.add(null);
@@ -373,8 +404,7 @@ class EventRepository {
   Future<void> reconcileSessionStatus(String machineId) async {
     // Collect all running/waitingApproval sessions for this machine
     final stale = sessions.values.where((s) {
-      final mid = s.metadata?['machineId'] as String? ?? '';
-      return mid == machineId &&
+      return s.machineId == machineId &&
           (s.status == SessionStatus.running ||
               s.status == SessionStatus.waitingApproval);
     }).toList();
@@ -462,13 +492,12 @@ class EventRepository {
           sessionIds ??
           sessions.values
               .where((s) {
-                final sameMachine =
-                    (s.metadata?['machineId'] as String? ?? '') == machineId;
+                final sameMachine = s.machineId == machineId;
                 if (!sameMachine || s.title.isNotEmpty) return false;
                 // Skip sessions from a different runtime — the daemon can't
                 // resolve them.
                 if (runtime != null && runtime.isNotEmpty) {
-                  final sr = s.metadata?['runtime'] as String? ?? '';
+                  final sr = s.runtime;
                   if (sr.isNotEmpty && sr != runtime) return false;
                 }
                 return true;
@@ -499,9 +528,11 @@ class EventRepository {
             id: sessionId,
             title: title,
             status: status,
+            machineId: machineId,
+            runtime: runtime ?? '',
+            cwd: sessionCwd,
             createdAt: updatedAt,
             updatedAt: updatedAt,
-            metadata: {'machineId': machineId, 'cwd': sessionCwd},
           );
           sessions[sessionId] = session;
           await SessionDatabase.insertSession(session);
@@ -519,23 +550,27 @@ class EventRepository {
           dirty = true;
         }
 
-        final metadata = <String, dynamic>{...?existing.metadata};
-        if (metadata['machineId'] != machineId) {
-          metadata['machineId'] = machineId;
+        if (existing.machineId != machineId) {
+          existing.machineId = machineId;
           dirty = true;
         }
-        if (sessionCwd.isNotEmpty && metadata['cwd'] != sessionCwd) {
-          metadata['cwd'] = sessionCwd;
+        if (runtime != null &&
+            runtime.isNotEmpty &&
+            existing.runtime != runtime) {
+          existing.runtime = runtime;
           dirty = true;
         }
-        existing.metadata = metadata;
+        if (sessionCwd.isNotEmpty && existing.cwd != sessionCwd) {
+          existing.cwd = sessionCwd;
+          dirty = true;
+        }
 
         if (!dirty) continue;
 
-        final persistedCwd = existing.metadata?['cwd'] as String? ?? '';
         final dbFields = <String, dynamic>{
           'machine_id': machineId,
-          'cwd': persistedCwd,
+          'runtime': existing.runtime,
+          'cwd': existing.cwd,
           'updated_at': existing.updatedAt.toIso8601String(),
         };
         if (existing.title.isNotEmpty) {

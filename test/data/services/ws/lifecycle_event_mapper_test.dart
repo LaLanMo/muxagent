@@ -29,7 +29,7 @@ void main() {
     expect(event.session!.title, 'Example Session');
     expect(event.session!.status, SessionStatus.done);
     expect(event.session!.model, 'opus');
-    expect(event.session!.metadata!['cwd'], '/tmp/project');
+    expect(event.session!.cwd, '/tmp/project');
   });
 
   test('maps run.failed payload from runFailed.app', () {

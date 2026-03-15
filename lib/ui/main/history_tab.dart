@@ -43,9 +43,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         // Filter chips
         Obx(() => _buildFilterChips()),
         // Session list — fill_container height, clip true
-        Expanded(
-          child: Obx(() => _buildBody()),
-        ),
+        Expanded(child: Obx(() => _buildBody())),
       ],
     );
   }
@@ -91,9 +89,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         decoration: BoxDecoration(
           color: selected ? AppTheme.textPrimary : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
-          border: selected
-              ? null
-              : Border.all(color: AppTheme.chipBorder),
+          border: selected ? null : Border.all(color: AppTheme.chipBorder),
         ),
         child: Text(
           label,
@@ -176,8 +172,8 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   }
 
   Widget _buildSessionRow(AgentSession session) {
-    final machineId = session.metadata?['machineId'] as String? ?? '';
-    final cwd = session.metadata?['cwd'] as String? ?? '';
+    final machineId = session.machineId;
+    final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
 
     return GestureDetector(
@@ -193,9 +189,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         // Session Row: padding [14, 16], bottom border inside #E5E7EB thickness 1
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: AppTheme.border),
-          ),
+          border: Border(bottom: BorderSide(color: AppTheme.border)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -206,50 +200,60 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             const SizedBox(width: 12),
             // Text Stack: vertical layout, gap 2, fill_container width
             Expanded(
-              child: Builder(builder: (_) {
-                final hasIndicator =
-                    session.status == SessionStatus.waitingApproval ||
-                    session.status == SessionStatus.running ||
-                    !session.isRead;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: GoogleFonts.inter(
-                        fontSize: 15,
-                        fontWeight: hasIndicator ? FontWeight.w600 : FontWeight.w400,
-                        color: hasIndicator ? AppTheme.textPrimary : AppTheme.textTertiary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      cwd.isNotEmpty ? cwd : '~',
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        color: hasIndicator ? AppTheme.textTertiary : const Color(0xFFAEB3BB),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    if (machineId.isNotEmpty)
+              child: Builder(
+                builder: (_) {
+                  final hasIndicator =
+                      session.status == SessionStatus.waitingApproval ||
+                      session.status == SessionStatus.running ||
+                      !session.isRead;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        shell.machineDisplayName(machineId),
+                        title,
                         style: GoogleFonts.inter(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: hasIndicator ? AppTheme.textMuted : const Color(0xFFD1D5DB),
+                          fontSize: 15,
+                          fontWeight: hasIndicator
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: hasIndicator
+                              ? AppTheme.textPrimary
+                              : AppTheme.textTertiary,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                  ],
-                );
-              }),
+                      const SizedBox(height: 2),
+                      Text(
+                        cwd.isNotEmpty ? cwd : '~',
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                          color: hasIndicator
+                              ? AppTheme.textTertiary
+                              : const Color(0xFFAEB3BB),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      if (machineId.isNotEmpty)
+                        Text(
+                          shell.machineDisplayName(machineId),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w400,
+                            color: hasIndicator
+                                ? AppTheme.textMuted
+                                : const Color(0xFFD1D5DB),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  );
+                },
+              ),
             ),
           ],
         ),
@@ -284,7 +288,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
           : null,
     );
   }
-
 }
 
 class _ListItem {
@@ -292,11 +295,7 @@ class _ListItem {
   final String? headerLabel;
   final AgentSession? session;
 
-  _ListItem.header(this.headerLabel)
-      : isHeader = true,
-        session = null;
+  _ListItem.header(this.headerLabel) : isHeader = true, session = null;
 
-  _ListItem.session(this.session)
-      : isHeader = false,
-        headerLabel = null;
+  _ListItem.session(this.session) : isHeader = false, headerLabel = null;
 }

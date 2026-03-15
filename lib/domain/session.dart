@@ -7,13 +7,13 @@ class AgentSession {
   SessionStatus status;
   String? model;
   CostInfo? cost;
+  String machineId;
+  String runtime;
+  String cwd;
+  String? mode;
   bool isRead;
   final DateTime createdAt;
   DateTime updatedAt;
-  Map<String, dynamic>? metadata;
-
-  /// Current ACP session mode string (e.g. "default", "plan", "acceptEdits").
-  String? get mode => metadata?['mode'] as String?;
 
   AgentSession({
     required this.id,
@@ -21,10 +21,13 @@ class AgentSession {
     this.status = SessionStatus.idle,
     this.model,
     this.cost,
+    this.machineId = '',
+    this.runtime = '',
+    this.cwd = '',
+    this.mode,
     this.isRead = false,
     required this.createdAt,
     required this.updatedAt,
-    this.metadata,
   });
 
   Map<String, dynamic> toJson() => {
@@ -33,9 +36,12 @@ class AgentSession {
     'status': status.value,
     if (model != null) 'model': model,
     if (cost != null) 'cost': cost!.toJson(),
+    if (machineId.isNotEmpty) 'machineId': machineId,
+    if (runtime.isNotEmpty) 'runtime': runtime,
+    if (cwd.isNotEmpty) 'cwd': cwd,
+    if (mode != null && mode!.isNotEmpty) 'mode': mode,
     'isRead': isRead,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt.toIso8601String(),
-    if (metadata != null) 'metadata': metadata,
   };
 }
