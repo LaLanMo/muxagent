@@ -343,10 +343,10 @@ class ChatViewModel extends GetxController {
     currentMode.value = mode;
 
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.setMode(
         machineId: machineId,
-        method: 'session.setMode',
-        params: {'sessionId': sessionId, 'permissionMode': mode.id},
+        sessionId: sessionId,
+        permissionMode: mode.id,
       );
     } catch (e) {
       debugPrint('[ChatVM] changeMode failed: $e');
@@ -378,12 +378,12 @@ class ChatViewModel extends GetxController {
     currentModel.value = value;
 
     try {
-      final result = await _wsRepo.callRpc(
+      await _wsRepo.setConfigOption(
         machineId: machineId,
-        method: 'session.setConfigOption',
-        params: {'sessionId': sessionId, 'configId': configId, 'value': value},
+        sessionId: sessionId,
+        configId: configId,
+        value: value,
       );
-      debugPrint('[ChatVM] changeModel success: $result');
     } catch (e) {
       debugPrint('[ChatVM] changeModel failed: $e');
       currentModel.value = previous;
@@ -834,10 +834,10 @@ class ChatViewModel extends GetxController {
     // Await ACK from daemon — prompt runs asynchronously on daemon side,
     // so this returns quickly. Failure means daemon rejected the request.
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.promptSession(
         machineId: machineId,
-        method: 'session.prompt',
-        params: {'sessionId': sessionId, 'content': content},
+        sessionId: sessionId,
+        content: content,
       );
     } catch (e) {
       debugPrint('Prompt rejected: $e');
@@ -865,14 +865,11 @@ class ChatViewModel extends GetxController {
 
   Future<void> replyApproval(String requestId, String optionId) async {
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.replyApproval(
         machineId: machineId,
-        method: 'approval.reply',
-        params: {
-          'sessionId': sessionId,
-          'requestId': requestId,
-          'optionId': optionId,
-        },
+        sessionId: sessionId,
+        requestId: requestId,
+        optionId: optionId,
       );
       chatState.resolveApproval(requestId);
       _refreshApprovals();
@@ -890,11 +887,7 @@ class ChatViewModel extends GetxController {
       return;
     }
     try {
-      await _wsRepo.callRpc(
-        machineId: machineId,
-        method: 'session.cancel',
-        params: {'sessionId': sessionId},
-      );
+      await _wsRepo.cancelSession(machineId: machineId, sessionId: sessionId);
     } catch (e) {
       debugPrint('Failed to cancel session: $e');
       _resetSessionLocally();

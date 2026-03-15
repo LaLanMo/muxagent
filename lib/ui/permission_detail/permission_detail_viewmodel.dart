@@ -8,7 +8,7 @@ class PermissionDetailViewModel extends GetxController {
   final WsSessionRepository _wsRepo;
 
   PermissionDetailViewModel({required WsSessionRepository wsRepo})
-      : _wsRepo = wsRepo;
+    : _wsRepo = wsRepo;
 
   late final ApprovalRequest approval;
   late final String machineId;
@@ -30,14 +30,11 @@ class PermissionDetailViewModel extends GetxController {
     isReplying.value = true;
 
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.replyApproval(
         machineId: machineId,
-        method: 'approval.reply',
-        params: {
-          'sessionId': sessionId,
-          'requestId': approval.id,
-          'optionId': optionId,
-        },
+        sessionId: sessionId,
+        requestId: approval.id,
+        optionId: optionId,
       );
       Get.back();
     } catch (e) {

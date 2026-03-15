@@ -560,14 +560,11 @@ class EventRepository {
     required String requestId,
     required String optionId,
   }) async {
-    await _wsRepo.callRpc(
+    await _wsRepo.replyApproval(
       machineId: machineId,
-      method: 'approval.reply',
-      params: {
-        'sessionId': sessionId,
-        'requestId': requestId,
-        'optionId': optionId,
-      },
+      sessionId: sessionId,
+      requestId: requestId,
+      optionId: optionId,
     );
   }
 

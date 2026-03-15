@@ -185,6 +185,91 @@ class WsSessionRepository {
     return RpcResultMapper.toPendingApprovals(response.approvals);
   }
 
+  Future<void> setMode({
+    required String machineId,
+    required String sessionId,
+    required String permissionMode,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'session.setMode',
+      params: {'sessionId': sessionId, 'permissionMode': permissionMode},
+    );
+    final response = RpcOkResponseDto.fromJson(result);
+    if (!response.ok) {
+      throw Exception('session.setMode was not acknowledged');
+    }
+  }
+
+  Future<void> setConfigOption({
+    required String machineId,
+    required String sessionId,
+    required String configId,
+    required String value,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'session.setConfigOption',
+      params: {'sessionId': sessionId, 'configId': configId, 'value': value},
+    );
+    final response = RpcOkResponseDto.fromJson(result);
+    if (!response.ok) {
+      throw Exception('session.setConfigOption was not acknowledged');
+    }
+  }
+
+  Future<void> promptSession({
+    required String machineId,
+    required String sessionId,
+    required List<Map<String, dynamic>> content,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'session.prompt',
+      params: {'sessionId': sessionId, 'content': content},
+    );
+    final response = RpcAcceptedResponseDto.fromJson(result);
+    if (!response.accepted) {
+      throw Exception('session.prompt was not accepted');
+    }
+  }
+
+  Future<void> replyApproval({
+    required String machineId,
+    required String sessionId,
+    required String requestId,
+    required String optionId,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'approval.reply',
+      params: {
+        'sessionId': sessionId,
+        'requestId': requestId,
+        'optionId': optionId,
+      },
+    );
+    final response = RpcOkResponseDto.fromJson(result);
+    if (!response.ok) {
+      throw Exception('approval.reply was not acknowledged');
+    }
+  }
+
+  Future<void> cancelSession({
+    required String machineId,
+    required String sessionId,
+  }) async {
+    final result = await callRpc(
+      machineId: machineId,
+      method: 'session.cancel',
+      params: {'sessionId': sessionId},
+    );
+    final response = RpcOkResponseDto.fromJson(result);
+    if (!response.ok) {
+      throw Exception('session.cancel was not acknowledged');
+    }
+  }
+
   Future<Map<String, dynamic>> callRpc({
     required String machineId,
     required String method,

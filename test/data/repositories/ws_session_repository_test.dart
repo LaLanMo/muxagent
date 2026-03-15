@@ -259,5 +259,79 @@ void main() {
       expect(approvals.single.id, 'req-1');
       expect(approvals.single.sessionId, 'sid-1');
     });
+
+    test('action helpers own rpc methods and ack semantics', () async {
+      final relay = FakeRelayWsClient(
+        nextPayload: {
+          'result': {'ok': true},
+        },
+      );
+      final repo = WsSessionRepository(
+        relay: relay,
+        sessions: SessionManager(),
+      );
+
+      await repo.setMode(
+        machineId: 'machine-1',
+        sessionId: 'sid-1',
+        permissionMode: 'read-only',
+      );
+      expect(relay.lastMethod, 'session.setMode');
+      expect(relay.lastParams, {
+        'sessionId': 'sid-1',
+        'permissionMode': 'read-only',
+      });
+
+      await repo.setConfigOption(
+        machineId: 'machine-1',
+        sessionId: 'sid-1',
+        configId: 'model',
+        value: 'claude-sonnet',
+      );
+      expect(relay.lastMethod, 'session.setConfigOption');
+      expect(relay.lastParams, {
+        'sessionId': 'sid-1',
+        'configId': 'model',
+        'value': 'claude-sonnet',
+      });
+
+      relay.nextPayload = {
+        'result': {'accepted': true},
+      };
+      await repo.promptSession(
+        machineId: 'machine-1',
+        sessionId: 'sid-1',
+        content: [
+          {'type': 'text', 'text': 'hello'},
+        ],
+      );
+      expect(relay.lastMethod, 'session.prompt');
+      expect(relay.lastParams, {
+        'sessionId': 'sid-1',
+        'content': [
+          {'type': 'text', 'text': 'hello'},
+        ],
+      });
+
+      relay.nextPayload = {
+        'result': {'ok': true},
+      };
+      await repo.replyApproval(
+        machineId: 'machine-1',
+        sessionId: 'sid-1',
+        requestId: 'req-1',
+        optionId: 'allow',
+      );
+      expect(relay.lastMethod, 'approval.reply');
+      expect(relay.lastParams, {
+        'sessionId': 'sid-1',
+        'requestId': 'req-1',
+        'optionId': 'allow',
+      });
+
+      await repo.cancelSession(machineId: 'machine-1', sessionId: 'sid-1');
+      expect(relay.lastMethod, 'session.cancel');
+      expect(relay.lastParams, {'sessionId': 'sid-1'});
+    });
   });
 }

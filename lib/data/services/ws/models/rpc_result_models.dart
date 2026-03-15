@@ -63,6 +63,26 @@ class RpcResyncResponseDto {
   }
 }
 
+class RpcOkResponseDto {
+  final bool ok;
+
+  const RpcOkResponseDto({required this.ok});
+
+  factory RpcOkResponseDto.fromJson(Map<String, dynamic> json) {
+    return RpcOkResponseDto(ok: _requireBool(json, 'ok'));
+  }
+}
+
+class RpcAcceptedResponseDto {
+  final bool accepted;
+
+  const RpcAcceptedResponseDto({required this.accepted});
+
+  factory RpcAcceptedResponseDto.fromJson(Map<String, dynamic> json) {
+    return RpcAcceptedResponseDto(accepted: _requireBool(json, 'accepted'));
+  }
+}
+
 class RpcResolvedSessionDto {
   final String sessionId;
   final String? title;
