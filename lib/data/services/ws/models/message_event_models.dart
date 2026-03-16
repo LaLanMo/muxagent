@@ -45,6 +45,8 @@ class AcpContentBlockDto {
       raw: Map<String, dynamic>.from(json),
     );
   }
+
+  Map<String, dynamic> toJson() => Map<String, dynamic>.from(raw);
 }
 
 class AcpContentChunkDto {
@@ -68,6 +70,13 @@ class AcpContentChunkDto {
       content: AcpContentBlockDto.fromJson(_requireObject(json, 'content')),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    if (meta != null) '_meta': meta,
+    'sessionUpdate': sessionUpdate,
+    if (messageId != null) 'messageId': messageId,
+    'content': content.toJson(),
+  };
 }
 
 class AppMessagePartDto {

@@ -44,6 +44,16 @@ List<Map<String, dynamic>> _objectList(Map<String, dynamic> json, String key) {
   }).toList();
 }
 
+Map<String, dynamic> _withMeta(
+  Map<String, dynamic> json,
+  Map<String, dynamic>? meta,
+) {
+  if (meta != null) {
+    json['_meta'] = meta;
+  }
+  return json;
+}
+
 class AcpSessionModeDto {
   final Map<String, dynamic>? meta;
   final String id;
@@ -65,6 +75,12 @@ class AcpSessionModeDto {
       description: _nullableString(json, 'description'),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'id': id,
+    'name': name,
+    if (description != null) 'description': description,
+  }, meta);
 }
 
 class AcpSessionModeStateDto {
@@ -88,6 +104,11 @@ class AcpSessionModeStateDto {
       ).map(AcpSessionModeDto.fromJson).toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'currentModeId': currentModeId,
+    'availableModes': availableModes.map((mode) => mode.toJson()).toList(),
+  }, meta);
 }
 
 class AcpSessionConfigSelectOptionDto {
@@ -111,6 +132,12 @@ class AcpSessionConfigSelectOptionDto {
       description: _nullableString(json, 'description'),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'value': value,
+    'name': name,
+    if (description != null) 'description': description,
+  }, meta);
 }
 
 class AcpSessionConfigSelectGroupDto {
@@ -137,6 +164,12 @@ class AcpSessionConfigSelectGroupDto {
       ).map(AcpSessionConfigSelectOptionDto.fromJson).toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'group': group,
+    'name': name,
+    'options': options.map((option) => option.toJson()).toList(),
+  }, meta);
 }
 
 class AcpSessionConfigSelectOptionsDto {
@@ -190,6 +223,13 @@ class AcpSessionConfigSelectOptionsDto {
     if (grouped.isEmpty) return List.of(ungrouped);
     return [for (final group in grouped) ...group.options];
   }
+
+  List<Map<String, dynamic>> toJson() {
+    if (grouped.isNotEmpty) {
+      return grouped.map((group) => group.toJson()).toList();
+    }
+    return ungrouped.map((option) => option.toJson()).toList();
+  }
 }
 
 class AcpSessionConfigOptionDto {
@@ -225,6 +265,16 @@ class AcpSessionConfigOptionDto {
       options: AcpSessionConfigSelectOptionsDto.fromJson(json['options']),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'id': id,
+    'name': name,
+    'type': type,
+    'currentValue': currentValue,
+    if (description != null) 'description': description,
+    if (category != null) 'category': category,
+    'options': options.toJson(),
+  }, meta);
 }
 
 class AcpNewSessionResponseDto {
@@ -260,6 +310,13 @@ class AcpNewSessionResponseDto {
       },
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'sessionId': sessionId,
+    if (modes != null) 'modes': modes!.toJson(),
+    if (configOptions != null)
+      'configOptions': configOptions!.map((option) => option.toJson()).toList(),
+  }, meta);
 }
 
 class AcpLoadSessionResponseDto {
@@ -288,6 +345,12 @@ class AcpLoadSessionResponseDto {
       },
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    if (modes != null) 'modes': modes!.toJson(),
+    if (configOptions != null)
+      'configOptions': configOptions!.map((option) => option.toJson()).toList(),
+  }, meta);
 }
 
 class AcpSetSessionConfigOptionResponseDto {
@@ -310,6 +373,10 @@ class AcpSetSessionConfigOptionResponseDto {
       ).map(AcpSessionConfigOptionDto.fromJson).toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'configOptions': configOptions.map((option) => option.toJson()).toList(),
+  }, meta);
 }
 
 class AcpCurrentModeUpdateDto {
@@ -324,6 +391,9 @@ class AcpCurrentModeUpdateDto {
       currentModeId: _requireString(json, 'currentModeId'),
     );
   }
+
+  Map<String, dynamic> toJson() =>
+      _withMeta({'currentModeId': currentModeId}, meta);
 }
 
 class AcpConfigOptionUpdateDto {
@@ -341,6 +411,10 @@ class AcpConfigOptionUpdateDto {
       ).map(AcpSessionConfigOptionDto.fromJson).toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'configOptions': configOptions.map((option) => option.toJson()).toList(),
+  }, meta);
 }
 
 class AcpPlanEntryDto {
@@ -364,6 +438,12 @@ class AcpPlanEntryDto {
       status: _requireString(json, 'status'),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    'content': content,
+    'priority': priority,
+    'status': status,
+  }, meta);
 }
 
 class AcpPlanUpdateDto {
@@ -387,6 +467,11 @@ class AcpPlanUpdateDto {
       ).map(AcpPlanEntryDto.fromJson).toList(),
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    if (sessionUpdate != null) 'sessionUpdate': sessionUpdate,
+    'entries': entries.map((entry) => entry.toJson()).toList(),
+  }, meta);
 }
 
 class AcpUsageCostDto {
@@ -401,6 +486,8 @@ class AcpUsageCostDto {
       currency: _requireString(json, 'currency'),
     );
   }
+
+  Map<String, dynamic> toJson() => {'amount': amount, 'currency': currency};
 }
 
 class AcpUsageUpdateDto {
@@ -433,6 +520,13 @@ class AcpUsageUpdateDto {
       },
     );
   }
+
+  Map<String, dynamic> toJson() => _withMeta({
+    if (sessionUpdate != null) 'sessionUpdate': sessionUpdate,
+    'used': used,
+    'size': size,
+    if (cost != null) 'cost': cost!.toJson(),
+  }, meta);
 }
 
 class AppSessionCreateDto {

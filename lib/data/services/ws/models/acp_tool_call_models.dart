@@ -7,6 +7,7 @@ part 'acp_tool_call_models.g.dart';
 
 @freezed
 class AcpToolCallUpdateDto with _$AcpToolCallUpdateDto {
+  @JsonSerializable(includeIfNull: false)
   const factory AcpToolCallUpdateDto({
     @JsonKey(name: '_meta') Map<String, dynamic>? meta,
     @JsonKey(name: 'toolCallId') required String toolCallId,
@@ -25,6 +26,7 @@ class AcpToolCallUpdateDto with _$AcpToolCallUpdateDto {
 
 @freezed
 class AcpToolCallLocationDto with _$AcpToolCallLocationDto {
+  @JsonSerializable(includeIfNull: false)
   const factory AcpToolCallLocationDto({
     @JsonKey(name: '_meta') Map<String, dynamic>? meta,
     required String path,

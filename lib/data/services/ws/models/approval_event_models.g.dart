@@ -145,7 +145,7 @@ _$$AcpRequestPermissionRequestDtoImplFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$$AcpRequestPermissionRequestDtoImplToJson(
   _$AcpRequestPermissionRequestDtoImpl instance,
 ) => <String, dynamic>{
-  '_meta': instance.meta,
+  if (instance.meta case final value?) '_meta': value,
   'sessionId': instance.sessionId,
   'toolCall': instance.toolCall.toJson(),
   'options': instance.options.map((e) => e.toJson()).toList(),
@@ -163,7 +163,7 @@ _$AcpPermissionOptionDtoImpl _$$AcpPermissionOptionDtoImplFromJson(
 Map<String, dynamic> _$$AcpPermissionOptionDtoImplToJson(
   _$AcpPermissionOptionDtoImpl instance,
 ) => <String, dynamic>{
-  '_meta': instance.meta,
+  if (instance.meta case final value?) '_meta': value,
   'optionId': instance.optionId,
   'name': instance.name,
   'kind': instance.kind,
@@ -181,7 +181,7 @@ _$$AcpRequestPermissionResponseDtoImplFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$$AcpRequestPermissionResponseDtoImplToJson(
   _$AcpRequestPermissionResponseDtoImpl instance,
 ) => <String, dynamic>{
-  '_meta': instance.meta,
+  if (instance.meta case final value?) '_meta': value,
   'outcome': instance.outcome.toJson(),
 };
 
@@ -196,7 +196,7 @@ _$$AcpRequestPermissionOutcomeDtoImplFromJson(Map<String, dynamic> json) =>
 Map<String, dynamic> _$$AcpRequestPermissionOutcomeDtoImplToJson(
   _$AcpRequestPermissionOutcomeDtoImpl instance,
 ) => <String, dynamic>{
-  '_meta': instance.meta,
+  if (instance.meta case final value?) '_meta': value,
   'outcome': instance.outcome,
-  'optionId': instance.optionId,
+  if (instance.optionId case final value?) 'optionId': value,
 };

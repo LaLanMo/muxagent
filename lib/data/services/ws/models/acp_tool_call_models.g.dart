@@ -27,15 +27,16 @@ _$AcpToolCallUpdateDtoImpl _$$AcpToolCallUpdateDtoImplFromJson(
 Map<String, dynamic> _$$AcpToolCallUpdateDtoImplToJson(
   _$AcpToolCallUpdateDtoImpl instance,
 ) => <String, dynamic>{
-  '_meta': instance.meta,
+  if (instance.meta case final value?) '_meta': value,
   'toolCallId': instance.toolCallId,
-  'title': instance.title,
-  'kind': instance.kind,
-  'status': instance.status,
-  'content': instance.content,
-  'locations': instance.locations?.map((e) => e.toJson()).toList(),
-  'rawInput': instance.rawInput,
-  'rawOutput': instance.rawOutput,
+  if (instance.title case final value?) 'title': value,
+  if (instance.kind case final value?) 'kind': value,
+  if (instance.status case final value?) 'status': value,
+  if (instance.content case final value?) 'content': value,
+  if (instance.locations?.map((e) => e.toJson()).toList() case final value?)
+    'locations': value,
+  if (instance.rawInput case final value?) 'rawInput': value,
+  if (instance.rawOutput case final value?) 'rawOutput': value,
 };
 
 _$AcpToolCallLocationDtoImpl _$$AcpToolCallLocationDtoImplFromJson(
@@ -49,7 +50,7 @@ _$AcpToolCallLocationDtoImpl _$$AcpToolCallLocationDtoImplFromJson(
 Map<String, dynamic> _$$AcpToolCallLocationDtoImplToJson(
   _$AcpToolCallLocationDtoImpl instance,
 ) => <String, dynamic>{
-  '_meta': instance.meta,
+  if (instance.meta case final value?) '_meta': value,
   'path': instance.path,
-  'line': instance.line,
+  if (instance.line case final value?) 'line': value,
 };

@@ -87,6 +87,7 @@ class ApprovalAllowedPromptDto with _$ApprovalAllowedPromptDto {
 
 @freezed
 class AcpRequestPermissionRequestDto with _$AcpRequestPermissionRequestDto {
+  @JsonSerializable(includeIfNull: false)
   const factory AcpRequestPermissionRequestDto({
     @JsonKey(name: '_meta') Map<String, dynamic>? meta,
     @JsonKey(name: 'sessionId') required String sessionId,
@@ -100,6 +101,7 @@ class AcpRequestPermissionRequestDto with _$AcpRequestPermissionRequestDto {
 
 @freezed
 class AcpPermissionOptionDto with _$AcpPermissionOptionDto {
+  @JsonSerializable(includeIfNull: false)
   const factory AcpPermissionOptionDto({
     @JsonKey(name: '_meta') Map<String, dynamic>? meta,
     @JsonKey(name: 'optionId') required String optionId,
@@ -113,6 +115,7 @@ class AcpPermissionOptionDto with _$AcpPermissionOptionDto {
 
 @freezed
 class AcpRequestPermissionResponseDto with _$AcpRequestPermissionResponseDto {
+  @JsonSerializable(includeIfNull: false)
   const factory AcpRequestPermissionResponseDto({
     @JsonKey(name: '_meta') Map<String, dynamic>? meta,
     required AcpRequestPermissionOutcomeDto outcome,
@@ -124,6 +127,7 @@ class AcpRequestPermissionResponseDto with _$AcpRequestPermissionResponseDto {
 
 @freezed
 class AcpRequestPermissionOutcomeDto with _$AcpRequestPermissionOutcomeDto {
+  @JsonSerializable(includeIfNull: false)
   const factory AcpRequestPermissionOutcomeDto({
     @JsonKey(name: '_meta') Map<String, dynamic>? meta,
     required String outcome,

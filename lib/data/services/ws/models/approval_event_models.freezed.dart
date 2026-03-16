@@ -1653,7 +1653,8 @@ class __$$AcpRequestPermissionRequestDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(includeIfNull: false)
 class _$AcpRequestPermissionRequestDtoImpl
     implements _AcpRequestPermissionRequestDto {
   const _$AcpRequestPermissionRequestDtoImpl({
@@ -1924,7 +1925,8 @@ class __$$AcpPermissionOptionDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(includeIfNull: false)
 class _$AcpPermissionOptionDtoImpl implements _AcpPermissionOptionDto {
   const _$AcpPermissionOptionDtoImpl({
     @JsonKey(name: '_meta') final Map<String, dynamic>? meta,
@@ -2170,7 +2172,8 @@ class __$$AcpRequestPermissionResponseDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(includeIfNull: false)
 class _$AcpRequestPermissionResponseDtoImpl
     implements _AcpRequestPermissionResponseDto {
   const _$AcpRequestPermissionResponseDtoImpl({
@@ -2405,7 +2408,8 @@ class __$$AcpRequestPermissionOutcomeDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(includeIfNull: false)
 class _$AcpRequestPermissionOutcomeDtoImpl
     implements _AcpRequestPermissionOutcomeDto {
   const _$AcpRequestPermissionOutcomeDtoImpl({

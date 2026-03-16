@@ -216,7 +216,8 @@ class __$$AcpToolCallUpdateDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(includeIfNull: false)
 class _$AcpToolCallUpdateDtoImpl implements _AcpToolCallUpdateDto {
   const _$AcpToolCallUpdateDtoImpl({
     @JsonKey(name: '_meta') final Map<String, dynamic>? meta,
@@ -521,7 +522,8 @@ class __$$AcpToolCallLocationDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
+@JsonSerializable(includeIfNull: false)
 class _$AcpToolCallLocationDtoImpl implements _AcpToolCallLocationDto {
   const _$AcpToolCallLocationDtoImpl({
     @JsonKey(name: '_meta') final Map<String, dynamic>? meta,
