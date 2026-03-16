@@ -3,10 +3,12 @@ import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
+import '../../domain/event.dart';
 import '../../domain/fs_entry.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/prompt_content_block.dart';
 import '../services/ws/models/acp_session_models.dart';
+import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/prompt_rpc_models.dart';
 import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
@@ -14,7 +16,7 @@ import '../services/ws/relay_ws_client.dart';
 import 'session_manager.dart';
 
 class ResyncBatch {
-  final List<Map<String, dynamic>> events;
+  final List<AgentEvent> events;
   final bool complete;
 
   const ResyncBatch({required this.events, required this.complete});
@@ -155,7 +157,14 @@ class WsSessionRepository {
       params: {'lastSeq': lastSeq},
     );
     final response = RpcResyncResponseDto.fromJson(result);
-    return ResyncBatch(events: response.events, complete: response.complete);
+    final events = <AgentEvent>[];
+    for (final payload in response.events) {
+      final event = EventEnvelopeParser.parse(payload, machineId);
+      if (event != null && event.type != null) {
+        events.add(event);
+      }
+    }
+    return ResyncBatch(events: events, complete: response.complete);
   }
 
   Future<List<ResolvedSessionSnapshot>> resolveSessions({

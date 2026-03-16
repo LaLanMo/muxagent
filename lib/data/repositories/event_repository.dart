@@ -10,14 +10,7 @@ import '../../domain/event.dart';
 import '../../domain/session.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
-import '../services/ws/approval_event_mapper.dart';
-import '../services/ws/lifecycle_event_mapper.dart';
-import '../services/ws/message_event_mapper.dart';
-import '../services/ws/plan_event_mapper.dart';
-import '../services/ws/run_event_mapper.dart';
-import '../services/ws/session_config_event_mapper.dart';
-import '../services/ws/tool_event_mapper.dart';
-import '../services/ws/usage_event_mapper.dart';
+import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
@@ -110,7 +103,7 @@ class EventRepository {
         payload['machineId'] as String? ??
         payload['machine_id'] as String? ??
         '';
-    final event = _parseEvent(payload, machineId);
+    final event = _parseWsEvent(payload, machineId);
     if (event == null || event.type == null) return;
 
     // Track sequence number per machine for resync
@@ -333,9 +326,7 @@ class EventRepository {
         machineId: machineId,
         lastSeq: lastSeq,
       );
-      for (final eventJson in response.events) {
-        final event = _parseEvent(eventJson, machineId);
-        if (event == null || event.type == null) continue;
+      for (final event in response.events) {
         if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
           _lastSeqByMachine[machineId] = event.seq;
         }
@@ -355,45 +346,15 @@ class EventRepository {
     }
   }
 
-  AgentEvent? _parseEvent(Map<String, dynamic> payload, String machineId) {
-    final eventType = EventType.fromValue(payload['type'] as String?);
-    if (eventType == null) {
-      debugPrint('[EventRepo] unsupported event type: ${payload['type']}');
-      return null;
-    }
-
+  AgentEvent? _parseWsEvent(Map<String, dynamic> payload, String machineId) {
     try {
-      return switch (eventType) {
-        EventType.approvalRequested || EventType.approvalReplied =>
-          ApprovalEventMapper.parseEvent(payload, machineId),
-        EventType.toolStarted ||
-        EventType.toolUpdated ||
-        EventType.toolCompleted ||
-        EventType.toolFailed => ToolEventMapper.parseEvent(payload, machineId),
-        EventType.messageDelta || EventType.reasoning =>
-          MessageEventMapper.parseEvent(payload, machineId),
-        EventType.planUpdated => PlanEventMapper.parseEvent(payload, machineId),
-        EventType.sessionStatus => LifecycleEventMapper.parseSessionStatus(
-          payload,
-          machineId,
-        ),
-        EventType.runFailed => LifecycleEventMapper.parseRunFailed(
-          payload,
-          machineId,
-        ),
-        EventType.runFinished => RunEventMapper.parseRunFinished(
-          payload,
-          machineId,
-        ),
-        EventType.usageUpdate => UsageEventMapper.parseEvent(
-          payload,
-          machineId,
-        ),
-        EventType.modeChanged || EventType.modelChanged =>
-          SessionConfigEventMapper.parseEvent(payload, machineId),
-      };
+      final event = EventEnvelopeParser.parse(payload, machineId);
+      if (event == null) {
+        debugPrint('[EventRepo] unsupported event type: ${payload['type']}');
+      }
+      return event;
     } catch (e) {
-      debugPrint('[EventRepo] failed to parse $eventType: $e');
+      debugPrint('[EventRepo] failed to parse ${payload['type']}: $e');
       return null;
     }
   }

@@ -4,6 +4,7 @@ import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
+import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/prompt_content_block.dart';
 
 class FakeRelayWsClient extends RelayWsClient {
@@ -172,7 +173,21 @@ void main() {
         nextPayload: {
           'result': {
             'events': [
-              {'type': 'message.delta', 'sessionId': 'sid-1', 'seq': 9},
+              {
+                'type': 'message.delta',
+                'sessionId': 'sid-1',
+                'seq': 9,
+                'messagePart': {
+                  'app': {
+                    'partId': 'part-1',
+                    'messageId': 'msg-1',
+                    'role': 'agent',
+                    'delta': 'hi',
+                    'partType': 'text',
+                    'fullText': 'hi',
+                  },
+                },
+              },
             ],
             'complete': true,
           },
@@ -191,7 +206,10 @@ void main() {
       expect(relay.lastMethod, 'events.resync');
       expect(relay.lastParams, {'lastSeq': 8});
       expect(resync.complete, isTrue);
-      expect(resync.events.single['seq'], 9);
+      expect(resync.events, hasLength(1));
+      expect(resync.events.single.type, EventType.messageDelta);
+      expect(resync.events.single.seq, 9);
+      expect(resync.events.single.sessionId, 'sid-1');
 
       relay.nextPayload = {
         'result': {
