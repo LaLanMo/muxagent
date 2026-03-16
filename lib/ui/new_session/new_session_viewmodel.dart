@@ -131,6 +131,7 @@ class NewSessionViewModel extends GetxController {
   final filteredCwds = <RecentCwd>[].obs;
   final isCwdDropdownOpen = false.obs;
   final cwdFocusNode = FocusNode();
+  final promptFocusNode = FocusNode();
 
   StreamSubscription<Set<String>>? _sessionSub;
   int _runtimeLoadToken = 0;
@@ -171,6 +172,7 @@ class NewSessionViewModel extends GetxController {
     _sessionSub?.cancel();
     _voiceRecorder?.dispose();
     cwdFocusNode.dispose();
+    promptFocusNode.dispose();
     cwdController.dispose();
     promptController.dispose();
     super.onClose();
@@ -317,6 +319,12 @@ class NewSessionViewModel extends GetxController {
     cwdController.text = cwd.path;
     isCwdDropdownOpen.value = false;
     cwdFocusNode.unfocus();
+  }
+
+  void commitCwdAndFocusPrompt() {
+    isCwdDropdownOpen.value = false;
+    cwdFocusNode.unfocus();
+    promptFocusNode.requestFocus();
   }
 
   Future<void> _checkSttConfig() async {

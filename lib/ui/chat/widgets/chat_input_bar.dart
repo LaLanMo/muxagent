@@ -46,9 +46,7 @@ class ChatInputBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
-        border: Border(
-          top: BorderSide(color: AppTheme.border),
-        ),
+        border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       child: SafeArea(
         top: false,
@@ -119,10 +117,10 @@ class ChatInputBar extends StatelessWidget {
                 _isRunning
                     ? _buildCancelButton()
                     : isTranscribing
-                        ? _buildTranscribingIndicator()
-                        : isRecording
-                            ? _buildStopRecordingButton()
-                            : _buildSendOrMicButton(),
+                    ? _buildTranscribingIndicator()
+                    : isRecording
+                    ? _buildStopRecordingButton()
+                    : _buildSendOrMicButton(),
               ],
             ),
           ],
@@ -199,7 +197,11 @@ class ChatInputBar extends StatelessWidget {
           border: Border.all(color: AppTheme.border),
         ),
         child: const Center(
-          child: Icon(LucideIcons.plus, color: AppTheme.textSecondary, size: 22),
+          child: Icon(
+            LucideIcons.plus,
+            color: AppTheme.textSecondary,
+            size: 22,
+          ),
         ),
       ),
     );
@@ -222,17 +224,21 @@ class ChatInputBar extends StatelessWidget {
   }
 
   Widget _buildSendButton() {
-    return GestureDetector(
-      onTap: onSend,
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: const BoxDecoration(
-          color: AppTheme.primary,
-          shape: BoxShape.circle,
-        ),
-        child: const Center(
-          child: Icon(LucideIcons.arrowUp, color: Colors.white, size: 18),
+    return Semantics(
+      button: true,
+      label: 'Send message',
+      child: GestureDetector(
+        onTap: onSend,
+        child: Container(
+          width: 36,
+          height: 36,
+          decoration: const BoxDecoration(
+            color: AppTheme.primary,
+            shape: BoxShape.circle,
+          ),
+          child: const Center(
+            child: Icon(LucideIcons.arrowUp, color: Colors.white, size: 18),
+          ),
         ),
       ),
     );
@@ -379,8 +385,7 @@ class _RecordingWaveformState extends State<_RecordingWaveform>
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: List.generate(_barCount, (i) {
                     final phase = i * 0.45;
-                    final t =
-                        (sin(_anim.value * 2 * pi + phase) + 1) / 2;
+                    final t = (sin(_anim.value * 2 * pi + phase) + 1) / 2;
                     final h = _minH + (_maxH - _minH) * t;
                     return Padding(
                       padding: EdgeInsets.only(left: i > 0 ? 6 : 0),

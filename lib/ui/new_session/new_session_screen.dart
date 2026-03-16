@@ -250,8 +250,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           for (var i = 0; i < options.length; i++) ...[
             _buildRuntimeRow(
               runtime: options[i],
-              isSelected:
-                  controller.selectedRuntime.value?.id == options[i].id,
+              isSelected: controller.selectedRuntime.value?.id == options[i].id,
               enabled: selectionEnabled,
             ),
             if (i != options.length - 1)
@@ -312,27 +311,35 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     final canTap = enabled && runtime.ready;
     final labelColor = canTap ? AppTheme.textPrimary : AppTheme.textSecondary;
 
-    return GestureDetector(
-      onTap: canTap ? () => controller.selectRuntime(runtime) : null,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        child: Row(
-          children: [
-            _buildRuntimeIcon(runtime.id),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                runtime.label,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: labelColor,
+    return Semantics(
+      label: runtime.label,
+      button: true,
+      enabled: canTap,
+      selected: isSelected,
+      container: true,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: canTap ? () => controller.selectRuntime(runtime) : null,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Row(
+            children: [
+              _buildRuntimeIcon(runtime.id),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  runtime.label,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: labelColor,
+                  ),
                 ),
               ),
-            ),
-            _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
-          ],
+              _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
+            ],
+          ),
         ),
       ),
     );
@@ -403,37 +410,47 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
   Widget _buildModeCard({required ModeOption mode, required bool isSelected}) {
     final accent = _modeAccent(mode.id);
-    return GestureDetector(
-      onTap: () => controller.selectMode(mode),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                mode.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+    return Semantics(
+      label: mode.label,
+      button: true,
+      selected: isSelected,
+      container: true,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () => controller.selectMode(mode),
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primary : AppTheme.inputFill,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  mode.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -557,29 +574,38 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: TextField(
-                      controller: controller.cwdController,
-                      focusNode: controller.cwdFocusNode,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      style: AppFonts.code(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimary,
-                      ),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        hintText: '~/project',
-                        hintStyle: AppFonts.code(
+                    child: Semantics(
+                      textField: true,
+                      label: 'Working directory',
+                      onTap: () => controller.cwdFocusNode.requestFocus(),
+                      child: TextField(
+                        controller: controller.cwdController,
+                        focusNode: controller.cwdFocusNode,
+                        textInputAction: TextInputAction.next,
+                        onSubmitted: (_) =>
+                            controller.commitCwdAndFocusPrompt(),
+                        onTapOutside: (_) => controller.cwdFocusNode.unfocus(),
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        smartDashesType: SmartDashesType.disabled,
+                        smartQuotesType: SmartQuotesType.disabled,
+                        style: AppFonts.code(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: AppTheme.textMuted,
+                          color: AppTheme.textPrimary,
+                        ),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          contentPadding: EdgeInsets.zero,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          hintText: '~/project',
+                          hintStyle: AppFonts.code(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textMuted,
+                          ),
                         ),
                       ),
                     ),
@@ -762,30 +788,38 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                child: TextField(
-                  controller: controller.promptController,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  autocorrect: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
-                    color: AppTheme.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    hintText: 'Describe what you want to do...',
-                    hintStyle: GoogleFonts.inter(
+                child: Semantics(
+                  textField: true,
+                  label: 'Initial prompt',
+                  onTap: () => controller.promptFocusNode.requestFocus(),
+                  child: TextField(
+                    controller: controller.promptController,
+                    focusNode: controller.promptFocusNode,
+                    textInputAction: TextInputAction.done,
+                    onTapOutside: (_) => controller.promptFocusNode.unfocus(),
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    autocorrect: false,
+                    smartDashesType: SmartDashesType.disabled,
+                    smartQuotesType: SmartQuotesType.disabled,
+                    style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.normal,
-                      color: AppTheme.textMuted,
+                      color: AppTheme.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      hintText: 'Describe what you want to do...',
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        color: AppTheme.textMuted,
+                      ),
                     ),
                   ),
                 ),

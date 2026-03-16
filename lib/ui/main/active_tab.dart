@@ -97,14 +97,18 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             Obx(() => _buildMachineCard()),
             const SizedBox(height: 16),
             // "Start New Session" text: Inter 15px w600 #1D1D1F (tappable text)
-            GestureDetector(
-              onTap: shell.navigateToNewSession,
-              child: Text(
-                'Start New Session',
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+            Semantics(
+              label: 'Start New Session',
+              button: true,
+              child: GestureDetector(
+                onTap: shell.navigateToNewSession,
+                child: Text(
+                  'Start New Session',
+                  style: GoogleFonts.inter(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
                 ),
               ),
             ),
