@@ -36,6 +36,7 @@ class RelayWsClient {
 
   final Map<String, PairedMachine> _machines = {};
   MasterKey? _masterKey;
+  String? _connectedRelayHttpUrl;
 
   RelayWsClient({
     required CryptoService crypto,
@@ -52,7 +53,16 @@ class RelayWsClient {
   bool get isConnected => _ws.isConnected;
 
   Future<void> connect({required String relayHttpUrl}) async {
-    if (relayConnected.value) {
+    final targetRelayHttpUrl = _normalizeRelayHttpUrl(relayHttpUrl);
+    if (_connectedRelayHttpUrl != null &&
+        _connectedRelayHttpUrl != targetRelayHttpUrl) {
+      debugPrint(
+        '[WS] switching relay from $_connectedRelayHttpUrl to $targetRelayHttpUrl',
+      );
+      await resetConnection(reason: 'switch relay to $targetRelayHttpUrl');
+    }
+
+    if (relayConnected.value && _connectedRelayHttpUrl == targetRelayHttpUrl) {
       connectionState.value = ConnState.connected;
       return;
     }
@@ -67,7 +77,7 @@ class RelayWsClient {
     }
     connectionState.value = ConnState.reconnecting;
 
-    final future = _connectInternal(relayHttpUrl);
+    final future = _connectInternal(targetRelayHttpUrl);
     _connectFuture = future;
     try {
       await future;
@@ -98,12 +108,14 @@ class RelayWsClient {
       wsUrl,
       onMessage: _handleMessage,
       onError: (err) {
+        _connectedRelayHttpUrl = null;
         relayConnected.value = false;
         connectionState.value = ConnState.disconnected;
         _registeredCompleter?.completeError(err);
         _sessions.endAll(err);
       },
       onDone: () {
+        _connectedRelayHttpUrl = null;
         relayConnected.value = false;
         connectionState.value = ConnState.disconnected;
         _registeredCompleter?.completeError('socket closed');
@@ -128,6 +140,7 @@ class RelayWsClient {
       ).toJson(),
     );
     await _registeredCompleter!.future;
+    _connectedRelayHttpUrl = relayHttpUrl;
     debugPrint('[WS] registered successfully');
   }
 
@@ -232,6 +245,7 @@ class RelayWsClient {
 
   Future<void> resetConnection({Object? reason}) async {
     final error = reason ?? 'connection reset';
+    _connectedRelayHttpUrl = null;
     relayConnected.value = false;
     connectionState.value = ConnState.disconnected;
     final completer = _registeredCompleter;
@@ -440,6 +454,19 @@ class RelayWsClient {
       publicKey: SimplePublicKey(publicKeyBytes, type: KeyPairType.ed25519),
     );
     return _ed25519.verify(utf8.encode(message), signature: signature);
+  }
+
+  String _normalizeRelayHttpUrl(String relayHttpUrl) {
+    final uri = Uri.parse(relayHttpUrl);
+    final normalized = Uri(
+      scheme: uri.scheme,
+      host: uri.host,
+      port: uri.hasPort ? uri.port : null,
+      path: uri.path == '/' ? '' : uri.path,
+    ).toString();
+    return normalized.endsWith('/')
+        ? normalized.substring(0, normalized.length - 1)
+        : normalized;
   }
 
   String _wsUrlFromHttp(String httpUrl) {
