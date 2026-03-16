@@ -14,8 +14,8 @@ class UsageEventMapper {
       at: at,
       machineId: machineId,
       usageUpdate: UsageUpdate(
-        contextUsed: dto.usage.app.contextUsed,
-        contextSize: dto.usage.app.contextSize,
+        contextUsed: dto.usage.app.contextUsed.toInt(),
+        contextSize: dto.usage.app.contextSize.toInt(),
         costAmount: dto.usage.app.costAmount,
         costCurrency: dto.usage.app.costCurrency,
       ),

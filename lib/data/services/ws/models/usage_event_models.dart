@@ -1,95 +1,89 @@
+// ignore_for_file: invalid_annotation_target
+
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'acp_session_models.dart';
 
-num _requireNum(Map<String, dynamic> json, String key) {
-  final value = json[key];
+part 'usage_event_models.freezed.dart';
+part 'usage_event_models.g.dart';
+
+num _requiredNum(Object? value) {
   if (value is num) return value;
-  throw FormatException('Expected "$key" to be a number');
+  throw FormatException('Expected a number');
 }
 
-class AppUsageUpdateDto {
-  final int contextUsed;
-  final int contextSize;
-  final double? costAmount;
-  final String? costCurrency;
-
-  const AppUsageUpdateDto({
-    required this.contextUsed,
-    required this.contextSize,
-    this.costAmount,
-    this.costCurrency,
-  });
-
-  factory AppUsageUpdateDto.fromJson(Map<String, dynamic> json) {
-    final rawCostAmount = json['costAmount'];
-    if (rawCostAmount != null && rawCostAmount is! num) {
-      throw FormatException('Expected "costAmount" to be a number or null');
-    }
-    final rawCostCurrency = json['costCurrency'];
-    if (rawCostCurrency != null && rawCostCurrency is! String) {
-      throw FormatException('Expected "costCurrency" to be a string or null');
-    }
-
-    return AppUsageUpdateDto(
-      contextUsed: _requireNum(json, 'contextUsed').toInt(),
-      contextSize: _requireNum(json, 'contextSize').toInt(),
-      costAmount: rawCostAmount?.toDouble(),
-      costCurrency: rawCostCurrency as String?,
-    );
-  }
+double? _nullableDouble(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toDouble();
+  throw FormatException('Expected a number or null');
 }
 
-class UsageWireDto {
-  final AppUsageUpdateDto app;
-  final AcpUsageUpdateDto? acp;
-
-  const UsageWireDto({required this.app, this.acp});
-
-  factory UsageWireDto.fromJson(Map<String, dynamic> json) {
-    return UsageWireDto(
-      app: AppUsageUpdateDto.fromJson(
-        Map<String, dynamic>.from(json['app'] as Map),
-      ),
-      acp: switch (json['acp']) {
-        null => null,
-        final Map value => AcpUsageUpdateDto.fromJson(
-          Map<String, dynamic>.from(value),
-        ),
-        _ => throw FormatException('Expected "acp" to be an object or null'),
-      },
-    );
-  }
+String? _nullableString(Object? value) {
+  if (value == null) return null;
+  if (value is String) return value;
+  throw FormatException('Expected a string or null');
 }
 
-class UsageEventEnvelopeDto {
-  final String type;
-  final String? sessionId;
-  final int seq;
-  final DateTime? at;
-  final UsageWireDto usage;
+Map<String, dynamic> _requiredObject(Object? value) {
+  if (value is Map) return Map<String, dynamic>.from(value);
+  throw FormatException('Expected an object');
+}
 
-  const UsageEventEnvelopeDto({
-    required this.type,
-    required this.usage,
-    this.sessionId,
-    this.seq = 0,
-    this.at,
-  });
+@Freezed(toJson: false)
+class AppUsageUpdateDto with _$AppUsageUpdateDto {
+  const factory AppUsageUpdateDto({
+    @JsonKey(name: 'contextUsed', fromJson: _requiredNum)
+    required num contextUsed,
+    @JsonKey(name: 'contextSize', fromJson: _requiredNum)
+    required num contextSize,
+    @JsonKey(name: 'costAmount', fromJson: _nullableDouble) double? costAmount,
+    @JsonKey(name: 'costCurrency', fromJson: _nullableString)
+    String? costCurrency,
+  }) = _AppUsageUpdateDto;
 
-  factory UsageEventEnvelopeDto.fromJson(Map<String, dynamic> json) {
-    return UsageEventEnvelopeDto(
-      type:
-          json['type'] as String? ??
-          (throw FormatException('Expected "type" to be a string')),
-      sessionId: json['sessionId'] as String?,
-      seq: (json['seq'] as num?)?.toInt() ?? 0,
-      at: switch (json['at']) {
-        null => null,
-        final String value => DateTime.parse(value),
-        _ => throw FormatException('Expected "at" to be a string or null'),
-      },
-      usage: UsageWireDto.fromJson(
-        Map<String, dynamic>.from(json['usage'] as Map),
-      ),
-    );
-  }
+  factory AppUsageUpdateDto.fromJson(Map<String, dynamic> json) =>
+      _$AppUsageUpdateDtoFromJson(json);
+}
+
+@Freezed(toJson: false)
+class UsageWireDto with _$UsageWireDto {
+  const factory UsageWireDto({
+    @JsonKey(fromJson: _appUsageFromJson) required AppUsageUpdateDto app,
+    @JsonKey(fromJson: _nullableAcpUsage) AcpUsageUpdateDto? acp,
+  }) = _UsageWireDto;
+
+  factory UsageWireDto.fromJson(Map<String, dynamic> json) =>
+      _$UsageWireDtoFromJson(json);
+}
+
+@Freezed(toJson: false)
+class UsageEventEnvelopeDto with _$UsageEventEnvelopeDto {
+  const factory UsageEventEnvelopeDto({
+    @JsonKey(fromJson: _requiredString) required String type,
+    @JsonKey(name: 'sessionId') String? sessionId,
+    @Default(0) int seq,
+    DateTime? at,
+    @JsonKey(fromJson: _usageWireFromJson) required UsageWireDto usage,
+  }) = _UsageEventEnvelopeDto;
+
+  factory UsageEventEnvelopeDto.fromJson(Map<String, dynamic> json) =>
+      _$UsageEventEnvelopeDtoFromJson(json);
+}
+
+String _requiredString(Object? value) {
+  if (value is String) return value;
+  throw FormatException('Expected a string');
+}
+
+AppUsageUpdateDto _appUsageFromJson(Object? value) {
+  return AppUsageUpdateDto.fromJson(_requiredObject(value));
+}
+
+UsageWireDto _usageWireFromJson(Object? value) {
+  return UsageWireDto.fromJson(_requiredObject(value));
+}
+
+AcpUsageUpdateDto? _nullableAcpUsage(Object? value) {
+  if (value == null) return null;
+  return AcpUsageUpdateDto.fromJson(_requiredObject(value));
 }
