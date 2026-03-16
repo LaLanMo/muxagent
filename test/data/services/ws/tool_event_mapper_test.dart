@@ -19,8 +19,10 @@ void main() {
           'title': 'touch /workspace/claude-approval.txt',
           'status': 'in_progress',
           'input': {
-            'command': 'touch /workspace/claude-approval.txt',
+            'command': {'display': 'touch /workspace/claude-approval.txt'},
             'description': 'Create empty file claude-approval.txt',
+            'rawInputJson':
+                '{"command":"touch /workspace/claude-approval.txt","description":"Create empty file claude-approval.txt"}',
           },
           'claudeCode': {'toolName': 'Bash'},
           'locations': [
@@ -60,8 +62,12 @@ void main() {
     expect(event.tool!.kind, 'execute');
     expect(event.tool!.status, ToolStatus.inProgress);
     expect(
-      event.tool!.input?['description'],
+      event.tool!.input?.description,
       'Create empty file claude-approval.txt',
+    );
+    expect(
+      event.tool!.input?.command?.display,
+      'touch /workspace/claude-approval.txt',
     );
     expect(event.tool!.claudeCode?.toolName, 'Bash');
     expect(event.tool!.locations, hasLength(1));
@@ -84,6 +90,11 @@ void main() {
           'title': 'Terminal',
           'status': 'completed',
           'output': '',
+          'input': {
+            'description': 'Create empty file',
+            'command': {'display': 'touch /workspace/output.txt'},
+            'rawInputJson': '{"command":"touch /workspace/output.txt"}',
+          },
         },
         'acp': {
           '_meta': {
@@ -103,6 +114,7 @@ void main() {
     expect(event.tool!.name, 'Terminal');
     expect(event.tool!.kind, 'execute');
     expect(event.tool!.claudeCode?.toolName, 'Bash');
+    expect(event.tool!.input?.command?.display, 'touch /workspace/output.txt');
     expect(event.tool!.output, isNull);
   });
 }

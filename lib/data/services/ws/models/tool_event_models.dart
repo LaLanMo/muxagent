@@ -42,7 +42,7 @@ class ToolAppDto with _$ToolAppDto {
     String? kind,
     String? title,
     required String status,
-    Map<String, dynamic>? input,
+    ToolInputDto? input,
     String? output,
     String? error,
     @Default(<ToolDiffDto>[]) List<ToolDiffDto> diffs,
@@ -52,6 +52,48 @@ class ToolAppDto with _$ToolAppDto {
 
   factory ToolAppDto.fromJson(Map<String, dynamic> json) =>
       _$ToolAppDtoFromJson(json);
+}
+
+@freezed
+class ToolInputDto with _$ToolInputDto {
+  const factory ToolInputDto({
+    String? description,
+    ToolCommandDto? command,
+    @JsonKey(name: 'filePath') String? filePath,
+    @JsonKey(name: 'sourcePath') String? sourcePath,
+    @JsonKey(name: 'targetPath') String? targetPath,
+    String? pattern,
+    String? url,
+    String? mode,
+    ToolEditInputDto? edit,
+    @JsonKey(name: 'rawInputJson') String? rawInputJson,
+  }) = _ToolInputDto;
+
+  factory ToolInputDto.fromJson(Map<String, dynamic> json) =>
+      _$ToolInputDtoFromJson(json);
+}
+
+@freezed
+class ToolCommandDto with _$ToolCommandDto {
+  const factory ToolCommandDto({
+    @Default(<String>[]) List<String> argv,
+    String? display,
+  }) = _ToolCommandDto;
+
+  factory ToolCommandDto.fromJson(Map<String, dynamic> json) =>
+      _$ToolCommandDtoFromJson(json);
+}
+
+@freezed
+class ToolEditInputDto with _$ToolEditInputDto {
+  const factory ToolEditInputDto({
+    @JsonKey(name: 'filePath') String? filePath,
+    @JsonKey(name: 'oldString') String? oldString,
+    @JsonKey(name: 'newString') String? newString,
+  }) = _ToolEditInputDto;
+
+  factory ToolEditInputDto.fromJson(Map<String, dynamic> json) =>
+      _$ToolEditInputDtoFromJson(json);
 }
 
 @freezed

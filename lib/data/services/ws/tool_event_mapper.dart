@@ -34,7 +34,31 @@ class ToolEventMapper {
       kind: kind,
       title: title,
       status: ToolStatus.fromValue(app.status),
-      input: _mapOrNull(app.input),
+      input: app.input == null
+          ? null
+          : ToolInputInfo(
+              description: _nonEmpty(app.input!.description),
+              command: app.input!.command == null
+                  ? null
+                  : ToolCommandInfo(
+                      argv: app.input!.command!.argv,
+                      display: _nonEmpty(app.input!.command!.display),
+                    ),
+              filePath: _nonEmpty(app.input!.filePath),
+              sourcePath: _nonEmpty(app.input!.sourcePath),
+              targetPath: _nonEmpty(app.input!.targetPath),
+              pattern: _nonEmpty(app.input!.pattern),
+              url: _nonEmpty(app.input!.url),
+              mode: _nonEmpty(app.input!.mode),
+              edit: app.input!.edit == null
+                  ? null
+                  : ToolEditInputInfo(
+                      filePath: _nonEmpty(app.input!.edit!.filePath),
+                      oldString: app.input!.edit!.oldString,
+                      newString: app.input!.edit!.newString,
+                    ),
+              rawInputJson: _nonEmpty(app.input!.rawInputJson),
+            ),
       output: _nullIfEmpty(app.output),
       error: _nullIfEmpty(app.error),
       diffs: app.diffs
@@ -70,11 +94,6 @@ class ToolEventMapper {
   static String? _nullIfEmpty(String? value) {
     if (value == null) return null;
     return value.isEmpty ? null : value;
-  }
-
-  static Map<String, dynamic>? _mapOrNull(Map<String, dynamic>? value) {
-    if (value == null || value.isEmpty) return null;
-    return Map<String, dynamic>.from(value);
   }
 
   static ClaudeCodeToolDto? _claudeCodeFromMeta(Map<String, dynamic>? meta) {

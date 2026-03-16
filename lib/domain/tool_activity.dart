@@ -7,7 +7,7 @@ class ToolActivity {
   String? kind;
   ToolStatus status;
   String? title;
-  Map<String, dynamic>? input;
+  ToolInputInfo? input;
   String? output;
   String? error;
   ClaudeCodeToolInfo? claudeCode;
@@ -45,7 +45,32 @@ class ToolActivity {
     'status': status.value,
     if (kind != null) 'kind': kind,
     if (title != null) 'title': title,
-    if (input != null) 'input': input,
+    if (input != null)
+      'input': {
+        if (input!.description != null) 'description': input!.description,
+        if (input!.command != null)
+          'command': {
+            if (input!.command!.argv.isNotEmpty) 'argv': input!.command!.argv,
+            if (input!.command!.display != null)
+              'display': input!.command!.display,
+          },
+        if (input!.filePath != null) 'filePath': input!.filePath,
+        if (input!.sourcePath != null) 'sourcePath': input!.sourcePath,
+        if (input!.targetPath != null) 'targetPath': input!.targetPath,
+        if (input!.pattern != null) 'pattern': input!.pattern,
+        if (input!.url != null) 'url': input!.url,
+        if (input!.mode != null) 'mode': input!.mode,
+        if (input!.edit != null)
+          'edit': {
+            if (input!.edit!.filePath != null)
+              'filePath': input!.edit!.filePath,
+            if (input!.edit!.oldString != null)
+              'oldString': input!.edit!.oldString,
+            if (input!.edit!.newString != null)
+              'newString': input!.edit!.newString,
+          },
+        if (input!.rawInputJson != null) 'rawInputJson': input!.rawInputJson,
+      },
     if (output != null) 'output': output,
     if (error != null) 'error': error,
     if (claudeCode != null)

@@ -49,7 +49,9 @@ _$ToolAppDtoImpl _$$ToolAppDtoImplFromJson(Map<String, dynamic> json) =>
       kind: json['kind'] as String?,
       title: json['title'] as String?,
       status: json['status'] as String,
-      input: json['input'] as Map<String, dynamic>?,
+      input: json['input'] == null
+          ? null
+          : ToolInputDto.fromJson(json['input'] as Map<String, dynamic>),
       output: json['output'] as String?,
       error: json['error'] as String?,
       diffs:
@@ -78,13 +80,73 @@ Map<String, dynamic> _$$ToolAppDtoImplToJson(_$ToolAppDtoImpl instance) =>
       'kind': instance.kind,
       'title': instance.title,
       'status': instance.status,
-      'input': instance.input,
+      'input': instance.input?.toJson(),
       'output': instance.output,
       'error': instance.error,
       'diffs': instance.diffs.map((e) => e.toJson()).toList(),
       'claude_code': instance.claudeCode?.toJson(),
       'locations': instance.locations.map((e) => e.toJson()).toList(),
     };
+
+_$ToolInputDtoImpl _$$ToolInputDtoImplFromJson(Map<String, dynamic> json) =>
+    _$ToolInputDtoImpl(
+      description: json['description'] as String?,
+      command: json['command'] == null
+          ? null
+          : ToolCommandDto.fromJson(json['command'] as Map<String, dynamic>),
+      filePath: json['filePath'] as String?,
+      sourcePath: json['sourcePath'] as String?,
+      targetPath: json['targetPath'] as String?,
+      pattern: json['pattern'] as String?,
+      url: json['url'] as String?,
+      mode: json['mode'] as String?,
+      edit: json['edit'] == null
+          ? null
+          : ToolEditInputDto.fromJson(json['edit'] as Map<String, dynamic>),
+      rawInputJson: json['rawInputJson'] as String?,
+    );
+
+Map<String, dynamic> _$$ToolInputDtoImplToJson(_$ToolInputDtoImpl instance) =>
+    <String, dynamic>{
+      'description': instance.description,
+      'command': instance.command?.toJson(),
+      'filePath': instance.filePath,
+      'sourcePath': instance.sourcePath,
+      'targetPath': instance.targetPath,
+      'pattern': instance.pattern,
+      'url': instance.url,
+      'mode': instance.mode,
+      'edit': instance.edit?.toJson(),
+      'rawInputJson': instance.rawInputJson,
+    };
+
+_$ToolCommandDtoImpl _$$ToolCommandDtoImplFromJson(Map<String, dynamic> json) =>
+    _$ToolCommandDtoImpl(
+      argv:
+          (json['argv'] as List<dynamic>?)?.map((e) => e as String).toList() ??
+          const <String>[],
+      display: json['display'] as String?,
+    );
+
+Map<String, dynamic> _$$ToolCommandDtoImplToJson(
+  _$ToolCommandDtoImpl instance,
+) => <String, dynamic>{'argv': instance.argv, 'display': instance.display};
+
+_$ToolEditInputDtoImpl _$$ToolEditInputDtoImplFromJson(
+  Map<String, dynamic> json,
+) => _$ToolEditInputDtoImpl(
+  filePath: json['filePath'] as String?,
+  oldString: json['oldString'] as String?,
+  newString: json['newString'] as String?,
+);
+
+Map<String, dynamic> _$$ToolEditInputDtoImplToJson(
+  _$ToolEditInputDtoImpl instance,
+) => <String, dynamic>{
+  'filePath': instance.filePath,
+  'oldString': instance.oldString,
+  'newString': instance.newString,
+};
 
 _$ClaudeCodeToolDtoImpl _$$ClaudeCodeToolDtoImplFromJson(
   Map<String, dynamic> json,

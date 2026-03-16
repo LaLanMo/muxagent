@@ -44,6 +44,47 @@ class ClaudeCodeToolInfo {
   const ClaudeCodeToolInfo({this.parentToolUseId, this.toolName});
 }
 
+class ToolCommandInfo {
+  final List<String> argv;
+  final String? display;
+
+  const ToolCommandInfo({this.argv = const [], this.display});
+}
+
+class ToolEditInputInfo {
+  final String? filePath;
+  final String? oldString;
+  final String? newString;
+
+  const ToolEditInputInfo({this.filePath, this.oldString, this.newString});
+}
+
+class ToolInputInfo {
+  final String? description;
+  final ToolCommandInfo? command;
+  final String? filePath;
+  final String? sourcePath;
+  final String? targetPath;
+  final String? pattern;
+  final String? url;
+  final String? mode;
+  final ToolEditInputInfo? edit;
+  final String? rawInputJson;
+
+  const ToolInputInfo({
+    this.description,
+    this.command,
+    this.filePath,
+    this.sourcePath,
+    this.targetPath,
+    this.pattern,
+    this.url,
+    this.mode,
+    this.edit,
+    this.rawInputJson,
+  });
+}
+
 class PlanUpdate {
   final List<PlanEntry> entries;
 
@@ -90,7 +131,7 @@ class ToolEvent {
   final String? kind;
   final String? title;
   final ToolStatus status;
-  final Map<String, dynamic>? input;
+  final ToolInputInfo? input;
   final String? output;
   final String? error;
   final List<ToolDiff>? diffs;

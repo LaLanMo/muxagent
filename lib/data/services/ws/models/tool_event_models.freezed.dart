@@ -501,7 +501,7 @@ mixin _$ToolAppDto {
   String? get kind => throw _privateConstructorUsedError;
   String? get title => throw _privateConstructorUsedError;
   String get status => throw _privateConstructorUsedError;
-  Map<String, dynamic>? get input => throw _privateConstructorUsedError;
+  ToolInputDto? get input => throw _privateConstructorUsedError;
   String? get output => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
   List<ToolDiffDto> get diffs => throw _privateConstructorUsedError;
@@ -533,7 +533,7 @@ abstract class $ToolAppDtoCopyWith<$Res> {
     String? kind,
     String? title,
     String status,
-    Map<String, dynamic>? input,
+    ToolInputDto? input,
     String? output,
     String? error,
     List<ToolDiffDto> diffs,
@@ -541,6 +541,7 @@ abstract class $ToolAppDtoCopyWith<$Res> {
     List<ToolLocationDto> locations,
   });
 
+  $ToolInputDtoCopyWith<$Res>? get input;
   $ClaudeCodeToolDtoCopyWith<$Res>? get claudeCode;
 }
 
@@ -606,7 +607,7 @@ class _$ToolAppDtoCopyWithImpl<$Res, $Val extends ToolAppDto>
             input: freezed == input
                 ? _value.input
                 : input // ignore: cast_nullable_to_non_nullable
-                      as Map<String, dynamic>?,
+                      as ToolInputDto?,
             output: freezed == output
                 ? _value.output
                 : output // ignore: cast_nullable_to_non_nullable
@@ -630,6 +631,20 @@ class _$ToolAppDtoCopyWithImpl<$Res, $Val extends ToolAppDto>
           )
           as $Val,
     );
+  }
+
+  /// Create a copy of ToolAppDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ToolInputDtoCopyWith<$Res>? get input {
+    if (_value.input == null) {
+      return null;
+    }
+
+    return $ToolInputDtoCopyWith<$Res>(_value.input!, (value) {
+      return _then(_value.copyWith(input: value) as $Val);
+    });
   }
 
   /// Create a copy of ToolAppDto
@@ -664,7 +679,7 @@ abstract class _$$ToolAppDtoImplCopyWith<$Res>
     String? kind,
     String? title,
     String status,
-    Map<String, dynamic>? input,
+    ToolInputDto? input,
     String? output,
     String? error,
     List<ToolDiffDto> diffs,
@@ -672,6 +687,8 @@ abstract class _$$ToolAppDtoImplCopyWith<$Res>
     List<ToolLocationDto> locations,
   });
 
+  @override
+  $ToolInputDtoCopyWith<$Res>? get input;
   @override
   $ClaudeCodeToolDtoCopyWith<$Res>? get claudeCode;
 }
@@ -735,9 +752,9 @@ class __$$ToolAppDtoImplCopyWithImpl<$Res>
             : status // ignore: cast_nullable_to_non_nullable
                   as String,
         input: freezed == input
-            ? _value._input
+            ? _value.input
             : input // ignore: cast_nullable_to_non_nullable
-                  as Map<String, dynamic>?,
+                  as ToolInputDto?,
         output: freezed == output
             ? _value.output
             : output // ignore: cast_nullable_to_non_nullable
@@ -774,14 +791,13 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
     this.kind,
     this.title,
     required this.status,
-    final Map<String, dynamic>? input,
+    this.input,
     this.output,
     this.error,
     final List<ToolDiffDto> diffs = const <ToolDiffDto>[],
     this.claudeCode,
     final List<ToolLocationDto> locations = const <ToolLocationDto>[],
-  }) : _input = input,
-       _diffs = diffs,
+  }) : _diffs = diffs,
        _locations = locations;
 
   factory _$ToolAppDtoImpl.fromJson(Map<String, dynamic> json) =>
@@ -804,16 +820,8 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
   final String? title;
   @override
   final String status;
-  final Map<String, dynamic>? _input;
   @override
-  Map<String, dynamic>? get input {
-    final value = _input;
-    if (value == null) return null;
-    if (_input is EqualUnmodifiableMapView) return _input;
-    // ignore: implicit_dynamic_type
-    return EqualUnmodifiableMapView(value);
-  }
-
+  final ToolInputDto? input;
   @override
   final String? output;
   @override
@@ -856,7 +864,7 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
             (identical(other.kind, kind) || other.kind == kind) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.status, status) || other.status == status) &&
-            const DeepCollectionEquality().equals(other._input, _input) &&
+            (identical(other.input, input) || other.input == input) &&
             (identical(other.output, output) || other.output == output) &&
             (identical(other.error, error) || other.error == error) &&
             const DeepCollectionEquality().equals(other._diffs, _diffs) &&
@@ -879,7 +887,7 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
     kind,
     title,
     status,
-    const DeepCollectionEquality().hash(_input),
+    input,
     output,
     error,
     const DeepCollectionEquality().hash(_diffs),
@@ -910,7 +918,7 @@ abstract class _ToolAppDto implements ToolAppDto {
     final String? kind,
     final String? title,
     required final String status,
-    final Map<String, dynamic>? input,
+    final ToolInputDto? input,
     final String? output,
     final String? error,
     final List<ToolDiffDto> diffs,
@@ -939,7 +947,7 @@ abstract class _ToolAppDto implements ToolAppDto {
   @override
   String get status;
   @override
-  Map<String, dynamic>? get input;
+  ToolInputDto? get input;
   @override
   String? get output;
   @override
@@ -956,6 +964,817 @@ abstract class _ToolAppDto implements ToolAppDto {
   @override
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$ToolAppDtoImplCopyWith<_$ToolAppDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+ToolInputDto _$ToolInputDtoFromJson(Map<String, dynamic> json) {
+  return _ToolInputDto.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ToolInputDto {
+  String? get description => throw _privateConstructorUsedError;
+  ToolCommandDto? get command => throw _privateConstructorUsedError;
+  @JsonKey(name: 'filePath')
+  String? get filePath => throw _privateConstructorUsedError;
+  @JsonKey(name: 'sourcePath')
+  String? get sourcePath => throw _privateConstructorUsedError;
+  @JsonKey(name: 'targetPath')
+  String? get targetPath => throw _privateConstructorUsedError;
+  String? get pattern => throw _privateConstructorUsedError;
+  String? get url => throw _privateConstructorUsedError;
+  String? get mode => throw _privateConstructorUsedError;
+  ToolEditInputDto? get edit => throw _privateConstructorUsedError;
+  @JsonKey(name: 'rawInputJson')
+  String? get rawInputJson => throw _privateConstructorUsedError;
+
+  /// Serializes this ToolInputDto to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ToolInputDtoCopyWith<ToolInputDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ToolInputDtoCopyWith<$Res> {
+  factory $ToolInputDtoCopyWith(
+    ToolInputDto value,
+    $Res Function(ToolInputDto) then,
+  ) = _$ToolInputDtoCopyWithImpl<$Res, ToolInputDto>;
+  @useResult
+  $Res call({
+    String? description,
+    ToolCommandDto? command,
+    @JsonKey(name: 'filePath') String? filePath,
+    @JsonKey(name: 'sourcePath') String? sourcePath,
+    @JsonKey(name: 'targetPath') String? targetPath,
+    String? pattern,
+    String? url,
+    String? mode,
+    ToolEditInputDto? edit,
+    @JsonKey(name: 'rawInputJson') String? rawInputJson,
+  });
+
+  $ToolCommandDtoCopyWith<$Res>? get command;
+  $ToolEditInputDtoCopyWith<$Res>? get edit;
+}
+
+/// @nodoc
+class _$ToolInputDtoCopyWithImpl<$Res, $Val extends ToolInputDto>
+    implements $ToolInputDtoCopyWith<$Res> {
+  _$ToolInputDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? description = freezed,
+    Object? command = freezed,
+    Object? filePath = freezed,
+    Object? sourcePath = freezed,
+    Object? targetPath = freezed,
+    Object? pattern = freezed,
+    Object? url = freezed,
+    Object? mode = freezed,
+    Object? edit = freezed,
+    Object? rawInputJson = freezed,
+  }) {
+    return _then(
+      _value.copyWith(
+            description: freezed == description
+                ? _value.description
+                : description // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            command: freezed == command
+                ? _value.command
+                : command // ignore: cast_nullable_to_non_nullable
+                      as ToolCommandDto?,
+            filePath: freezed == filePath
+                ? _value.filePath
+                : filePath // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            sourcePath: freezed == sourcePath
+                ? _value.sourcePath
+                : sourcePath // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            targetPath: freezed == targetPath
+                ? _value.targetPath
+                : targetPath // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            pattern: freezed == pattern
+                ? _value.pattern
+                : pattern // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            url: freezed == url
+                ? _value.url
+                : url // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            mode: freezed == mode
+                ? _value.mode
+                : mode // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            edit: freezed == edit
+                ? _value.edit
+                : edit // ignore: cast_nullable_to_non_nullable
+                      as ToolEditInputDto?,
+            rawInputJson: freezed == rawInputJson
+                ? _value.rawInputJson
+                : rawInputJson // ignore: cast_nullable_to_non_nullable
+                      as String?,
+          )
+          as $Val,
+    );
+  }
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ToolCommandDtoCopyWith<$Res>? get command {
+    if (_value.command == null) {
+      return null;
+    }
+
+    return $ToolCommandDtoCopyWith<$Res>(_value.command!, (value) {
+      return _then(_value.copyWith(command: value) as $Val);
+    });
+  }
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $ToolEditInputDtoCopyWith<$Res>? get edit {
+    if (_value.edit == null) {
+      return null;
+    }
+
+    return $ToolEditInputDtoCopyWith<$Res>(_value.edit!, (value) {
+      return _then(_value.copyWith(edit: value) as $Val);
+    });
+  }
+}
+
+/// @nodoc
+abstract class _$$ToolInputDtoImplCopyWith<$Res>
+    implements $ToolInputDtoCopyWith<$Res> {
+  factory _$$ToolInputDtoImplCopyWith(
+    _$ToolInputDtoImpl value,
+    $Res Function(_$ToolInputDtoImpl) then,
+  ) = __$$ToolInputDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    String? description,
+    ToolCommandDto? command,
+    @JsonKey(name: 'filePath') String? filePath,
+    @JsonKey(name: 'sourcePath') String? sourcePath,
+    @JsonKey(name: 'targetPath') String? targetPath,
+    String? pattern,
+    String? url,
+    String? mode,
+    ToolEditInputDto? edit,
+    @JsonKey(name: 'rawInputJson') String? rawInputJson,
+  });
+
+  @override
+  $ToolCommandDtoCopyWith<$Res>? get command;
+  @override
+  $ToolEditInputDtoCopyWith<$Res>? get edit;
+}
+
+/// @nodoc
+class __$$ToolInputDtoImplCopyWithImpl<$Res>
+    extends _$ToolInputDtoCopyWithImpl<$Res, _$ToolInputDtoImpl>
+    implements _$$ToolInputDtoImplCopyWith<$Res> {
+  __$$ToolInputDtoImplCopyWithImpl(
+    _$ToolInputDtoImpl _value,
+    $Res Function(_$ToolInputDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? description = freezed,
+    Object? command = freezed,
+    Object? filePath = freezed,
+    Object? sourcePath = freezed,
+    Object? targetPath = freezed,
+    Object? pattern = freezed,
+    Object? url = freezed,
+    Object? mode = freezed,
+    Object? edit = freezed,
+    Object? rawInputJson = freezed,
+  }) {
+    return _then(
+      _$ToolInputDtoImpl(
+        description: freezed == description
+            ? _value.description
+            : description // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        command: freezed == command
+            ? _value.command
+            : command // ignore: cast_nullable_to_non_nullable
+                  as ToolCommandDto?,
+        filePath: freezed == filePath
+            ? _value.filePath
+            : filePath // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        sourcePath: freezed == sourcePath
+            ? _value.sourcePath
+            : sourcePath // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        targetPath: freezed == targetPath
+            ? _value.targetPath
+            : targetPath // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        pattern: freezed == pattern
+            ? _value.pattern
+            : pattern // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        url: freezed == url
+            ? _value.url
+            : url // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        mode: freezed == mode
+            ? _value.mode
+            : mode // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        edit: freezed == edit
+            ? _value.edit
+            : edit // ignore: cast_nullable_to_non_nullable
+                  as ToolEditInputDto?,
+        rawInputJson: freezed == rawInputJson
+            ? _value.rawInputJson
+            : rawInputJson // ignore: cast_nullable_to_non_nullable
+                  as String?,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ToolInputDtoImpl implements _ToolInputDto {
+  const _$ToolInputDtoImpl({
+    this.description,
+    this.command,
+    @JsonKey(name: 'filePath') this.filePath,
+    @JsonKey(name: 'sourcePath') this.sourcePath,
+    @JsonKey(name: 'targetPath') this.targetPath,
+    this.pattern,
+    this.url,
+    this.mode,
+    this.edit,
+    @JsonKey(name: 'rawInputJson') this.rawInputJson,
+  });
+
+  factory _$ToolInputDtoImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ToolInputDtoImplFromJson(json);
+
+  @override
+  final String? description;
+  @override
+  final ToolCommandDto? command;
+  @override
+  @JsonKey(name: 'filePath')
+  final String? filePath;
+  @override
+  @JsonKey(name: 'sourcePath')
+  final String? sourcePath;
+  @override
+  @JsonKey(name: 'targetPath')
+  final String? targetPath;
+  @override
+  final String? pattern;
+  @override
+  final String? url;
+  @override
+  final String? mode;
+  @override
+  final ToolEditInputDto? edit;
+  @override
+  @JsonKey(name: 'rawInputJson')
+  final String? rawInputJson;
+
+  @override
+  String toString() {
+    return 'ToolInputDto(description: $description, command: $command, filePath: $filePath, sourcePath: $sourcePath, targetPath: $targetPath, pattern: $pattern, url: $url, mode: $mode, edit: $edit, rawInputJson: $rawInputJson)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ToolInputDtoImpl &&
+            (identical(other.description, description) ||
+                other.description == description) &&
+            (identical(other.command, command) || other.command == command) &&
+            (identical(other.filePath, filePath) ||
+                other.filePath == filePath) &&
+            (identical(other.sourcePath, sourcePath) ||
+                other.sourcePath == sourcePath) &&
+            (identical(other.targetPath, targetPath) ||
+                other.targetPath == targetPath) &&
+            (identical(other.pattern, pattern) || other.pattern == pattern) &&
+            (identical(other.url, url) || other.url == url) &&
+            (identical(other.mode, mode) || other.mode == mode) &&
+            (identical(other.edit, edit) || other.edit == edit) &&
+            (identical(other.rawInputJson, rawInputJson) ||
+                other.rawInputJson == rawInputJson));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    description,
+    command,
+    filePath,
+    sourcePath,
+    targetPath,
+    pattern,
+    url,
+    mode,
+    edit,
+    rawInputJson,
+  );
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ToolInputDtoImplCopyWith<_$ToolInputDtoImpl> get copyWith =>
+      __$$ToolInputDtoImplCopyWithImpl<_$ToolInputDtoImpl>(this, _$identity);
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ToolInputDtoImplToJson(this);
+  }
+}
+
+abstract class _ToolInputDto implements ToolInputDto {
+  const factory _ToolInputDto({
+    final String? description,
+    final ToolCommandDto? command,
+    @JsonKey(name: 'filePath') final String? filePath,
+    @JsonKey(name: 'sourcePath') final String? sourcePath,
+    @JsonKey(name: 'targetPath') final String? targetPath,
+    final String? pattern,
+    final String? url,
+    final String? mode,
+    final ToolEditInputDto? edit,
+    @JsonKey(name: 'rawInputJson') final String? rawInputJson,
+  }) = _$ToolInputDtoImpl;
+
+  factory _ToolInputDto.fromJson(Map<String, dynamic> json) =
+      _$ToolInputDtoImpl.fromJson;
+
+  @override
+  String? get description;
+  @override
+  ToolCommandDto? get command;
+  @override
+  @JsonKey(name: 'filePath')
+  String? get filePath;
+  @override
+  @JsonKey(name: 'sourcePath')
+  String? get sourcePath;
+  @override
+  @JsonKey(name: 'targetPath')
+  String? get targetPath;
+  @override
+  String? get pattern;
+  @override
+  String? get url;
+  @override
+  String? get mode;
+  @override
+  ToolEditInputDto? get edit;
+  @override
+  @JsonKey(name: 'rawInputJson')
+  String? get rawInputJson;
+
+  /// Create a copy of ToolInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ToolInputDtoImplCopyWith<_$ToolInputDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+ToolCommandDto _$ToolCommandDtoFromJson(Map<String, dynamic> json) {
+  return _ToolCommandDto.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ToolCommandDto {
+  List<String> get argv => throw _privateConstructorUsedError;
+  String? get display => throw _privateConstructorUsedError;
+
+  /// Serializes this ToolCommandDto to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ToolCommandDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ToolCommandDtoCopyWith<ToolCommandDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ToolCommandDtoCopyWith<$Res> {
+  factory $ToolCommandDtoCopyWith(
+    ToolCommandDto value,
+    $Res Function(ToolCommandDto) then,
+  ) = _$ToolCommandDtoCopyWithImpl<$Res, ToolCommandDto>;
+  @useResult
+  $Res call({List<String> argv, String? display});
+}
+
+/// @nodoc
+class _$ToolCommandDtoCopyWithImpl<$Res, $Val extends ToolCommandDto>
+    implements $ToolCommandDtoCopyWith<$Res> {
+  _$ToolCommandDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ToolCommandDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? argv = null, Object? display = freezed}) {
+    return _then(
+      _value.copyWith(
+            argv: null == argv
+                ? _value.argv
+                : argv // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            display: freezed == display
+                ? _value.display
+                : display // ignore: cast_nullable_to_non_nullable
+                      as String?,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$ToolCommandDtoImplCopyWith<$Res>
+    implements $ToolCommandDtoCopyWith<$Res> {
+  factory _$$ToolCommandDtoImplCopyWith(
+    _$ToolCommandDtoImpl value,
+    $Res Function(_$ToolCommandDtoImpl) then,
+  ) = __$$ToolCommandDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({List<String> argv, String? display});
+}
+
+/// @nodoc
+class __$$ToolCommandDtoImplCopyWithImpl<$Res>
+    extends _$ToolCommandDtoCopyWithImpl<$Res, _$ToolCommandDtoImpl>
+    implements _$$ToolCommandDtoImplCopyWith<$Res> {
+  __$$ToolCommandDtoImplCopyWithImpl(
+    _$ToolCommandDtoImpl _value,
+    $Res Function(_$ToolCommandDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ToolCommandDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? argv = null, Object? display = freezed}) {
+    return _then(
+      _$ToolCommandDtoImpl(
+        argv: null == argv
+            ? _value._argv
+            : argv // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        display: freezed == display
+            ? _value.display
+            : display // ignore: cast_nullable_to_non_nullable
+                  as String?,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ToolCommandDtoImpl implements _ToolCommandDto {
+  const _$ToolCommandDtoImpl({
+    final List<String> argv = const <String>[],
+    this.display,
+  }) : _argv = argv;
+
+  factory _$ToolCommandDtoImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ToolCommandDtoImplFromJson(json);
+
+  final List<String> _argv;
+  @override
+  @JsonKey()
+  List<String> get argv {
+    if (_argv is EqualUnmodifiableListView) return _argv;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_argv);
+  }
+
+  @override
+  final String? display;
+
+  @override
+  String toString() {
+    return 'ToolCommandDto(argv: $argv, display: $display)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ToolCommandDtoImpl &&
+            const DeepCollectionEquality().equals(other._argv, _argv) &&
+            (identical(other.display, display) || other.display == display));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(
+    runtimeType,
+    const DeepCollectionEquality().hash(_argv),
+    display,
+  );
+
+  /// Create a copy of ToolCommandDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ToolCommandDtoImplCopyWith<_$ToolCommandDtoImpl> get copyWith =>
+      __$$ToolCommandDtoImplCopyWithImpl<_$ToolCommandDtoImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ToolCommandDtoImplToJson(this);
+  }
+}
+
+abstract class _ToolCommandDto implements ToolCommandDto {
+  const factory _ToolCommandDto({
+    final List<String> argv,
+    final String? display,
+  }) = _$ToolCommandDtoImpl;
+
+  factory _ToolCommandDto.fromJson(Map<String, dynamic> json) =
+      _$ToolCommandDtoImpl.fromJson;
+
+  @override
+  List<String> get argv;
+  @override
+  String? get display;
+
+  /// Create a copy of ToolCommandDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ToolCommandDtoImplCopyWith<_$ToolCommandDtoImpl> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+ToolEditInputDto _$ToolEditInputDtoFromJson(Map<String, dynamic> json) {
+  return _ToolEditInputDto.fromJson(json);
+}
+
+/// @nodoc
+mixin _$ToolEditInputDto {
+  @JsonKey(name: 'filePath')
+  String? get filePath => throw _privateConstructorUsedError;
+  @JsonKey(name: 'oldString')
+  String? get oldString => throw _privateConstructorUsedError;
+  @JsonKey(name: 'newString')
+  String? get newString => throw _privateConstructorUsedError;
+
+  /// Serializes this ToolEditInputDto to a JSON map.
+  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
+
+  /// Create a copy of ToolEditInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  $ToolEditInputDtoCopyWith<ToolEditInputDto> get copyWith =>
+      throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class $ToolEditInputDtoCopyWith<$Res> {
+  factory $ToolEditInputDtoCopyWith(
+    ToolEditInputDto value,
+    $Res Function(ToolEditInputDto) then,
+  ) = _$ToolEditInputDtoCopyWithImpl<$Res, ToolEditInputDto>;
+  @useResult
+  $Res call({
+    @JsonKey(name: 'filePath') String? filePath,
+    @JsonKey(name: 'oldString') String? oldString,
+    @JsonKey(name: 'newString') String? newString,
+  });
+}
+
+/// @nodoc
+class _$ToolEditInputDtoCopyWithImpl<$Res, $Val extends ToolEditInputDto>
+    implements $ToolEditInputDtoCopyWith<$Res> {
+  _$ToolEditInputDtoCopyWithImpl(this._value, this._then);
+
+  // ignore: unused_field
+  final $Val _value;
+  // ignore: unused_field
+  final $Res Function($Val) _then;
+
+  /// Create a copy of ToolEditInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? filePath = freezed,
+    Object? oldString = freezed,
+    Object? newString = freezed,
+  }) {
+    return _then(
+      _value.copyWith(
+            filePath: freezed == filePath
+                ? _value.filePath
+                : filePath // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            oldString: freezed == oldString
+                ? _value.oldString
+                : oldString // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            newString: freezed == newString
+                ? _value.newString
+                : newString // ignore: cast_nullable_to_non_nullable
+                      as String?,
+          )
+          as $Val,
+    );
+  }
+}
+
+/// @nodoc
+abstract class _$$ToolEditInputDtoImplCopyWith<$Res>
+    implements $ToolEditInputDtoCopyWith<$Res> {
+  factory _$$ToolEditInputDtoImplCopyWith(
+    _$ToolEditInputDtoImpl value,
+    $Res Function(_$ToolEditInputDtoImpl) then,
+  ) = __$$ToolEditInputDtoImplCopyWithImpl<$Res>;
+  @override
+  @useResult
+  $Res call({
+    @JsonKey(name: 'filePath') String? filePath,
+    @JsonKey(name: 'oldString') String? oldString,
+    @JsonKey(name: 'newString') String? newString,
+  });
+}
+
+/// @nodoc
+class __$$ToolEditInputDtoImplCopyWithImpl<$Res>
+    extends _$ToolEditInputDtoCopyWithImpl<$Res, _$ToolEditInputDtoImpl>
+    implements _$$ToolEditInputDtoImplCopyWith<$Res> {
+  __$$ToolEditInputDtoImplCopyWithImpl(
+    _$ToolEditInputDtoImpl _value,
+    $Res Function(_$ToolEditInputDtoImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of ToolEditInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({
+    Object? filePath = freezed,
+    Object? oldString = freezed,
+    Object? newString = freezed,
+  }) {
+    return _then(
+      _$ToolEditInputDtoImpl(
+        filePath: freezed == filePath
+            ? _value.filePath
+            : filePath // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        oldString: freezed == oldString
+            ? _value.oldString
+            : oldString // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        newString: freezed == newString
+            ? _value.newString
+            : newString // ignore: cast_nullable_to_non_nullable
+                  as String?,
+      ),
+    );
+  }
+}
+
+/// @nodoc
+@JsonSerializable()
+class _$ToolEditInputDtoImpl implements _ToolEditInputDto {
+  const _$ToolEditInputDtoImpl({
+    @JsonKey(name: 'filePath') this.filePath,
+    @JsonKey(name: 'oldString') this.oldString,
+    @JsonKey(name: 'newString') this.newString,
+  });
+
+  factory _$ToolEditInputDtoImpl.fromJson(Map<String, dynamic> json) =>
+      _$$ToolEditInputDtoImplFromJson(json);
+
+  @override
+  @JsonKey(name: 'filePath')
+  final String? filePath;
+  @override
+  @JsonKey(name: 'oldString')
+  final String? oldString;
+  @override
+  @JsonKey(name: 'newString')
+  final String? newString;
+
+  @override
+  String toString() {
+    return 'ToolEditInputDto(filePath: $filePath, oldString: $oldString, newString: $newString)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$ToolEditInputDtoImpl &&
+            (identical(other.filePath, filePath) ||
+                other.filePath == filePath) &&
+            (identical(other.oldString, oldString) ||
+                other.oldString == oldString) &&
+            (identical(other.newString, newString) ||
+                other.newString == newString));
+  }
+
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  int get hashCode => Object.hash(runtimeType, filePath, oldString, newString);
+
+  /// Create a copy of ToolEditInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$ToolEditInputDtoImplCopyWith<_$ToolEditInputDtoImpl> get copyWith =>
+      __$$ToolEditInputDtoImplCopyWithImpl<_$ToolEditInputDtoImpl>(
+        this,
+        _$identity,
+      );
+
+  @override
+  Map<String, dynamic> toJson() {
+    return _$$ToolEditInputDtoImplToJson(this);
+  }
+}
+
+abstract class _ToolEditInputDto implements ToolEditInputDto {
+  const factory _ToolEditInputDto({
+    @JsonKey(name: 'filePath') final String? filePath,
+    @JsonKey(name: 'oldString') final String? oldString,
+    @JsonKey(name: 'newString') final String? newString,
+  }) = _$ToolEditInputDtoImpl;
+
+  factory _ToolEditInputDto.fromJson(Map<String, dynamic> json) =
+      _$ToolEditInputDtoImpl.fromJson;
+
+  @override
+  @JsonKey(name: 'filePath')
+  String? get filePath;
+  @override
+  @JsonKey(name: 'oldString')
+  String? get oldString;
+  @override
+  @JsonKey(name: 'newString')
+  String? get newString;
+
+  /// Create a copy of ToolEditInputDto
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$ToolEditInputDtoImplCopyWith<_$ToolEditInputDtoImpl> get copyWith =>
       throw _privateConstructorUsedError;
 }
 

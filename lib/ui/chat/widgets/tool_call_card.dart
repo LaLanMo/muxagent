@@ -44,9 +44,7 @@ class _ToolCallCardState extends State<ToolCallCard>
     if (widget.tool.effectiveKind != ToolKind.edit) return false;
     final input = widget.tool.input;
     if (input == null) return false;
-    final old = input['old_string'];
-    final neu = input['new_string'];
-    return old is String && neu is String;
+    return input.edit?.oldString != null && input.edit?.newString != null;
   }
 
   @override
@@ -130,17 +128,14 @@ class _ToolCallCardState extends State<ToolCallCard>
   Widget _buildDefaultLayout(ToolKind kind) {
     final hasChildren = widget.childTools.isNotEmpty;
     return GestureDetector(
-      onTap: () => Get.toNamed(Routes.toolDetail, arguments: {
-        'tool': widget.tool,
-        'childTools': widget.childTools,
-      }),
+      onTap: () => Get.toNamed(
+        Routes.toolDetail,
+        arguments: {'tool': widget.tool, 'childTools': widget.childTools},
+      ),
       child: hasChildren
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _buildHeaderRow(kind),
-                _buildChildSummary(),
-              ],
+              children: [_buildHeaderRow(kind), _buildChildSummary()],
             )
           : _buildHeaderRow(kind),
     );
@@ -174,8 +169,9 @@ class _ToolCallCardState extends State<ToolCallCard>
 
   Widget _buildEditLayout(ToolKind kind) {
     final input = widget.tool.input!;
-    final oldString = input['old_string'] as String;
-    final newString = input['new_string'] as String;
+    final edit = input.edit!;
+    final oldString = edit.oldString!;
+    final newString = edit.newString!;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -184,10 +180,7 @@ class _ToolCallCardState extends State<ToolCallCard>
         if (_isCompleted)
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: EditDiffView(
-              oldString: oldString,
-              newString: newString,
-            ),
+            child: EditDiffView(oldString: oldString, newString: newString),
           ),
       ],
     );
@@ -198,8 +191,7 @@ class _ToolCallCardState extends State<ToolCallCard>
   // -------------------------------------------------------------------------
 
   Widget _buildHeaderRow(ToolKind kind) {
-    final iconColor =
-        _isFailed ? AppTheme.failedRed : AppTheme.textSecondary;
+    final iconColor = _isFailed ? AppTheme.failedRed : AppTheme.textSecondary;
 
     final hasChildren = widget.childTools.isNotEmpty;
     final icon = hasChildren ? LucideIcons.layers : _iconForKind(kind);
@@ -243,10 +235,10 @@ class _ToolCallCardState extends State<ToolCallCard>
         if (_isEditWithDiff) ...[
           const SizedBox(width: 6),
           GestureDetector(
-            onTap: () => Get.toNamed(Routes.toolDetail, arguments: {
-              'tool': widget.tool,
-              'childTools': widget.childTools,
-            }),
+            onTap: () => Get.toNamed(
+              Routes.toolDetail,
+              arguments: {'tool': widget.tool, 'childTools': widget.childTools},
+            ),
             child: Icon(
               LucideIcons.arrowUpRight,
               size: 14,
@@ -356,12 +348,23 @@ class _ToolCallCardState extends State<ToolCallCard>
     if (pathKinds.contains(kind)) {
       final segments = text.split('/');
       if (segments.length > 3) {
-        final display = '\u2026/${segments.sublist(segments.length - 2).join('/')}';
-        return Text(display, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
+        final display =
+            '\u2026/${segments.sublist(segments.length - 2).join('/')}';
+        return Text(
+          display,
+          style: style,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
       }
     }
 
-    return Text(text, style: style, maxLines: 1, overflow: TextOverflow.ellipsis);
+    return Text(
+      text,
+      style: style,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 
   String? _bodyPreview(ToolKind kind) {
@@ -370,48 +373,37 @@ class _ToolCallCardState extends State<ToolCallCard>
 
     switch (kind) {
       case ToolKind.execute:
-        final desc = input['description'];
-        if (desc is String && desc.isNotEmpty) return desc;
-        final cmd = input['command'];
-        if (cmd is String && cmd.isNotEmpty) return cmd;
+        if (input.description != null && input.description!.isNotEmpty) {
+          return input.description;
+        }
+        final cmd = input.command?.display;
+        if (cmd != null && cmd.isNotEmpty) return cmd;
         return null;
       case ToolKind.read:
-        final fp = input['file_path'];
-        if (fp is String && fp.isNotEmpty) return fp;
-        return null;
+        return input.filePath;
       case ToolKind.edit:
-        final fp = input['file_path'];
-        if (fp is String && fp.isNotEmpty) return fp;
-        return null;
+        return input.edit?.filePath ?? input.filePath;
       case ToolKind.search:
-        final pattern = input['pattern'];
-        if (pattern is String && pattern.isNotEmpty) return pattern;
-        final fp = input['file_path'];
-        if (fp is String && fp.isNotEmpty) return fp;
-        return null;
+        return input.pattern ?? input.filePath;
       case ToolKind.fetch:
-        final url = input['url'];
-        if (url is String && url.isNotEmpty) return url;
-        return null;
+        return input.url;
       case ToolKind.delete:
-        final fp = input['file_path'] ?? input['path'];
-        if (fp is String && fp.isNotEmpty) return fp;
-        return null;
+        return input.filePath;
       case ToolKind.move:
-        final src = input['source'] ?? input['path'];
-        if (src is String && src.isNotEmpty) return src;
-        return null;
+        return input.sourcePath;
       case ToolKind.think:
         return null;
       case ToolKind.switchMode:
-        final mode = input['mode'];
-        if (mode is String && mode.isNotEmpty) return mode;
-        return null;
+        return input.mode;
       case ToolKind.other:
-        for (final v in input.values) {
-          if (v is String && v.isNotEmpty) return v;
-        }
-        return null;
+        return input.description ??
+            input.command?.display ??
+            input.filePath ??
+            input.sourcePath ??
+            input.targetPath ??
+            input.pattern ??
+            input.url ??
+            input.mode;
     }
   }
 }
