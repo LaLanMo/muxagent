@@ -3,6 +3,7 @@ import 'package:muxagent/data/repositories/session_manager.dart';
 import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
+import 'package:muxagent/data/services/ws/models/rpc_transport_models.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/prompt_content_block.dart';
@@ -21,7 +22,7 @@ class FakeRelayWsClient extends RelayWsClient {
       );
 
   @override
-  Future<Map<String, dynamic>> callRpc({
+  Future<RpcResponseEnvelopeDto> callRpc({
     required String machineId,
     required String method,
     Map<String, dynamic>? params,
@@ -29,7 +30,7 @@ class FakeRelayWsClient extends RelayWsClient {
     lastMachineId = machineId;
     lastMethod = method;
     lastParams = params == null ? null : Map<String, dynamic>.from(params);
-    return nextPayload;
+    return RpcResponseEnvelopeDto.fromJson(nextPayload);
   }
 }
 

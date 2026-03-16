@@ -294,18 +294,18 @@ class WsSessionRepository {
     required String method,
     Map<String, dynamic>? params,
   }) async {
-    final payload = await _relay.callRpc(
+    final envelope = await _relay.callRpc(
       machineId: machineId,
       method: method,
       params: params,
     );
 
-    final error = payload['error'] as String?;
-    if (error != null && error.isNotEmpty) {
+    final error = envelope.error;
+    if (error != null) {
       throw Exception(error);
     }
 
-    final result = payload['result'];
+    final result = envelope.result;
     if (result == null) {
       return <String, dynamic>{};
     }

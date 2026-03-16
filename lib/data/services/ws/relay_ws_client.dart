@@ -12,6 +12,7 @@ import '../../../domain/master_key.dart';
 import '../../../domain/paired_machine.dart';
 
 import 'base_ws_client.dart';
+import 'models/rpc_transport_models.dart';
 import 'models/ws_models.dart';
 import 'session_crypto.dart';
 import '../../repositories/session_manager.dart';
@@ -197,7 +198,7 @@ class RelayWsClient {
     _sessions.endSession(machineId);
   }
 
-  Future<Map<String, dynamic>> callRpc({
+  Future<RpcResponseEnvelopeDto> callRpc({
     required String machineId,
     required String method,
     Map<String, dynamic>? params,
@@ -391,7 +392,11 @@ class RelayWsClient {
       return;
     }
     final decoded = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
-    _sessions.resolvePendingRpc(machineId, msgId, decoded);
+    _sessions.resolvePendingRpc(
+      machineId,
+      msgId,
+      RpcResponseEnvelopeDto.fromJson(decoded),
+    );
   }
 
   Future<void> _handleEvent(WsEncryptedMessage msg) async {
