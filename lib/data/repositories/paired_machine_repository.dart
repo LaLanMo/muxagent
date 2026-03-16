@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/paired_machine_storage_dto.dart';
 import '../../domain/paired_machine.dart';
 
 class PairedMachineRepository {
@@ -19,7 +20,11 @@ class PairedMachineRepository {
     }
     return decoded
         .whereType<Map>()
-        .map((entry) => PairedMachine.fromJson(entry.cast<String, dynamic>()))
+        .map(
+          (entry) => PairedMachineStorageDto.fromJson(
+            entry.cast<String, dynamic>(),
+          ).toDomain(),
+        )
         .toList();
   }
 
@@ -41,16 +46,27 @@ class PairedMachineRepository {
         if (existing.machineId != machine.machineId) existing,
       machine,
     ];
-    final payload = jsonEncode(updated.map((m) => m.toJson()).toList());
+    final payload = jsonEncode(
+      updated
+          .map(PairedMachineStorageDto.fromDomain)
+          .map((m) => m.toJson())
+          .toList(),
+    );
     await prefs.setString(_storageKey, payload);
   }
 
   Future<void> removeMachine(String machineId) async {
     final prefs = await SharedPreferences.getInstance();
     final machines = await listMachines();
-    final updated =
-        machines.where((machine) => machine.machineId != machineId).toList();
-    final payload = jsonEncode(updated.map((m) => m.toJson()).toList());
+    final updated = machines
+        .where((machine) => machine.machineId != machineId)
+        .toList();
+    final payload = jsonEncode(
+      updated
+          .map(PairedMachineStorageDto.fromDomain)
+          .map((m) => m.toJson())
+          .toList(),
+    );
     await prefs.setString(_storageKey, payload);
   }
 }
