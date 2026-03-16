@@ -81,7 +81,7 @@ void main() {
     );
   });
 
-  test('falls back to ACP metadata when app metadata is absent', () {
+  test('does not read runtime-specific tool metadata from ACP _meta', () {
     final event = ToolEventMapper.mapEnvelope(
       ToolEventEnvelopeDto.fromJson({
         'type': 'tool.completed',
@@ -120,7 +120,7 @@ void main() {
     expect(event.tool, isNotNull);
     expect(event.tool!.name, 'Terminal');
     expect(event.tool!.kind, 'execute');
-    expect(event.tool!.claudeCode?.toolName, 'Bash');
+    expect(event.tool!.claudeCode, isNull);
     expect(event.tool!.input?.command?.display, 'touch /workspace/output.txt');
     expect(event.tool!.output, isNull);
   });

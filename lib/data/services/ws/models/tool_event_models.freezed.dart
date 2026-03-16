@@ -505,6 +505,7 @@ mixin _$ToolAppDto {
   String? get output => throw _privateConstructorUsedError;
   String? get error => throw _privateConstructorUsedError;
   List<ToolDiffDto> get diffs => throw _privateConstructorUsedError;
+  @JsonKey(name: 'claudeCode')
   ClaudeCodeToolDto? get claudeCode => throw _privateConstructorUsedError;
   List<ToolLocationDto> get locations => throw _privateConstructorUsedError;
 
@@ -537,7 +538,7 @@ abstract class $ToolAppDtoCopyWith<$Res> {
     String? output,
     String? error,
     List<ToolDiffDto> diffs,
-    ClaudeCodeToolDto? claudeCode,
+    @JsonKey(name: 'claudeCode') ClaudeCodeToolDto? claudeCode,
     List<ToolLocationDto> locations,
   });
 
@@ -683,7 +684,7 @@ abstract class _$$ToolAppDtoImplCopyWith<$Res>
     String? output,
     String? error,
     List<ToolDiffDto> diffs,
-    ClaudeCodeToolDto? claudeCode,
+    @JsonKey(name: 'claudeCode') ClaudeCodeToolDto? claudeCode,
     List<ToolLocationDto> locations,
   });
 
@@ -795,7 +796,7 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
     this.output,
     this.error,
     final List<ToolDiffDto> diffs = const <ToolDiffDto>[],
-    this.claudeCode,
+    @JsonKey(name: 'claudeCode') this.claudeCode,
     final List<ToolLocationDto> locations = const <ToolLocationDto>[],
   }) : _diffs = diffs,
        _locations = locations;
@@ -836,6 +837,7 @@ class _$ToolAppDtoImpl implements _ToolAppDto {
   }
 
   @override
+  @JsonKey(name: 'claudeCode')
   final ClaudeCodeToolDto? claudeCode;
   final List<ToolLocationDto> _locations;
   @override
@@ -922,7 +924,7 @@ abstract class _ToolAppDto implements ToolAppDto {
     final String? output,
     final String? error,
     final List<ToolDiffDto> diffs,
-    final ClaudeCodeToolDto? claudeCode,
+    @JsonKey(name: 'claudeCode') final ClaudeCodeToolDto? claudeCode,
     final List<ToolLocationDto> locations,
   }) = _$ToolAppDtoImpl;
 
@@ -955,6 +957,7 @@ abstract class _ToolAppDto implements ToolAppDto {
   @override
   List<ToolDiffDto> get diffs;
   @override
+  @JsonKey(name: 'claudeCode')
   ClaudeCodeToolDto? get claudeCode;
   @override
   List<ToolLocationDto> get locations;

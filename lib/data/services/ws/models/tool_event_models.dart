@@ -46,7 +46,7 @@ class ToolAppDto with _$ToolAppDto {
     String? output,
     String? error,
     @Default(<ToolDiffDto>[]) List<ToolDiffDto> diffs,
-    ClaudeCodeToolDto? claudeCode,
+    @JsonKey(name: 'claudeCode') ClaudeCodeToolDto? claudeCode,
     @Default(<ToolLocationDto>[]) List<ToolLocationDto> locations,
   }) = _ToolAppDto;
 

@@ -231,6 +231,36 @@ class RelayWsClient {
     return completer.future;
   }
 
+  Future<T> callRpcDecoded<T>({
+    required String machineId,
+    required String method,
+    required T Function(Map<String, dynamic> json) decode,
+    Map<String, dynamic>? params,
+  }) async {
+    final envelope = await callRpc(
+      machineId: machineId,
+      method: method,
+      params: params,
+    );
+
+    final error = envelope.error;
+    if (error != null) {
+      throw Exception(error);
+    }
+
+    final result = envelope.result;
+    if (result == null) {
+      return decode(const <String, dynamic>{});
+    }
+    if (result is Map<String, dynamic>) {
+      return decode(result);
+    }
+    if (result is Map) {
+      return decode(Map<String, dynamic>.from(result));
+    }
+    throw Exception('invalid rpc result for $method');
+  }
+
   Future<void> resetConnection({Object? reason}) async {
     final error = reason ?? 'connection reset';
     relayConnected.value = false;

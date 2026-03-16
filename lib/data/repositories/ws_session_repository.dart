@@ -71,8 +71,11 @@ class WsSessionRepository {
   Future<AppRuntimeListResponseDto> listRuntimes({
     required String machineId,
   }) async {
-    final result = await _callRpc(machineId: machineId, method: 'runtime.list');
-    return AppRuntimeListResponseDto.fromJson(result);
+    return _relay.callRpcDecoded(
+      machineId: machineId,
+      method: 'runtime.list',
+      decode: AppRuntimeListResponseDto.fromJson,
+    );
   }
 
   Future<AppSessionCreateResponseDto> createSession({
@@ -82,7 +85,7 @@ class WsSessionRepository {
     bool useWorktree = false,
     String? permissionMode,
   }) async {
-    final result = await _callRpc(
+    return _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.create',
       params: RpcSessionCreateParamsDto(
@@ -91,8 +94,8 @@ class WsSessionRepository {
         useWorktree: useWorktree,
         permissionMode: permissionMode,
       ).toJson(),
+      decode: AppSessionCreateResponseDto.fromJson,
     );
-    return AppSessionCreateResponseDto.fromJson(result);
   }
 
   Future<AppSessionLoadResponseDto> loadSession({
@@ -103,7 +106,7 @@ class WsSessionRepository {
     String? permissionMode,
     String? model,
   }) async {
-    final result = await _callRpc(
+    return _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.load',
       params: RpcSessionLoadParamsDto(
@@ -113,8 +116,8 @@ class WsSessionRepository {
         permissionMode: permissionMode,
         model: model,
       ).toJson(),
+      decode: AppSessionLoadResponseDto.fromJson,
     );
-    return AppSessionLoadResponseDto.fromJson(result);
   }
 
   Future<List<FsEntry>> listFiles({
@@ -122,12 +125,12 @@ class WsSessionRepository {
     required String sessionId,
     required String path,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'fs.list',
       params: RpcFsListParamsDto(sessionId: sessionId, path: path).toJson(),
+      decode: RpcFsListResponseDto.fromJson,
     );
-    final response = RpcFsListResponseDto.fromJson(result);
     return RpcResultMapper.toFsEntries(response.entries);
   }
 
@@ -136,12 +139,12 @@ class WsSessionRepository {
     required String sessionId,
     required String query,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'fs.search',
       params: RpcFsSearchParamsDto(sessionId: sessionId, query: query).toJson(),
+      decode: RpcFsSearchResponseDto.fromJson,
     );
-    final response = RpcFsSearchResponseDto.fromJson(result);
     return RpcResultMapper.toFsEntries(response.results);
   }
 
@@ -149,12 +152,12 @@ class WsSessionRepository {
     required String machineId,
     required int lastSeq,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'events.resync',
       params: RpcResyncEventsParamsDto(lastSeq: lastSeq).toJson(),
+      decode: RpcResyncResponseDto.fromJson,
     );
-    final response = RpcResyncResponseDto.fromJson(result);
     final events = <AgentEvent>[];
     for (final payload in response.events) {
       final enrichedPayload = Map<String, dynamic>.from(payload);
@@ -174,27 +177,27 @@ class WsSessionRepository {
     required Iterable<String> sessionIds,
     String? runtime,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.resolve',
       params: RpcSessionResolveParamsDto(
         sessionIds: sessionIds.toList(),
         runtime: runtime,
       ).toJson(),
+      decode: RpcSessionResolveResponseDto.fromJson,
     );
-    final response = RpcSessionResolveResponseDto.fromJson(result);
     return RpcResultMapper.toResolvedSessions(response.sessions);
   }
 
   Future<List<ApprovalRequest>> listPendingApprovals({
     required String machineId,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'approvals.pending',
       params: const {},
+      decode: RpcPendingApprovalsResponseDto.fromJson,
     );
-    final response = RpcPendingApprovalsResponseDto.fromJson(result);
     return RpcResultMapper.toPendingApprovals(response.approvals);
   }
 
@@ -203,15 +206,15 @@ class WsSessionRepository {
     required String sessionId,
     required String permissionMode,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.setMode',
       params: RpcSessionSetModeParamsDto(
         sessionId: sessionId,
         permissionMode: permissionMode,
       ).toJson(),
+      decode: RpcOkResponseDto.fromJson,
     );
-    final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
       throw Exception('session.setMode was not acknowledged');
     }
@@ -223,7 +226,7 @@ class WsSessionRepository {
     required String configId,
     required String value,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.setConfigOption',
       params: RpcSessionSetConfigOptionParamsDto(
@@ -231,8 +234,8 @@ class WsSessionRepository {
         configId: configId,
         value: value,
       ).toJson(),
+      decode: RpcOkResponseDto.fromJson,
     );
-    final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
       throw Exception('session.setConfigOption was not acknowledged');
     }
@@ -247,12 +250,12 @@ class WsSessionRepository {
       sessionId: sessionId,
       content: content.map(PromptContentBlockDto.fromDomain).toList(),
     );
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.prompt',
       params: params.toJson(),
+      decode: RpcAcceptedResponseDto.fromJson,
     );
-    final response = RpcAcceptedResponseDto.fromJson(result);
     if (!response.accepted) {
       throw Exception('session.prompt was not accepted');
     }
@@ -264,7 +267,7 @@ class WsSessionRepository {
     required String requestId,
     required String optionId,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'approval.reply',
       params: RpcApprovalReplyParamsDto(
@@ -272,8 +275,8 @@ class WsSessionRepository {
         requestId: requestId,
         optionId: optionId,
       ).toJson(),
+      decode: RpcOkResponseDto.fromJson,
     );
-    final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
       throw Exception('approval.reply was not acknowledged');
     }
@@ -283,44 +286,15 @@ class WsSessionRepository {
     required String machineId,
     required String sessionId,
   }) async {
-    final result = await _callRpc(
+    final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'session.cancel',
       params: RpcSessionCancelParamsDto(sessionId: sessionId).toJson(),
+      decode: RpcOkResponseDto.fromJson,
     );
-    final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
       throw Exception('session.cancel was not acknowledged');
     }
-  }
-
-  Future<Map<String, dynamic>> _callRpc({
-    required String machineId,
-    required String method,
-    Map<String, dynamic>? params,
-  }) async {
-    final envelope = await _relay.callRpc(
-      machineId: machineId,
-      method: method,
-      params: params,
-    );
-
-    final error = envelope.error;
-    if (error != null) {
-      throw Exception(error);
-    }
-
-    final result = envelope.result;
-    if (result == null) {
-      return <String, dynamic>{};
-    }
-    if (result is Map<String, dynamic>) {
-      return result;
-    }
-    if (result is Map) {
-      return Map<String, dynamic>.from(result);
-    }
-    throw Exception('invalid rpc result for $method');
   }
 
   Future<void> close() => _relay.close();

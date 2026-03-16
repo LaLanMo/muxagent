@@ -59,10 +59,10 @@ _$ToolAppDtoImpl _$$ToolAppDtoImplFromJson(Map<String, dynamic> json) =>
               ?.map((e) => ToolDiffDto.fromJson(e as Map<String, dynamic>))
               .toList() ??
           const <ToolDiffDto>[],
-      claudeCode: json['claude_code'] == null
+      claudeCode: json['claudeCode'] == null
           ? null
           : ClaudeCodeToolDto.fromJson(
-              json['claude_code'] as Map<String, dynamic>,
+              json['claudeCode'] as Map<String, dynamic>,
             ),
       locations:
           (json['locations'] as List<dynamic>?)
@@ -84,7 +84,7 @@ Map<String, dynamic> _$$ToolAppDtoImplToJson(_$ToolAppDtoImpl instance) =>
       'output': instance.output,
       'error': instance.error,
       'diffs': instance.diffs.map((e) => e.toJson()).toList(),
-      'claude_code': instance.claudeCode?.toJson(),
+      'claudeCode': instance.claudeCode?.toJson(),
       'locations': instance.locations.map((e) => e.toJson()).toList(),
     };
 
