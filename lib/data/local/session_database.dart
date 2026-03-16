@@ -47,30 +47,22 @@ class SessionDatabase {
 
   static Future<void> insertSession(AgentSession s) async {
     final db = await database;
-    final machineId = s.metadata?['machineId'] as String? ?? '';
-    final runtime = s.metadata?['runtime'] as String? ?? '';
-    final cwd = s.metadata?['cwd'] as String? ?? '';
-    final mode = s.metadata?['mode'] as String? ?? '';
-    await db.insert(
-      'sessions',
-      {
-        'id': s.id,
-        'title': s.title,
-        'status': s.status.value,
-        'model': s.model,
-        'cost_amount': s.cost?.costAmount ?? 0,
-        'cost_currency': s.cost?.costCurrency ?? 'USD',
-        'total_tokens': s.cost?.totalTokens ?? 0,
-        'machine_id': machineId,
-        'runtime': runtime,
-        'cwd': cwd,
-        'mode': mode,
-        'created_at': s.createdAt.toIso8601String(),
-        'updated_at': s.updatedAt.toIso8601String(),
-        'is_read': s.isRead ? 1 : 0,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('sessions', {
+      'id': s.id,
+      'title': s.title,
+      'status': s.status.value,
+      'model': s.model,
+      'cost_amount': s.cost?.costAmount ?? 0,
+      'cost_currency': s.cost?.costCurrency ?? 'USD',
+      'total_tokens': s.cost?.totalTokens ?? 0,
+      'machine_id': s.machineId,
+      'runtime': s.runtime,
+      'cwd': s.cwd,
+      'mode': s.mode ?? '',
+      'created_at': s.createdAt.toIso8601String(),
+      'updated_at': s.updatedAt.toIso8601String(),
+      'is_read': s.isRead ? 1 : 0,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<List<AgentSession>> loadAll() async {
@@ -96,8 +88,7 @@ class SessionDatabase {
     final db = await database;
     final where = machineId != null ? 'WHERE machine_id = ?' : '';
     final args = machineId != null ? [machineId] : <String>[];
-    final rows = await db.rawQuery(
-      '''
+    final rows = await db.rawQuery('''
       SELECT cwd, MAX(updated_at) as last_used
       FROM sessions
       $where
@@ -105,13 +96,15 @@ class SessionDatabase {
       HAVING cwd != ''
       ORDER BY last_used DESC
       LIMIT 20
-      ''',
-      args,
-    );
-    return rows.map((r) => RecentCwd(
-      path: r['cwd'] as String,
-      lastUsed: DateTime.parse(r['last_used'] as String),
-    )).toList();
+      ''', args);
+    return rows
+        .map(
+          (r) => RecentCwd(
+            path: r['cwd'] as String,
+            lastUsed: DateTime.parse(r['last_used'] as String),
+          ),
+        )
+        .toList();
   }
 
   static AgentSession _rowToSession(Map<String, dynamic> row) {
@@ -134,14 +127,14 @@ class SessionDatabase {
             )
           : null,
       isRead: (row['is_read'] as int? ?? 0) == 1,
+      machineId: row['machine_id'] as String? ?? '',
+      runtime: row['runtime'] as String? ?? '',
+      cwd: row['cwd'] as String? ?? '',
+      mode: (row['mode'] as String?)?.isNotEmpty == true
+          ? row['mode'] as String
+          : null,
       createdAt: DateTime.parse(row['created_at'] as String),
       updatedAt: DateTime.parse(row['updated_at'] as String),
-      metadata: {
-        'machineId': row['machine_id'] as String? ?? '',
-        'runtime': row['runtime'] as String? ?? '',
-        'cwd': row['cwd'] as String? ?? '',
-        'mode': row['mode'] as String? ?? '',
-      },
     );
   }
 }

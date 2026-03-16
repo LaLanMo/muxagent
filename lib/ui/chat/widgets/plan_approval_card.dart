@@ -23,23 +23,14 @@ class PlanApprovalCard extends StatefulWidget {
 }
 
 class _PlanApprovalCardState extends State<PlanApprovalCard> {
-
   String? get _planText {
-    final input = widget.approval.input;
-    if (input == null) return null;
-    final plan = input['plan'];
-    if (plan is String && plan.isNotEmpty) return plan;
-    return null;
+    final plan = widget.approval.planMarkdown?.trim();
+    if (plan == null || plan.isEmpty) return null;
+    return plan;
   }
 
-  List<Map<String, dynamic>> get _allowedPrompts {
-    final input = widget.approval.input;
-    if (input == null) return [];
-    final prompts = input['allowedPrompts'];
-    if (prompts is List) {
-      return prompts.cast<Map<String, dynamic>>();
-    }
-    return [];
+  List<String> get _allowedPrompts {
+    return widget.approval.allowedPrompts;
   }
 
   @override
@@ -65,8 +56,11 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
             child: Row(
               children: [
-                Icon(LucideIcons.fileText,
-                    color: resolved ? AppTheme.textTertiary : AppTheme.planAccent, size: 16),
+                Icon(
+                  LucideIcons.fileText,
+                  color: resolved ? AppTheme.textTertiary : AppTheme.planAccent,
+                  size: 16,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   widget.approval.resolved ? 'Plan (Rejected)' : 'Review Plan',
@@ -128,26 +122,31 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  ..._allowedPrompts.map((item) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          children: [
-                            const Icon(LucideIcons.terminal,
-                                size: 13, color: AppTheme.textTertiary),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                item['prompt'] as String? ?? '',
-                                style: GoogleFonts.inter(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400,
-                                  color: AppTheme.textSecondary,
-                                ),
+                  ..._allowedPrompts.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            LucideIcons.terminal,
+                            size: 13,
+                            color: AppTheme.textTertiary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              item,
+                              style: GoogleFonts.inter(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w400,
+                                color: AppTheme.textSecondary,
                               ),
                             ),
-                          ],
-                        ),
-                      )),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),

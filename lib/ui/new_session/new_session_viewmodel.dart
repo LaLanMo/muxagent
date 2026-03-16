@@ -10,6 +10,8 @@ import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/runtime_preference_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../data/services/ws/models/acp_session_models.dart';
+import '../../data/services/ws/session_config_mapper.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import '../../domain/enums.dart';
@@ -129,6 +131,7 @@ class NewSessionViewModel extends GetxController {
   final filteredCwds = <RecentCwd>[].obs;
   final isCwdDropdownOpen = false.obs;
   final cwdFocusNode = FocusNode();
+  final promptFocusNode = FocusNode();
 
   StreamSubscription<Set<String>>? _sessionSub;
   int _runtimeLoadToken = 0;
@@ -141,19 +144,6 @@ class NewSessionViewModel extends GetxController {
     _subscribeToActiveSessions();
     _loadMachines();
     _checkSttConfig();
-
-    cwdFocusNode.addListener(() {
-      if (cwdFocusNode.hasFocus) {
-        if (filteredCwds.isNotEmpty) {
-          isCwdDropdownOpen.value = true;
-        }
-      } else {
-        // Delay so tap on dropdown row registers before closing
-        Future.delayed(const Duration(milliseconds: 150), () {
-          isCwdDropdownOpen.value = false;
-        });
-      }
-    });
 
     cwdController.addListener(_filterCwds);
 
@@ -169,6 +159,7 @@ class NewSessionViewModel extends GetxController {
     _sessionSub?.cancel();
     _voiceRecorder?.dispose();
     cwdFocusNode.dispose();
+    promptFocusNode.dispose();
     cwdController.dispose();
     promptController.dispose();
     super.onClose();
@@ -258,18 +249,12 @@ class NewSessionViewModel extends GetxController {
         await _wsRepo.startSession(machine: machine);
       }
 
-      final result = await _wsRepo.callRpc(
-        machineId: machine.machineId,
-        method: 'runtime.list',
-      );
       if (token != _runtimeLoadToken) return;
 
-      final raw = result['runtimes'] as List<dynamic>? ?? const [];
-      final all = raw
-          .whereType<Map>()
-          .map(
-            (item) => RuntimeOption.fromJson(Map<String, dynamic>.from(item)),
-          )
+      final response = await _wsRepo.listRuntimes(machineId: machine.machineId);
+      if (token != _runtimeLoadToken) return;
+      final all = response.runtimes
+          .map(SessionConfigMapper.runtimeOptionFromDto)
           .toList();
       final visible = all.where((item) => item.ready).toList();
       final options = visible.isNotEmpty ? visible : all;
@@ -310,17 +295,46 @@ class NewSessionViewModel extends GetxController {
           .where((c) => c.path.toLowerCase().contains(query))
           .toList();
     }
-    if (cwdFocusNode.hasFocus && filteredCwds.isNotEmpty) {
-      isCwdDropdownOpen.value = true;
-    } else if (filteredCwds.isEmpty) {
-      isCwdDropdownOpen.value = false;
+  }
+
+  void openCwdDropdown() {
+    isCwdDropdownOpen.value = true;
+    if (!cwdFocusNode.hasFocus) {
+      cwdFocusNode.requestFocus();
     }
+  }
+
+  void closeCwdDropdown({bool unfocus = false}) {
+    isCwdDropdownOpen.value = false;
+    if (unfocus) {
+      cwdFocusNode.unfocus();
+    }
+  }
+
+  void dismissTransientInputs() {
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.unfocus();
+  }
+
+  void focusPromptInput() {
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.requestFocus();
   }
 
   void selectCwd(RecentCwd cwd) {
     cwdController.text = cwd.path;
-    isCwdDropdownOpen.value = false;
-    cwdFocusNode.unfocus();
+    cwdController.selection = TextSelection.collapsed(
+      offset: cwdController.text.length,
+    );
+    closeCwdDropdown();
+    if (!cwdFocusNode.hasFocus) {
+      cwdFocusNode.requestFocus();
+    }
+  }
+
+  void commitCwdAndFocusPrompt() {
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.requestFocus();
   }
 
   Future<void> _checkSttConfig() async {
@@ -452,46 +466,30 @@ class NewSessionViewModel extends GetxController {
         throw Exception('Please select a runtime');
       }
 
-      final createParams = <String, dynamic>{
-        'cwd': cwd,
-        if (useWorktree.value) 'useWorktree': true,
-        // Always send runtime explicitly
-        'runtime': selectedRuntimeId,
-        if (selectedMode.value != null)
-          'permissionMode': selectedMode.value!.id,
-      };
-
-      final createResult = await _createSessionWithRecovery(
+      final createResponse = await _createSessionWithRecovery(
         machine: machine,
-        params: createParams,
+        cwd: cwd,
+        runtime: selectedRuntimeId,
+        permissionMode: selectedMode.value?.id,
+        useWorktree: useWorktree.value,
       );
 
-      final sessionId = createResult['sessionId'] as String?;
-      if (sessionId == null || sessionId.isEmpty) {
+      final sessionId = createResponse.acp.sessionId;
+      if (sessionId.isEmpty) {
         throw Exception('Failed to create session: no sessionId returned');
       }
-      final runtime = createResult['runtime'] as String? ?? '';
+      final runtime = createResponse.app.runtime;
       await _rememberRuntimeSelection(
         runtime.isNotEmpty ? runtime : selectedRuntimeId,
       );
-      final configOptions = createResult['configOptions'] as List<dynamic>?;
-      debugPrint(
-        '[NewSessionVM] createResult keys: ${createResult.keys.toList()}',
+      final configSnapshot = SessionConfigMapper.snapshotFromConfigOptions(
+        runtimeId: runtime,
+        configOptions: createResponse.acp.configOptions ?? const [],
+        modes: createResponse.acp.modes,
       );
-      debugPrint(
-        '[NewSessionVM] configOptions type: ${configOptions.runtimeType}',
-      );
-      if (configOptions != null) {
-        for (final item in configOptions) {
-          debugPrint(
-            '[NewSessionVM]   item type: ${item.runtimeType} keys: ${item is Map ? item.keys.toList() : "N/A"}',
-          );
-        }
-      }
 
-      final initialMode = _extractCurrentMode(configOptions).isNotEmpty
-          ? _extractCurrentMode(configOptions)
-          : (selectedMode.value?.id ?? '');
+      final initialMode =
+          configSnapshot.currentMode?.id ?? (selectedMode.value?.id ?? '');
       await _rememberModeSelection(
         runtimeId: runtime.isNotEmpty ? runtime : selectedRuntimeId,
         modeId: initialMode,
@@ -503,14 +501,12 @@ class NewSessionViewModel extends GetxController {
           id: sessionId,
           title: '',
           status: SessionStatus.idle,
+          machineId: machine.machineId,
+          runtime: runtime.isNotEmpty ? runtime : selectedRuntimeId,
+          cwd: createResponse.app.cwd,
+          mode: initialMode.isNotEmpty ? initialMode : null,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
-          metadata: {
-            'machineId': machine.machineId,
-            'runtime': runtime,
-            'cwd': cwd,
-            'mode': initialMode,
-          },
         ),
       );
 
@@ -522,10 +518,10 @@ class NewSessionViewModel extends GetxController {
           'sessionId': sessionId,
           'machineId': machine.machineId,
           'runtime': runtime,
-          'cwd': cwd,
+          'cwd': createResponse.app.cwd,
           'sessionTitle': '',
           'isNewSession': true,
-          if (configOptions != null) 'configOptions': configOptions,
+          'configSnapshot': configSnapshot,
           if (prompt.isNotEmpty) 'initialPrompt': prompt,
         },
       );
@@ -536,16 +532,31 @@ class NewSessionViewModel extends GetxController {
     }
   }
 
-  Future<Map<String, dynamic>> _createSessionWithRecovery({
+  Future<AppSessionCreateResponseDto> _createSessionWithRecovery({
     required PairedMachine machine,
-    required Map<String, dynamic> params,
+    required String cwd,
+    required String runtime,
+    required bool useWorktree,
+    String? permissionMode,
   }) async {
     try {
-      return await _callCreateSession(machine.machineId, params);
+      return await _callCreateSession(
+        machineId: machine.machineId,
+        cwd: cwd,
+        runtime: runtime,
+        permissionMode: permissionMode,
+        useWorktree: useWorktree,
+      );
     } on TimeoutException {
       await _recoverRelaySession(machine, 'session.create timeout');
       try {
-        return await _callCreateSession(machine.machineId, params);
+        return await _callCreateSession(
+          machineId: machine.machineId,
+          cwd: cwd,
+          runtime: runtime,
+          permissionMode: permissionMode,
+          useWorktree: useWorktree,
+        );
       } on TimeoutException {
         throw Exception(
           'Session create timed out after reconnect. Relay session appears stale.',
@@ -554,12 +565,21 @@ class NewSessionViewModel extends GetxController {
     }
   }
 
-  Future<Map<String, dynamic>> _callCreateSession(
-    String machineId,
-    Map<String, dynamic> params,
-  ) {
+  Future<AppSessionCreateResponseDto> _callCreateSession({
+    required String machineId,
+    required String cwd,
+    required String runtime,
+    required bool useWorktree,
+    String? permissionMode,
+  }) {
     return _wsRepo
-        .callRpc(machineId: machineId, method: 'session.create', params: params)
+        .createSession(
+          machineId: machineId,
+          cwd: cwd,
+          runtime: runtime,
+          useWorktree: useWorktree,
+          permissionMode: permissionMode,
+        )
         .timeout(
           _createSessionTimeout,
           onTimeout: () => throw TimeoutException(
@@ -577,18 +597,6 @@ class NewSessionViewModel extends GetxController {
     await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
     await _wsRepo.startSession(machine: machine);
     selectedMachine.value = machine;
-  }
-
-  String _extractCurrentMode(List<dynamic>? configOptions) {
-    if (configOptions == null) return '';
-    for (final item in configOptions) {
-      if (item is! Map) continue;
-      final raw = Map<String, dynamic>.from(item);
-      if ((raw['category'] as String? ?? '') == 'mode') {
-        return raw['currentValue'] as String? ?? '';
-      }
-    }
-    return '';
   }
 
   Future<void> _rememberRuntimeSelection(String runtimeId) async {

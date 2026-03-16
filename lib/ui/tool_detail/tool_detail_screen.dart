@@ -67,8 +67,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
               ],
 
               // Locations
-              if (tool.locations != null &&
-                  tool.locations!.isNotEmpty) ...[
+              if (tool.locations != null && tool.locations!.isNotEmpty) ...[
                 _buildSectionLabel('LOCATIONS'),
                 const SizedBox(height: 8),
                 _buildLocationsSection(tool.locations!),
@@ -124,9 +123,9 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
 
   Widget _buildInputSection(ToolActivity tool) {
     final isEdit = tool.effectiveKind == ToolKind.edit;
-    final input = tool.input as Map<String, dynamic>;
-    final oldStr = input['old_string'];
-    final newStr = input['new_string'];
+    final input = tool.input!;
+    final oldStr = input.edit?.oldString;
+    final newStr = input.edit?.newString;
 
     if (isEdit && oldStr is String && newStr is String) {
       return EditDiffView(
@@ -137,7 +136,40 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
       );
     }
 
-    return CodeBlock(text: _jsonEncoder.convert(input));
+    final rawInputJson = input.rawInputJson;
+    if (rawInputJson != null && rawInputJson.isNotEmpty) {
+      try {
+        return CodeBlock(text: _jsonEncoder.convert(jsonDecode(rawInputJson)));
+      } catch (_) {
+        return CodeBlock(text: rawInputJson);
+      }
+    }
+
+    return CodeBlock(
+      text: _jsonEncoder.convert({
+        if (input.description != null) 'description': input.description,
+        if (input.command != null)
+          'command': {
+            if (input.command!.argv.isNotEmpty) 'argv': input.command!.argv,
+            if (input.command!.display != null)
+              'display': input.command!.display,
+          },
+        if (input.filePath != null) 'filePath': input.filePath,
+        if (input.sourcePath != null) 'sourcePath': input.sourcePath,
+        if (input.targetPath != null) 'targetPath': input.targetPath,
+        if (input.pattern != null) 'pattern': input.pattern,
+        if (input.url != null) 'url': input.url,
+        if (input.mode != null) 'mode': input.mode,
+        if (input.edit != null)
+          'edit': {
+            if (input.edit!.filePath != null) 'filePath': input.edit!.filePath,
+            if (input.edit!.oldString != null)
+              'oldString': input.edit!.oldString,
+            if (input.edit!.newString != null)
+              'newString': input.edit!.newString,
+          },
+      }),
+    );
   }
 
   Widget _buildLocationsSection(List<ToolLocation> locations) {
@@ -148,11 +180,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(
             children: [
-              Icon(
-                LucideIcons.mapPin,
-                size: 13,
-                color: AppTheme.textSecondary,
-              ),
+              Icon(LucideIcons.mapPin, size: 13, color: AppTheme.textSecondary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -209,7 +237,11 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
         // Summary row
         Row(
           children: [
-            const Icon(LucideIcons.layers, size: 16, color: AppTheme.subagentAccent),
+            const Icon(
+              LucideIcons.layers,
+              size: 16,
+              color: AppTheme.subagentAccent,
+            ),
             const SizedBox(width: 8),
             Text(
               '$count $noun completed',

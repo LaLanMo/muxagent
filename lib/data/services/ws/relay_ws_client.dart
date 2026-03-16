@@ -12,6 +12,7 @@ import '../../../domain/master_key.dart';
 import '../../../domain/paired_machine.dart';
 
 import 'base_ws_client.dart';
+import 'models/rpc_transport_models.dart';
 import 'models/ws_models.dart';
 import 'session_crypto.dart';
 import '../../repositories/session_manager.dart';
@@ -210,7 +211,7 @@ class RelayWsClient {
     _sessions.endSession(machineId);
   }
 
-  Future<Map<String, dynamic>> callRpc({
+  Future<RpcResponseEnvelopeDto> callRpc({
     required String machineId,
     required String method,
     Map<String, dynamic>? params,
@@ -241,6 +242,36 @@ class RelayWsClient {
       ).toJson(),
     );
     return completer.future;
+  }
+
+  Future<T> callRpcDecoded<T>({
+    required String machineId,
+    required String method,
+    required T Function(Map<String, dynamic> json) decode,
+    Map<String, dynamic>? params,
+  }) async {
+    final envelope = await callRpc(
+      machineId: machineId,
+      method: method,
+      params: params,
+    );
+
+    final error = envelope.error;
+    if (error != null) {
+      throw Exception(error);
+    }
+
+    final result = envelope.result;
+    if (result == null) {
+      return decode(const <String, dynamic>{});
+    }
+    if (result is Map<String, dynamic>) {
+      return decode(result);
+    }
+    if (result is Map) {
+      return decode(Map<String, dynamic>.from(result));
+    }
+    throw Exception('invalid rpc result for $method');
   }
 
   Future<void> resetConnection({Object? reason}) async {
@@ -405,7 +436,11 @@ class RelayWsClient {
       return;
     }
     final decoded = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
-    _sessions.resolvePendingRpc(machineId, msgId, decoded);
+    _sessions.resolvePendingRpc(
+      machineId,
+      msgId,
+      RpcResponseEnvelopeDto.fromJson(decoded),
+    );
   }
 
   Future<void> _handleEvent(WsEncryptedMessage msg) async {

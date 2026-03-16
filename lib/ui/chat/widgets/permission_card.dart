@@ -35,8 +35,11 @@ class PermissionCard extends StatelessWidget {
           // Header
           Row(
             children: [
-              const Icon(LucideIcons.shieldAlert,
-                  color: AppTheme.warning, size: 16),
+              const Icon(
+                LucideIcons.shieldAlert,
+                color: AppTheme.warning,
+                size: 16,
+              ),
               const SizedBox(width: 8),
               Text(
                 'Permission Required',
@@ -51,28 +54,28 @@ class PermissionCard extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Description
-          Text(
-            'Agent wants to use ${approval.title}',
-            style: GoogleFonts.inter(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppTheme.textSecondary,
+          if (approval.descriptionText != null)
+            Text(
+              approval.descriptionText!,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textSecondary,
+              ),
             ),
-          ),
 
           // Command preview
-          if (_commandText != null) ...[
+          if (approval.commandText != null) ...[
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
-              padding:
-                  const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
               decoration: BoxDecoration(
                 color: AppTheme.codeBg,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                _commandText!,
+                approval.commandText!,
                 style: AppFonts.code(
                   fontSize: 13,
                   fontWeight: FontWeight.w400,
@@ -82,25 +85,27 @@ class PermissionCard extends StatelessWidget {
             ),
           ],
 
+          if (approval.cwd != null && approval.cwd!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'cwd: ${approval.cwd!}',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textTertiary,
+              ),
+            ),
+          ],
+
           // Action buttons: 3 equal columns
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              children: _buildActionButtons(),
-            ),
+            child: Row(children: _buildActionButtons()),
           ),
         ],
       ),
     );
-  }
-
-  String? get _commandText {
-    final input = approval.input;
-    if (input == null) return null;
-    final command = input['command'];
-    if (command is String && command.isNotEmpty) return command;
-    return null;
   }
 
   List<Widget> _buildActionButtons() {

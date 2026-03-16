@@ -7,10 +7,10 @@ class ToolActivity {
   String? kind;
   ToolStatus status;
   String? title;
-  Map<String, dynamic>? input;
+  ToolInputInfo? input;
   String? output;
   String? error;
-  Map<String, dynamic>? metadata;
+  ClaudeCodeToolInfo? claudeCode;
   List<ToolDiff>? diffs;
   List<ToolLocation>? locations;
 
@@ -23,24 +23,10 @@ class ToolActivity {
     this.input,
     this.output,
     this.error,
-    this.metadata,
+    this.claudeCode,
     this.diffs,
     this.locations,
   });
-
-  factory ToolActivity.fromJson(Map<String, dynamic> json) {
-    return ToolActivity(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      kind: json['kind'] as String?,
-      status: ToolStatus.fromValue(json['status'] as String? ?? 'pending'),
-      title: json['title'] as String?,
-      input: json['input'] as Map<String, dynamic>?,
-      output: json['output'] as String?,
-      error: json['error'] as String?,
-      metadata: json['metadata'] as Map<String, dynamic>?,
-    );
-  }
 
   ToolKind get effectiveKind {
     if (kind != null) return ToolKind.fromValue(kind);
@@ -54,24 +40,52 @@ class ToolActivity {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'status': status.value,
-        if (kind != null) 'kind': kind,
-        if (title != null) 'title': title,
-        if (input != null) 'input': input,
-        if (output != null) 'output': output,
-        if (error != null) 'error': error,
-        if (metadata != null) 'metadata': metadata,
-      };
+    'id': id,
+    'name': name,
+    'status': status.value,
+    if (kind != null) 'kind': kind,
+    if (title != null) 'title': title,
+    if (input != null)
+      'input': {
+        if (input!.description != null) 'description': input!.description,
+        if (input!.command != null)
+          'command': {
+            if (input!.command!.argv.isNotEmpty) 'argv': input!.command!.argv,
+            if (input!.command!.display != null)
+              'display': input!.command!.display,
+          },
+        if (input!.filePath != null) 'filePath': input!.filePath,
+        if (input!.sourcePath != null) 'sourcePath': input!.sourcePath,
+        if (input!.targetPath != null) 'targetPath': input!.targetPath,
+        if (input!.pattern != null) 'pattern': input!.pattern,
+        if (input!.url != null) 'url': input!.url,
+        if (input!.mode != null) 'mode': input!.mode,
+        if (input!.edit != null)
+          'edit': {
+            if (input!.edit!.filePath != null)
+              'filePath': input!.edit!.filePath,
+            if (input!.edit!.oldString != null)
+              'oldString': input!.edit!.oldString,
+            if (input!.edit!.newString != null)
+              'newString': input!.edit!.newString,
+          },
+        if (input!.rawInputJson != null) 'rawInputJson': input!.rawInputJson,
+      },
+    if (output != null) 'output': output,
+    if (error != null) 'error': error,
+    if (claudeCode != null)
+      'claudeCode': {
+        if (claudeCode!.parentToolUseId != null)
+          'parentToolUseId': claudeCode!.parentToolUseId,
+        if (claudeCode!.toolName != null) 'toolName': claudeCode!.toolName,
+      },
+  };
 }
 
 extension ToolActivityMeta on ToolActivity {
-  String? get parentToolCallId =>
-      metadata?['claudeCode']?['parentToolUseId'] as String?;
+  String? get parentToolCallId => claudeCode?.parentToolUseId;
 
-  String? get claudeToolName =>
-      metadata?['claudeCode']?['toolName'] as String?;
+  String? get claudeToolName => claudeCode?.toolName;
 
   bool get isChildTool => parentToolCallId != null;
 }

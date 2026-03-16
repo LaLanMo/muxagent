@@ -15,7 +15,7 @@ class HistoryTabViewModel extends GetxController {
   final EventRepository _eventRepo;
 
   HistoryTabViewModel({required EventRepository eventRepo})
-      : _eventRepo = eventRepo;
+    : _eventRepo = eventRepo;
 
   final sessionGroups = <SessionGroup>[].obs;
   final selectedMachineFilter = Rxn<String>();
@@ -47,10 +47,7 @@ class HistoryTabViewModel extends GetxController {
 
     final machineFilter = selectedMachineFilter.value;
     if (machineFilter != null) {
-      filtered = filtered.where((s) {
-        final mid = s.metadata?['machineId'] as String? ?? '';
-        return mid == machineFilter;
-      }).toList();
+      filtered = filtered.where((s) => s.machineId == machineFilter).toList();
     }
 
     filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -87,8 +84,18 @@ class HistoryTabViewModel extends GetxController {
 
   String _formatDate(DateTime dt) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${months[dt.month - 1]} ${dt.day}';
   }

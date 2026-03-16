@@ -20,9 +20,9 @@ class PillTabBar extends StatelessWidget {
   });
 
   static const _tabs = [
-    _TabDef(icon: LucideIcons.radio),
-    _TabDef(icon: LucideIcons.clock4),
-    _TabDef(icon: LucideIcons.settings),
+    _TabDef(icon: LucideIcons.radio, label: 'Active Sessions'),
+    _TabDef(icon: LucideIcons.clock4, label: 'History'),
+    _TabDef(icon: LucideIcons.settings, label: 'Settings'),
   ];
 
   @override
@@ -47,21 +47,24 @@ class PillTabBar extends StatelessWidget {
                 final tab = _tabs[i];
                 final selected = i == currentIndex;
                 return Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      HapticFeedback.lightImpact();
-                      onTap(i);
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? AppTheme.selectedBg
-                            : Colors.transparent,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Center(
-                        child: _buildIcon(tab, i),
+                  child: Semantics(
+                    label: tab.label,
+                    button: true,
+                    selected: selected,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        HapticFeedback.lightImpact();
+                        onTap(i);
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppTheme.selectedBg
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Center(child: _buildIcon(tab, i)),
                       ),
                     ),
                   ),
@@ -71,25 +74,29 @@ class PillTabBar extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           // Create button
-          GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () {
-              HapticFeedback.lightImpact();
-              onCreateTap?.call();
-            },
-            child: Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: AppTheme.chipBorder),
-              ),
-              child: const Center(
-                child: Icon(
-                  LucideIcons.pencil,
-                  size: 22,
-                  color: AppTheme.primary,
+          Semantics(
+            label: 'New Session',
+            button: true,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () {
+                HapticFeedback.lightImpact();
+                onCreateTap?.call();
+              },
+              child: Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: AppTheme.chipBorder),
+                ),
+                child: const Center(
+                  child: Icon(
+                    LucideIcons.pencil,
+                    size: 22,
+                    color: AppTheme.primary,
+                  ),
                 ),
               ),
             ),
@@ -100,11 +107,7 @@ class PillTabBar extends StatelessWidget {
   }
 
   Widget _buildIcon(_TabDef tab, int index) {
-    final icon = Icon(
-      tab.icon,
-      size: 22,
-      color: AppTheme.primary,
-    );
+    final icon = Icon(tab.icon, size: 22, color: AppTheme.primary);
 
     // Show badge on Active tab (index 0)
     if (index == 0 && activeBadgeCount > 0) {
@@ -144,5 +147,7 @@ class PillTabBar extends StatelessWidget {
 
 class _TabDef {
   final IconData icon;
-  const _TabDef({required this.icon});
+  final String label;
+
+  const _TabDef({required this.icon, required this.label});
 }

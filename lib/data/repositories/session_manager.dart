@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cryptography/cryptography.dart';
 
+import '../services/ws/models/rpc_transport_models.dart';
 import '../services/ws/session_crypto.dart';
 
 class SessionState {
@@ -12,7 +13,7 @@ class SessionState {
   KeyPair? clientEphemeralKeyPair;
   Completer<void>? sessionCompleter;
   Timer? sessionTimer;
-  final Map<String, Completer<Map<String, dynamic>>> pendingRpc = {};
+  final Map<String, Completer<RpcResponseEnvelopeDto>> pendingRpc = {};
   final Map<String, Timer> pendingTimers = {};
 }
 
@@ -98,18 +99,20 @@ class SessionManager {
     state.clientEphemeralKeyPair = null;
     state.clientEphemeralPubB64 = null;
     if (state.session == null) {
-      state.pendingTimers.values.forEach((timer) => timer.cancel());
+      for (final timer in state.pendingTimers.values) {
+        timer.cancel();
+      }
       _sessions.remove(machineId);
       _setActive(machineId, false);
     }
   }
 
-  Completer<Map<String, dynamic>> registerPendingRpc(
+  Completer<RpcResponseEnvelopeDto> registerPendingRpc(
     String machineId,
     String msgId,
   ) {
     final state = getOrCreate(machineId);
-    final completer = Completer<Map<String, dynamic>>();
+    final completer = Completer<RpcResponseEnvelopeDto>();
     state.pendingRpc[msgId] = completer;
     state.pendingTimers[msgId]?.cancel();
     state.pendingTimers[msgId] = Timer(rpcTimeout, () {
@@ -121,7 +124,7 @@ class SessionManager {
   void resolvePendingRpc(
     String machineId,
     String msgId,
-    Map<String, dynamic> payload,
+    RpcResponseEnvelopeDto payload,
   ) {
     final state = _sessions[machineId];
     if (state == null) return;
@@ -146,7 +149,9 @@ class SessionManager {
     final state = _sessions.remove(machineId);
     if (state == null) return;
     state.sessionTimer?.cancel();
-    state.pendingTimers.values.forEach((timer) => timer.cancel());
+    for (final timer in state.pendingTimers.values) {
+      timer.cancel();
+    }
     state.pendingTimers.clear();
     state.pendingRpc.clear();
     state.session = null;
@@ -171,7 +176,9 @@ class SessionManager {
         }
       }
       state.sessionTimer?.cancel();
-      state.pendingTimers.values.forEach((timer) => timer.cancel());
+      for (final timer in state.pendingTimers.values) {
+        timer.cancel();
+      }
     }
     _sessions.clear();
     if (_activeSessions.isNotEmpty) {

@@ -11,6 +11,7 @@ import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../data/services/ws/session_config_mapper.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
@@ -19,6 +20,8 @@ import '../../domain/model_info.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/message.dart';
 import '../../domain/plan_entry.dart';
+import '../../domain/prompt_content_block.dart';
+import '../../domain/session_config_snapshot.dart';
 import '../../domain/usage_info.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
@@ -110,7 +113,7 @@ class ChatViewModel extends GetxController {
     if (existing != null) {
       sessionStatus.value = existing.status;
       currentMode.value = _resolveMode(existing.mode);
-      runtimeId.value = existing.metadata?['runtime'] as String? ?? '';
+      runtimeId.value = existing.runtime;
     }
     runtimeId.value = (args['runtime'] as String?) ?? runtimeId.value;
 
@@ -137,21 +140,9 @@ class ChatViewModel extends GetxController {
 
     if (isNewSession) {
       // New sessions are already created via session.create — skip load.
-      // Apply configOptions from the create response (synchronous, no event timing issues).
-      final configOptions = args['configOptions'] as List<dynamic>?;
-      debugPrint(
-        '[ChatVM] new session configOptions: ${configOptions?.length} items',
-      );
-      if (configOptions != null) {
-        for (final item in configOptions) {
-          debugPrint(
-            '[ChatVM]   item type=${item.runtimeType} keys=${item is Map ? item.keys.toList() : "N/A"}',
-          );
-          if (item is Map) debugPrint('[ChatVM]   item=$item');
-        }
-      }
-      if (configOptions != null) {
-        _applyConfigOptions(configOptions);
+      final configSnapshot = args['configSnapshot'] as SessionConfigSnapshot?;
+      if (configSnapshot != null) {
+        _applyConfigSnapshot(configSnapshot);
       }
       isLoading.value = false;
       _scheduleScrollStateSync();
@@ -170,10 +161,7 @@ class ChatViewModel extends GetxController {
 
   void _subscribeEvents() {
     _eventSub = _eventRepo.events
-        .where(
-          (e) =>
-              e.sessionId == sessionId || e.type == EventType.connectionState,
-        )
+        .where((e) => e.sessionId == sessionId)
         .listen(_handleEvent);
   }
 
@@ -183,31 +171,12 @@ class ChatViewModel extends GetxController {
     });
   }
 
-  void _applyConfigOptions(List<dynamic> configOptions) {
-    debugPrint(
-      '[ChatVM] _applyConfigOptions called with ${configOptions.length} items',
-    );
-    for (final raw in configOptions) {
-      debugPrint('[ChatVM]   raw item type: ${raw.runtimeType}, value: $raw');
-      if (raw is! Map<String, dynamic>) continue;
-      final category = raw['category'] as String? ?? '';
-      debugPrint('[ChatVM]   category: $category');
-      if (category == 'model') {
-        modelConfigId.value = raw['id'] as String? ?? '';
-        currentModel.value = raw['currentValue'] as String?;
-        final rawValues = raw['options'] as List? ?? [];
-        availableModels.value = rawValues
-            .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
-            .toList();
-      } else if (category == 'mode') {
-        final rawValues = raw['options'] as List? ?? [];
-        availableModes.value = ModeOption.orderedForRuntime(
-          runtimeId.value,
-          rawValues.map((v) => ModeOption.fromJson(v as Map<String, dynamic>)),
-        );
-        currentMode.value = _resolveMode(raw['currentValue'] as String?);
-      }
-    }
+  void _applyConfigSnapshot(SessionConfigSnapshot snapshot) {
+    modelConfigId.value = snapshot.modelConfigId ?? '';
+    currentModel.value = snapshot.currentModel;
+    availableModels.value = snapshot.availableModels;
+    availableModes.value = snapshot.availableModes;
+    currentMode.value = snapshot.currentMode;
   }
 
   Future<void> _loadSession() async {
@@ -221,35 +190,24 @@ class ChatViewModel extends GetxController {
       final session = _eventRepo.sessionById(sessionId);
       final mode = session?.mode ?? '';
       final model = session?.model ?? '';
-      final params = <String, dynamic>{
-        'sessionId': sessionId,
-        'cwd': cwd,
-        // Always send runtime explicitly
-        'runtime': runtimeId.value,
-        if (mode.isNotEmpty && mode != 'default') 'permissionMode': mode,
-        if (model.isNotEmpty && model != 'default') 'model': model,
-      };
-      final result = await _wsRepo.callRpc(
+      final response = await _wsRepo.loadSession(
         machineId: machineId,
-        method: 'session.load',
-        params: params,
+        sessionId: sessionId,
+        cwd: cwd,
+        runtime: runtimeId.value,
+        permissionMode: mode.isNotEmpty && mode != 'default' ? mode : null,
+        model: model,
       );
-      final configOptions = result['configOptions'] as List<dynamic>?;
-      final loadedRuntime = result['runtime'] as String? ?? '';
+      final loadedRuntime = response.app.runtime;
       if (loadedRuntime.isNotEmpty) {
         runtimeId.value = loadedRuntime;
       }
-      debugPrint(
-        '[ChatVM] load session configOptions: ${configOptions?.length} items',
+      final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
+        runtimeId: runtimeId.value,
+        configOptions: response.acp.configOptions ?? const [],
+        modes: response.acp.modes,
       );
-      if (configOptions != null) {
-        for (final item in configOptions) {
-          debugPrint(
-            '[ChatVM] load item type=${item.runtimeType} keys=${item is Map ? item.keys.toList() : "N/A"}',
-          );
-        }
-        _applyConfigOptions(configOptions);
-      }
+      _applyConfigSnapshot(snapshot);
     } catch (e) {
       debugPrint('Failed to load session: $e');
       AppToast.show('$e');
@@ -272,12 +230,6 @@ class ChatViewModel extends GetxController {
             break;
           }
           chatState.applyDelta(event.messagePart!);
-          _refreshMessages();
-        }
-
-      case EventType.messageFinal:
-        if (event.message != null) {
-          chatState.finalizeMessage(event.message!);
           _refreshMessages();
         }
 
@@ -337,32 +289,30 @@ class ChatViewModel extends GetxController {
         }
 
       case EventType.planUpdated:
-        final rawEntries = event.data?['entries'] as List?;
-        if (rawEntries != null) {
-          final entries = rawEntries
-              .map((e) => PlanEntry.fromJson(e as Map<String, dynamic>))
-              .toList();
+        final entries = event.planUpdate?.entries;
+        if (entries != null) {
           chatState.updatePlan(entries);
           planEntries.value = entries;
         }
 
       case EventType.modeChanged:
-        final modeId = event.data?['currentModeId'] as String?;
-        currentMode.value = _resolveMode(modeId);
+        currentMode.value = _resolveMode(event.modeChange?.currentModeId);
 
       case EventType.modelChanged:
-        if (event.data != null) {
-          currentModel.value = event.data!['currentValue'] as String?;
-          modelConfigId.value = event.data!['configId'] as String? ?? '';
-          final rawValues = event.data!['values'] as List? ?? [];
-          availableModels.value = rawValues
-              .map((v) => ModelInfo.fromJson(v as Map<String, dynamic>))
+        if (event.configChange != null) {
+          final configChange = event.configChange!;
+          currentModel.value = configChange.currentValue;
+          modelConfigId.value = configChange.configId;
+          availableModels.value = configChange.values
+              .map(
+                (value) => ModelInfo(
+                  value: value.value,
+                  name: value.name,
+                  description: value.description,
+                ),
+              )
               .toList();
         }
-
-      case EventType.connectionState:
-        final state = event.data?['state'] as String? ?? 'connected';
-        connState.value = ConnState.fromValue(state);
 
       default:
         break;
@@ -394,10 +344,10 @@ class ChatViewModel extends GetxController {
     currentMode.value = mode;
 
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.setMode(
         machineId: machineId,
-        method: 'session.setMode',
-        params: {'sessionId': sessionId, 'permissionMode': mode.id},
+        sessionId: sessionId,
+        permissionMode: mode.id,
       );
     } catch (e) {
       debugPrint('[ChatVM] changeMode failed: $e');
@@ -429,12 +379,12 @@ class ChatViewModel extends GetxController {
     currentModel.value = value;
 
     try {
-      final result = await _wsRepo.callRpc(
+      await _wsRepo.setConfigOption(
         machineId: machineId,
-        method: 'session.setConfigOption',
-        params: {'sessionId': sessionId, 'configId': configId, 'value': value},
+        sessionId: sessionId,
+        configId: configId,
+        value: value,
       );
-      debugPrint('[ChatVM] changeModel success: $result');
     } catch (e) {
       debugPrint('[ChatVM] changeModel failed: $e');
       currentModel.value = previous;
@@ -754,16 +704,11 @@ class ChatViewModel extends GetxController {
   Future<void> _fetchListing(String path) async {
     filePickerLoading.value = true;
     try {
-      final result = await _wsRepo.callRpc(
+      filePickerEntries.value = await _wsRepo.listFiles(
         machineId: machineId,
-        method: 'fs.list',
-        params: {'sessionId': sessionId, 'path': path},
+        sessionId: sessionId,
+        path: path,
       );
-      final raw = result['entries'] as List? ?? [];
-      final entries = raw
-          .map((e) => FsEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-      filePickerEntries.value = entries;
     } catch (e) {
       debugPrint('[ChatVM] fs.list failed: $e');
       filePickerEntries.clear();
@@ -775,16 +720,11 @@ class ChatViewModel extends GetxController {
   Future<void> _fetchSearch(String query) async {
     filePickerLoading.value = true;
     try {
-      final result = await _wsRepo.callRpc(
+      filePickerEntries.value = await _wsRepo.searchFiles(
         machineId: machineId,
-        method: 'fs.search',
-        params: {'sessionId': sessionId, 'query': query},
+        sessionId: sessionId,
+        query: query,
       );
-      final raw = result['results'] as List? ?? [];
-      final entries = raw
-          .map((e) => FsEntry.fromJson(e as Map<String, dynamic>))
-          .toList();
-      filePickerEntries.value = entries;
     } catch (e) {
       debugPrint('[ChatVM] fs.search failed: $e');
       filePickerEntries.clear();
@@ -880,25 +820,26 @@ class ChatViewModel extends GetxController {
     _eventRepo.setSessionStatus(sessionId, SessionStatus.running);
 
     // Build content blocks for the RPC
-    final content = <Map<String, dynamic>>[];
+    final content = <PromptContentBlock>[];
     for (var i = 0; i < previewsToSend.length; i++) {
-      content.add({
-        'type': 'image',
-        'mimeType': mimeTypesToSend[i],
-        'data': base64Encode(previewsToSend[i]),
-      });
+      content.add(
+        PromptContentBlock.imageBase64(
+          mimeType: mimeTypesToSend[i],
+          data: base64Encode(previewsToSend[i]),
+        ),
+      );
     }
     if (trimmed.isNotEmpty) {
-      content.add({'type': 'text', 'text': trimmed});
+      content.add(PromptContentBlock.text(trimmed));
     }
 
     // Await ACK from daemon — prompt runs asynchronously on daemon side,
     // so this returns quickly. Failure means daemon rejected the request.
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.promptSession(
         machineId: machineId,
-        method: 'session.prompt',
-        params: {'sessionId': sessionId, 'content': content},
+        sessionId: sessionId,
+        content: content,
       );
     } catch (e) {
       debugPrint('Prompt rejected: $e');
@@ -926,14 +867,11 @@ class ChatViewModel extends GetxController {
 
   Future<void> replyApproval(String requestId, String optionId) async {
     try {
-      await _wsRepo.callRpc(
+      await _wsRepo.replyApproval(
         machineId: machineId,
-        method: 'approval.reply',
-        params: {
-          'sessionId': sessionId,
-          'requestId': requestId,
-          'optionId': optionId,
-        },
+        sessionId: sessionId,
+        requestId: requestId,
+        optionId: optionId,
       );
       chatState.resolveApproval(requestId);
       _refreshApprovals();
@@ -951,11 +889,7 @@ class ChatViewModel extends GetxController {
       return;
     }
     try {
-      await _wsRepo.callRpc(
-        machineId: machineId,
-        method: 'session.cancel',
-        params: {'sessionId': sessionId},
-      );
+      await _wsRepo.cancelSession(machineId: machineId, sessionId: sessionId);
     } catch (e) {
       debugPrint('Failed to cancel session: $e');
       _resetSessionLocally();

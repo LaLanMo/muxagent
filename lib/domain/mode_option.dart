@@ -5,13 +5,15 @@ class ModeOption {
 
   const ModeOption({required this.id, required this.label, this.description});
 
-  factory ModeOption.fromJson(Map<String, dynamic> json) {
-    final id = json['value'] as String? ?? json['id'] as String? ?? '';
-    final upstreamLabel = json['name'] as String? ?? json['label'] as String?;
+  factory ModeOption.fromConfigValue({
+    required String value,
+    required String name,
+    String? description,
+  }) {
     return ModeOption(
-      id: id,
-      label: _displayLabel(id, upstreamLabel),
-      description: json['description'] as String?,
+      id: value,
+      label: _displayLabel(value, name),
+      description: description,
     );
   }
 

@@ -32,14 +32,16 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                        vertical: 12, horizontal: 14),
+                      vertical: 12,
+                      horizontal: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.codeBg,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     clipBehavior: Clip.antiAlias,
                     child: Text(
-                      _commandText(approval) ?? approval.title,
+                      approval.commandText ?? approval.title,
                       style: AppFonts.code(
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
@@ -47,12 +49,25 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
                       ),
                     ),
                   ),
+                  if (approval.cwd != null && approval.cwd!.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'cwd: ${approval.cwd!}',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
 
                   // Spacer fills remaining space
                   const Spacer(),
 
                   // Actions
-                  Obx(() => _buildActions(approval, controller.isReplying.value)),
+                  Obx(
+                    () => _buildActions(approval, controller.isReplying.value),
+                  ),
                 ],
               ),
             ),
@@ -68,9 +83,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: const BoxDecoration(
         color: AppTheme.surface,
-        border: Border(
-          bottom: BorderSide(color: AppTheme.border),
-        ),
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: SafeArea(
         bottom: false,
@@ -99,14 +112,6 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
     );
   }
 
-  String? _commandText(ApprovalRequest approval) {
-    final input = approval.input;
-    if (input == null) return null;
-    final command = input['command'];
-    if (command is String && command.isNotEmpty) return command;
-    return null;
-  }
-
   Widget _buildActions(ApprovalRequest approval, bool disabled) {
     final widgets = <Widget>[];
 
@@ -124,8 +129,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
               height: 48,
               decoration: BoxDecoration(
                 color: Colors.white,
-                border:
-                    Border.all(color: AppTheme.textPrimary, width: 1.5),
+                border: Border.all(color: AppTheme.textPrimary, width: 1.5),
                 borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,

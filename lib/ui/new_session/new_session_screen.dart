@@ -17,10 +17,13 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: UiEffectListener(
-        effects: controller.uiEffect,
-        child: SafeArea(
-          child: Column(
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: controller.dismissTransientInputs,
+        child: UiEffectListener(
+          effects: controller.uiEffect,
+          child: SafeArea(
+            child: Column(
             children: [
               // Header: height 56, padding [0, 16], gap 12, alignItems center,
               // bottom border #E5E7EB
@@ -35,7 +38,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   children: [
                     // X icon 24x24 #6B6F76
                     GestureDetector(
-                      onTap: () => Get.back(),
+                      onTap: () {
+                        controller.dismissTransientInputs();
+                        Get.back();
+                      },
                       child: const Icon(
                         LucideIcons.x,
                         size: 24,
@@ -121,6 +127,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 ),
               ),
             ],
+            ),
           ),
         ),
       ),
@@ -149,7 +156,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         : 'Select a machine';
 
     return GestureDetector(
-      onTap: _showMachinePicker,
+      onTap: () {
+        controller.dismissTransientInputs();
+        _showMachinePicker();
+      },
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -250,8 +260,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           for (var i = 0; i < options.length; i++) ...[
             _buildRuntimeRow(
               runtime: options[i],
-              isSelected:
-                  controller.selectedRuntime.value?.id == options[i].id,
+              isSelected: controller.selectedRuntime.value?.id == options[i].id,
               enabled: selectionEnabled,
             ),
             if (i != options.length - 1)
@@ -312,27 +321,40 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     final canTap = enabled && runtime.ready;
     final labelColor = canTap ? AppTheme.textPrimary : AppTheme.textSecondary;
 
-    return GestureDetector(
-      onTap: canTap ? () => controller.selectRuntime(runtime) : null,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        child: Row(
-          children: [
-            _buildRuntimeIcon(runtime.id),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                runtime.label,
-                style: GoogleFonts.inter(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: labelColor,
+    return Semantics(
+      label: runtime.label,
+      button: true,
+      enabled: canTap,
+      selected: isSelected,
+      container: true,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: canTap
+            ? () {
+                controller.dismissTransientInputs();
+                controller.selectRuntime(runtime);
+              }
+            : null,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          child: Row(
+            children: [
+              _buildRuntimeIcon(runtime.id),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  runtime.label,
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: labelColor,
+                  ),
                 ),
               ),
-            ),
-            _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
-          ],
+              _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
+            ],
+          ),
         ),
       ),
     );
@@ -403,37 +425,50 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
   Widget _buildModeCard({required ModeOption mode, required bool isSelected}) {
     final accent = _modeAccent(mode.id);
-    return GestureDetector(
-      onTap: () => controller.selectMode(mode),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppTheme.primary : AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
-            ),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                mode.label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                  color: isSelected ? Colors.white : AppTheme.textSecondary,
+    return Semantics(
+      label: mode.label,
+      button: true,
+      selected: isSelected,
+      container: true,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: () {
+          controller.dismissTransientInputs();
+          controller.selectMode(mode);
+        },
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppTheme.primary : AppTheme.inputFill,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: accent,
+                  shape: BoxShape.circle,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  mode.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                    color: isSelected ? Colors.white : AppTheme.textSecondary,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -502,6 +537,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 trailing: isOnline ? _statusDot(true) : _statusDot(false),
                 onTap: isOnline
                     ? () {
+                        controller.dismissTransientInputs();
                         controller.selectMachine(machine);
                         Get.back();
                       }
@@ -526,153 +562,186 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   // Directory input with recent-cwd dropdown.
-  // The outer Obx only tracks isCwdDropdownOpen (for the border & showing the
-  // dropdown). The inner Obx tracks filteredCwds so that typing to filter the
-  // list does NOT rebuild the TextField — which would disconnect the IME and
-  // close the keyboard on Android.
+  // Visibility is explicit: tapping the field opens it, and only an outside
+  // tap closes it. The inner Obx tracks filteredCwds so that typing to filter
+  // the list does NOT rebuild the TextField — which would disconnect the IME
+  // and close the keyboard on Android.
   Widget _buildDirectorySection() {
     return Obx(() {
       final isOpen = controller.isCwdDropdownOpen.value;
 
       return Container(
-        decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
-          border: isOpen ? Border.all(color: AppTheme.primary, width: 2) : null,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
+          decoration: BoxDecoration(
+            color: AppTheme.inputFill,
+            borderRadius: BorderRadius.circular(8),
+            border: isOpen
+                ? Border.all(color: AppTheme.primary, width: 2)
+                : null,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
             // Input row — always at index 0 to preserve focus
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  const Icon(
-                    LucideIcons.folder,
-                    size: 16,
-                    color: AppTheme.textTertiary,
+              GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: controller.openCwdDropdown,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: controller.cwdController,
-                      focusNode: controller.cwdFocusNode,
-                      autocorrect: false,
-                      enableSuggestions: false,
-                      smartDashesType: SmartDashesType.disabled,
-                      smartQuotesType: SmartQuotesType.disabled,
-                      style: AppFonts.code(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: AppTheme.textPrimary,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Icon(
+                        LucideIcons.folder,
+                        size: 16,
+                        color: AppTheme.textTertiary,
                       ),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        hintText: '~/project',
-                        hintStyle: AppFonts.code(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: AppTheme.textMuted,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Semantics(
+                          textField: true,
+                          label: 'Working directory',
+                          onTap: controller.openCwdDropdown,
+                          child: TextField(
+                            controller: controller.cwdController,
+                            focusNode: controller.cwdFocusNode,
+                            textInputAction: TextInputAction.next,
+                            onTap: controller.openCwdDropdown,
+                            onSubmitted: (_) =>
+                                controller.commitCwdAndFocusPrompt(),
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            smartDashesType: SmartDashesType.disabled,
+                            smartQuotesType: SmartQuotesType.disabled,
+                            style: AppFonts.code(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.textPrimary,
+                            ),
+                            decoration: InputDecoration(
+                              isDense: true,
+                              contentPadding: EdgeInsets.zero,
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              hintText: '~/project',
+                              hintStyle: AppFonts.code(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.textMuted,
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            // Dropdown — conditionally shown below the input
-            if (isOpen) ...[
-              const Divider(height: 1, thickness: 1, color: AppTheme.border),
-              // Nested Obx: only this rebuilds when filteredCwds changes,
-              // keeping the TextField above stable.
-              Obx(() {
-                final filtered = controller.filteredCwds;
-                return Container(
-                  color: Colors.white,
-                  constraints: const BoxConstraints(maxHeight: 220),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: filtered.length + 1, // +1 for header
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                          child: Text(
-                            'RECENT',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF9CA0A8),
-                              letterSpacing: 0.5,
+              // Dropdown — conditionally shown below the input
+              if (isOpen) ...[
+                const Divider(height: 1, thickness: 1, color: AppTheme.border),
+                // Nested Obx: only this rebuilds when filteredCwds changes,
+                // keeping the TextField above stable.
+                Obx(() {
+                  final filtered = controller.filteredCwds;
+                  if (filtered.isEmpty) {
+                    return Container(
+                      width: double.infinity,
+                      color: Colors.white,
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                      child: Text(
+                        'No recent directories',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFF9CA0A8),
+                        ),
+                      ),
+                    );
+                  }
+                  return Container(
+                    color: Colors.white,
+                    constraints: const BoxConstraints(maxHeight: 220),
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount: filtered.length + 1, // +1 for header
+                      itemBuilder: (context, index) {
+                        if (index == 0) {
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                            child: Text(
+                              'RECENT',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF9CA0A8),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          );
+                        }
+                        final cwd = filtered[index - 1];
+                        final isFirst = index == 1;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => controller.selectCwd(cwd),
+                          child: Container(
+                            color: isFirst
+                                ? AppTheme.hoverBg
+                                : Colors.transparent,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  LucideIcons.folder,
+                                  size: 14,
+                                  color: Color(0xFF9CA0A8),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        cwd.path,
+                                        style: AppFonts.code(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w500,
+                                          color: AppTheme.textPrimary,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        _relativeTime(cwd.lastUsed),
+                                        style: GoogleFonts.inter(
+                                          fontSize: 11,
+                                          color: const Color(0xFF9CA0A8),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         );
-                      }
-                      final cwd = filtered[index - 1];
-                      final isFirst = index == 1;
-                      return GestureDetector(
-                        onTap: () => controller.selectCwd(cwd),
-                        child: Container(
-                          color: isFirst
-                              ? AppTheme.hoverBg
-                              : Colors.transparent,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(
-                                LucideIcons.folder,
-                                size: 14,
-                                color: Color(0xFF9CA0A8),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      cwd.path,
-                                      style: AppFonts.code(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _relativeTime(cwd.lastUsed),
-                                      style: GoogleFonts.inter(
-                                        fontSize: 11,
-                                        color: const Color(0xFF9CA0A8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }),
+                      },
+                    ),
+                  );
+                }),
+              ],
             ],
-          ],
-        ),
-      );
+          ),
+        );
     });
   }
 
@@ -695,7 +764,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   Widget _buildWorktreeToggle() {
     final isOn = controller.useWorktree.value;
     return GestureDetector(
-      onTap: controller.toggleWorktree,
+      onTap: () {
+        controller.dismissTransientInputs();
+        controller.toggleWorktree();
+      },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
@@ -762,30 +834,38 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                child: TextField(
-                  controller: controller.promptController,
-                  maxLines: null,
-                  expands: true,
-                  textAlignVertical: TextAlignVertical.top,
-                  autocorrect: false,
-                  smartDashesType: SmartDashesType.disabled,
-                  smartQuotesType: SmartQuotesType.disabled,
-                  style: GoogleFonts.inter(
-                    fontSize: 14,
-                    fontWeight: FontWeight.normal,
-                    color: AppTheme.textPrimary,
-                  ),
-                  decoration: InputDecoration(
-                    isDense: true,
-                    contentPadding: EdgeInsets.zero,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    hintText: 'Describe what you want to do...',
-                    hintStyle: GoogleFonts.inter(
+                child: Semantics(
+                  textField: true,
+                  label: 'Initial prompt',
+                  onTap: controller.focusPromptInput,
+                  child: TextField(
+                    controller: controller.promptController,
+                    focusNode: controller.promptFocusNode,
+                    textInputAction: TextInputAction.done,
+                    onTap: controller.focusPromptInput,
+                    maxLines: null,
+                    expands: true,
+                    textAlignVertical: TextAlignVertical.top,
+                    autocorrect: false,
+                    smartDashesType: SmartDashesType.disabled,
+                    smartQuotesType: SmartQuotesType.disabled,
+                    style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.normal,
-                      color: AppTheme.textMuted,
+                      color: AppTheme.textPrimary,
+                    ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      hintText: 'Describe what you want to do...',
+                      hintStyle: GoogleFonts.inter(
+                        fontSize: 14,
+                        fontWeight: FontWeight.normal,
+                        color: AppTheme.textMuted,
+                      ),
                     ),
                   ),
                 ),
@@ -826,7 +906,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
       if (recording) {
         return GestureDetector(
-          onTap: controller.stopVoiceInput,
+          onTap: () {
+            controller.dismissTransientInputs();
+            controller.stopVoiceInput();
+          },
           child: Container(
             width: 32,
             height: 32,
@@ -849,7 +932,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       }
 
       return GestureDetector(
-        onTap: controller.startVoiceInput,
+        onTap: () {
+          controller.dismissTransientInputs();
+          controller.startVoiceInput();
+        },
         child: Container(
           width: 32,
           height: 32,
@@ -877,7 +963,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           hasMachine && hasRuntimeSelection && !controller.isLoading.value;
 
       return GestureDetector(
-        onTap: canCreate ? controller.startSession : null,
+        onTap: canCreate
+            ? () {
+                controller.dismissTransientInputs();
+                controller.startSession();
+              }
+            : null,
         child: Container(
           width: double.infinity,
           height: 48,
