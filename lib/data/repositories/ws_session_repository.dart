@@ -5,7 +5,9 @@ import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/fs_entry.dart';
 import '../../domain/paired_machine.dart';
+import '../../domain/prompt_content_block.dart';
 import '../services/ws/models/acp_session_models.dart';
+import '../services/ws/models/prompt_rpc_models.dart';
 import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/relay_ws_client.dart';
@@ -221,12 +223,16 @@ class WsSessionRepository {
   Future<void> promptSession({
     required String machineId,
     required String sessionId,
-    required List<Map<String, dynamic>> content,
+    required List<PromptContentBlock> content,
   }) async {
+    final params = PromptSessionParamsDto(
+      sessionId: sessionId,
+      content: content.map(PromptContentBlockDto.fromDomain).toList(),
+    );
     final result = await callRpc(
       machineId: machineId,
       method: 'session.prompt',
-      params: {'sessionId': sessionId, 'content': content},
+      params: params.toJson(),
     );
     final response = RpcAcceptedResponseDto.fromJson(result);
     if (!response.accepted) {

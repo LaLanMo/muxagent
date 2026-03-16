@@ -162,30 +162,6 @@ class SessionError {
   SessionError({required this.code, required this.message});
 }
 
-class ContentBlock {
-  final String type;
-  final String? text;
-  final String? mimeType;
-  final String? data;
-  final String? uri;
-
-  ContentBlock({
-    required this.type,
-    this.text,
-    this.mimeType,
-    this.data,
-    this.uri,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'type': type,
-    if (text != null) 'text': text,
-    if (mimeType != null) 'mimeType': mimeType,
-    if (data != null) 'data': data,
-    if (uri != null) 'uri': uri,
-  };
-}
-
 class AgentEvent {
   final EventType? type;
   final String? sessionId;

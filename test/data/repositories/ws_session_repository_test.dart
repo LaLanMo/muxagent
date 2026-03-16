@@ -4,6 +4,7 @@ import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
+import 'package:muxagent/domain/prompt_content_block.dart';
 
 class FakeRelayWsClient extends RelayWsClient {
   Map<String, dynamic> nextPayload;
@@ -301,9 +302,7 @@ void main() {
       await repo.promptSession(
         machineId: 'machine-1',
         sessionId: 'sid-1',
-        content: [
-          {'type': 'text', 'text': 'hello'},
-        ],
+        content: [PromptContentBlock.text('hello')],
       );
       expect(relay.lastMethod, 'session.prompt');
       expect(relay.lastParams, {

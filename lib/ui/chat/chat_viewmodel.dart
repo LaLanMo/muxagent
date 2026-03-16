@@ -20,6 +20,7 @@ import '../../domain/model_info.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/message.dart';
 import '../../domain/plan_entry.dart';
+import '../../domain/prompt_content_block.dart';
 import '../../domain/session_config_snapshot.dart';
 import '../../domain/usage_info.dart';
 import '../../usecases/transcribe_audio.dart';
@@ -819,16 +820,17 @@ class ChatViewModel extends GetxController {
     _eventRepo.setSessionStatus(sessionId, SessionStatus.running);
 
     // Build content blocks for the RPC
-    final content = <Map<String, dynamic>>[];
+    final content = <PromptContentBlock>[];
     for (var i = 0; i < previewsToSend.length; i++) {
-      content.add({
-        'type': 'image',
-        'mimeType': mimeTypesToSend[i],
-        'data': base64Encode(previewsToSend[i]),
-      });
+      content.add(
+        PromptContentBlock.imageBase64(
+          mimeType: mimeTypesToSend[i],
+          data: base64Encode(previewsToSend[i]),
+        ),
+      );
     }
     if (trimmed.isNotEmpty) {
-      content.add({'type': 'text', 'text': trimmed});
+      content.add(PromptContentBlock.text(trimmed));
     }
 
     // Await ACK from daemon — prompt runs asynchronously on daemon side,
