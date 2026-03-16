@@ -49,7 +49,7 @@ func InitTestContainer() (*testContainer, error) {
 	deviceTokenDAO := dao.NewGormDeviceTokenDAO(db)
 	deviceTokenRepository := repository.NewDeviceTokenRepository(deviceTokenDAO)
 	client := initTestNilFCMClient()
-	pushService := service.NewPushService(deviceTokenRepository, wsHub, client)
+	pushService := service.NewPushService(deviceTokenRepository, client)
 	config := initTestConfig()
 	wsServiceConfig := ioc.InitWSServiceConfig(config)
 	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService, wsServiceConfig)

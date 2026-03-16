@@ -14,38 +14,31 @@ type EventHint struct {
 }
 
 type PushService interface {
-	SendPushIfOffline(ctx context.Context, masterID uuid.UUID, hint EventHint) error
+	SendPushForHint(ctx context.Context, masterID uuid.UUID, hint EventHint) error
 }
 
 type pushServiceImpl struct {
 	deviceTokens repository.DeviceTokenRepository
-	hub          *WSHub
 	fcm          *messaging.Client
 }
 
 type noopPushService struct{}
 
-func NewPushService(deviceTokens repository.DeviceTokenRepository, hub *WSHub, fcm *messaging.Client) PushService {
+func NewPushService(deviceTokens repository.DeviceTokenRepository, fcm *messaging.Client) PushService {
 	if fcm == nil {
 		return &noopPushService{}
 	}
 	return &pushServiceImpl{
 		deviceTokens: deviceTokens,
-		hub:          hub,
 		fcm:          fcm,
 	}
 }
 
-func (s *noopPushService) SendPushIfOffline(ctx context.Context, masterID uuid.UUID, hint EventHint) error {
+func (s *noopPushService) SendPushForHint(ctx context.Context, masterID uuid.UUID, hint EventHint) error {
 	return nil
 }
 
-func (s *pushServiceImpl) SendPushIfOffline(ctx context.Context, masterID uuid.UUID, hint EventHint) error {
-	clients := s.hub.GetClientsByMasterID(masterID)
-	if len(clients) > 0 {
-		return nil
-	}
-
+func (s *pushServiceImpl) SendPushForHint(ctx context.Context, masterID uuid.UUID, hint EventHint) error {
 	tokens, err := s.deviceTokens.FindByMasterID(ctx, masterID)
 	if err != nil {
 		return err
@@ -86,9 +79,9 @@ func pushContentForEvent(event string) (title, body string) {
 	case "approval.requested":
 		return "Approval Needed", "An agent is waiting for your approval"
 	case "run.failed":
-		return "Task Failed", "An agent task has failed"
+		return "Run Failed", "An agent run has failed"
 	case "run.finished":
-		return "Task Completed", "An agent task has completed"
+		return "Run Completed", "An agent run has completed"
 	default:
 		return "Agent Update", "Your agent has an update"
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,6 +60,22 @@ func (m *tokenServiceMock) VerifyMachineAccessToken(ctx context.Context, token s
 type machineRepoMock struct {
 	findFn   func(ctx context.Context, id uuid.UUID) (domain.Machine, error)
 	updateFn func(ctx context.Context, id uuid.UUID, lastSeen time.Time, hostname string) error
+}
+
+type pushCall struct {
+	masterID uuid.UUID
+	hint     EventHint
+}
+
+type capturingPushService struct {
+	calls chan pushCall
+}
+
+func (s *capturingPushService) SendPushForHint(ctx context.Context, masterID uuid.UUID, hint EventHint) error {
+	if s.calls != nil {
+		s.calls <- pushCall{masterID: masterID, hint: hint}
+	}
+	return nil
 }
 
 func (m *machineRepoMock) Create(ctx context.Context, machine *domain.Machine) error {
@@ -132,7 +149,7 @@ func TestWSService_RegisterMachineAndClient(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -209,7 +226,7 @@ func TestWSService_RegisterClientWithInvalidToken_LogsRejected(t *testing.T) {
 		tokens,
 		NewWSHub(),
 		NewSessionRegistry(),
-		NewPushService(nil, NewWSHub(), nil),
+		NewPushService(nil, nil),
 		testWSServiceConfig(),
 	)
 	wsURL := newWSServer(t, svc)
@@ -260,7 +277,7 @@ func TestWSService_InvalidSessionInit_LogsRejected(t *testing.T) {
 		tokens,
 		NewWSHub(),
 		NewSessionRegistry(),
-		NewPushService(nil, NewWSHub(), nil),
+		NewPushService(nil, nil),
 		testWSServiceConfig(),
 	)
 	wsURL := newWSServer(t, svc)
@@ -343,7 +360,7 @@ func TestWSService_SessionInitAckRouting(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -470,7 +487,7 @@ func TestWSService_RejectRPCWithoutActiveSession(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, tokens, NewWSHub(), NewSessionRegistry(), NewPushService(nil, nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -554,7 +571,7 @@ func TestWSService_RegisterRevokedMachineRejected(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, NewWSHub(), NewSessionRegistry(), NewPushService(nil, nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -587,7 +604,7 @@ func TestWSService_RegisterMachineHostnameTooLongRejected(t *testing.T) {
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, NewWSHub(), NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, NewWSHub(), NewSessionRegistry(), NewPushService(nil, nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	machineConn := dialWS(t, wsURL)
@@ -621,7 +638,7 @@ func TestWSService_DuplicateMachineRegistrationReplacesOldConnection(t *testing.
 		},
 	}
 
-	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, hub, NewSessionRegistry(), NewPushService(nil, NewWSHub(), nil), testWSServiceConfig())
+	svc := NewWSService(machineRepo, &masterKeyRepoMock{}, &tokenServiceMock{}, hub, NewSessionRegistry(), NewPushService(nil, nil), testWSServiceConfig())
 	wsURL := newWSServer(t, svc)
 
 	firstConn := dialWS(t, wsURL)
@@ -650,4 +667,146 @@ func TestWSService_DuplicateMachineRegistrationReplacesOldConnection(t *testing.
 		_, ok := hub.GetMachine(machineID)
 		return !ok
 	}, time.Second, 10*time.Millisecond)
+}
+
+func TestWSService_ForwardMachineEventPushesWhenClientConnected(t *testing.T) {
+	masterID := uuid.New()
+	machineID := uuid.New()
+
+	masterSignPub, masterSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	masterFingerprint := crypto.HashKeyFingerprint(masterSignPub)
+
+	machineSignPub, machineSignPriv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+
+	pushSvc := &capturingPushService{calls: make(chan pushCall, 1)}
+	machineRepo := &machineRepoMock{
+		findFn: func(ctx context.Context, id uuid.UUID) (domain.Machine, error) {
+			return domain.Machine{
+				ID:             machineID,
+				MasterID:       masterID,
+				MachineSignPub: machineSignPub,
+			}, nil
+		},
+	}
+	masterKeys := &masterKeyRepoMock{
+		findByMasterFingerprintFn: func(ctx context.Context, id uuid.UUID, fingerprint string) (domain.MasterKey, error) {
+			if fingerprint != masterFingerprint {
+				return domain.MasterKey{}, repository.ErrMasterKeyNotFound
+			}
+			return domain.MasterKey{MasterSignPub: masterSignPub}, nil
+		},
+	}
+	tokens := &tokenServiceMock{
+		verifyConnectFn: func(ctx context.Context, token string) (ConnectTokenClaims, error) {
+			return ConnectTokenClaims{MasterID: masterID, MasterSignKeyFingerprint: masterFingerprint}, nil
+		},
+		verifyMachineFn: func(ctx context.Context, token string) (MachineTokenClaims, error) {
+			return MachineTokenClaims{MasterID: masterID, MachineID: machineID, MasterSignKeyFingerprint: masterFingerprint}, nil
+		},
+	}
+
+	svc := NewWSService(machineRepo, masterKeys, tokens, NewWSHub(), NewSessionRegistry(), pushSvc, testWSServiceConfig())
+	wsURL := newWSServer(t, svc)
+
+	machineConn := dialWS(t, wsURL)
+	registerMachineWS(t, machineConn, machineID, machineSignPriv, "host")
+
+	clientConn := dialWS(t, wsURL)
+	require.NoError(t, clientConn.WriteJSON(registerMessage{
+		Type:         WSTypeRegister,
+		Role:         WSRoleClient,
+		ConnectToken: "connect",
+	}))
+	readJSON(t, clientConn, &registeredMessage{})
+
+	clientEphemeral := "client-ephemeral"
+	initMsg := crypto.BuildSessionInitMessage(machineID.String(), clientEphemeral)
+	initSig := ed25519.Sign(masterSignPriv, []byte(initMsg))
+
+	require.NoError(t, clientConn.WriteJSON(sessionInitMessage{
+		Type:               WSTypeSessionInit,
+		MachineID:          machineID.String(),
+		MachineToken:       "machine",
+		ClientEphemeralPub: clientEphemeral,
+		Signature:          base64.StdEncoding.EncodeToString(initSig),
+	}))
+
+	var initReceived sessionInitMessage
+	readJSON(t, machineConn, &initReceived)
+
+	machineEphemeral := "machine-ephemeral"
+	ackMsg := crypto.BuildSessionAckMessage(machineID.String(), machineEphemeral)
+	ackSig := ed25519.Sign(machineSignPriv, []byte(ackMsg))
+	require.NoError(t, machineConn.WriteJSON(sessionAckMessage{
+		Type:                WSTypeSessionAck,
+		MachineID:           machineID.String(),
+		MachineEphemeralPub: machineEphemeral,
+		Signature:           base64.StdEncoding.EncodeToString(ackSig),
+	}))
+	readJSON(t, clientConn, &sessionAckMessage{})
+
+	eventMsg := encryptedMessage{
+		Type:       WSTypeEvent,
+		MachineID:  machineID.String(),
+		MsgID:      "evt-1",
+		Nonce:      "n",
+		Ciphertext: "c",
+		Hint:       &eventHint{Event: "run.finished"},
+	}
+	require.NoError(t, machineConn.WriteJSON(eventMsg))
+
+	var eventReceived encryptedMessage
+	readJSON(t, clientConn, &eventReceived)
+	assert.Equal(t, eventMsg.Type, eventReceived.Type)
+	assert.Equal(t, eventMsg.MachineID, eventReceived.MachineID)
+	assert.Equal(t, eventMsg.MsgID, eventReceived.MsgID)
+	assert.Equal(t, eventMsg.Hint.Event, eventReceived.Hint.Event)
+
+	select {
+	case call := <-pushSvc.calls:
+		assert.Equal(t, masterID, call.masterID)
+		assert.Equal(t, "run.finished", call.hint.Event)
+	case <-time.After(time.Second):
+		t.Fatal("expected push to be triggered for hinted event")
+	}
+}
+
+func TestWSService_ForwardMachineEventPushesWithoutActiveSession(t *testing.T) {
+	masterID := uuid.New()
+	machineID := uuid.New()
+
+	hub := NewWSHub()
+	hub.machines[machineID] = &machineConn{
+		ID:       machineID,
+		MasterID: masterID,
+		Hostname: "host",
+	}
+
+	pushSvc := &capturingPushService{calls: make(chan pushCall, 1)}
+	svc := NewWSService(&machineRepoMock{}, &masterKeyRepoMock{}, &tokenServiceMock{}, hub, NewSessionRegistry(), pushSvc, testWSServiceConfig())
+
+	raw, err := json.Marshal(encryptedMessage{
+		Type:       WSTypeEvent,
+		MachineID:  machineID.String(),
+		MsgID:      "evt-2",
+		Nonce:      "n",
+		Ciphertext: "c",
+		Hint:       &eventHint{Event: "run.failed"},
+	})
+	require.NoError(t, err)
+
+	wsSvc, ok := svc.(*wsServiceImpl)
+	require.True(t, ok)
+	err = wsSvc.forwardMachineMessage(raw, machineID)
+	require.ErrorIs(t, err, ErrUnauthorizedSession)
+
+	select {
+	case call := <-pushSvc.calls:
+		assert.Equal(t, masterID, call.masterID)
+		assert.Equal(t, "run.failed", call.hint.Event)
+	case <-time.After(time.Second):
+		t.Fatal("expected push to be triggered without an active session")
+	}
 }

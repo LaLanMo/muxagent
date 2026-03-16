@@ -50,7 +50,7 @@ func InitApp(cfg *config.Config) (*App, error) {
 	deviceTokenRepository := repository.NewDeviceTokenRepository(deviceTokenDAO)
 	app := ioc.InitFirebaseApp(cfg)
 	client := ioc.InitFCMClient(app)
-	pushService := service.NewPushService(deviceTokenRepository, wsHub, client)
+	pushService := service.NewPushService(deviceTokenRepository, client)
 	wsServiceConfig := ioc.InitWSServiceConfig(cfg)
 	wsService := service.NewWSService(machineRepository, masterKeyRepository, tokenService, wsHub, sessionRegistry, pushService, wsServiceConfig)
 	wsConnLimiter := ioc.InitWSConnLimiter(cfg)

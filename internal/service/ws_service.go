@@ -752,6 +752,8 @@ func (s *wsServiceImpl) forwardClientMessage(raw json.RawMessage, clientID uuid.
 }
 
 func (s *wsServiceImpl) forwardMachineMessage(raw json.RawMessage, machineID uuid.UUID) error {
+	s.tryPushNotification(raw, machineID)
+
 	clientID, ok := s.sessions.GetActiveSessionClient(machineID)
 	if !ok {
 		return ErrUnauthorizedSession
@@ -759,12 +761,10 @@ func (s *wsServiceImpl) forwardMachineMessage(raw json.RawMessage, machineID uui
 	clientConn, ok := s.hub.GetClient(clientID)
 	if !ok {
 		s.sessions.EndSession(machineID)
-		s.tryPushNotification(raw, machineID)
 		return ErrUnauthorizedSession
 	}
 	if err := clientConn.conn.WriteMessage(websocket.TextMessage, raw); err != nil {
 		s.sessions.EndSession(machineID)
-		s.tryPushNotification(raw, machineID)
 		return ErrUnauthorizedSession
 	}
 	return nil
@@ -782,7 +782,7 @@ func (s *wsServiceImpl) tryPushNotification(raw json.RawMessage, machineID uuid.
 	if !ok {
 		return
 	}
-	go s.pushService.SendPushIfOffline(context.Background(), mc.MasterID, EventHint{Event: msg.Hint.Event})
+	go s.pushService.SendPushForHint(context.Background(), mc.MasterID, EventHint{Event: msg.Hint.Event})
 }
 
 func (s *wsServiceImpl) notifyMachineStatus(masterID, machineID uuid.UUID, hostname string, online bool) {
