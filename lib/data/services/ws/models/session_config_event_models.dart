@@ -1,84 +1,56 @@
+// ignore_for_file: invalid_annotation_target
+
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'acp_session_models.dart';
 
-Map<String, dynamic> _requireObject(Map<String, dynamic> json, String key) {
-  final value = json[key];
+part 'session_config_event_models.freezed.dart';
+part 'session_config_event_models.g.dart';
+
+Map<String, dynamic> _requiredObject(Object? value) {
   if (value is Map) return Map<String, dynamic>.from(value);
-  throw FormatException('Expected "$key" to be an object');
+  throw FormatException('Expected an object');
 }
 
-String _requireString(Map<String, dynamic> json, String key) {
-  final value = json[key];
+String _requiredString(Object? value) {
   if (value is String) return value;
-  throw FormatException('Expected "$key" to be a string');
+  throw FormatException('Expected a string');
 }
 
-String? _nullableString(Map<String, dynamic> json, String key) {
-  final value = json[key];
-  if (value == null) return null;
-  if (value is String) return value;
-  throw FormatException('Expected "$key" to be a string or null');
+@Freezed(toJson: false)
+class ModeChangedEventEnvelopeDto with _$ModeChangedEventEnvelopeDto {
+  const factory ModeChangedEventEnvelopeDto({
+    @JsonKey(fromJson: _requiredString) required String type,
+    @JsonKey(name: 'sessionId') String? sessionId,
+    @Default(0) int seq,
+    DateTime? at,
+    @JsonKey(name: 'modeChanged', fromJson: _modeChangedEnvelopeFromJson)
+    required AppModeChangedEventDataDto modeChanged,
+  }) = _ModeChangedEventEnvelopeDto;
+
+  factory ModeChangedEventEnvelopeDto.fromJson(Map<String, dynamic> json) =>
+      _$ModeChangedEventEnvelopeDtoFromJson(json);
 }
 
-class ModeChangedEventEnvelopeDto {
-  final String type;
-  final String? sessionId;
-  final int seq;
-  final DateTime? at;
-  final AppModeChangedEventDataDto modeChanged;
+@Freezed(toJson: false)
+class ConfigChangedEventEnvelopeDto with _$ConfigChangedEventEnvelopeDto {
+  const factory ConfigChangedEventEnvelopeDto({
+    @JsonKey(fromJson: _requiredString) required String type,
+    @JsonKey(name: 'sessionId') String? sessionId,
+    @Default(0) int seq,
+    DateTime? at,
+    @JsonKey(name: 'configChanged', fromJson: _configChangedEnvelopeFromJson)
+    required AppConfigChangedEventDataDto configChanged,
+  }) = _ConfigChangedEventEnvelopeDto;
 
-  const ModeChangedEventEnvelopeDto({
-    required this.type,
-    required this.modeChanged,
-    this.sessionId,
-    this.seq = 0,
-    this.at,
-  });
-
-  factory ModeChangedEventEnvelopeDto.fromJson(Map<String, dynamic> json) {
-    return ModeChangedEventEnvelopeDto(
-      type: _requireString(json, 'type'),
-      sessionId: _nullableString(json, 'sessionId'),
-      seq: (json['seq'] as num?)?.toInt() ?? 0,
-      at: switch (json['at']) {
-        null => null,
-        final String value => DateTime.parse(value),
-        _ => throw FormatException('Expected "at" to be a string or null'),
-      },
-      modeChanged: AppModeChangedEventDataDto.fromJson(
-        _requireObject(json, 'modeChanged'),
-      ),
-    );
-  }
+  factory ConfigChangedEventEnvelopeDto.fromJson(Map<String, dynamic> json) =>
+      _$ConfigChangedEventEnvelopeDtoFromJson(json);
 }
 
-class ConfigChangedEventEnvelopeDto {
-  final String type;
-  final String? sessionId;
-  final int seq;
-  final DateTime? at;
-  final AppConfigChangedEventDataDto configChanged;
+AppModeChangedEventDataDto _modeChangedEnvelopeFromJson(Object? value) {
+  return AppModeChangedEventDataDto.fromJson(_requiredObject(value));
+}
 
-  const ConfigChangedEventEnvelopeDto({
-    required this.type,
-    required this.configChanged,
-    this.sessionId,
-    this.seq = 0,
-    this.at,
-  });
-
-  factory ConfigChangedEventEnvelopeDto.fromJson(Map<String, dynamic> json) {
-    return ConfigChangedEventEnvelopeDto(
-      type: _requireString(json, 'type'),
-      sessionId: _nullableString(json, 'sessionId'),
-      seq: (json['seq'] as num?)?.toInt() ?? 0,
-      at: switch (json['at']) {
-        null => null,
-        final String value => DateTime.parse(value),
-        _ => throw FormatException('Expected "at" to be a string or null'),
-      },
-      configChanged: AppConfigChangedEventDataDto.fromJson(
-        _requireObject(json, 'configChanged'),
-      ),
-    );
-  }
+AppConfigChangedEventDataDto _configChangedEnvelopeFromJson(Object? value) {
+  return AppConfigChangedEventDataDto.fromJson(_requiredObject(value));
 }

@@ -1,186 +1,171 @@
+// ignore_for_file: invalid_annotation_target
+
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'approval_event_models.dart';
 
-List<Map<String, dynamic>> _requireObjectList(
-  Map<String, dynamic> json,
-  String key,
-) {
-  final value = json[key];
-  if (value == null) {
-    throw FormatException('Expected "$key" to be a list');
-  }
+part 'rpc_result_models.freezed.dart';
+part 'rpc_result_models.g.dart';
+
+List<Map<String, dynamic>> _requiredObjectList(Object? value) {
   if (value is! List) {
-    throw FormatException('Expected "$key" to be a list');
+    throw FormatException('Expected a list of objects');
   }
   return value.map((item) {
     if (item is! Map) {
-      throw FormatException('Expected "$key" items to be objects');
+      throw FormatException('Expected list items to be objects');
     }
     return Map<String, dynamic>.from(item);
   }).toList();
 }
 
-String _requireString(Map<String, dynamic> json, String key) {
-  final value = json[key];
+String _requiredString(Object? value) {
   if (value is String) return value;
-  throw FormatException('Expected "$key" to be a string');
+  throw FormatException('Expected a string');
 }
 
-String? _nullableString(Map<String, dynamic> json, String key) {
-  final value = json[key];
+String? _nullableString(Object? value) {
   if (value == null) return null;
   if (value is String) return value;
-  throw FormatException('Expected "$key" to be a string or null');
+  throw FormatException('Expected a string or null');
 }
 
-bool _requireBool(Map<String, dynamic> json, String key) {
-  final value = json[key];
+bool _requiredBool(Object? value) {
   if (value is bool) return value;
-  throw FormatException('Expected "$key" to be a bool');
+  throw FormatException('Expected a bool');
 }
 
-DateTime? _nullableDateTime(Map<String, dynamic> json, String key) {
-  final value = json[key];
+int _nullableIntWithDefaultZero(Object? value) {
+  if (value == null) return 0;
+  if (value is num) return value.toInt();
+  throw FormatException('Expected a number or null');
+}
+
+DateTime? _nullableDateTime(Object? value) {
   if (value == null) return null;
   if (value is! String) {
-    throw FormatException('Expected "$key" to be a string or null');
+    throw FormatException('Expected an ISO-8601 datetime string or null');
   }
   final parsed = DateTime.tryParse(value);
   if (parsed != null) return parsed;
-  throw FormatException('Expected "$key" to be an ISO-8601 datetime');
+  throw FormatException('Expected an ISO-8601 datetime string');
 }
 
-class RpcResyncResponseDto {
-  final List<Map<String, dynamic>> events;
-  final bool complete;
+@freezed
+class RpcResyncResponseDto with _$RpcResyncResponseDto {
+  const factory RpcResyncResponseDto({
+    @JsonKey(fromJson: _requiredObjectList)
+    required List<Map<String, dynamic>> events,
+    @JsonKey(fromJson: _requiredBool) required bool complete,
+    @JsonKey(fromJson: _nullableIntWithDefaultZero) @Default(0) int seq,
+  }) = _RpcResyncResponseDto;
 
-  const RpcResyncResponseDto({required this.events, required this.complete});
-
-  factory RpcResyncResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcResyncResponseDto(
-      events: _requireObjectList(json, 'events'),
-      complete: _requireBool(json, 'complete'),
-    );
-  }
+  factory RpcResyncResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcResyncResponseDtoFromJson(json);
 }
 
-class RpcOkResponseDto {
-  final bool ok;
+@freezed
+class RpcOkResponseDto with _$RpcOkResponseDto {
+  const factory RpcOkResponseDto({
+    @JsonKey(fromJson: _requiredBool) required bool ok,
+  }) = _RpcOkResponseDto;
 
-  const RpcOkResponseDto({required this.ok});
-
-  factory RpcOkResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcOkResponseDto(ok: _requireBool(json, 'ok'));
-  }
+  factory RpcOkResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcOkResponseDtoFromJson(json);
 }
 
-class RpcAcceptedResponseDto {
-  final bool accepted;
+@freezed
+class RpcAcceptedResponseDto with _$RpcAcceptedResponseDto {
+  const factory RpcAcceptedResponseDto({
+    @JsonKey(fromJson: _requiredBool) required bool accepted,
+  }) = _RpcAcceptedResponseDto;
 
-  const RpcAcceptedResponseDto({required this.accepted});
-
-  factory RpcAcceptedResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcAcceptedResponseDto(accepted: _requireBool(json, 'accepted'));
-  }
+  factory RpcAcceptedResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcAcceptedResponseDtoFromJson(json);
 }
 
-class RpcResolvedSessionDto {
-  final String sessionId;
-  final String? title;
-  final String? cwd;
-  final String? status;
-  final DateTime? updatedAt;
+@freezed
+class RpcResolvedSessionDto with _$RpcResolvedSessionDto {
+  const factory RpcResolvedSessionDto({
+    @JsonKey(name: 'sessionId', fromJson: _requiredString)
+    required String sessionId,
+    @JsonKey(fromJson: _nullableString) String? title,
+    @JsonKey(fromJson: _nullableString) String? cwd,
+    @JsonKey(fromJson: _nullableString) String? status,
+    @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
+    DateTime? updatedAt,
+  }) = _RpcResolvedSessionDto;
 
-  const RpcResolvedSessionDto({
-    required this.sessionId,
-    this.title,
-    this.cwd,
-    this.status,
-    this.updatedAt,
-  });
-
-  factory RpcResolvedSessionDto.fromJson(Map<String, dynamic> json) {
-    return RpcResolvedSessionDto(
-      sessionId: _requireString(json, 'sessionId'),
-      title: _nullableString(json, 'title'),
-      cwd: _nullableString(json, 'cwd'),
-      status: _nullableString(json, 'status'),
-      updatedAt: _nullableDateTime(json, 'updatedAt'),
-    );
-  }
+  factory RpcResolvedSessionDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcResolvedSessionDtoFromJson(json);
 }
 
-class RpcSessionResolveResponseDto {
-  final List<RpcResolvedSessionDto> sessions;
+@freezed
+class RpcSessionResolveResponseDto with _$RpcSessionResolveResponseDto {
+  const factory RpcSessionResolveResponseDto({
+    @JsonKey(fromJson: _resolvedSessionListFromJson)
+    required List<RpcResolvedSessionDto> sessions,
+  }) = _RpcSessionResolveResponseDto;
 
-  const RpcSessionResolveResponseDto({this.sessions = const []});
-
-  factory RpcSessionResolveResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcSessionResolveResponseDto(
-      sessions: _requireObjectList(
-        json,
-        'sessions',
-      ).map(RpcResolvedSessionDto.fromJson).toList(),
-    );
-  }
+  factory RpcSessionResolveResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcSessionResolveResponseDtoFromJson(json);
 }
 
-class RpcPendingApprovalsResponseDto {
-  final List<ApprovalWireDto> approvals;
+@freezed
+class RpcPendingApprovalsResponseDto with _$RpcPendingApprovalsResponseDto {
+  const factory RpcPendingApprovalsResponseDto({
+    @JsonKey(fromJson: _approvalWireListFromJson)
+    required List<ApprovalWireDto> approvals,
+  }) = _RpcPendingApprovalsResponseDto;
 
-  const RpcPendingApprovalsResponseDto({this.approvals = const []});
-
-  factory RpcPendingApprovalsResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcPendingApprovalsResponseDto(
-      approvals: _requireObjectList(
-        json,
-        'approvals',
-      ).map(ApprovalWireDto.fromJson).toList(),
-    );
-  }
+  factory RpcPendingApprovalsResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcPendingApprovalsResponseDtoFromJson(json);
 }
 
-class RpcFsEntryDto {
-  final String path;
-  final bool isDir;
-  final String? name;
+@freezed
+class RpcFsEntryDto with _$RpcFsEntryDto {
+  const factory RpcFsEntryDto({
+    @JsonKey(fromJson: _requiredString) required String path,
+    @JsonKey(name: 'isDir', fromJson: _requiredBool) required bool isDir,
+    @JsonKey(fromJson: _nullableString) String? name,
+  }) = _RpcFsEntryDto;
 
-  const RpcFsEntryDto({required this.path, required this.isDir, this.name});
-
-  factory RpcFsEntryDto.fromJson(Map<String, dynamic> json) {
-    return RpcFsEntryDto(
-      path: _requireString(json, 'path'),
-      isDir: _requireBool(json, 'isDir'),
-      name: _nullableString(json, 'name'),
-    );
-  }
+  factory RpcFsEntryDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcFsEntryDtoFromJson(json);
 }
 
-class RpcFsListResponseDto {
-  final List<RpcFsEntryDto> entries;
+@freezed
+class RpcFsListResponseDto with _$RpcFsListResponseDto {
+  const factory RpcFsListResponseDto({
+    @JsonKey(fromJson: _fsEntryListFromJson)
+    required List<RpcFsEntryDto> entries,
+  }) = _RpcFsListResponseDto;
 
-  const RpcFsListResponseDto({this.entries = const []});
-
-  factory RpcFsListResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcFsListResponseDto(
-      entries: _requireObjectList(
-        json,
-        'entries',
-      ).map(RpcFsEntryDto.fromJson).toList(),
-    );
-  }
+  factory RpcFsListResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcFsListResponseDtoFromJson(json);
 }
 
-class RpcFsSearchResponseDto {
-  final List<RpcFsEntryDto> results;
+@freezed
+class RpcFsSearchResponseDto with _$RpcFsSearchResponseDto {
+  const factory RpcFsSearchResponseDto({
+    @JsonKey(fromJson: _fsEntryListFromJson)
+    required List<RpcFsEntryDto> results,
+  }) = _RpcFsSearchResponseDto;
 
-  const RpcFsSearchResponseDto({this.results = const []});
+  factory RpcFsSearchResponseDto.fromJson(Map<String, dynamic> json) =>
+      _$RpcFsSearchResponseDtoFromJson(json);
+}
 
-  factory RpcFsSearchResponseDto.fromJson(Map<String, dynamic> json) {
-    return RpcFsSearchResponseDto(
-      results: _requireObjectList(
-        json,
-        'results',
-      ).map(RpcFsEntryDto.fromJson).toList(),
-    );
-  }
+List<RpcResolvedSessionDto> _resolvedSessionListFromJson(Object? value) {
+  return _requiredObjectList(
+    value,
+  ).map(RpcResolvedSessionDto.fromJson).toList();
+}
+
+List<ApprovalWireDto> _approvalWireListFromJson(Object? value) {
+  return _requiredObjectList(value).map(ApprovalWireDto.fromJson).toList();
+}
+
+List<RpcFsEntryDto> _fsEntryListFromJson(Object? value) {
+  return _requiredObjectList(value).map(RpcFsEntryDto.fromJson).toList();
 }

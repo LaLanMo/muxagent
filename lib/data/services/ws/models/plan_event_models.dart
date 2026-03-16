@@ -1,112 +1,96 @@
+// ignore_for_file: invalid_annotation_target
+
+import 'package:freezed_annotation/freezed_annotation.dart';
+
 import 'acp_session_models.dart';
 
-List<Map<String, dynamic>> _objectList(Map<String, dynamic> json, String key) {
-  final value = json[key];
-  if (value == null) return const [];
+part 'plan_event_models.freezed.dart';
+part 'plan_event_models.g.dart';
+
+List<Map<String, dynamic>> _requiredObjectList(Object? value) {
   if (value is! List) {
-    throw FormatException('Expected "$key" to be a list');
+    throw FormatException('Expected a list of objects');
   }
   return value.map((item) {
     if (item is! Map) {
-      throw FormatException('Expected "$key" items to be objects');
+      throw FormatException('Expected list items to be objects');
     }
     return Map<String, dynamic>.from(item);
   }).toList();
 }
 
-class AppPlanEntryDto {
-  final String content;
-  final String priority;
-  final String status;
-
-  const AppPlanEntryDto({
-    required this.content,
-    required this.priority,
-    required this.status,
-  });
-
-  factory AppPlanEntryDto.fromJson(Map<String, dynamic> json) {
-    return AppPlanEntryDto(
-      content:
-          json['content'] as String? ??
-          (throw FormatException('Expected "content" to be a string')),
-      priority:
-          json['priority'] as String? ??
-          (throw FormatException('Expected "priority" to be a string')),
-      status:
-          json['status'] as String? ??
-          (throw FormatException('Expected "status" to be a string')),
-    );
-  }
+Map<String, dynamic> _requiredObject(Object? value) {
+  if (value is Map) return Map<String, dynamic>.from(value);
+  throw FormatException('Expected an object');
 }
 
-class AppPlanUpdateDto {
-  final List<AppPlanEntryDto> entries;
-
-  const AppPlanUpdateDto({required this.entries});
-
-  factory AppPlanUpdateDto.fromJson(Map<String, dynamic> json) {
-    return AppPlanUpdateDto(
-      entries: _objectList(
-        json,
-        'entries',
-      ).map(AppPlanEntryDto.fromJson).toList(),
-    );
-  }
+String _requiredString(Object? value) {
+  if (value is String) return value;
+  throw FormatException('Expected a string');
 }
 
-class PlanWireDto {
-  final AppPlanUpdateDto app;
-  final AcpPlanUpdateDto? acp;
+@Freezed(toJson: false)
+class AppPlanEntryDto with _$AppPlanEntryDto {
+  const factory AppPlanEntryDto({
+    @JsonKey(fromJson: _requiredString) required String content,
+    @JsonKey(fromJson: _requiredString) required String priority,
+    @JsonKey(fromJson: _requiredString) required String status,
+  }) = _AppPlanEntryDto;
 
-  const PlanWireDto({required this.app, this.acp});
-
-  factory PlanWireDto.fromJson(Map<String, dynamic> json) {
-    return PlanWireDto(
-      app: AppPlanUpdateDto.fromJson(
-        Map<String, dynamic>.from(json['app'] as Map),
-      ),
-      acp: switch (json['acp']) {
-        null => null,
-        final Map value => AcpPlanUpdateDto.fromJson(
-          Map<String, dynamic>.from(value),
-        ),
-        _ => throw FormatException('Expected "acp" to be an object or null'),
-      },
-    );
-  }
+  factory AppPlanEntryDto.fromJson(Map<String, dynamic> json) =>
+      _$AppPlanEntryDtoFromJson(json);
 }
 
-class PlanEventEnvelopeDto {
-  final String type;
-  final String? sessionId;
-  final int seq;
-  final DateTime? at;
-  final PlanWireDto plan;
+@Freezed(toJson: false)
+class AppPlanUpdateDto with _$AppPlanUpdateDto {
+  const factory AppPlanUpdateDto({
+    @JsonKey(fromJson: _appPlanEntryListFromJson)
+    @Default(<AppPlanEntryDto>[])
+    List<AppPlanEntryDto> entries,
+  }) = _AppPlanUpdateDto;
 
-  const PlanEventEnvelopeDto({
-    required this.type,
-    required this.plan,
-    this.sessionId,
-    this.seq = 0,
-    this.at,
-  });
+  factory AppPlanUpdateDto.fromJson(Map<String, dynamic> json) =>
+      _$AppPlanUpdateDtoFromJson(json);
+}
 
-  factory PlanEventEnvelopeDto.fromJson(Map<String, dynamic> json) {
-    return PlanEventEnvelopeDto(
-      type:
-          json['type'] as String? ??
-          (throw FormatException('Expected "type" to be a string')),
-      sessionId: json['sessionId'] as String?,
-      seq: (json['seq'] as num?)?.toInt() ?? 0,
-      at: switch (json['at']) {
-        null => null,
-        final String value => DateTime.parse(value),
-        _ => throw FormatException('Expected "at" to be a string or null'),
-      },
-      plan: PlanWireDto.fromJson(
-        Map<String, dynamic>.from(json['plan'] as Map),
-      ),
-    );
-  }
+@Freezed(toJson: false)
+class PlanWireDto with _$PlanWireDto {
+  const factory PlanWireDto({
+    @JsonKey(fromJson: _appPlanUpdateFromJson) required AppPlanUpdateDto app,
+    @JsonKey(fromJson: _nullableAcpPlanUpdate) AcpPlanUpdateDto? acp,
+  }) = _PlanWireDto;
+
+  factory PlanWireDto.fromJson(Map<String, dynamic> json) =>
+      _$PlanWireDtoFromJson(json);
+}
+
+@Freezed(toJson: false)
+class PlanEventEnvelopeDto with _$PlanEventEnvelopeDto {
+  const factory PlanEventEnvelopeDto({
+    @JsonKey(fromJson: _requiredString) required String type,
+    @JsonKey(name: 'sessionId') String? sessionId,
+    @Default(0) int seq,
+    DateTime? at,
+    @JsonKey(fromJson: _planWireFromJson) required PlanWireDto plan,
+  }) = _PlanEventEnvelopeDto;
+
+  factory PlanEventEnvelopeDto.fromJson(Map<String, dynamic> json) =>
+      _$PlanEventEnvelopeDtoFromJson(json);
+}
+
+List<AppPlanEntryDto> _appPlanEntryListFromJson(Object? value) {
+  return _requiredObjectList(value).map(AppPlanEntryDto.fromJson).toList();
+}
+
+AppPlanUpdateDto _appPlanUpdateFromJson(Object? value) {
+  return AppPlanUpdateDto.fromJson(_requiredObject(value));
+}
+
+PlanWireDto _planWireFromJson(Object? value) {
+  return PlanWireDto.fromJson(_requiredObject(value));
+}
+
+AcpPlanUpdateDto? _nullableAcpPlanUpdate(Object? value) {
+  if (value == null) return null;
+  return AcpPlanUpdateDto.fromJson(_requiredObject(value));
 }
