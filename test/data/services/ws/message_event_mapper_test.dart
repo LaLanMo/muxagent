@@ -20,26 +20,29 @@ void main() {
   test(
     'maps message.delta payload from messagePart.acp and messagePart.app',
     () {
-      final event = MessageEventMapper.parseEvent({
-        'type': 'message.delta',
-        'sessionId': 'session-123',
-        'seq': 8,
-        'at': '2026-03-14T03:05:00.000Z',
-        'messagePart': {
-          'app': {
-            'partId': 'part-1',
-            'messageId': 'message-1',
-            'role': 'agent',
-            'delta': 'MUX',
-            'partType': 'text',
+      final event = MessageEventMapper.mapEnvelope(
+        MessageEventEnvelopeDto.fromJson({
+          'type': 'message.delta',
+          'sessionId': 'session-123',
+          'seq': 8,
+          'at': '2026-03-14T03:05:00.000Z',
+          'messagePart': {
+            'app': {
+              'partId': 'part-1',
+              'messageId': 'message-1',
+              'role': 'agent',
+              'delta': 'MUX',
+              'partType': 'text',
+            },
+            'acp': {
+              'sessionUpdate': 'agent_message_chunk',
+              'messageId': 'message-1',
+              'content': {'type': 'text', 'text': 'MUX'},
+            },
           },
-          'acp': {
-            'sessionUpdate': 'agent_message_chunk',
-            'messageId': 'message-1',
-            'content': {'type': 'text', 'text': 'MUX'},
-          },
-        },
-      }, 'machine-1');
+        }),
+        'machine-1',
+      );
 
       expect(event.type, EventType.messageDelta);
       expect(event.sessionId, 'session-123');
@@ -54,24 +57,27 @@ void main() {
   );
 
   test('maps reasoning payload from messagePart.acp and messagePart.app', () {
-    final event = MessageEventMapper.parseEvent({
-      'type': 'reasoning',
-      'sessionId': 'session-123',
-      'messagePart': {
-        'app': {
-          'partId': 'part-2',
-          'messageId': 'message-1',
-          'role': 'agent',
-          'delta': 'thinking...',
-          'partType': 'reasoning',
+    final event = MessageEventMapper.mapEnvelope(
+      MessageEventEnvelopeDto.fromJson({
+        'type': 'reasoning',
+        'sessionId': 'session-123',
+        'messagePart': {
+          'app': {
+            'partId': 'part-2',
+            'messageId': 'message-1',
+            'role': 'agent',
+            'delta': 'thinking...',
+            'partType': 'reasoning',
+          },
+          'acp': {
+            'sessionUpdate': 'agent_thought_chunk',
+            'messageId': 'message-1',
+            'content': {'type': 'text', 'text': 'thinking...'},
+          },
         },
-        'acp': {
-          'sessionUpdate': 'agent_thought_chunk',
-          'messageId': 'message-1',
-          'content': {'type': 'text', 'text': 'thinking...'},
-        },
-      },
-    }, 'machine-1');
+      }),
+      'machine-1',
+    );
 
     expect(event.type, EventType.reasoning);
     expect(event.messagePart, isNotNull);

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muxagent/data/services/ws/approval_event_mapper.dart';
+import 'package:muxagent/data/services/ws/models/approval_event_models.dart';
 import 'package:muxagent/domain/enums.dart';
 
 void main() {
@@ -51,7 +52,10 @@ void main() {
         },
       };
 
-      final event = ApprovalEventMapper.parseEvent(payload, 'machine-1');
+      final event = ApprovalEventMapper.mapEnvelope(
+        ApprovalEventEnvelopeDto.fromJson(payload),
+        'machine-1',
+      );
       final approval = event.approval;
 
       expect(event.type, EventType.approvalRequested);

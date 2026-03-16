@@ -5,11 +5,10 @@ import '../../../domain/cost_info.dart';
 import 'models/lifecycle_event_models.dart';
 
 class LifecycleEventMapper {
-  static AgentEvent parseSessionStatus(
-    Map<String, dynamic> payload,
+  static AgentEvent mapSessionStatusEnvelope(
+    SessionStatusEventEnvelopeDto dto,
     String machineId,
   ) {
-    final dto = SessionStatusEventEnvelopeDto.fromJson(payload);
     final app = dto.sessionStatus.app;
 
     return AgentEvent(
@@ -43,11 +42,10 @@ class LifecycleEventMapper {
     );
   }
 
-  static AgentEvent parseRunFailed(
-    Map<String, dynamic> payload,
+  static AgentEvent mapRunFailedEnvelope(
+    RunFailedEventEnvelopeDto dto,
     String machineId,
   ) {
-    final dto = RunFailedEventEnvelopeDto.fromJson(payload);
     final app = dto.runFailed.app;
 
     return AgentEvent(

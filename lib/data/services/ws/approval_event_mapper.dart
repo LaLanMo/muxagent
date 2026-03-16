@@ -4,8 +4,10 @@ import '../../../domain/event.dart';
 import 'models/approval_event_models.dart';
 
 class ApprovalEventMapper {
-  static AgentEvent parseEvent(Map<String, dynamic> payload, String machineId) {
-    final dto = ApprovalEventEnvelopeDto.fromJson(payload);
+  static AgentEvent mapEnvelope(
+    ApprovalEventEnvelopeDto dto,
+    String machineId,
+  ) {
     final at = dto.at ?? DateTime.now();
 
     return AgentEvent(

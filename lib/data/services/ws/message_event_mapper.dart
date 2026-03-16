@@ -3,8 +3,7 @@ import '../../../domain/event.dart';
 import 'models/message_event_models.dart';
 
 class MessageEventMapper {
-  static AgentEvent parseEvent(Map<String, dynamic> payload, String machineId) {
-    final dto = MessageEventEnvelopeDto.fromJson(payload);
+  static AgentEvent mapEnvelope(MessageEventEnvelopeDto dto, String machineId) {
     final app = dto.messagePart.app;
 
     return AgentEvent(

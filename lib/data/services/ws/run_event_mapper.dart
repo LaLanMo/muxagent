@@ -3,11 +3,10 @@ import '../../../domain/event.dart';
 import 'models/run_event_models.dart';
 
 class RunEventMapper {
-  static AgentEvent parseRunFinished(
-    Map<String, dynamic> payload,
+  static AgentEvent mapRunFinishedEnvelope(
+    RunFinishedEventEnvelopeDto dto,
     String machineId,
   ) {
-    final dto = RunFinishedEventEnvelopeDto.fromJson(payload);
     final app = dto.runFinished.app;
 
     return AgentEvent(

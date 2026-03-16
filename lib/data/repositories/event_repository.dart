@@ -98,18 +98,13 @@ class EventRepository {
       return;
     }
 
-    final payload = wsEvent.payload;
-    final machineId =
-        payload['machineId'] as String? ??
-        payload['machine_id'] as String? ??
-        '';
-    final event = _parseWsEvent(payload, machineId);
+    final event = _parseWsEvent(wsEvent);
     if (event == null || event.type == null) return;
 
     // Track sequence number per machine for resync
-    if (machineId.isNotEmpty &&
-        event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
-      _lastSeqByMachine[machineId] = event.seq;
+    if (event.machineId.isNotEmpty &&
+        event.seq > (_lastSeqByMachine[event.machineId] ?? 0)) {
+      _lastSeqByMachine[event.machineId] = event.seq;
     }
 
     _processEvent(event);
@@ -346,15 +341,19 @@ class EventRepository {
     }
   }
 
-  AgentEvent? _parseWsEvent(Map<String, dynamic> payload, String machineId) {
+  AgentEvent? _parseWsEvent(WsEvent wsEvent) {
     try {
-      final event = EventEnvelopeParser.parse(payload, machineId);
+      final event = EventEnvelopeParser.parse(wsEvent);
       if (event == null) {
-        debugPrint('[EventRepo] unsupported event type: ${payload['type']}');
+        debugPrint(
+          '[EventRepo] unsupported event type: ${EventEnvelopeParser.rawEventType(wsEvent)}',
+        );
       }
       return event;
     } catch (e) {
-      debugPrint('[EventRepo] failed to parse ${payload['type']}: $e');
+      debugPrint(
+        '[EventRepo] failed to parse ${EventEnvelopeParser.rawEventType(wsEvent)}: $e',
+      );
       return null;
     }
   }

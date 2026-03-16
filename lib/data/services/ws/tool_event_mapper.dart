@@ -3,8 +3,7 @@ import '../../../domain/event.dart';
 import 'models/tool_event_models.dart';
 
 class ToolEventMapper {
-  static AgentEvent parseEvent(Map<String, dynamic> payload, String machineId) {
-    final dto = ToolEventEnvelopeDto.fromJson(payload);
+  static AgentEvent mapEnvelope(ToolEventEnvelopeDto dto, String machineId) {
     final at = dto.at ?? DateTime.now();
 
     return AgentEvent(

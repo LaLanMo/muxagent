@@ -13,6 +13,7 @@ import '../services/ws/models/rpc_request_models.dart';
 import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/relay_ws_client.dart';
+import '../services/ws/ws_types.dart';
 import 'session_manager.dart';
 
 class ResyncBatch {
@@ -156,7 +157,11 @@ class WsSessionRepository {
     final response = RpcResyncResponseDto.fromJson(result);
     final events = <AgentEvent>[];
     for (final payload in response.events) {
-      final event = EventEnvelopeParser.parse(payload, machineId);
+      final enrichedPayload = Map<String, dynamic>.from(payload);
+      enrichedPayload.putIfAbsent('machineId', () => machineId);
+      final event = EventEnvelopeParser.parse(
+        WsEvent(type: WsMessageType.event.value, payload: enrichedPayload),
+      );
       if (event != null && event.type != null) {
         events.add(event);
       }

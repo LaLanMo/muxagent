@@ -4,8 +4,7 @@ import '../../../domain/plan_entry.dart';
 import 'models/plan_event_models.dart';
 
 class PlanEventMapper {
-  static AgentEvent parseEvent(Map<String, dynamic> payload, String machineId) {
-    final dto = PlanEventEnvelopeDto.fromJson(payload);
+  static AgentEvent mapEnvelope(PlanEventEnvelopeDto dto, String machineId) {
     final at = dto.at ?? DateTime.now();
 
     return AgentEvent(

@@ -3,8 +3,7 @@ import '../../../domain/event.dart';
 import 'models/usage_event_models.dart';
 
 class UsageEventMapper {
-  static AgentEvent parseEvent(Map<String, dynamic> payload, String machineId) {
-    final dto = UsageEventEnvelopeDto.fromJson(payload);
+  static AgentEvent mapEnvelope(UsageEventEnvelopeDto dto, String machineId) {
     final at = dto.at ?? DateTime.now();
 
     return AgentEvent(
