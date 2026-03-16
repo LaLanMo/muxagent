@@ -15,9 +15,12 @@ void main() {
           'title': 'Example Session',
           'status': 'done',
           'model': 'opus',
+          'machineId': 'machine-1',
+          'runtime': 'claude-code',
+          'cwd': '/tmp/project',
+          'mode': 'default',
           'createdAt': '2026-03-14T04:10:00.000Z',
           'updatedAt': '2026-03-14T04:20:00.000Z',
-          'metadata': {'cwd': '/tmp/project'},
         },
       },
     }, 'machine-1');
@@ -29,7 +32,10 @@ void main() {
     expect(event.session!.title, 'Example Session');
     expect(event.session!.status, SessionStatus.done);
     expect(event.session!.model, 'opus');
+    expect(event.session!.machineId, 'machine-1');
+    expect(event.session!.runtime, 'claude-code');
     expect(event.session!.cwd, '/tmp/project');
+    expect(event.session!.mode, 'default');
   });
 
   test('maps run.failed payload from runFailed.app', () {

@@ -1,10 +1,3 @@
-Map<String, dynamic>? _nullableObject(Map<String, dynamic> json, String key) {
-  final value = json[key];
-  if (value == null) return null;
-  if (value is Map) return Map<String, dynamic>.from(value);
-  throw FormatException('Expected "$key" to be an object or null');
-}
-
 Map<String, dynamic> _requireObject(Map<String, dynamic> json, String key) {
   final value = json[key];
   if (value is Map) return Map<String, dynamic>.from(value);
@@ -50,9 +43,12 @@ class AppSessionStatusDto {
   final String status;
   final String? model;
   final AppCostInfoDto? cost;
+  final String? machineId;
+  final String? runtime;
+  final String? cwd;
+  final String? mode;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final Map<String, dynamic>? metadata;
 
   const AppSessionStatusDto({
     required this.id,
@@ -62,7 +58,10 @@ class AppSessionStatusDto {
     required this.updatedAt,
     this.model,
     this.cost,
-    this.metadata,
+    this.machineId,
+    this.runtime,
+    this.cwd,
+    this.mode,
   });
 
   factory AppSessionStatusDto.fromJson(Map<String, dynamic> json) {
@@ -87,9 +86,12 @@ class AppSessionStatusDto {
         ),
         _ => throw FormatException('Expected "cost" to be an object or null'),
       },
+      machineId: _nullableString(json, 'machineId'),
+      runtime: _nullableString(json, 'runtime'),
+      cwd: _nullableString(json, 'cwd'),
+      mode: _nullableString(json, 'mode'),
       createdAt: DateTime.parse(createdAt),
       updatedAt: DateTime.parse(updatedAt),
-      metadata: _nullableObject(json, 'metadata'),
     );
   }
 }
