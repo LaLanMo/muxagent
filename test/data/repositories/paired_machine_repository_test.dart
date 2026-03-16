@@ -28,7 +28,7 @@ void main() {
             'relay_http_url': 'https://relay.example',
             'machine_sign_pub': 'sign-pub',
             'machine_enc_pub': 'enc-pub',
-            'hostname': 'devbox',
+            'hostname': 'workspace-host',
           },
         ]),
       });
@@ -39,7 +39,7 @@ void main() {
       expect(machines, hasLength(1));
       expect(machines.single.machineId, 'machine-1');
       expect(machines.single.relayHttpUrl, 'https://relay.example');
-      expect(machines.single.hostname, 'devbox');
+      expect(machines.single.hostname, 'workspace-host');
     });
 
     test('saveMachine persists and replaces by machine id', () async {
