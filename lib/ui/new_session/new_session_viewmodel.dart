@@ -145,19 +145,6 @@ class NewSessionViewModel extends GetxController {
     _loadMachines();
     _checkSttConfig();
 
-    cwdFocusNode.addListener(() {
-      if (cwdFocusNode.hasFocus) {
-        if (filteredCwds.isNotEmpty) {
-          isCwdDropdownOpen.value = true;
-        }
-      } else {
-        // Delay so tap on dropdown row registers before closing
-        Future.delayed(const Duration(milliseconds: 150), () {
-          isCwdDropdownOpen.value = false;
-        });
-      }
-    });
-
     cwdController.addListener(_filterCwds);
 
     ever(selectedMachine, (machine) {
@@ -308,22 +295,45 @@ class NewSessionViewModel extends GetxController {
           .where((c) => c.path.toLowerCase().contains(query))
           .toList();
     }
-    if (cwdFocusNode.hasFocus && filteredCwds.isNotEmpty) {
-      isCwdDropdownOpen.value = true;
-    } else if (filteredCwds.isEmpty) {
-      isCwdDropdownOpen.value = false;
+  }
+
+  void openCwdDropdown() {
+    isCwdDropdownOpen.value = true;
+    if (!cwdFocusNode.hasFocus) {
+      cwdFocusNode.requestFocus();
     }
+  }
+
+  void closeCwdDropdown({bool unfocus = false}) {
+    isCwdDropdownOpen.value = false;
+    if (unfocus) {
+      cwdFocusNode.unfocus();
+    }
+  }
+
+  void dismissTransientInputs() {
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.unfocus();
+  }
+
+  void focusPromptInput() {
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.requestFocus();
   }
 
   void selectCwd(RecentCwd cwd) {
     cwdController.text = cwd.path;
-    isCwdDropdownOpen.value = false;
-    cwdFocusNode.unfocus();
+    cwdController.selection = TextSelection.collapsed(
+      offset: cwdController.text.length,
+    );
+    closeCwdDropdown();
+    if (!cwdFocusNode.hasFocus) {
+      cwdFocusNode.requestFocus();
+    }
   }
 
   void commitCwdAndFocusPrompt() {
-    isCwdDropdownOpen.value = false;
-    cwdFocusNode.unfocus();
+    closeCwdDropdown(unfocus: true);
     promptFocusNode.requestFocus();
   }
 
