@@ -582,6 +582,44 @@ class EventRepository {
     }
   }
 
+  /// Persist a session mode acknowledged by the daemon, even if the async
+  /// config-change event arrives later or not at all.
+  void setSessionMode(String sessionId, String? modeId) {
+    final existing = sessions[sessionId];
+    if (existing == null) return;
+
+    final normalized = (modeId ?? '').trim();
+    final nextMode = normalized.isEmpty ? null : normalized;
+    if (existing.mode == nextMode) return;
+
+    existing.mode = nextMode;
+    existing.updatedAt = DateTime.now();
+    SessionDatabase.updateFields(sessionId, {
+      'mode': nextMode ?? '',
+      'updated_at': existing.updatedAt.toIso8601String(),
+    });
+    _sessionsChangedController.add(null);
+  }
+
+  /// Persist a session model acknowledged by the daemon, even if the async
+  /// config-change event arrives later or not at all.
+  void setSessionModel(String sessionId, String? model) {
+    final existing = sessions[sessionId];
+    if (existing == null) return;
+
+    final normalized = (model ?? '').trim();
+    final nextModel = normalized.isEmpty ? null : normalized;
+    if (existing.model == nextModel) return;
+
+    existing.model = nextModel;
+    existing.updatedAt = DateTime.now();
+    SessionDatabase.updateFields(sessionId, {
+      'model': nextModel,
+      'updated_at': existing.updatedAt.toIso8601String(),
+    });
+    _sessionsChangedController.add(null);
+  }
+
   /// Mark a session as read. Called when user opens a chat.
   void markAsRead(String sessionId) {
     final session = sessions[sessionId];

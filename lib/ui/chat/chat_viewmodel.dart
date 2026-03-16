@@ -349,6 +349,7 @@ class ChatViewModel extends GetxController {
         sessionId: sessionId,
         permissionMode: mode.id,
       );
+      _eventRepo.setSessionMode(sessionId, mode.id);
     } catch (e) {
       debugPrint('[ChatVM] changeMode failed: $e');
       currentMode.value = previous;
@@ -385,6 +386,7 @@ class ChatViewModel extends GetxController {
         configId: configId,
         value: value,
       );
+      _eventRepo.setSessionModel(sessionId, value);
     } catch (e) {
       debugPrint('[ChatVM] changeModel failed: $e');
       currentModel.value = previous;
