@@ -9,7 +9,7 @@ import '../../domain/paired_machine.dart';
 import '../../domain/prompt_content_block.dart';
 import '../services/ws/models/acp_session_models.dart';
 import '../services/ws/event_envelope_parser.dart';
-import '../services/ws/models/prompt_rpc_models.dart';
+import '../services/ws/models/rpc_request_models.dart';
 import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/relay_ws_client.dart';
@@ -70,7 +70,7 @@ class WsSessionRepository {
   Future<AppRuntimeListResponseDto> listRuntimes({
     required String machineId,
   }) async {
-    final result = await callRpc(machineId: machineId, method: 'runtime.list');
+    final result = await _callRpc(machineId: machineId, method: 'runtime.list');
     return AppRuntimeListResponseDto.fromJson(result);
   }
 
@@ -81,16 +81,15 @@ class WsSessionRepository {
     bool useWorktree = false,
     String? permissionMode,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.create',
-      params: {
-        'cwd': cwd,
-        'runtime': runtime,
-        if (useWorktree) 'useWorktree': true,
-        if (permissionMode != null && permissionMode.isNotEmpty)
-          'permissionMode': permissionMode,
-      },
+      params: RpcSessionCreateParamsDto(
+        cwd: cwd,
+        runtime: runtime,
+        useWorktree: useWorktree,
+        permissionMode: permissionMode,
+      ).toJson(),
     );
     return AppSessionCreateResponseDto.fromJson(result);
   }
@@ -103,18 +102,16 @@ class WsSessionRepository {
     String? permissionMode,
     String? model,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.load',
-      params: {
-        'sessionId': sessionId,
-        'cwd': cwd,
-        'runtime': runtime,
-        if (permissionMode != null && permissionMode.isNotEmpty)
-          'permissionMode': permissionMode,
-        if (model != null && model.isNotEmpty && model != 'default')
-          'model': model,
-      },
+      params: RpcSessionLoadParamsDto(
+        sessionId: sessionId,
+        cwd: cwd,
+        runtime: runtime,
+        permissionMode: permissionMode,
+        model: model,
+      ).toJson(),
     );
     return AppSessionLoadResponseDto.fromJson(result);
   }
@@ -124,10 +121,10 @@ class WsSessionRepository {
     required String sessionId,
     required String path,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'fs.list',
-      params: {'sessionId': sessionId, 'path': path},
+      params: RpcFsListParamsDto(sessionId: sessionId, path: path).toJson(),
     );
     final response = RpcFsListResponseDto.fromJson(result);
     return RpcResultMapper.toFsEntries(response.entries);
@@ -138,10 +135,10 @@ class WsSessionRepository {
     required String sessionId,
     required String query,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'fs.search',
-      params: {'sessionId': sessionId, 'query': query},
+      params: RpcFsSearchParamsDto(sessionId: sessionId, query: query).toJson(),
     );
     final response = RpcFsSearchResponseDto.fromJson(result);
     return RpcResultMapper.toFsEntries(response.results);
@@ -151,10 +148,10 @@ class WsSessionRepository {
     required String machineId,
     required int lastSeq,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'events.resync',
-      params: {'lastSeq': lastSeq},
+      params: RpcResyncEventsParamsDto(lastSeq: lastSeq).toJson(),
     );
     final response = RpcResyncResponseDto.fromJson(result);
     final events = <AgentEvent>[];
@@ -172,13 +169,13 @@ class WsSessionRepository {
     required Iterable<String> sessionIds,
     String? runtime,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.resolve',
-      params: {
-        'sessionIds': sessionIds.toList(),
-        if (runtime != null && runtime.isNotEmpty) 'runtime': runtime,
-      },
+      params: RpcSessionResolveParamsDto(
+        sessionIds: sessionIds.toList(),
+        runtime: runtime,
+      ).toJson(),
     );
     final response = RpcSessionResolveResponseDto.fromJson(result);
     return RpcResultMapper.toResolvedSessions(response.sessions);
@@ -187,7 +184,7 @@ class WsSessionRepository {
   Future<List<ApprovalRequest>> listPendingApprovals({
     required String machineId,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'approvals.pending',
       params: const {},
@@ -201,10 +198,13 @@ class WsSessionRepository {
     required String sessionId,
     required String permissionMode,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.setMode',
-      params: {'sessionId': sessionId, 'permissionMode': permissionMode},
+      params: RpcSessionSetModeParamsDto(
+        sessionId: sessionId,
+        permissionMode: permissionMode,
+      ).toJson(),
     );
     final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
@@ -218,10 +218,14 @@ class WsSessionRepository {
     required String configId,
     required String value,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.setConfigOption',
-      params: {'sessionId': sessionId, 'configId': configId, 'value': value},
+      params: RpcSessionSetConfigOptionParamsDto(
+        sessionId: sessionId,
+        configId: configId,
+        value: value,
+      ).toJson(),
     );
     final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
@@ -234,11 +238,11 @@ class WsSessionRepository {
     required String sessionId,
     required List<PromptContentBlock> content,
   }) async {
-    final params = PromptSessionParamsDto(
+    final params = RpcSessionPromptParamsDto(
       sessionId: sessionId,
       content: content.map(PromptContentBlockDto.fromDomain).toList(),
     );
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.prompt',
       params: params.toJson(),
@@ -255,14 +259,14 @@ class WsSessionRepository {
     required String requestId,
     required String optionId,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'approval.reply',
-      params: {
-        'sessionId': sessionId,
-        'requestId': requestId,
-        'optionId': optionId,
-      },
+      params: RpcApprovalReplyParamsDto(
+        sessionId: sessionId,
+        requestId: requestId,
+        optionId: optionId,
+      ).toJson(),
     );
     final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
@@ -274,10 +278,10 @@ class WsSessionRepository {
     required String machineId,
     required String sessionId,
   }) async {
-    final result = await callRpc(
+    final result = await _callRpc(
       machineId: machineId,
       method: 'session.cancel',
-      params: {'sessionId': sessionId},
+      params: RpcSessionCancelParamsDto(sessionId: sessionId).toJson(),
     );
     final response = RpcOkResponseDto.fromJson(result);
     if (!response.ok) {
@@ -285,7 +289,7 @@ class WsSessionRepository {
     }
   }
 
-  Future<Map<String, dynamic>> callRpc({
+  Future<Map<String, dynamic>> _callRpc({
     required String machineId,
     required String method,
     Map<String, dynamic>? params,

@@ -98,7 +98,9 @@ class SessionManager {
     state.clientEphemeralKeyPair = null;
     state.clientEphemeralPubB64 = null;
     if (state.session == null) {
-      state.pendingTimers.values.forEach((timer) => timer.cancel());
+      for (final timer in state.pendingTimers.values) {
+        timer.cancel();
+      }
       _sessions.remove(machineId);
       _setActive(machineId, false);
     }
@@ -146,7 +148,9 @@ class SessionManager {
     final state = _sessions.remove(machineId);
     if (state == null) return;
     state.sessionTimer?.cancel();
-    state.pendingTimers.values.forEach((timer) => timer.cancel());
+    for (final timer in state.pendingTimers.values) {
+      timer.cancel();
+    }
     state.pendingTimers.clear();
     state.pendingRpc.clear();
     state.session = null;
@@ -171,7 +175,9 @@ class SessionManager {
         }
       }
       state.sessionTimer?.cancel();
-      state.pendingTimers.values.forEach((timer) => timer.cancel());
+      for (final timer in state.pendingTimers.values) {
+        timer.cancel();
+      }
     }
     _sessions.clear();
     if (_activeSessions.isNotEmpty) {
