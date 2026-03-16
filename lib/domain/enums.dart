@@ -82,8 +82,7 @@ enum PartType {
   reasoning('reasoning'),
   file('file'),
   media('media'),
-  tool('tool'),
-  data('data');
+  tool('tool');
 
   const PartType(this.value);
   final String value;

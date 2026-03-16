@@ -25,22 +25,14 @@ class MessagePart {
   String? text;
   MediaPart? media;
   ToolActivity? tool;
-  Map<String, dynamic>? data;
 
-  MessagePart({
-    required this.type,
-    this.text,
-    this.media,
-    this.tool,
-    this.data,
-  });
+  MessagePart({required this.type, this.text, this.media, this.tool});
 
   Map<String, dynamic> toJson() => {
     'type': type.value,
     if (text != null) 'text': text,
     if (media != null) 'media': media!.toJson(),
     if (tool != null) 'tool': tool!.toJson(),
-    if (data != null) 'data': data,
   };
 }
 
