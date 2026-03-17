@@ -87,6 +87,7 @@ class ChatInputBar extends StatelessWidget {
                             autocorrect: false,
                             smartDashesType: SmartDashesType.disabled,
                             smartQuotesType: SmartQuotesType.disabled,
+                            keyboardType: TextInputType.multiline,
                             decoration: InputDecoration(
                               hintText: 'Type a message...',
                               hintStyle: GoogleFonts.inter(
@@ -106,10 +107,9 @@ class ChatInputBar extends StatelessWidget {
                               fontWeight: FontWeight.w400,
                               color: AppTheme.textPrimary,
                             ),
-                            textInputAction: TextInputAction.send,
+                            textInputAction: TextInputAction.newline,
                             minLines: 1,
                             maxLines: 4,
-                            onSubmitted: (_) => onSend(),
                           ),
                         ),
                 ),
