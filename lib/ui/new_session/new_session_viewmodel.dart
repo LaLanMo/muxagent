@@ -43,6 +43,9 @@ class NewSessionViewModel extends GetxController {
        _runtimePrefs = runtimePrefs,
        _transcribe = transcribe;
 
+  RxBool get relayConnected => _wsRepo.relayConnected;
+  Rx<ConnState> get relayConnectionState => _wsRepo.connectionState;
+
   static RuntimeOption? resolveSelectedRuntime({
     required List<RuntimeOption> options,
     RuntimeOption? current,

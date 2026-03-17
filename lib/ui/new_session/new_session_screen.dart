@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
 import '../../config/theme.dart';
+import '../../domain/enums.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/runtime_option.dart';
 import '../common/ui_effect_listener.dart';
@@ -59,6 +60,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                       ),
                     ),
                   ],
+                ),
+              ),
+              Obx(
+                () => _buildRelayConnectionBanner(
+                  connected: controller.relayConnected.value,
+                  state: controller.relayConnectionState.value,
                 ),
               ),
               // Body: padding [24, 16], gap 24, vertical, fill_container
@@ -142,6 +149,48 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         fontSize: 13,
         fontWeight: FontWeight.w500,
         color: AppTheme.textSecondary,
+      ),
+    );
+  }
+
+  Widget _buildRelayConnectionBanner({
+    required bool connected,
+    required ConnState state,
+  }) {
+    if (connected) return const SizedBox.shrink();
+
+    final bool isReconnecting = state == ConnState.reconnecting;
+    final Color color = isReconnecting
+        ? AppTheme.statusConnecting
+        : AppTheme.statusDisconnected;
+    final Color bg = isReconnecting
+        ? AppTheme.warningBg
+        : AppTheme.disconnectedBg;
+    final IconData icon = isReconnecting
+        ? LucideIcons.refreshCw
+        : LucideIcons.cloudOff;
+    final String label = isReconnecting
+        ? 'Reconnecting...'
+        : 'Server unreachable';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: bg,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
       ),
     );
   }
