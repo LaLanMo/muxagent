@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muxagent/domain/mode_option.dart';
+import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/domain/runtime_option.dart';
 import 'package:muxagent/ui/new_session/new_session_viewmodel.dart';
 
@@ -18,6 +19,16 @@ RuntimeOption buildRuntime(
     ready: true,
     defaultModeId: defaultModeId,
     modeOptions: modeOptions,
+  );
+}
+
+PairedMachine buildMachine(String id, {String? hostname}) {
+  return PairedMachine(
+    machineId: id,
+    relayHttpUrl: 'https://relay.test',
+    machineSignPubB64: 'sign-$id',
+    machineEncPubB64: 'enc-$id',
+    hostname: hostname ?? id,
   );
 }
 
@@ -156,6 +167,52 @@ void main() {
         runtimeId: 'custom-runtime',
         options: [first, buildMode('acceptEdits')],
         runtimeDefaultModeId: 'missing-default',
+      );
+
+      expect(identical(result, first), isTrue);
+    });
+  });
+
+  group('NewSessionViewModel.resolveSelectedMachine', () {
+    test('preserves the current machine when it is still connected', () {
+      final current = buildMachine('machine-2');
+      final result = NewSessionViewModel.resolveSelectedMachine(
+        machines: [buildMachine('machine-1'), current],
+        connectedMachineIds: {'machine-2'},
+        current: buildMachine('machine-2'),
+      );
+
+      expect(identical(result, current), isTrue);
+    });
+
+    test(
+      'does not auto-select when multiple machines are online by default',
+      () {
+        final result = NewSessionViewModel.resolveSelectedMachine(
+          machines: [buildMachine('machine-1'), buildMachine('machine-2')],
+          connectedMachineIds: {'machine-1', 'machine-2'},
+        );
+
+        expect(result, isNull);
+      },
+    );
+
+    test('selects the only online machine', () {
+      final only = buildMachine('machine-2');
+      final result = NewSessionViewModel.resolveSelectedMachine(
+        machines: [buildMachine('machine-1'), only],
+        connectedMachineIds: {'machine-2'},
+      );
+
+      expect(identical(result, only), isTrue);
+    });
+
+    test('selects the first online machine when reconnect allows fallback', () {
+      final first = buildMachine('machine-1');
+      final result = NewSessionViewModel.resolveSelectedMachine(
+        machines: [first, buildMachine('machine-2')],
+        connectedMachineIds: {'machine-1', 'machine-2'},
+        selectFirstOnlineWhenMultiple: true,
       );
 
       expect(identical(result, first), isTrue);

@@ -110,6 +110,33 @@ class NewSessionViewModel extends GetxController {
     return options.first;
   }
 
+  static PairedMachine? resolveSelectedMachine({
+    required List<PairedMachine> machines,
+    required Set<String> connectedMachineIds,
+    PairedMachine? current,
+    bool selectFirstOnlineWhenMultiple = false,
+  }) {
+    if (current != null) {
+      for (final machine in machines) {
+        if (machine.machineId == current.machineId &&
+            connectedMachineIds.contains(machine.machineId)) {
+          return machine;
+        }
+      }
+    }
+
+    final onlineMachines = machines
+        .where((machine) => connectedMachineIds.contains(machine.machineId))
+        .toList();
+    if (onlineMachines.isEmpty) {
+      return null;
+    }
+    if (onlineMachines.length == 1 || selectFirstOnlineWhenMultiple) {
+      return onlineMachines.first;
+    }
+    return null;
+  }
+
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
   final isLoading = false.obs;
@@ -137,14 +164,17 @@ class NewSessionViewModel extends GetxController {
   final promptFocusNode = FocusNode();
 
   StreamSubscription<Set<String>>? _sessionSub;
+  Worker? _relayConnectedWorker;
   int _runtimeLoadToken = 0;
   final _rememberedModeIds = <String, String>{};
   String _selectedModeRuntimeId = '';
+  bool _shouldAutoSelectMachineOnReconnect = false;
 
   @override
   void onInit() {
     super.onInit();
     _subscribeToActiveSessions();
+    _subscribeToRelayConnection();
     _loadMachines();
     _checkSttConfig();
 
@@ -160,6 +190,7 @@ class NewSessionViewModel extends GetxController {
   @override
   void onClose() {
     _sessionSub?.cancel();
+    _relayConnectedWorker?.dispose();
     _voiceRecorder?.dispose();
     cwdFocusNode.dispose();
     promptFocusNode.dispose();
@@ -172,15 +203,26 @@ class NewSessionViewModel extends GetxController {
     activeSessionIds
       ..clear()
       ..addAll(_wsRepo.activeSessionIds);
+    _syncMachineSelection();
     _sessionSub = _wsRepo.activeSessions.listen((ids) {
       activeSessionIds
         ..clear()
         ..addAll(ids);
-      // Clear selection if selected machine went offline
-      final sel = selectedMachine.value;
-      if (sel != null && !ids.contains(sel.machineId) && !isLoading.value) {
-        selectedMachine.value = null;
+      _syncMachineSelection(
+        selectFirstOnlineWhenMultiple: _shouldAutoSelectMachineOnReconnect,
+      );
+    });
+  }
+
+  void _subscribeToRelayConnection() {
+    _shouldAutoSelectMachineOnReconnect = !_wsRepo.relayConnected.value;
+    _relayConnectedWorker = ever<bool>(_wsRepo.relayConnected, (connected) {
+      if (!connected) {
+        _shouldAutoSelectMachineOnReconnect = true;
+        return;
       }
+
+      _syncMachineSelection(selectFirstOnlineWhenMultiple: true);
     });
   }
 
@@ -191,16 +233,33 @@ class NewSessionViewModel extends GetxController {
   Future<void> _loadMachines() async {
     final list = await _machineRepo.listMachines();
     machines.value = list;
-
-    // Auto-select first online machine if only one is online
-    final onlineMachines = list
-        .where((m) => isMachineConnected(m.machineId))
-        .toList();
-    if (onlineMachines.length == 1) {
-      selectedMachine.value = onlineMachines.first;
-    }
+    _syncMachineSelection();
 
     _loadRecentCwds();
+  }
+
+  void _syncMachineSelection({bool selectFirstOnlineWhenMultiple = false}) {
+    final resolved = resolveSelectedMachine(
+      machines: machines,
+      connectedMachineIds: activeSessionIds,
+      current: selectedMachine.value,
+      selectFirstOnlineWhenMultiple: selectFirstOnlineWhenMultiple,
+    );
+
+    if (resolved == null) {
+      final current = selectedMachine.value;
+      if (current != null &&
+          !activeSessionIds.contains(current.machineId) &&
+          !isLoading.value) {
+        selectedMachine.value = null;
+      }
+      return;
+    }
+
+    if (selectedMachine.value?.machineId != resolved.machineId) {
+      selectedMachine.value = resolved;
+    }
+    _shouldAutoSelectMachineOnReconnect = false;
   }
 
   void selectMachine(PairedMachine machine) {
