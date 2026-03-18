@@ -88,9 +88,10 @@ class ChatViewModel extends GetxController {
   AudioRecorder? _voiceRecorder;
   final hasSttConfig = false.obs;
   bool _userIsScrolling = false;
-  bool _isProgrammaticScroll = false;
+  bool _isAnimatingToBottom = false;
   bool _hasOptimisticUserMsg = false;
-  int _scrollRequestId = 0;
+  Completer<void>? _historyCompleter;
+  Timer? _historyTimeout;
 
   StreamSubscription<AgentEvent>? _eventSub;
   Worker? _connStateWorker;
@@ -180,16 +181,16 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> _loadSession() async {
+    _historyCompleter = Completer<void>();
     try {
-      if (cwd.isEmpty) {
-        throw Exception('missing cwd for session.load');
-      }
+      if (cwd.isEmpty) throw Exception('missing cwd for session.load');
       if (runtimeId.value.isEmpty) {
         throw Exception('missing runtime for session.load');
       }
       final session = _eventRepo.sessionById(sessionId);
       final mode = session?.mode ?? '';
       final model = session?.model ?? '';
+
       final response = await _wsRepo.loadSession(
         machineId: machineId,
         sessionId: sessionId,
@@ -198,22 +199,39 @@ class ChatViewModel extends GetxController {
         permissionMode: mode.isNotEmpty && mode != 'default' ? mode : null,
         model: model,
       );
+
+      // Apply config BEFORE waiting for history — immune to event race.
       final loadedRuntime = response.app.runtime;
-      if (loadedRuntime.isNotEmpty) {
-        runtimeId.value = loadedRuntime;
-      }
+      if (loadedRuntime.isNotEmpty) runtimeId.value = loadedRuntime;
       final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
         runtimeId: runtimeId.value,
         configOptions: response.acp.configOptions ?? const [],
         modes: response.acp.modes,
       );
       _applyConfigSnapshot(snapshot);
+
+      // Safety timeout — cancellable Timer, not Future.delayed.
+      _historyTimeout = Timer(const Duration(seconds: 30), () {
+        if (!isClosed &&
+            _historyCompleter != null &&
+            !_historyCompleter!.isCompleted) {
+          _historyCompleter!.complete();
+        }
+      });
+
+      // Wait for history.complete signal (or timeout).
+      await _historyCompleter!.future;
     } catch (e) {
-      debugPrint('Failed to load session: $e');
       AppToast.show('$e');
     } finally {
-      isLoading.value = false;
-      _scheduleScrollStateSync();
+      _historyTimeout?.cancel();
+      _historyTimeout = null;
+      _historyCompleter = null;
+      if (!isClosed) {
+        isLoading.value = false;
+        _refreshMessages();
+        _scheduleScrollStateSync();
+      }
     }
   }
 
@@ -230,7 +248,7 @@ class ChatViewModel extends GetxController {
             break;
           }
           chatState.applyDelta(event.messagePart!);
-          _refreshMessages();
+          if (!isLoading.value) _refreshMessages();
         }
 
       case EventType.toolStarted:
@@ -239,7 +257,7 @@ class ChatViewModel extends GetxController {
       case EventType.toolFailed:
         if (event.tool != null) {
           chatState.applyToolEvent(event.tool!);
-          _refreshMessages();
+          if (!isLoading.value) _refreshMessages();
         }
 
       case EventType.approvalRequested:
@@ -285,7 +303,7 @@ class ChatViewModel extends GetxController {
             createdAt: event.at,
           );
           chatState.finalizeMessage(errorMsg);
-          _refreshMessages();
+          if (!isLoading.value) _refreshMessages();
         }
 
       case EventType.planUpdated:
@@ -314,19 +332,23 @@ class ChatViewModel extends GetxController {
               .toList();
         }
 
-      default:
+      case EventType.historyComplete:
+        if (_historyCompleter != null && !_historyCompleter!.isCompleted) {
+          _historyCompleter!.complete();
+        }
+
+      case null:
         break;
     }
   }
 
   bool get _isAtBottom {
     if (!scrollController.hasClients) return true;
-    final pos = scrollController.position;
-    return pos.maxScrollExtent - pos.pixels <= 100;
+    return scrollController.position.pixels <= 100;
   }
 
   void _onScrollChanged() {
-    if (_isProgrammaticScroll) return;
+    if (_isAnimatingToBottom) return;
     if (showModeDropdown.value) showModeDropdown.value = false;
     _syncScrollState();
   }
@@ -409,7 +431,7 @@ class ChatViewModel extends GetxController {
 
   void _scheduleScrollStateSync() {
     void sync() {
-      if (_isProgrammaticScroll || !scrollController.hasClients) return;
+      if (_isAnimatingToBottom || !scrollController.hasClients) return;
       _syncScrollState();
     }
 
@@ -423,72 +445,34 @@ class ChatViewModel extends GetxController {
       return;
     }
 
-    final requestId = ++_scrollRequestId;
-    _isProgrammaticScroll = true;
-    if (force) {
-      _setFollowBottom(false);
+    _setFollowBottom(false);
+
+    if (!scrollController.hasClients) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!scrollController.hasClients) return;
+        if (scrollController.position.pixels > 0.5) scrollController.jumpTo(0);
+        _syncScrollState();
+      });
+      return;
     }
 
-    Future<void> doScroll() async {
-      try {
-        for (var i = 0; i < 8; i++) {
-          if (requestId != _scrollRequestId) return;
+    if (scrollController.position.pixels <= 0.5) return;
 
-          if (!scrollController.hasClients) {
-            await Future<void>.delayed(const Duration(milliseconds: 16));
-            continue;
-          }
-
-          final position = scrollController.position;
-          final target = position.maxScrollExtent;
-          final remaining = target - position.pixels;
-
-          if (remaining > 1) {
-            if (animated) {
-              await scrollController.animateTo(
-                target,
-                duration: Duration(milliseconds: i == 0 ? 240 : 140),
-                curve: Curves.easeOutCubic,
-              );
-            } else {
-              scrollController.jumpTo(target);
-            }
-          }
-
-          await Future<void>.delayed(const Duration(milliseconds: 16));
-
-          if (requestId != _scrollRequestId || !scrollController.hasClients) {
-            return;
-          }
-
-          final settledRemaining =
-              scrollController.position.maxScrollExtent -
-              scrollController.position.pixels;
-          if (settledRemaining <= 1) {
-            await Future<void>.delayed(const Duration(milliseconds: 16));
-            if (requestId != _scrollRequestId || !scrollController.hasClients) {
-              return;
-            }
-            final finalRemaining =
-                scrollController.position.maxScrollExtent -
-                scrollController.position.pixels;
-            if (finalRemaining <= 1) {
-              break;
-            }
-          }
-        }
-      } finally {
-        if (requestId == _scrollRequestId) {
-          _isProgrammaticScroll = false;
-          _scheduleScrollStateSync();
-        }
-      }
+    if (animated) {
+      _isAnimatingToBottom = true;
+      scrollController
+          .animateTo(
+            0,
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+          )
+          .whenComplete(() {
+            _isAnimatingToBottom = false;
+            _syncScrollState();
+          });
+    } else {
+      scrollController.jumpTo(0);
     }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (requestId != _scrollRequestId) return;
-      unawaited(doScroll());
-    });
   }
 
   void animateToBottom() {
@@ -916,6 +900,10 @@ class ChatViewModel extends GetxController {
 
   @override
   void onClose() {
+    if (_historyCompleter != null && !_historyCompleter!.isCompleted) {
+      _historyCompleter!.complete();
+    }
+    _historyTimeout?.cancel();
     _eventRepo.markNotViewing(sessionId);
     _eventSub?.cancel();
     _connStateWorker?.dispose();

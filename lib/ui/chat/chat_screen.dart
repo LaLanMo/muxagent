@@ -103,13 +103,17 @@ class ChatScreen extends GetView<ChatViewModel> {
 
                   return ListView.builder(
                     controller: controller.scrollController,
+                    reverse: true,
                     padding: const EdgeInsets.all(16),
                     itemCount: itemCount,
                     itemBuilder: (context, index) {
-                      if (index < messageWidgets.length) {
-                        return messageWidgets[index];
+                      // Reverse index: 0 = visual bottom = last item in forward order
+                      final forwardIndex = itemCount - 1 - index;
+                      if (forwardIndex < messageWidgets.length) {
+                        return messageWidgets[forwardIndex];
                       }
-                      final approvalIndex = index - messageWidgets.length;
+                      final approvalIndex =
+                          forwardIndex - messageWidgets.length;
                       final approval = unlinkedApprovals[approvalIndex];
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 16),

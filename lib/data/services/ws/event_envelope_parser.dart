@@ -82,6 +82,11 @@ class EventEnvelopeParser {
           ConfigChangedEventEnvelopeDto.fromJson(payload),
           machineId,
         ),
+      EventType.historyComplete =>
+        LifecycleEventMapper.mapHistoryCompleteEnvelope(
+          HistoryCompleteEventEnvelopeDto.fromJson(payload),
+          machineId,
+        ),
     };
   }
 }

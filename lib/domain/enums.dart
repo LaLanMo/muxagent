@@ -48,7 +48,8 @@ enum EventType {
   planUpdated('plan.updated'),
   modeChanged('mode.changed'),
   modelChanged('model.changed'),
-  usageUpdate('usage.update');
+  usageUpdate('usage.update'),
+  historyComplete('history.complete');
 
   const EventType(this.value);
   final String value;
