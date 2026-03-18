@@ -6,7 +6,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
-import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/tool_activity.dart';
 import '../../ui/chat/widgets/code_block.dart';
@@ -74,7 +73,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
                 const SizedBox(height: 20),
               ],
 
-              // Input: show diff for edit tools, raw JSON for everything else
+              // Input: show the raw/normalized ACP input. ACP diffs render below.
               if (tool.input != null) ...[
                 _buildSectionLabel('INPUT'),
                 const SizedBox(height: 8),
@@ -122,19 +121,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   }
 
   Widget _buildInputSection(ToolActivity tool) {
-    final isEdit = tool.effectiveKind == ToolKind.edit;
     final input = tool.input!;
-    final oldStr = input.edit?.oldString;
-    final newStr = input.edit?.newString;
-
-    if (isEdit && oldStr is String && newStr is String) {
-      return EditDiffView(
-        oldString: oldStr,
-        newString: newStr,
-        contextLines: 3,
-        maxCollapsedLines: 999, // always show all in detail screen
-      );
-    }
 
     final rawInputJson = input.rawInputJson;
     if (rawInputJson != null && rawInputJson.isNotEmpty) {

@@ -124,4 +124,31 @@ void main() {
     expect(event.tool!.input?.command?.display, 'touch /workspace/output.txt');
     expect(event.tool!.output, isNull);
   });
+
+  test(
+    'maps empty app.diffs to null so later tool updates do not clear diffs',
+    () {
+      final event = ToolEventMapper.mapEnvelope(
+        ToolEventEnvelopeDto.fromJson({
+          'type': 'tool.updated',
+          'sessionId': 'session-123',
+          'tool': {
+            'app': {
+              'partId': 'part-3',
+              'messageId': 'message-3',
+              'callId': 'toolu_789',
+              'name': 'apply_patch',
+              'kind': 'edit',
+              'status': 'in_progress',
+              'diffs': [],
+            },
+          },
+        }),
+        'machine-1',
+      );
+
+      expect(event.tool, isNotNull);
+      expect(event.tool!.diffs, isNull);
+    },
+  );
 }

@@ -42,9 +42,8 @@ class _ToolCallCardState extends State<ToolCallCard>
 
   bool get _isEditWithDiff {
     if (widget.tool.effectiveKind != ToolKind.edit) return false;
-    final input = widget.tool.input;
-    if (input == null) return false;
-    return input.edit?.oldString != null && input.edit?.newString != null;
+    final diffs = widget.tool.diffs;
+    return diffs != null && diffs.isNotEmpty;
   }
 
   @override
@@ -168,10 +167,9 @@ class _ToolCallCardState extends State<ToolCallCard>
   // -------------------------------------------------------------------------
 
   Widget _buildEditLayout(ToolKind kind) {
-    final input = widget.tool.input!;
-    final edit = input.edit!;
-    final oldString = edit.oldString!;
-    final newString = edit.newString!;
+    final diffs = widget.tool.diffs!;
+    final previewDiff = diffs.first;
+    final extraDiffCount = diffs.length - 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -180,7 +178,39 @@ class _ToolCallCardState extends State<ToolCallCard>
         if (_isCompleted)
           Padding(
             padding: const EdgeInsets.only(top: 10),
-            child: EditDiffView(oldString: oldString, newString: newString),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (extraDiffCount > 0) ...[
+                  Text(
+                    'Previewing 1 of ${diffs.length} file changes',
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                ],
+                EditDiffView(
+                  oldString: previewDiff.oldText ?? '',
+                  newString: previewDiff.newText,
+                  maxCollapsedLines: 5,
+                  contextLines: 1,
+                ),
+                if (extraDiffCount > 0) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '+$extraDiffCount more file ${extraDiffCount == 1 ? 'change' : 'changes'} in details',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
       ],
     );
@@ -382,7 +412,9 @@ class _ToolCallCardState extends State<ToolCallCard>
       case ToolKind.read:
         return input.filePath;
       case ToolKind.edit:
-        return input.edit?.filePath ?? input.filePath;
+        final diffs = widget.tool.diffs;
+        if (diffs != null && diffs.isNotEmpty) return diffs.first.path;
+        return input.filePath;
       case ToolKind.search:
         return input.pattern ?? input.filePath;
       case ToolKind.fetch:

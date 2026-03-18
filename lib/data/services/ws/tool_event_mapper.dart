@@ -60,15 +60,17 @@ class ToolEventMapper {
             ),
       output: _nullIfEmpty(app.output),
       error: _nullIfEmpty(app.error),
-      diffs: app.diffs
-          .map(
-            (diff) => ToolDiff(
-              path: diff.path,
-              oldText: diff.oldText,
-              newText: diff.newText,
-            ),
-          )
-          .toList(),
+      diffs: app.diffs.isEmpty
+          ? null
+          : app.diffs
+                .map(
+                  (diff) => ToolDiff(
+                    path: diff.path,
+                    oldText: diff.oldText,
+                    newText: diff.newText,
+                  ),
+                )
+                .toList(),
       claudeCode: claudeCode == null
           ? null
           : ClaudeCodeToolInfo(
