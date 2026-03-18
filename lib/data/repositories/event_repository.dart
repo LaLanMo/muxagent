@@ -15,6 +15,22 @@ import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'ws_session_repository.dart';
 
+enum ResyncOutcome { complete, incomplete, failed, noCursor }
+
+class ResyncResult {
+  final ResyncOutcome outcome;
+  final int lastSeqUsed;
+  final int highestSeqApplied;
+  final Object? error;
+
+  const ResyncResult({
+    required this.outcome,
+    required this.lastSeqUsed,
+    required this.highestSeqApplied,
+    this.error,
+  });
+}
+
 class EventRepository {
   final WsSessionRepository _wsRepo;
   late final StreamSubscription<WsEvent> _sub;
@@ -312,32 +328,78 @@ class EventRepository {
   }
 
   /// Resync missed events after reconnect. Call after session re-init.
-  Future<void> resync(String machineId) async {
+  ///
+  /// The `complete` signal comes from the daemon's `events.resync` response,
+  /// not from a client-side heuristic. `noCursor` means we cannot trust
+  /// incremental catch-up and the active session may need `session.load`.
+  Future<ResyncResult> resync(String machineId) async {
     final lastSeq = _lastSeqByMachine[machineId] ?? 0;
-    if (lastSeq == 0) return; // No events seen yet, nothing to resync
+    if (lastSeq == 0) {
+      debugPrint('[Resync] machine=$machineId outcome=noCursor lastSeq=0');
+      return const ResyncResult(
+        outcome: ResyncOutcome.noCursor,
+        lastSeqUsed: 0,
+        highestSeqApplied: 0,
+      );
+    }
 
     try {
+      debugPrint('[Resync] machine=$machineId start lastSeq=$lastSeq');
       final response = await _wsRepo.resyncEvents(
         machineId: machineId,
         lastSeq: lastSeq,
       );
+      var highestSeqApplied = lastSeq;
       for (final event in response.events) {
         if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
           _lastSeqByMachine[machineId] = event.seq;
         }
+        if (event.seq > highestSeqApplied) {
+          highestSeqApplied = event.seq;
+        }
         _processEvent(event);
       }
 
+      debugPrint(
+        '[Resync] machine=$machineId response events=${response.events.length} '
+        'complete=${response.complete} highestSeqApplied=$highestSeqApplied',
+      );
+
+      // `complete=false` means the daemon's replay buffer could not fully cover
+      // the gap since `lastSeq`, so transcript state is no longer trustworthy.
       final complete = response.complete;
       if (!complete) {
         // Gap too large — event buffer overflowed.
         // Affected sessions should be fully reloaded via session.load.
         debugPrint(
-          '[EventRepo] resync incomplete — some events may have been lost',
+          '[Resync] machine=$machineId outcome=incomplete '
+          'lastSeq=$lastSeq highestSeqApplied=$highestSeqApplied',
+        );
+        return ResyncResult(
+          outcome: ResyncOutcome.incomplete,
+          lastSeqUsed: lastSeq,
+          highestSeqApplied: highestSeqApplied,
         );
       }
+      debugPrint(
+        '[Resync] machine=$machineId outcome=complete '
+        'lastSeq=$lastSeq highestSeqApplied=$highestSeqApplied',
+      );
+      return ResyncResult(
+        outcome: ResyncOutcome.complete,
+        lastSeqUsed: lastSeq,
+        highestSeqApplied: highestSeqApplied,
+      );
     } catch (e) {
-      debugPrint('[EventRepo] resync failed: $e');
+      debugPrint(
+        '[Resync] machine=$machineId outcome=failed lastSeq=$lastSeq error=$e',
+      );
+      return ResyncResult(
+        outcome: ResyncOutcome.failed,
+        lastSeqUsed: lastSeq,
+        highestSeqApplied: _lastSeqByMachine[machineId] ?? lastSeq,
+        error: e,
+      );
     }
   }
 
@@ -418,7 +480,28 @@ class EventRepository {
       final approvals = await _wsRepo.listPendingApprovals(
         machineId: machineId,
       );
+      final fetchedIds = approvals.map((approval) => approval.id).toSet();
+      final existingMachineApprovalIds = pendingApprovals.entries
+          .where((entry) {
+            final session = sessions[entry.value.sessionId];
+            return session?.machineId == machineId;
+          })
+          .map((entry) => entry.key)
+          .toSet();
+      var changed = false;
+
+      for (final approvalId in existingMachineApprovalIds.difference(
+        fetchedIds,
+      )) {
+        pendingApprovals.remove(approvalId);
+        changed = true;
+      }
+
       for (final approval in approvals) {
+        final existing = pendingApprovals[approval.id];
+        if (existing != approval) {
+          changed = true;
+        }
         pendingApprovals[approval.id] = approval;
         // Also update session status
         final session = sessions[approval.sessionId];
@@ -428,9 +511,10 @@ class EventRepository {
           SessionDatabase.updateFields(approval.sessionId, {
             'status': 'waiting_approval',
           });
+          changed = true;
         }
       }
-      if (approvals.isNotEmpty) {
+      if (changed) {
         _sessionsChangedController.add(null);
       }
     } catch (e) {
@@ -571,6 +655,12 @@ class EventRepository {
   }
 
   AgentSession? sessionById(String sessionId) => sessions[sessionId];
+
+  List<ApprovalRequest> approvalsForSession(String sessionId) {
+    return pendingApprovals.values
+        .where((approval) => approval.sessionId == sessionId)
+        .toList();
+  }
 
   /// Update a session's status from the UI (e.g. optimistic "running" on send).
   void setSessionStatus(String sessionId, SessionStatus status) {

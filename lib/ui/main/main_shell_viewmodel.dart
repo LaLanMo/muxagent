@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
+import '../../data/repositories/reconnect_recovery_coordinator.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/models/ws_models.dart';
 import '../../data/services/ws/ws_types.dart';
@@ -14,16 +15,19 @@ import '../../routing/routes.dart';
 
 class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   final PairedMachineRepository _machineRepo;
+  final ReconnectRecoveryCoordinator _recovery;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
 
   MainShellViewModel({
     required PairedMachineRepository machineRepo,
+    required ReconnectRecoveryCoordinator recovery,
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
-  })  : _machineRepo = machineRepo,
-        _wsRepo = wsRepo,
-        _eventRepo = eventRepo;
+  }) : _machineRepo = machineRepo,
+       _recovery = recovery,
+       _wsRepo = wsRepo,
+       _eventRepo = eventRepo;
 
   RxBool get relayConnected => _wsRepo.relayConnected;
   Rx<ConnState> get relayConnectionState => _wsRepo.connectionState;
@@ -145,13 +149,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
 
   Future<void> _connectMachine(PairedMachine machine) async {
     try {
-      await _wsRepo.ensureConnected(relayHttpUrl: machine.relayHttpUrl);
-      await _wsRepo.startSession(machine: machine);
-      // Resync missed events after reconnect
-      await _eventRepo.resync(machine.machineId);
-      await _eventRepo.reconcileSessionStatus(machine.machineId);
-      await _eventRepo.backfillMissingTitles(machine.machineId);
-      await _eventRepo.fetchPendingApprovals(machine.machineId);
+      await _recovery.recoverMachine(machine.machineId);
     } catch (e) {
       debugPrint('[MainShell] connect ${machine.machineId} failed: $e');
     }

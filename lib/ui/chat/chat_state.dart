@@ -177,6 +177,15 @@ class ChatState {
     planEntries = entries;
   }
 
+  void reset() {
+    messages.clear();
+    messageOrder.clear();
+    tools.clear();
+    approvals.clear();
+    planEntries = [];
+    _pendingParts.clear();
+  }
+
   List<ToolActivity> childToolsOf(String parentToolId) {
     return tools.values
         .where((t) => t.parentToolCallId == parentToolId)

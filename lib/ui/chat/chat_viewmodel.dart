@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
+import '../../data/repositories/reconnect_recovery_coordinator.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/session_config_mapper.dart';
 import '../../domain/approval.dart';
@@ -30,14 +31,17 @@ import 'widgets/mention_text_controller.dart';
 
 class ChatViewModel extends GetxController {
   final EventRepository _eventRepo;
+  final ReconnectRecoveryCoordinator _recovery;
   final WsSessionRepository _wsRepo;
   final TranscribeAudioUseCase _transcribe;
 
   ChatViewModel({
     required EventRepository eventRepo,
+    required ReconnectRecoveryCoordinator recovery,
     required WsSessionRepository wsRepo,
     required TranscribeAudioUseCase transcribe,
   }) : _eventRepo = eventRepo,
+       _recovery = recovery,
        _wsRepo = wsRepo,
        _transcribe = transcribe;
 
@@ -73,6 +77,7 @@ class ChatViewModel extends GetxController {
   final filePickerLoading = false.obs;
   final isFileSearchMode = false.obs;
   final usageVersion = 0.obs;
+  final isRecoveringAfterReconnect = false.obs;
 
   /// Live usage info for this session (cost, tokens, context window).
   UsageInfo? get usageInfo => _eventRepo.liveUsageFor(sessionId);
@@ -92,9 +97,16 @@ class ChatViewModel extends GetxController {
   bool _hasOptimisticUserMsg = false;
   Completer<void>? _historyCompleter;
   Timer? _historyTimeout;
+  int _scrollRequestId = 0;
+  bool _hasSeenDisconnect = false;
+  bool _foregroundRecoveryInFlight = false;
+  int _recoveryEpoch = 0;
 
   StreamSubscription<AgentEvent>? _eventSub;
+  StreamSubscription<void>? _sessionMetaSub;
+  StreamSubscription<ReconnectRecoveryNotification>? _recoverySub;
   Worker? _connStateWorker;
+  Timer? _foregroundReconnectTimer;
 
   @override
   void onInit() {
@@ -125,16 +137,12 @@ class ChatViewModel extends GetxController {
     scrollController.addListener(_onScrollChanged);
     inputController.addListener(_detectMention);
     _subscribeEvents();
+    _subscribeSessionSnapshot();
+    _subscribeRecoveryNotifications();
     _subscribeConnectionState();
     _checkSttConfig();
 
-    // Restore pending approvals for this session
-    for (final approval in _eventRepo.pendingApprovals.values) {
-      if (approval.sessionId == sessionId) {
-        chatState.addApproval(approval);
-      }
-    }
-    _refreshApprovals();
+    _syncSessionSnapshotFromRepository();
 
     final initialPrompt = args['initialPrompt'] as String?;
     final isNewSession = args['isNewSession'] as bool? ?? false;
@@ -166,10 +174,137 @@ class ChatViewModel extends GetxController {
         .listen(_handleEvent);
   }
 
+  void _subscribeSessionSnapshot() {
+    _sessionMetaSub = _eventRepo.sessionsChanged.listen((_) {
+      if (isClosed) return;
+      _syncSessionSnapshotFromRepository();
+    });
+  }
+
+  void _subscribeRecoveryNotifications() {
+    _recoverySub = _recovery.recoveries
+        .where((notification) => notification.machineId == machineId)
+        .listen((notification) {
+          unawaited(_handleRecoveryNotification(notification));
+        });
+  }
+
   void _subscribeConnectionState() {
     _connStateWorker = ever<ConnState>(_wsRepo.connectionState, (state) {
+      final previous = connState.value;
       connState.value = state;
+      if (state == ConnState.disconnected) {
+        _hasSeenDisconnect = true;
+        _startForegroundReconnectRetry();
+        return;
+      }
+      if (state == ConnState.reconnecting) {
+        _hasSeenDisconnect = true;
+        return;
+      }
+      _stopForegroundReconnectRetry();
+      if (previous != ConnState.connected) {
+        _syncSessionSnapshotFromRepository();
+      }
     });
+    if (connState.value == ConnState.disconnected) {
+      _hasSeenDisconnect = true;
+      _startForegroundReconnectRetry();
+    }
+  }
+
+  void _syncSessionSnapshotFromRepository() {
+    final session = _eventRepo.sessionById(sessionId);
+    if (session != null) {
+      sessionStatus.value = session.status;
+      if (session.title.isNotEmpty) {
+        sessionTitle.value = session.title;
+      }
+      if (session.runtime.isNotEmpty) {
+        runtimeId.value = session.runtime;
+      }
+      if (session.model != null && session.model!.isNotEmpty) {
+        currentModel.value = session.model;
+      }
+      final mode = _resolveMode(session.mode);
+      if (mode != null) {
+        currentMode.value = mode;
+      }
+    }
+
+    chatState.approvals
+      ..clear()
+      ..addEntries(
+        _eventRepo
+            .approvalsForSession(sessionId)
+            .map((approval) => MapEntry(approval.id, approval)),
+      );
+    approvals.value = Map.from(chatState.approvals);
+  }
+
+  void _startForegroundReconnectRetry() {
+    if (_foregroundReconnectTimer != null) return;
+
+    unawaited(_attemptForegroundRecovery());
+    _foregroundReconnectTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (isClosed || connState.value == ConnState.connected) {
+        _stopForegroundReconnectRetry();
+        return;
+      }
+      unawaited(_attemptForegroundRecovery());
+    });
+  }
+
+  void _stopForegroundReconnectRetry() {
+    _foregroundReconnectTimer?.cancel();
+    _foregroundReconnectTimer = null;
+  }
+
+  Future<void> _attemptForegroundRecovery() async {
+    if (isClosed || !_hasSeenDisconnect || _foregroundRecoveryInFlight) return;
+    _foregroundRecoveryInFlight = true;
+    try {
+      await _recovery.recoverMachine(machineId);
+    } finally {
+      _foregroundRecoveryInFlight = false;
+    }
+  }
+
+  // A complete machine recovery only needs repo-derived UI refresh. Any
+  // incomplete/failed/noCursor recovery escalates to active-session replay via
+  // session.load so the open transcript is rebuilt from daemon history.
+  Future<void> _handleRecoveryNotification(
+    ReconnectRecoveryNotification notification,
+  ) async {
+    if (isClosed) return;
+
+    debugPrint(
+      '[ChatRecovery] session=$sessionId machine=$machineId '
+      'outcome=${notification.outcome} '
+      'hasSeenDisconnect=$_hasSeenDisconnect '
+      'conn=${connState.value} '
+      'hasSession=${_wsRepo.hasSession(machineId)}',
+    );
+    _syncSessionSnapshotFromRepository();
+    if (!_hasSeenDisconnect) return;
+
+    if (notification.outcome == ReconnectRecoveryOutcome.complete) {
+      _hasSeenDisconnect = false;
+      return;
+    }
+    if (connState.value != ConnState.connected ||
+        !_wsRepo.hasSession(machineId)) {
+      return;
+    }
+
+    debugPrint(
+      '[ChatRecovery] session=$sessionId machine=$machineId '
+      'triggering=session.load-fallback',
+    );
+    await _reloadSessionAfterReconnect();
+    if (!isClosed) {
+      _hasSeenDisconnect = false;
+    }
   }
 
   void _applyConfigSnapshot(SessionConfigSnapshot snapshot) {
@@ -233,6 +368,40 @@ class ChatViewModel extends GetxController {
         _scheduleScrollStateSync();
       }
     }
+  }
+
+  Future<void> _reloadSessionAfterReconnect() async {
+    if (isRecoveringAfterReconnect.value || isClosed) return;
+
+    // Guard against stale async completions mutating a newer replay attempt.
+    final token = ++_recoveryEpoch;
+    isRecoveringAfterReconnect.value = true;
+    _hasOptimisticUserMsg = false;
+    // Clear rebuild-sensitive state before daemon replay to avoid duplicate
+    // messages, tool activity, and approval cards after session.load.
+    _resetTranscriptState();
+    _syncSessionSnapshotFromRepository();
+    isLoading.value = true;
+
+    try {
+      await _loadSession();
+    } finally {
+      if (!isClosed && token == _recoveryEpoch) {
+        isRecoveringAfterReconnect.value = false;
+        _syncSessionSnapshotFromRepository();
+      }
+    }
+  }
+
+  void _resetTranscriptState() {
+    chatState.reset();
+    messages.clear();
+    approvals.clear();
+    planEntries.clear();
+    showScrollToBottomButton.value = false;
+    _userIsScrolling = false;
+    _isProgrammaticScroll = false;
+    _scrollRequestId++;
   }
 
   void _handleEvent(AgentEvent event) {
@@ -758,6 +927,10 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> sendMessage(String text) async {
+    if (isRecoveringAfterReconnect.value) {
+      AppToast.show('Reconnecting chat. Please wait.');
+      return;
+    }
     if (showFilePicker.value) _dismissFilePicker();
 
     final trimmed = text.trim();
@@ -904,10 +1077,14 @@ class ChatViewModel extends GetxController {
       _historyCompleter!.complete();
     }
     _historyTimeout?.cancel();
+    _recoveryEpoch++;
     _eventRepo.markNotViewing(sessionId);
     _eventSub?.cancel();
+    _sessionMetaSub?.cancel();
+    _recoverySub?.cancel();
     _connStateWorker?.dispose();
     _searchDebounce?.cancel();
+    _stopForegroundReconnectRetry();
     scrollController.dispose();
     inputController.removeListener(_detectMention);
     inputController.dispose();

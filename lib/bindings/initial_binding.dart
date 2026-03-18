@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/event_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
+import '../data/repositories/reconnect_recovery_coordinator.dart';
 import '../data/repositories/runtime_preference_repository.dart';
 import '../data/repositories/session_manager.dart';
 import '../data/repositories/stt_repository.dart';
@@ -64,6 +65,14 @@ class InitialBinding extends Bindings {
     );
     Get.put<EventRepository>(
       EventRepository(wsRepo: Get.find<WsSessionRepository>()),
+      permanent: true,
+    );
+    Get.put<ReconnectRecoveryCoordinator>(
+      ReconnectRecoveryCoordinator(
+        machines: Get.find<PairedMachineRepository>(),
+        wsRepo: Get.find<WsSessionRepository>(),
+        eventRepo: Get.find<EventRepository>(),
+      ),
       permanent: true,
     );
     Get.put<PushNotificationService>(
