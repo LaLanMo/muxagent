@@ -68,6 +68,14 @@ void main() {
     expect(approvals.first.options, hasLength(1));
   });
 
+  test('parses approvals.pending null approvals as empty list', () {
+    final dto = RpcPendingApprovalsResponseDto.fromJson({'approvals': null});
+
+    final approvals = RpcResultMapper.toPendingApprovals(dto.approvals);
+
+    expect(approvals, isEmpty);
+  });
+
   test('parses and maps fs.list results', () {
     final dto = RpcFsListResponseDto.fromJson({
       'entries': [
@@ -105,7 +113,13 @@ void main() {
     );
     expect(
       () => RpcPendingApprovalsResponseDto.fromJson({}),
-      throwsA(isA<FormatException>()),
+      throwsA(
+        isA<FormatException>().having(
+          (error) => error.message,
+          'message',
+          'Expected approvals field',
+        ),
+      ),
     );
   });
 

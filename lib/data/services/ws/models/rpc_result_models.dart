@@ -118,8 +118,14 @@ class RpcPendingApprovalsResponseDto with _$RpcPendingApprovalsResponseDto {
     required List<ApprovalWireDto> approvals,
   }) = _RpcPendingApprovalsResponseDto;
 
-  factory RpcPendingApprovalsResponseDto.fromJson(Map<String, dynamic> json) =>
-      _$RpcPendingApprovalsResponseDtoFromJson(json);
+  factory RpcPendingApprovalsResponseDto.fromJson(Map<String, dynamic> json) {
+    if (!json.containsKey('approvals')) {
+      throw FormatException('Expected approvals field');
+    }
+    final normalized = Map<String, dynamic>.from(json);
+    normalized['approvals'] ??= const <Object>[];
+    return _$RpcPendingApprovalsResponseDtoFromJson(normalized);
+  }
 }
 
 @freezed

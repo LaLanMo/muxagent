@@ -278,6 +278,16 @@ void main() {
       expect(relay.lastParams, isEmpty);
       expect(approvals.single.id, 'req-1');
       expect(approvals.single.sessionId, 'sid-1');
+
+      relay.nextPayload = {
+        'result': {'approvals': null},
+      };
+
+      final emptyApprovals = await repo.listPendingApprovals(
+        machineId: 'machine-1',
+      );
+
+      expect(emptyApprovals, isEmpty);
     });
 
     test('action helpers own rpc methods and ack semantics', () async {
