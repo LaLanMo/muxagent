@@ -19,6 +19,7 @@ import 'widgets/file_picker_panel.dart';
 import 'widgets/permission_card.dart';
 import 'widgets/plan_approval_card.dart';
 import 'widgets/tool_call_card.dart';
+import 'widgets/tool_group_card.dart';
 
 class ChatScreen extends GetView<ChatViewModel> {
   const ChatScreen({super.key});
@@ -548,8 +549,9 @@ class ChatScreen extends GetView<ChatViewModel> {
       );
     }
 
-    // Agent messages: render per-part with reasoning merging
+    // Agent messages: render per-part with reasoning merging + tool grouping
     final StringBuffer reasoningBuf = StringBuffer();
+    final toolBuffer = <ToolActivity>[];
 
     void flushReasoning({bool isLastPart = false}) {
       if (reasoningBuf.isNotEmpty) {
@@ -566,15 +568,100 @@ class ChatScreen extends GetView<ChatViewModel> {
       }
     }
 
+    // Track remaining parts to determine if a tool group is the last content
+    int partsRemaining = message.parts.length;
+
+    void flushToolGroup() {
+      if (toolBuffer.isEmpty) return;
+      if (toolBuffer.length < 2) {
+        // Single tool: render as normal ToolCallCard
+        final tool = toolBuffer.first;
+        final childTools = controller.chatState.childToolsOf(tool.id);
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ToolCallCard(
+              key: ValueKey('tc-${tool.id}'),
+              tool: tool,
+              childTools: childTools,
+            ),
+          ),
+        );
+      } else {
+        // 2+ tools: render as collapsed/expandable ToolGroupCard
+        final isLastContent = partsRemaining == 0;
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ToolGroupCard(
+              key: ValueKey('tg-${toolBuffer.first.id}'),
+              tools: List.of(toolBuffer),
+              initiallyExpanded: isStreaming && isLastContent,
+            ),
+          ),
+        );
+      }
+      toolBuffer.clear();
+    }
+
+    void renderLinkedApproval(ToolActivity tool) {
+      final linkedApproval = pendingApprovals
+          .cast<ApprovalRequest?>()
+          .firstWhere(
+            (a) => a!.toolCallId != null && a.toolCallId == tool.id,
+            orElse: () => null,
+          );
+      if (linkedApproval != null) {
+        renderedApprovalIds.add(linkedApproval.id);
+        widgets.add(
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: linkedApproval.kind == 'switch_mode'
+                ? PlanApprovalCard(
+                    approval: linkedApproval,
+                    onReply: (optionId) => controller.replyApproval(
+                      linkedApproval.id,
+                      optionId,
+                    ),
+                  )
+                : PermissionCard(
+                    approval: linkedApproval,
+                    onReply: (optionId) => controller.replyApproval(
+                      linkedApproval.id,
+                      optionId,
+                    ),
+                  ),
+          ),
+        );
+      }
+    }
+
+    bool shouldBreakGroup(ToolActivity tool) {
+      // Edit tools always standalone (preserve inline diff preview)
+      if (tool.effectiveKind == ToolKind.edit) return true;
+      // Tools with pending approval must be visible
+      if (pendingApprovals.any(
+        (a) => a.toolCallId != null && a.toolCallId == tool.id,
+      )) {
+        return true;
+      }
+      // Subagent parent tools already have their own aggregation
+      if (controller.chatState.childToolsOf(tool.id).isNotEmpty) return true;
+      return false;
+    }
+
     for (final part in message.parts) {
+      partsRemaining--;
       switch (part.type) {
         case PartType.reasoning:
+          flushToolGroup();
           if (part.text != null && part.text!.isNotEmpty) {
             reasoningBuf.write(part.text!);
           }
 
         case PartType.text:
         case PartType.media:
+          flushToolGroup();
           flushReasoning();
           widgets.add(
             Padding(
@@ -590,50 +677,35 @@ class ChatScreen extends GetView<ChatViewModel> {
         case PartType.tool:
           flushReasoning();
           if (part.tool != null && !part.tool!.isChildTool) {
-            final childTools = controller.chatState.childToolsOf(part.tool!.id);
-            widgets.add(
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: ToolCallCard(tool: part.tool!, childTools: childTools),
-              ),
-            );
-            // If this tool has a pending approval, render it inline
-            final linkedApproval = pendingApprovals
-                .cast<ApprovalRequest?>()
-                .firstWhere(
-                  (a) => a!.toolCallId != null && a.toolCallId == part.tool!.id,
-                  orElse: () => null,
-                );
-            if (linkedApproval != null) {
-              renderedApprovalIds.add(linkedApproval.id);
+            if (shouldBreakGroup(part.tool!)) {
+              // Flush any accumulated group, then render standalone
+              flushToolGroup();
+              final childTools =
+                  controller.chatState.childToolsOf(part.tool!.id);
               widgets.add(
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: linkedApproval.kind == 'switch_mode'
-                      ? PlanApprovalCard(
-                          approval: linkedApproval,
-                          onReply: (optionId) => controller.replyApproval(
-                            linkedApproval.id,
-                            optionId,
-                          ),
-                        )
-                      : PermissionCard(
-                          approval: linkedApproval,
-                          onReply: (optionId) => controller.replyApproval(
-                            linkedApproval.id,
-                            optionId,
-                          ),
-                        ),
+                  child: ToolCallCard(
+                    key: ValueKey('tc-${part.tool!.id}'),
+                    tool: part.tool!,
+                    childTools: childTools,
+                  ),
                 ),
               );
+              renderLinkedApproval(part.tool!);
+            } else {
+              // Groupable tool: accumulate into buffer
+              toolBuffer.add(part.tool!);
             }
           }
 
         default:
+          flushToolGroup();
           flushReasoning();
           break;
       }
     }
+    flushToolGroup();
     flushReasoning(isLastPart: true);
 
     return Column(
