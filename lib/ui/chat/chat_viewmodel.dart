@@ -111,7 +111,6 @@ class ChatViewModel extends GetxController {
   bool _hasOptimisticUserMsg = false;
   Completer<void>? _historyCompleter;
   Timer? _historyTimeout;
-  int _scrollRequestId = 0;
   bool _hasSeenDisconnect = false;
   bool _foregroundRecoveryInFlight = false;
   int _recoveryEpoch = 0;
@@ -419,8 +418,7 @@ class ChatViewModel extends GetxController {
     planEntries.clear();
     showScrollToBottomButton.value = false;
     _userIsScrolling = false;
-    _isProgrammaticScroll = false;
-    _scrollRequestId++;
+    _isAnimatingToBottom = false;
   }
 
   void _handleEvent(AgentEvent event) {
