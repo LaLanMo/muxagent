@@ -463,6 +463,8 @@ class EventRepository {
   /// The daemon decides whether a cursor is valid for the current replay stream.
   /// Missing/newer protocol fields are treated conservatively as unsafe so the
   /// caller falls back to session.load instead of trusting legacy replay.
+  /// TODO: Remove the unsafe legacy path once every supported daemon returns
+  /// status + streamEpoch + replayedThroughSeq for events.resync.
   Future<ResyncResult> resync(String machineId) async {
     final cursor = _replayCursorByMachine[machineId];
     final lastSeq = cursor?.lastSeq ?? 0;
