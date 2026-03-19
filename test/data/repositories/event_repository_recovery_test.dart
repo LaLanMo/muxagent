@@ -34,7 +34,6 @@ class _FakeWsSessionRepository extends WsSessionRepository {
     status: ReplayResyncStatus.reset,
     streamEpoch: 77,
     replayedThroughSeq: 0,
-    complete: false,
   );
   int? lastResyncStreamEpoch;
   int? lastResyncSeq;
@@ -125,23 +124,6 @@ void main() {
       expect(wsRepo.lastResyncStreamEpoch, isNull);
     });
 
-    test('resync reports unsafe for legacy replay responses', () async {
-      wsRepo.nextResyncBatch = const ResyncBatch(
-        events: [],
-        status: null,
-        streamEpoch: null,
-        replayedThroughSeq: 12,
-        complete: true,
-      );
-
-      final result = await repo.resync('machine-1');
-
-      expect(result.outcome, ResyncOutcome.unsafe);
-      expect(result.lastSeqUsed, 0);
-      expect(wsRepo.lastResyncSeq, 0);
-      expect(wsRepo.lastResyncStreamEpoch, isNull);
-    });
-
     test('live events bootstrap and persist replay cursor', () async {
       wsRepo.emitEvent(
         WsEvent(
@@ -181,7 +163,6 @@ void main() {
         status: ReplayResyncStatus.ok,
         streamEpoch: 77,
         replayedThroughSeq: 6,
-        complete: true,
       );
 
       final result = await repo.resync('machine-1');

@@ -98,13 +98,11 @@ void main() {
       'events': [
         {'type': 'message.delta', 'sessionId': 'sid-1', 'seq': 9},
       ],
-      'complete': true,
       'status': 'ok',
       'streamEpoch': 99,
       'replayedThroughSeq': 9,
     });
 
-    expect(dto.complete, isTrue);
     expect(dto.status, RpcResyncStatusDto.ok);
     expect(dto.streamEpoch, 99);
     expect(dto.replayedThroughSeq, 9);
@@ -112,18 +110,22 @@ void main() {
     expect(dto.events.first['type'], 'message.delta');
   });
 
-  test('parses legacy events.resync envelope conservatively', () {
-    final dto = RpcResyncResponseDto.fromJson({
-      'events': const [],
-      'complete': true,
-      'seq': 12,
-    });
-
-    expect(dto.complete, isTrue);
-    expect(dto.status, isNull);
-    expect(dto.streamEpoch, isNull);
-    expect(dto.replayedThroughSeq, isNull);
-    expect(dto.seq, 12);
+  test('rejects events.resync envelopes missing required replay fields', () {
+    expect(
+      () => RpcResyncResponseDto.fromJson({
+        'events': const [],
+        'replayedThroughSeq': 12,
+      }),
+      throwsA(isA<FormatException>()),
+    );
+    expect(
+      () => RpcResyncResponseDto.fromJson({
+        'events': const [],
+        'status': 'ok',
+        'replayedThroughSeq': 12,
+      }),
+      throwsA(isA<FormatException>()),
+    );
   });
 
   test('rejects missing required list fields', () {

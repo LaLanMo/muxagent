@@ -35,22 +35,15 @@ bool _requiredBool(Object? value) {
   throw FormatException('Expected a bool');
 }
 
-bool? _nullableBool(Object? value) {
-  if (value == null) return null;
-  if (value is bool) return value;
-  throw FormatException('Expected a bool or null');
+int _requiredInt(Object? value) {
+  if (value is num) return value.toInt();
+  throw FormatException('Expected a number');
 }
 
-int _nullableIntWithDefaultZero(Object? value) {
-  if (value == null) return 0;
-  if (value is num) return value.toInt();
-  throw FormatException('Expected a number or null');
-}
-
-int? _nullableInt(Object? value) {
-  if (value == null) return null;
-  if (value is num) return value.toInt();
-  throw FormatException('Expected a number or null');
+int _requiredPositiveInt(Object? value) {
+  final parsed = _requiredInt(value);
+  if (parsed > 0) return parsed;
+  throw FormatException('Expected a positive number');
 }
 
 enum RpcResyncStatusDto { ok, gap, reset }
@@ -68,6 +61,12 @@ RpcResyncStatusDto? _nullableResyncStatus(Object? value) {
   };
 }
 
+RpcResyncStatusDto _requiredResyncStatus(Object? value) {
+  final parsed = _nullableResyncStatus(value);
+  if (parsed != null) return parsed;
+  throw FormatException('Expected a valid resync status');
+}
+
 DateTime? _nullableDateTime(Object? value) {
   if (value == null) return null;
   if (value is! String) {
@@ -83,12 +82,12 @@ class RpcResyncResponseDto with _$RpcResyncResponseDto {
   const factory RpcResyncResponseDto({
     @JsonKey(fromJson: _requiredObjectList)
     required List<Map<String, dynamic>> events,
-    @JsonKey(fromJson: _nullableBool) bool? complete,
-    @JsonKey(fromJson: _nullableIntWithDefaultZero) @Default(0) int seq,
-    @JsonKey(fromJson: _nullableResyncStatus) RpcResyncStatusDto? status,
-    @JsonKey(name: 'streamEpoch', fromJson: _nullableInt) int? streamEpoch,
-    @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
-    int? replayedThroughSeq,
+    @JsonKey(fromJson: _requiredResyncStatus)
+    required RpcResyncStatusDto status,
+    @JsonKey(name: 'streamEpoch', fromJson: _requiredPositiveInt)
+    required int streamEpoch,
+    @JsonKey(name: 'replayedThroughSeq', fromJson: _requiredInt)
+    required int replayedThroughSeq,
   }) = _RpcResyncResponseDto;
 
   factory RpcResyncResponseDto.fromJson(Map<String, dynamic> json) =>

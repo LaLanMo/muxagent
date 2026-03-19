@@ -156,7 +156,6 @@ class ReconnectRecoveryCoordinator {
         ResyncOutcome.incomplete => TranscriptRecoveryState.fallbackNeeded,
         ResyncOutcome.noCursor => TranscriptRecoveryState.fallbackNeeded,
         ResyncOutcome.reset => TranscriptRecoveryState.fallbackNeeded,
-        ResyncOutcome.unsafe => TranscriptRecoveryState.fallbackNeeded,
         ResyncOutcome.failed =>
           sessionReady
               ? TranscriptRecoveryState.fallbackNeeded

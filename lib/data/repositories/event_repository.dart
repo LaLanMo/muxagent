@@ -16,7 +16,7 @@ import '../services/ws/ws_types.dart';
 import 'replay_cursor_repository.dart';
 import 'ws_session_repository.dart';
 
-enum ResyncOutcome { complete, incomplete, failed, noCursor, reset, unsafe }
+enum ResyncOutcome { complete, incomplete, failed, noCursor, reset }
 
 class ResyncResult {
   final ResyncOutcome outcome;
@@ -196,11 +196,9 @@ class EventRepository {
         lastSeq: 0,
       );
       final responseEpoch = response.streamEpoch;
-      if (response.status == null ||
-          responseEpoch == null ||
-          responseEpoch <= 0) {
+      if (responseEpoch <= 0) {
         debugPrint(
-          '[ReplayCursor] bootstrap machine=$machineId skipped due to legacy/unsafe replay contract',
+          '[ReplayCursor] bootstrap machine=$machineId skipped due to invalid replay epoch',
         );
         return;
       }
@@ -461,10 +459,6 @@ class EventRepository {
   /// Resync missed events after reconnect. Call after session re-init.
   ///
   /// The daemon decides whether a cursor is valid for the current replay stream.
-  /// Missing/newer protocol fields are treated conservatively as unsafe so the
-  /// caller falls back to session.load instead of trusting legacy replay.
-  /// TODO: Remove the unsafe legacy path once every supported daemon returns
-  /// status + streamEpoch + replayedThroughSeq for events.resync.
   Future<ResyncResult> resync(String machineId) async {
     final cursor = _replayCursorByMachine[machineId];
     final lastSeq = cursor?.lastSeq ?? 0;
@@ -481,18 +475,17 @@ class EventRepository {
       );
 
       final responseEpoch = response.streamEpoch;
-      if (response.status == null ||
-          responseEpoch == null ||
-          responseEpoch <= 0) {
+      if (responseEpoch <= 0) {
         debugPrint(
-          '[Resync] machine=$machineId outcome=unsafe '
+          '[Resync] machine=$machineId outcome=failed-invalid-epoch '
           'lastSeq=$lastSeq streamEpoch=$streamEpoch',
         );
         return ResyncResult(
-          outcome: ResyncOutcome.unsafe,
+          outcome: ResyncOutcome.failed,
           lastSeqUsed: lastSeq,
           highestSeqApplied: lastSeq,
           streamEpoch: streamEpoch,
+          error: const FormatException('Invalid replay epoch'),
         );
       }
 
@@ -509,7 +502,7 @@ class EventRepository {
         'replayedThroughSeq=${response.replayedThroughSeq}',
       );
 
-      switch (response.status!) {
+      switch (response.status) {
         case ReplayResyncStatus.reset:
           _setReplayCursor(
             machineId,

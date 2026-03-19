@@ -190,7 +190,6 @@ void main() {
                 },
               },
             ],
-            'complete': true,
             'status': 'ok',
             'streamEpoch': 42,
             'replayedThroughSeq': 9,
@@ -210,7 +209,6 @@ void main() {
 
       expect(relay.lastMethod, 'events.resync');
       expect(relay.lastParams, {'lastSeq': 8, 'streamEpoch': 42});
-      expect(resync.complete, isTrue);
       expect(resync.status, ReplayResyncStatus.ok);
       expect(resync.streamEpoch, 42);
       expect(resync.replayedThroughSeq, 9);

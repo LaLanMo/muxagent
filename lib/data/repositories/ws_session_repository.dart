@@ -20,17 +20,15 @@ enum ReplayResyncStatus { ok, gap, reset }
 
 class ResyncBatch {
   final List<AgentEvent> events;
-  final ReplayResyncStatus? status;
-  final int? streamEpoch;
+  final ReplayResyncStatus status;
+  final int streamEpoch;
   final int replayedThroughSeq;
-  final bool complete;
 
   const ResyncBatch({
     required this.events,
     required this.status,
     required this.streamEpoch,
     required this.replayedThroughSeq,
-    required this.complete,
   });
 }
 
@@ -187,11 +185,9 @@ class WsSessionRepository {
         RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
         RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
         RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
-        null => null,
       },
       streamEpoch: response.streamEpoch,
-      replayedThroughSeq: response.replayedThroughSeq ?? response.seq,
-      complete: response.complete ?? false,
+      replayedThroughSeq: response.replayedThroughSeq,
     );
   }
 
