@@ -3,7 +3,9 @@ import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/message.dart';
 import '../../domain/plan_entry.dart';
+import '../../domain/run_diff_summary.dart';
 import '../../domain/tool_activity.dart';
+import '../../utils/diff_utils.dart';
 
 class _PendingPart {
   final String messageId;
@@ -25,6 +27,8 @@ class ChatState {
   final approvals = <String, ApprovalRequest>{};
   var planEntries = <PlanEntry>[];
   final _pendingParts = <String, _PendingPart>{};
+
+  final _diffSummaryCache = <String, RunDiffSummary?>{};
 
   ChatState({required this.sessionId});
 
@@ -177,6 +181,87 @@ class ChatState {
     return tools.values
         .where((t) => t.parentToolCallId == parentToolId)
         .toList();
+  }
+
+  /// Computes an aggregate diff summary for the agent run following the user
+  /// message identified by [userMessageId]. Returns null if no edit diffs
+  /// exist in that run. Results are cached per user message ID.
+  RunDiffSummary? runDiffSummaryAfter(String userMessageId) {
+    if (_diffSummaryCache.containsKey(userMessageId)) {
+      return _diffSummaryCache[userMessageId];
+    }
+
+    final startIdx = messageOrder.indexOf(userMessageId);
+    if (startIdx < 0) return null;
+
+    // Collect all agent messages until the next user message (or end).
+    // Per-file: track first oldText and last newText to aggregate.
+    final fileOld = <String, String?>{}; // path → first oldText
+    final fileNew = <String, String>{}; // path → last newText
+
+    void collectDiffs(ToolActivity tool) {
+      if (tool.effectiveKind != ToolKind.edit || tool.diffs == null) return;
+      for (final diff in tool.diffs!) {
+        if (!fileOld.containsKey(diff.path)) {
+          fileOld[diff.path] = diff.oldText;
+        }
+        fileNew[diff.path] = diff.newText;
+      }
+      // Also collect child tool diffs (subagent edits).
+      for (final child in childToolsOf(tool.id)) {
+        collectDiffs(child);
+      }
+    }
+
+    for (var i = startIdx + 1; i < messageOrder.length; i++) {
+      final msg = messages[messageOrder[i]];
+      if (msg == null) continue;
+      if (msg.role == MessageRole.user) break;
+      for (final part in msg.parts) {
+        if (part.type == PartType.tool && part.tool != null) {
+          collectDiffs(part.tool!);
+        }
+      }
+    }
+
+    if (fileNew.isEmpty) {
+      _diffSummaryCache[userMessageId] = null;
+      return null;
+    }
+
+    int totalAdd = 0;
+    int totalDel = 0;
+    final files = <FileDiffStat>[];
+
+    for (final path in fileNew.keys) {
+      final oldSrc = fileOld[path] ?? '';
+      final newSrc = fileNew[path]!;
+      final result = computeLineDiff(oldSrc, newSrc);
+      if (result.additions > 0 || result.deletions > 0) {
+        files.add(FileDiffStat(
+          path: path,
+          additions: result.additions,
+          deletions: result.deletions,
+          oldText: oldSrc,
+          newText: newSrc,
+        ));
+        totalAdd += result.additions;
+        totalDel += result.deletions;
+      }
+    }
+
+    if (files.isEmpty) {
+      _diffSummaryCache[userMessageId] = null;
+      return null;
+    }
+
+    final summary = RunDiffSummary(
+      files: files,
+      totalAdditions: totalAdd,
+      totalDeletions: totalDel,
+    );
+    _diffSummaryCache[userMessageId] = summary;
+    return summary;
   }
 
   List<Message> get orderedMessages {

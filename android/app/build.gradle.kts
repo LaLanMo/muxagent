@@ -13,6 +13,7 @@ val keystoreProperties = Properties()
 val keystorePropertiesFile =
     sequenceOf(
         rootProject.file("../../key.properties"),
+        rootProject.file("../../secure-keys/key.properties"),
         rootProject.file("key.properties"),
     ).firstOrNull { it.exists() }
 val hasReleaseKeystore = keystorePropertiesFile != null
@@ -25,7 +26,7 @@ if (hasReleaseKeystore) {
 } else if (isReleaseBuild) {
     error(
         "Missing key.properties. Supported locations: ../../key.properties " +
-            "or android/key.properties. Copy android/key.properties.example " +
+            "../../secure-keys/key.properties or android/key.properties. Copy android/key.properties.example " +
             "and point it to your upload keystore before building a release.",
     )
 }

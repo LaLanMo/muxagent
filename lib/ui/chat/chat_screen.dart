@@ -18,6 +18,7 @@ import 'widgets/chat_message_bubble.dart';
 import 'widgets/file_picker_panel.dart';
 import 'widgets/permission_card.dart';
 import 'widgets/plan_approval_card.dart';
+import 'widgets/run_diff_summary_card.dart';
 import 'widgets/tool_call_card.dart';
 import 'widgets/tool_group_card.dart';
 
@@ -68,20 +69,61 @@ class ChatScreen extends GetView<ChatViewModel> {
                   // Track which approvals get rendered inline with their tool card
                   final renderedApprovalIds = <String>{};
 
-                  // Pre-build message widgets so we can count unlinked approvals
+                  // Pre-build message widgets with run diff summary cards
+                  // inserted at run boundaries.
                   final isRunning =
                       controller.sessionStatus.value == SessionStatus.running;
-                  final messageWidgets = allMessages.asMap().entries.map((
-                    entry,
-                  ) {
-                    final isLast = entry.key == allMessages.length - 1;
-                    return _buildMessageItem(
-                      entry.value,
-                      pendingApprovals,
-                      renderedApprovalIds,
-                      isStreaming: isLast && isRunning,
+                  final messageWidgets = <Widget>[];
+                  String? lastUserMessageId;
+
+                  for (var i = 0; i < allMessages.length; i++) {
+                    final msg = allMessages[i];
+                    final isLast = i == allMessages.length - 1;
+
+                    // Before each user message (except the first), insert a
+                    // diff summary card for the preceding run if it had edits.
+                    if (msg.role == MessageRole.user &&
+                        lastUserMessageId != null) {
+                      final summary = controller.chatState
+                          .runDiffSummaryAfter(lastUserMessageId);
+                      if (summary != null) {
+                        messageWidgets.add(
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: RunDiffSummaryCard(summary: summary),
+                          ),
+                        );
+                      }
+                    }
+
+                    if (msg.role == MessageRole.user) {
+                      lastUserMessageId = msg.id;
+                    }
+
+                    messageWidgets.add(
+                      _buildMessageItem(
+                        msg,
+                        pendingApprovals,
+                        renderedApprovalIds,
+                        isStreaming: isLast && isRunning,
+                      ),
                     );
-                  }).toList();
+                  }
+
+                  // Trailing run: show diff summary after the last user
+                  // message if the session is idle (run completed).
+                  if (lastUserMessageId != null && !isRunning) {
+                    final summary = controller.chatState
+                        .runDiffSummaryAfter(lastUserMessageId);
+                    if (summary != null) {
+                      messageWidgets.add(
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: RunDiffSummaryCard(summary: summary),
+                        ),
+                      );
+                    }
+                  }
 
                   final unlinkedApprovals = pendingApprovals
                       .where((a) => !renderedApprovalIds.contains(a.id))
@@ -693,7 +735,7 @@ class ChatScreen extends GetView<ChatViewModel> {
                     key: ValueKey('tc-${part.tool!.id}'),
                     tool: part.tool!,
                     childTools: childTools,
-                  ),
+                        ),
                 ),
               );
               renderLinkedApproval(part.tool!);
