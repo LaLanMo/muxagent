@@ -31,6 +31,19 @@ class ResyncResult {
   });
 }
 
+class RepairStepResult {
+  final bool ok;
+  final bool changed;
+  final Object? error;
+
+  const RepairStepResult.success({this.changed = false})
+    : ok = true,
+      error = null;
+
+  const RepairStepResult.failure(this.error, {this.changed = false})
+    : ok = false;
+}
+
 class EventRepository {
   final WsSessionRepository _wsRepo;
   late final StreamSubscription<WsEvent> _sub;
@@ -423,7 +436,7 @@ class EventRepository {
   /// Reconcile stale running/waitingApproval sessions after reconnect.
   /// Uses session.resolve to consume the daemon's authoritative status snapshot.
   /// Sessions not returned are considered gone from this daemon instance.
-  Future<void> reconcileSessionStatus(String machineId) async {
+  Future<RepairStepResult> reconcileSessionStatus(String machineId) async {
     // Collect all running/waitingApproval sessions for this machine
     final stale = sessions.values.where((s) {
       return s.machineId == machineId &&
@@ -431,7 +444,9 @@ class EventRepository {
               s.status == SessionStatus.waitingApproval);
     }).toList();
 
-    if (stale.isEmpty) return;
+    if (stale.isEmpty) {
+      return const RepairStepResult.success();
+    }
 
     try {
       final resolvedSessions = await _wsRepo.resolveSessions(
@@ -469,13 +484,15 @@ class EventRepository {
       if (changed) {
         _sessionsChangedController.add(null);
       }
+      return RepairStepResult.success(changed: changed);
     } catch (e) {
       debugPrint('[EventRepo] reconcileSessionStatus failed: $e');
+      return RepairStepResult.failure(e);
     }
   }
 
   /// Fetch pending approvals from daemon via RPC (fallback for ring buffer overflow).
-  Future<void> fetchPendingApprovals(String machineId) async {
+  Future<RepairStepResult> fetchPendingApprovals(String machineId) async {
     try {
       final approvals = await _wsRepo.listPendingApprovals(
         machineId: machineId,
@@ -517,8 +534,10 @@ class EventRepository {
       if (changed) {
         _sessionsChangedController.add(null);
       }
+      return RepairStepResult.success(changed: changed);
     } catch (e) {
       debugPrint('[EventRepo] fetchPendingApprovals failed: $e');
+      return RepairStepResult.failure(e);
     }
   }
 
@@ -526,7 +545,7 @@ class EventRepository {
   /// When [runtime] is provided, only sessions matching that runtime are
   /// included in the RPC call. Sessions from a different runtime would not
   /// be resolvable by the current daemon anyway.
-  Future<void> backfillMissingTitles(
+  Future<RepairStepResult> backfillMissingTitles(
     String machineId, {
     List<String>? sessionIds,
     String? runtime,
@@ -549,7 +568,7 @@ class EventRepository {
               .map((s) => s.id)
               .toList();
       if (targetIds.isEmpty) {
-        return;
+        return const RepairStepResult.success();
       }
 
       final resolvedSessions = await _wsRepo.resolveSessions(
@@ -627,8 +646,10 @@ class EventRepository {
       if (changed) {
         _sessionsChangedController.add(null);
       }
+      return RepairStepResult.success(changed: changed);
     } catch (e) {
       debugPrint('[EventRepo] backfillMissingTitles failed: $e');
+      return RepairStepResult.failure(e);
     }
   }
 

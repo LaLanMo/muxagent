@@ -34,11 +34,14 @@ class _FakePairedMachineRepository extends PairedMachineRepository {
 
 class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = false.obs;
+  @override
   final activeSessionIds = <String>{};
   final callOrder = <String>[];
   int ensureConnectedCalls = 0;
   int startSessionCalls = 0;
   bool connected = false;
+  Object? ensureConnectedError;
+  Object? startSessionError;
 
   _FakeWsSessionRepository()
     : super(relay: _NoopRelayWsClient(), sessions: SessionManager());
@@ -56,6 +59,10 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   Future<void> ensureConnected({required String relayHttpUrl}) async {
     ensureConnectedCalls++;
     callOrder.add('ensureConnected');
+    final error = ensureConnectedError;
+    if (error != null) {
+      throw error;
+    }
     connected = true;
     relayConnectedValue.value = true;
   }
@@ -64,6 +71,10 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   Future<void> startSession({required PairedMachine machine}) async {
     startSessionCalls++;
     callOrder.add('startSession');
+    final error = startSessionError;
+    if (error != null) {
+      throw error;
+    }
     activeSessionIds.add(machine.machineId);
   }
 }
@@ -75,6 +86,9 @@ class _FakeEventRepository extends EventRepository {
     lastSeqUsed: 4,
     highestSeqApplied: 7,
   );
+  RepairStepResult reconcileResult = const RepairStepResult.success();
+  RepairStepResult titleResult = const RepairStepResult.success();
+  RepairStepResult approvalResult = const RepairStepResult.success();
   Completer<void>? resyncBlocker;
   Object? resyncError;
 
@@ -95,22 +109,25 @@ class _FakeEventRepository extends EventRepository {
   }
 
   @override
-  Future<void> reconcileSessionStatus(String machineId) async {
+  Future<RepairStepResult> reconcileSessionStatus(String machineId) async {
     callOrder.add('reconcile');
+    return reconcileResult;
   }
 
   @override
-  Future<void> backfillMissingTitles(
+  Future<RepairStepResult> backfillMissingTitles(
     String machineId, {
     List<String>? sessionIds,
     String? runtime,
   }) async {
     callOrder.add('backfill');
+    return titleResult;
   }
 
   @override
-  Future<void> fetchPendingApprovals(String machineId) async {
+  Future<RepairStepResult> fetchPendingApprovals(String machineId) async {
     callOrder.add('approvals');
+    return approvalResult;
   }
 }
 
@@ -138,14 +155,18 @@ void main() {
     });
 
     test('returns complete and preserves recovery order', () async {
-      final notifications = <ReconnectRecoveryOutcome>[];
-      final sub = coordinator.recoveries.listen((notification) {
-        notifications.add(notification.outcome);
+      final notifications = <ReconnectRecoveryResult>[];
+      final sub = coordinator.recoveries.listen((result) {
+        notifications.add(result);
       });
 
-      final outcome = await coordinator.recoverMachine('machine-1');
+      final result = await coordinator.recoverMachine('machine-1');
 
-      expect(outcome, ReconnectRecoveryOutcome.complete);
+      expect(result.transcript, TranscriptRecoveryState.complete);
+      expect(result.metadata, MetadataRecoveryState.complete);
+      expect(result.statusesOk, isTrue);
+      expect(result.titlesOk, isTrue);
+      expect(result.approvalsOk, isTrue);
       expect(wsRepo.callOrder, ['ensureConnected', 'startSession']);
       expect(eventRepo.callOrder, [
         'resync',
@@ -153,7 +174,8 @@ void main() {
         'backfill',
         'approvals',
       ]);
-      expect(notifications, [ReconnectRecoveryOutcome.complete]);
+      expect(notifications.single.transcript, TranscriptRecoveryState.complete);
+      expect(notifications.single.metadata, MetadataRecoveryState.complete);
 
       await sub.cancel();
     });
@@ -166,10 +188,9 @@ void main() {
           lastSeqUsed: 4,
           highestSeqApplied: 5,
         );
-        expect(
-          await coordinator.recoverMachine('machine-1'),
-          ReconnectRecoveryOutcome.incomplete,
-        );
+        final incomplete = await coordinator.recoverMachine('machine-1');
+        expect(incomplete.transcript, TranscriptRecoveryState.fallbackNeeded);
+        expect(incomplete.metadata, MetadataRecoveryState.complete);
 
         wsRepo.connected = false;
         wsRepo.relayConnectedValue.value = false;
@@ -182,19 +203,65 @@ void main() {
           highestSeqApplied: 0,
         );
 
-        expect(
-          await coordinator.recoverMachine('machine-1'),
-          ReconnectRecoveryOutcome.noCursor,
-        );
+        final noCursor = await coordinator.recoverMachine('machine-1');
+        expect(noCursor.transcript, TranscriptRecoveryState.fallbackNeeded);
+        expect(noCursor.metadata, MetadataRecoveryState.complete);
       },
     );
 
-    test('maps thrown resync errors to failed', () async {
-      eventRepo.resyncError = StateError('boom');
+    test('degrades metadata without forcing transcript fallback', () async {
+      eventRepo.approvalResult = RepairStepResult.failure(StateError('boom'));
 
-      final outcome = await coordinator.recoverMachine('machine-1');
+      final result = await coordinator.recoverMachine('machine-1');
 
-      expect(outcome, ReconnectRecoveryOutcome.failed);
+      expect(result.transcript, TranscriptRecoveryState.complete);
+      expect(result.metadata, MetadataRecoveryState.degraded);
+      expect(result.approvalsOk, isFalse);
+      expect(result.statusesOk, isTrue);
+      expect(result.titlesOk, isTrue);
+    });
+
+    test('reports failed transcript when transport setup fails', () async {
+      wsRepo.ensureConnectedError = StateError('boom');
+
+      final result = await coordinator.recoverMachine('machine-1');
+
+      expect(result.transcript, TranscriptRecoveryState.failed);
+      expect(result.metadata, MetadataRecoveryState.skipped);
+      expect(result.sessionReady, isFalse);
+      expect(result.transportError, isA<StateError>());
+      expect(eventRepo.callOrder, isEmpty);
+    });
+
+    test(
+      'maps thrown resync errors to fallbackNeeded with a usable session',
+      () async {
+        eventRepo.resyncError = StateError('boom');
+
+        final result = await coordinator.recoverMachine('machine-1');
+
+        expect(result.transcript, TranscriptRecoveryState.fallbackNeeded);
+        expect(result.metadata, MetadataRecoveryState.skipped);
+        expect(result.sessionReady, isTrue);
+      },
+    );
+
+    test('still runs repair when transport is already active', () async {
+      wsRepo.connected = true;
+      wsRepo.relayConnectedValue.value = true;
+      wsRepo.activeSessionIds.add('machine-1');
+
+      final result = await coordinator.recoverMachine('machine-1');
+
+      expect(wsRepo.callOrder, isEmpty);
+      expect(result.transcript, TranscriptRecoveryState.complete);
+      expect(result.metadata, MetadataRecoveryState.complete);
+      expect(eventRepo.callOrder, [
+        'resync',
+        'reconcile',
+        'backfill',
+        'approvals',
+      ]);
     });
 
     test('joins duplicate in-flight recovery requests', () async {
@@ -209,10 +276,10 @@ void main() {
       eventRepo.resyncBlocker!.complete();
       final results = await Future.wait([first, second]);
 
-      expect(results, [
-        ReconnectRecoveryOutcome.complete,
-        ReconnectRecoveryOutcome.complete,
-      ]);
+      expect(
+        results.map((result) => result.transcript),
+        everyElement(equals(TranscriptRecoveryState.complete)),
+      );
       expect(wsRepo.ensureConnectedCalls, 1);
       expect(wsRepo.startSessionCalls, 1);
       expect(

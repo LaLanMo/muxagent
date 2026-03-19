@@ -104,7 +104,7 @@ class ChatViewModel extends GetxController {
 
   StreamSubscription<AgentEvent>? _eventSub;
   StreamSubscription<void>? _sessionMetaSub;
-  StreamSubscription<ReconnectRecoveryNotification>? _recoverySub;
+  StreamSubscription<ReconnectRecoveryResult>? _recoverySub;
   Worker? _connStateWorker;
   Timer? _foregroundReconnectTimer;
 
@@ -183,9 +183,9 @@ class ChatViewModel extends GetxController {
 
   void _subscribeRecoveryNotifications() {
     _recoverySub = _recovery.recoveries
-        .where((notification) => notification.machineId == machineId)
-        .listen((notification) {
-          unawaited(_handleRecoveryNotification(notification));
+        .where((result) => result.machineId == machineId)
+        .listen((result) {
+          unawaited(_handleRecoveryNotification(result));
         });
   }
 
@@ -271,29 +271,31 @@ class ChatViewModel extends GetxController {
   }
 
   // A complete machine recovery only needs repo-derived UI refresh. Any
-  // incomplete/failed/noCursor recovery escalates to active-session replay via
+  // fallback-needed transcript recovery escalates to active-session replay via
   // session.load so the open transcript is rebuilt from daemon history.
   Future<void> _handleRecoveryNotification(
-    ReconnectRecoveryNotification notification,
+    ReconnectRecoveryResult result,
   ) async {
     if (isClosed) return;
 
     debugPrint(
       '[ChatRecovery] session=$sessionId machine=$machineId '
-      'outcome=${notification.outcome} '
+      'transcript=${result.transcript} metadata=${result.metadata} '
       'hasSeenDisconnect=$_hasSeenDisconnect '
       'conn=${connState.value} '
-      'hasSession=${_wsRepo.hasSession(machineId)}',
+      'hasSession=${_wsRepo.hasSession(machineId)} '
+      'sessionReady=${result.sessionReady}',
     );
     _syncSessionSnapshotFromRepository();
     if (!_hasSeenDisconnect) return;
 
-    if (notification.outcome == ReconnectRecoveryOutcome.complete) {
+    if (result.transcript == TranscriptRecoveryState.complete) {
       _hasSeenDisconnect = false;
       return;
     }
     if (connState.value != ConnState.connected ||
-        !_wsRepo.hasSession(machineId)) {
+        !_wsRepo.hasSession(machineId) ||
+        !result.sessionReady) {
       return;
     }
 
