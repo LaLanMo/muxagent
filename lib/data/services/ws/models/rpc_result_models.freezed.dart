@@ -23,10 +23,16 @@ RpcResyncResponseDto _$RpcResyncResponseDtoFromJson(Map<String, dynamic> json) {
 mixin _$RpcResyncResponseDto {
   @JsonKey(fromJson: _requiredObjectList)
   List<Map<String, dynamic>> get events => throw _privateConstructorUsedError;
-  @JsonKey(fromJson: _requiredBool)
-  bool get complete => throw _privateConstructorUsedError;
+  @JsonKey(fromJson: _nullableBool)
+  bool? get complete => throw _privateConstructorUsedError;
   @JsonKey(fromJson: _nullableIntWithDefaultZero)
   int get seq => throw _privateConstructorUsedError;
+  @JsonKey(fromJson: _nullableResyncStatus)
+  RpcResyncStatusDto? get status => throw _privateConstructorUsedError;
+  @JsonKey(name: 'streamEpoch', fromJson: _nullableInt)
+  int? get streamEpoch => throw _privateConstructorUsedError;
+  @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+  int? get replayedThroughSeq => throw _privateConstructorUsedError;
 
   /// Serializes this RpcResyncResponseDto to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -47,8 +53,12 @@ abstract class $RpcResyncResponseDtoCopyWith<$Res> {
   @useResult
   $Res call({
     @JsonKey(fromJson: _requiredObjectList) List<Map<String, dynamic>> events,
-    @JsonKey(fromJson: _requiredBool) bool complete,
+    @JsonKey(fromJson: _nullableBool) bool? complete,
     @JsonKey(fromJson: _nullableIntWithDefaultZero) int seq,
+    @JsonKey(fromJson: _nullableResyncStatus) RpcResyncStatusDto? status,
+    @JsonKey(name: 'streamEpoch', fromJson: _nullableInt) int? streamEpoch,
+    @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+    int? replayedThroughSeq,
   });
 }
 
@@ -71,8 +81,11 @@ class _$RpcResyncResponseDtoCopyWithImpl<
   @override
   $Res call({
     Object? events = null,
-    Object? complete = null,
+    Object? complete = freezed,
     Object? seq = null,
+    Object? status = freezed,
+    Object? streamEpoch = freezed,
+    Object? replayedThroughSeq = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -80,14 +93,26 @@ class _$RpcResyncResponseDtoCopyWithImpl<
                 ? _value.events
                 : events // ignore: cast_nullable_to_non_nullable
                       as List<Map<String, dynamic>>,
-            complete: null == complete
+            complete: freezed == complete
                 ? _value.complete
                 : complete // ignore: cast_nullable_to_non_nullable
-                      as bool,
+                      as bool?,
             seq: null == seq
                 ? _value.seq
                 : seq // ignore: cast_nullable_to_non_nullable
                       as int,
+            status: freezed == status
+                ? _value.status
+                : status // ignore: cast_nullable_to_non_nullable
+                      as RpcResyncStatusDto?,
+            streamEpoch: freezed == streamEpoch
+                ? _value.streamEpoch
+                : streamEpoch // ignore: cast_nullable_to_non_nullable
+                      as int?,
+            replayedThroughSeq: freezed == replayedThroughSeq
+                ? _value.replayedThroughSeq
+                : replayedThroughSeq // ignore: cast_nullable_to_non_nullable
+                      as int?,
           )
           as $Val,
     );
@@ -105,8 +130,12 @@ abstract class _$$RpcResyncResponseDtoImplCopyWith<$Res>
   @useResult
   $Res call({
     @JsonKey(fromJson: _requiredObjectList) List<Map<String, dynamic>> events,
-    @JsonKey(fromJson: _requiredBool) bool complete,
+    @JsonKey(fromJson: _nullableBool) bool? complete,
     @JsonKey(fromJson: _nullableIntWithDefaultZero) int seq,
+    @JsonKey(fromJson: _nullableResyncStatus) RpcResyncStatusDto? status,
+    @JsonKey(name: 'streamEpoch', fromJson: _nullableInt) int? streamEpoch,
+    @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+    int? replayedThroughSeq,
   });
 }
 
@@ -125,8 +154,11 @@ class __$$RpcResyncResponseDtoImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? events = null,
-    Object? complete = null,
+    Object? complete = freezed,
     Object? seq = null,
+    Object? status = freezed,
+    Object? streamEpoch = freezed,
+    Object? replayedThroughSeq = freezed,
   }) {
     return _then(
       _$RpcResyncResponseDtoImpl(
@@ -134,14 +166,26 @@ class __$$RpcResyncResponseDtoImplCopyWithImpl<$Res>
             ? _value._events
             : events // ignore: cast_nullable_to_non_nullable
                   as List<Map<String, dynamic>>,
-        complete: null == complete
+        complete: freezed == complete
             ? _value.complete
             : complete // ignore: cast_nullable_to_non_nullable
-                  as bool,
+                  as bool?,
         seq: null == seq
             ? _value.seq
             : seq // ignore: cast_nullable_to_non_nullable
                   as int,
+        status: freezed == status
+            ? _value.status
+            : status // ignore: cast_nullable_to_non_nullable
+                  as RpcResyncStatusDto?,
+        streamEpoch: freezed == streamEpoch
+            ? _value.streamEpoch
+            : streamEpoch // ignore: cast_nullable_to_non_nullable
+                  as int?,
+        replayedThroughSeq: freezed == replayedThroughSeq
+            ? _value.replayedThroughSeq
+            : replayedThroughSeq // ignore: cast_nullable_to_non_nullable
+                  as int?,
       ),
     );
   }
@@ -153,8 +197,12 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
   const _$RpcResyncResponseDtoImpl({
     @JsonKey(fromJson: _requiredObjectList)
     required final List<Map<String, dynamic>> events,
-    @JsonKey(fromJson: _requiredBool) required this.complete,
+    @JsonKey(fromJson: _nullableBool) this.complete,
     @JsonKey(fromJson: _nullableIntWithDefaultZero) this.seq = 0,
+    @JsonKey(fromJson: _nullableResyncStatus) this.status,
+    @JsonKey(name: 'streamEpoch', fromJson: _nullableInt) this.streamEpoch,
+    @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+    this.replayedThroughSeq,
   }) : _events = events;
 
   factory _$RpcResyncResponseDtoImpl.fromJson(Map<String, dynamic> json) =>
@@ -170,15 +218,24 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
   }
 
   @override
-  @JsonKey(fromJson: _requiredBool)
-  final bool complete;
+  @JsonKey(fromJson: _nullableBool)
+  final bool? complete;
   @override
   @JsonKey(fromJson: _nullableIntWithDefaultZero)
   final int seq;
+  @override
+  @JsonKey(fromJson: _nullableResyncStatus)
+  final RpcResyncStatusDto? status;
+  @override
+  @JsonKey(name: 'streamEpoch', fromJson: _nullableInt)
+  final int? streamEpoch;
+  @override
+  @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+  final int? replayedThroughSeq;
 
   @override
   String toString() {
-    return 'RpcResyncResponseDto(events: $events, complete: $complete, seq: $seq)';
+    return 'RpcResyncResponseDto(events: $events, complete: $complete, seq: $seq, status: $status, streamEpoch: $streamEpoch, replayedThroughSeq: $replayedThroughSeq)';
   }
 
   @override
@@ -189,7 +246,12 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
             const DeepCollectionEquality().equals(other._events, _events) &&
             (identical(other.complete, complete) ||
                 other.complete == complete) &&
-            (identical(other.seq, seq) || other.seq == seq));
+            (identical(other.seq, seq) || other.seq == seq) &&
+            (identical(other.status, status) || other.status == status) &&
+            (identical(other.streamEpoch, streamEpoch) ||
+                other.streamEpoch == streamEpoch) &&
+            (identical(other.replayedThroughSeq, replayedThroughSeq) ||
+                other.replayedThroughSeq == replayedThroughSeq));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -199,6 +261,9 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
     const DeepCollectionEquality().hash(_events),
     complete,
     seq,
+    status,
+    streamEpoch,
+    replayedThroughSeq,
   );
 
   /// Create a copy of RpcResyncResponseDto
@@ -223,8 +288,13 @@ abstract class _RpcResyncResponseDto implements RpcResyncResponseDto {
   const factory _RpcResyncResponseDto({
     @JsonKey(fromJson: _requiredObjectList)
     required final List<Map<String, dynamic>> events,
-    @JsonKey(fromJson: _requiredBool) required final bool complete,
+    @JsonKey(fromJson: _nullableBool) final bool? complete,
     @JsonKey(fromJson: _nullableIntWithDefaultZero) final int seq,
+    @JsonKey(fromJson: _nullableResyncStatus) final RpcResyncStatusDto? status,
+    @JsonKey(name: 'streamEpoch', fromJson: _nullableInt)
+    final int? streamEpoch,
+    @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+    final int? replayedThroughSeq,
   }) = _$RpcResyncResponseDtoImpl;
 
   factory _RpcResyncResponseDto.fromJson(Map<String, dynamic> json) =
@@ -234,11 +304,20 @@ abstract class _RpcResyncResponseDto implements RpcResyncResponseDto {
   @JsonKey(fromJson: _requiredObjectList)
   List<Map<String, dynamic>> get events;
   @override
-  @JsonKey(fromJson: _requiredBool)
-  bool get complete;
+  @JsonKey(fromJson: _nullableBool)
+  bool? get complete;
   @override
   @JsonKey(fromJson: _nullableIntWithDefaultZero)
   int get seq;
+  @override
+  @JsonKey(fromJson: _nullableResyncStatus)
+  RpcResyncStatusDto? get status;
+  @override
+  @JsonKey(name: 'streamEpoch', fromJson: _nullableInt)
+  int? get streamEpoch;
+  @override
+  @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+  int? get replayedThroughSeq;
 
   /// Create a copy of RpcResyncResponseDto
   /// with the given fields replaced by the non-null parameter values.
@@ -1050,19 +1129,10 @@ abstract class _RpcSessionResolveResponseDto
   get copyWith => throw _privateConstructorUsedError;
 }
 
-RpcPendingApprovalsResponseDto _$RpcPendingApprovalsResponseDtoFromJson(
-  Map<String, dynamic> json,
-) {
-  return _RpcPendingApprovalsResponseDto.fromJson(json);
-}
-
 /// @nodoc
 mixin _$RpcPendingApprovalsResponseDto {
   @JsonKey(fromJson: _approvalWireListFromJson)
   List<ApprovalWireDto> get approvals => throw _privateConstructorUsedError;
-
-  /// Serializes this RpcPendingApprovalsResponseDto to a JSON map.
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
   /// Create a copy of RpcPendingApprovalsResponseDto
   /// with the given fields replaced by the non-null parameter values.
@@ -1163,17 +1233,13 @@ class __$$RpcPendingApprovalsResponseDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
 class _$RpcPendingApprovalsResponseDtoImpl
     implements _RpcPendingApprovalsResponseDto {
   const _$RpcPendingApprovalsResponseDtoImpl({
     @JsonKey(fromJson: _approvalWireListFromJson)
     required final List<ApprovalWireDto> approvals,
   }) : _approvals = approvals;
-
-  factory _$RpcPendingApprovalsResponseDtoImpl.fromJson(
-    Map<String, dynamic> json,
-  ) => _$$RpcPendingApprovalsResponseDtoImplFromJson(json);
 
   final List<ApprovalWireDto> _approvals;
   @override
@@ -1200,7 +1266,6 @@ class _$RpcPendingApprovalsResponseDtoImpl
             ));
   }
 
-  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode =>
       Object.hash(runtimeType, const DeepCollectionEquality().hash(_approvals));
@@ -1217,11 +1282,6 @@ class _$RpcPendingApprovalsResponseDtoImpl
       __$$RpcPendingApprovalsResponseDtoImplCopyWithImpl<
         _$RpcPendingApprovalsResponseDtoImpl
       >(this, _$identity);
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$RpcPendingApprovalsResponseDtoImplToJson(this);
-  }
 }
 
 abstract class _RpcPendingApprovalsResponseDto
@@ -1230,9 +1290,6 @@ abstract class _RpcPendingApprovalsResponseDto
     @JsonKey(fromJson: _approvalWireListFromJson)
     required final List<ApprovalWireDto> approvals,
   }) = _$RpcPendingApprovalsResponseDtoImpl;
-
-  factory _RpcPendingApprovalsResponseDto.fromJson(Map<String, dynamic> json) =
-      _$RpcPendingApprovalsResponseDtoImpl.fromJson;
 
   @override
   @JsonKey(fromJson: _approvalWireListFromJson)

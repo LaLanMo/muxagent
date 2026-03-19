@@ -35,10 +35,37 @@ bool _requiredBool(Object? value) {
   throw FormatException('Expected a bool');
 }
 
+bool? _nullableBool(Object? value) {
+  if (value == null) return null;
+  if (value is bool) return value;
+  throw FormatException('Expected a bool or null');
+}
+
 int _nullableIntWithDefaultZero(Object? value) {
   if (value == null) return 0;
   if (value is num) return value.toInt();
   throw FormatException('Expected a number or null');
+}
+
+int? _nullableInt(Object? value) {
+  if (value == null) return null;
+  if (value is num) return value.toInt();
+  throw FormatException('Expected a number or null');
+}
+
+enum RpcResyncStatusDto { ok, gap, reset }
+
+RpcResyncStatusDto? _nullableResyncStatus(Object? value) {
+  if (value == null) return null;
+  if (value is! String) {
+    throw FormatException('Expected a string or null');
+  }
+  return switch (value) {
+    'ok' => RpcResyncStatusDto.ok,
+    'gap' => RpcResyncStatusDto.gap,
+    'reset' => RpcResyncStatusDto.reset,
+    _ => throw FormatException('Expected a valid resync status'),
+  };
 }
 
 DateTime? _nullableDateTime(Object? value) {
@@ -56,8 +83,12 @@ class RpcResyncResponseDto with _$RpcResyncResponseDto {
   const factory RpcResyncResponseDto({
     @JsonKey(fromJson: _requiredObjectList)
     required List<Map<String, dynamic>> events,
-    @JsonKey(fromJson: _requiredBool) required bool complete,
+    @JsonKey(fromJson: _nullableBool) bool? complete,
     @JsonKey(fromJson: _nullableIntWithDefaultZero) @Default(0) int seq,
+    @JsonKey(fromJson: _nullableResyncStatus) RpcResyncStatusDto? status,
+    @JsonKey(name: 'streamEpoch', fromJson: _nullableInt) int? streamEpoch,
+    @JsonKey(name: 'replayedThroughSeq', fromJson: _nullableInt)
+    int? replayedThroughSeq,
   }) = _RpcResyncResponseDto;
 
   factory RpcResyncResponseDto.fromJson(Map<String, dynamic> json) =>
@@ -124,7 +155,9 @@ class RpcPendingApprovalsResponseDto with _$RpcPendingApprovalsResponseDto {
     }
     final normalized = Map<String, dynamic>.from(json);
     normalized['approvals'] ??= const <Object>[];
-    return _$RpcPendingApprovalsResponseDtoFromJson(normalized);
+    return RpcPendingApprovalsResponseDto(
+      approvals: _approvalWireListFromJson(normalized['approvals']),
+    );
   }
 }
 

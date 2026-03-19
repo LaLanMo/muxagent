@@ -8,6 +8,7 @@ import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/models/rpc_transport_models.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
 import 'package:muxagent/domain/session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class _FakeRelayWsClient extends RelayWsClient {
@@ -38,6 +39,7 @@ void main() {
     late String sessionId;
 
     setUp(() async {
+      SharedPreferences.setMockInitialValues({});
       final wsRepo = WsSessionRepository(
         relay: _FakeRelayWsClient(),
         sessions: SessionManager(),

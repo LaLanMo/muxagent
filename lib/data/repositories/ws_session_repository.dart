@@ -16,11 +16,22 @@ import '../services/ws/relay_ws_client.dart';
 import '../services/ws/ws_types.dart';
 import 'session_manager.dart';
 
+enum ReplayResyncStatus { ok, gap, reset }
+
 class ResyncBatch {
   final List<AgentEvent> events;
+  final ReplayResyncStatus? status;
+  final int? streamEpoch;
+  final int replayedThroughSeq;
   final bool complete;
 
-  const ResyncBatch({required this.events, required this.complete});
+  const ResyncBatch({
+    required this.events,
+    required this.status,
+    required this.streamEpoch,
+    required this.replayedThroughSeq,
+    required this.complete,
+  });
 }
 
 class WsSessionRepository {
@@ -148,11 +159,15 @@ class WsSessionRepository {
   Future<ResyncBatch> resyncEvents({
     required String machineId,
     required int lastSeq,
+    int? streamEpoch,
   }) async {
     final response = await _relay.callRpcDecoded(
       machineId: machineId,
       method: 'events.resync',
-      params: RpcResyncEventsParamsDto(lastSeq: lastSeq).toJson(),
+      params: RpcResyncEventsParamsDto(
+        lastSeq: lastSeq,
+        streamEpoch: streamEpoch,
+      ).toJson(),
       decode: RpcResyncResponseDto.fromJson,
     );
     final events = <AgentEvent>[];
@@ -166,7 +181,18 @@ class WsSessionRepository {
         events.add(event);
       }
     }
-    return ResyncBatch(events: events, complete: response.complete);
+    return ResyncBatch(
+      events: events,
+      status: switch (response.status) {
+        RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
+        RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
+        RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
+        null => null,
+      },
+      streamEpoch: response.streamEpoch,
+      replayedThroughSeq: response.replayedThroughSeq ?? response.seq,
+      complete: response.complete ?? false,
+    );
   }
 
   Future<List<ResolvedSessionSnapshot>> resolveSessions({

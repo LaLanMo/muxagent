@@ -68,10 +68,14 @@ class RpcFsSearchParamsDto {
 
 class RpcResyncEventsParamsDto {
   final int lastSeq;
+  final int? streamEpoch;
 
-  const RpcResyncEventsParamsDto({required this.lastSeq});
+  const RpcResyncEventsParamsDto({required this.lastSeq, this.streamEpoch});
 
-  Map<String, dynamic> toJson() => {'lastSeq': lastSeq};
+  Map<String, dynamic> toJson() => {
+    'lastSeq': lastSeq,
+    if (streamEpoch != null && streamEpoch! > 0) 'streamEpoch': streamEpoch,
+  };
 }
 
 class RpcSessionResolveParamsDto {

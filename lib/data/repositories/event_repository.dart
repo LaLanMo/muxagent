@@ -13,20 +13,23 @@ import '../local/session_database.dart';
 import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
+import 'replay_cursor_repository.dart';
 import 'ws_session_repository.dart';
 
-enum ResyncOutcome { complete, incomplete, failed, noCursor }
+enum ResyncOutcome { complete, incomplete, failed, noCursor, reset, unsafe }
 
 class ResyncResult {
   final ResyncOutcome outcome;
   final int lastSeqUsed;
   final int highestSeqApplied;
+  final int? streamEpoch;
   final Object? error;
 
   const ResyncResult({
     required this.outcome,
     required this.lastSeqUsed,
     required this.highestSeqApplied,
+    this.streamEpoch,
     this.error,
   });
 }
@@ -46,6 +49,8 @@ class RepairStepResult {
 
 class EventRepository {
   final WsSessionRepository _wsRepo;
+  final ReplayCursorRepository _replayCursors;
+  final Duration _replayCursorPersistDebounce;
   late final StreamSubscription<WsEvent> _sub;
   final _eventController = StreamController<AgentEvent>.broadcast();
   final _sessionsChangedController = StreamController<void>.broadcast();
@@ -65,10 +70,20 @@ class EventRepository {
   /// Sessions currently being viewed in ChatVM (don't mark unread while viewing).
   final Set<String> _viewingSessions = {};
 
-  /// Last seen event sequence number per machine (for resync after reconnect).
-  final Map<String, int> _lastSeqByMachine = {};
+  /// Last persisted replay cursor per machine (for resync after reconnect).
+  final Map<String, ReplayCursor> _replayCursorByMachine = {};
+  final Map<String, Future<void>> _replayCursorBootstrapByMachine = {};
+  final Map<String, int> _bootstrapObservedSeqByMachine = {};
+  Timer? _replayCursorPersistTimer;
+  bool _replayCursorDirty = false;
 
-  EventRepository({required WsSessionRepository wsRepo}) : _wsRepo = wsRepo {
+  EventRepository({
+    required WsSessionRepository wsRepo,
+    ReplayCursorRepository? replayCursors,
+    Duration replayCursorPersistDebounce = const Duration(milliseconds: 250),
+  }) : _wsRepo = wsRepo,
+       _replayCursors = replayCursors ?? ReplayCursorRepository(),
+       _replayCursorPersistDebounce = replayCursorPersistDebounce {
     _sub = _wsRepo.events.listen(_onWsEvent);
   }
 
@@ -77,7 +92,8 @@ class EventRepository {
   /// Emits only when session metadata changes (status, runFinished, runFailed, register).
   Stream<void> get sessionsChanged => _sessionsChangedController.stream;
 
-  int lastSeqFor(String machineId) => _lastSeqByMachine[machineId] ?? 0;
+  int lastSeqFor(String machineId) =>
+      _replayCursorByMachine[machineId]?.lastSeq ?? 0;
 
   static String _preferNonEmpty(String primary, String fallback) {
     return primary.isNotEmpty ? primary : fallback;
@@ -120,6 +136,9 @@ class EventRepository {
     for (final s in rows) {
       sessions[s.id] = s;
     }
+    _replayCursorByMachine
+      ..clear()
+      ..addAll(await _replayCursors.loadAll());
   }
 
   void _onWsEvent(WsEvent wsEvent) {
@@ -130,13 +149,112 @@ class EventRepository {
     final event = _parseWsEvent(wsEvent);
     if (event == null || event.type == null) return;
 
-    // Track sequence number per machine for resync
-    if (event.machineId.isNotEmpty &&
-        event.seq > (_lastSeqByMachine[event.machineId] ?? 0)) {
-      _lastSeqByMachine[event.machineId] = event.seq;
-    }
+    _trackLiveReplayCursor(event);
 
     _processEvent(event);
+  }
+
+  void _trackLiveReplayCursor(AgentEvent event) {
+    if (event.machineId.isEmpty || event.seq <= 0) {
+      return;
+    }
+    final existing = _replayCursorByMachine[event.machineId];
+    if (existing == null) {
+      final observedSeq = _bootstrapObservedSeqByMachine[event.machineId] ?? 0;
+      if (event.seq > observedSeq) {
+        _bootstrapObservedSeqByMachine[event.machineId] = event.seq;
+      }
+      _ensureReplayCursorBootstrapped(event.machineId);
+      return;
+    }
+    if (event.seq <= existing.lastSeq) {
+      return;
+    }
+    _setReplayCursor(
+      event.machineId,
+      ReplayCursor(streamEpoch: existing.streamEpoch, lastSeq: event.seq),
+    );
+  }
+
+  void _ensureReplayCursorBootstrapped(String machineId) {
+    if (_replayCursorBootstrapByMachine.containsKey(machineId)) {
+      return;
+    }
+    final future = _bootstrapReplayCursor(machineId);
+    _replayCursorBootstrapByMachine[machineId] = future;
+    future.whenComplete(() {
+      if (identical(_replayCursorBootstrapByMachine[machineId], future)) {
+        _replayCursorBootstrapByMachine.remove(machineId);
+      }
+    });
+  }
+
+  Future<void> _bootstrapReplayCursor(String machineId) async {
+    try {
+      final response = await _wsRepo.resyncEvents(
+        machineId: machineId,
+        lastSeq: 0,
+      );
+      final responseEpoch = response.streamEpoch;
+      if (response.status == null ||
+          responseEpoch == null ||
+          responseEpoch <= 0) {
+        debugPrint(
+          '[ReplayCursor] bootstrap machine=$machineId skipped due to legacy/unsafe replay contract',
+        );
+        return;
+      }
+
+      final observedSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
+      final targetSeq = observedSeq > response.replayedThroughSeq
+          ? observedSeq
+          : response.replayedThroughSeq;
+      final existing = _replayCursorByMachine[machineId];
+      if (existing != null) {
+        if (existing.streamEpoch != responseEpoch ||
+            existing.lastSeq >= targetSeq) {
+          return;
+        }
+      }
+
+      _setReplayCursor(
+        machineId,
+        ReplayCursor(streamEpoch: responseEpoch, lastSeq: targetSeq),
+      );
+      debugPrint(
+        '[ReplayCursor] bootstrap machine=$machineId status=${response.status} '
+        'streamEpoch=$responseEpoch targetSeq=$targetSeq',
+      );
+    } catch (e) {
+      debugPrint('[ReplayCursor] bootstrap machine=$machineId failed: $e');
+    } finally {
+      _bootstrapObservedSeqByMachine.remove(machineId);
+    }
+  }
+
+  void _setReplayCursor(String machineId, ReplayCursor cursor) {
+    final existing = _replayCursorByMachine[machineId];
+    if (existing != null &&
+        existing.streamEpoch == cursor.streamEpoch &&
+        existing.lastSeq == cursor.lastSeq) {
+      return;
+    }
+    _replayCursorByMachine[machineId] = cursor;
+    _scheduleReplayCursorPersist();
+  }
+
+  void _scheduleReplayCursorPersist() {
+    _replayCursorDirty = true;
+    _replayCursorPersistTimer?.cancel();
+    _replayCursorPersistTimer = Timer(_replayCursorPersistDebounce, () {
+      unawaited(_persistReplayCursors());
+    });
+  }
+
+  Future<void> _persistReplayCursors() async {
+    if (!_replayCursorDirty) return;
+    _replayCursorDirty = false;
+    await _replayCursors.saveAll(_replayCursorByMachine);
   }
 
   void _processEvent(AgentEvent event) {
@@ -342,75 +460,135 @@ class EventRepository {
 
   /// Resync missed events after reconnect. Call after session re-init.
   ///
-  /// The `complete` signal comes from the daemon's `events.resync` response,
-  /// not from a client-side heuristic. `noCursor` means we cannot trust
-  /// incremental catch-up and the active session may need `session.load`.
+  /// The daemon decides whether a cursor is valid for the current replay stream.
+  /// Missing/newer protocol fields are treated conservatively as unsafe so the
+  /// caller falls back to session.load instead of trusting legacy replay.
   Future<ResyncResult> resync(String machineId) async {
-    final lastSeq = _lastSeqByMachine[machineId] ?? 0;
-    if (lastSeq == 0) {
-      debugPrint('[Resync] machine=$machineId outcome=noCursor lastSeq=0');
-      return const ResyncResult(
-        outcome: ResyncOutcome.noCursor,
-        lastSeqUsed: 0,
-        highestSeqApplied: 0,
-      );
-    }
+    final cursor = _replayCursorByMachine[machineId];
+    final lastSeq = cursor?.lastSeq ?? 0;
+    final streamEpoch = cursor?.streamEpoch;
 
     try {
-      debugPrint('[Resync] machine=$machineId start lastSeq=$lastSeq');
+      debugPrint(
+        '[Resync] machine=$machineId start lastSeq=$lastSeq streamEpoch=$streamEpoch',
+      );
       final response = await _wsRepo.resyncEvents(
         machineId: machineId,
         lastSeq: lastSeq,
+        streamEpoch: streamEpoch,
       );
-      var highestSeqApplied = lastSeq;
-      for (final event in response.events) {
-        if (event.seq > (_lastSeqByMachine[machineId] ?? 0)) {
-          _lastSeqByMachine[machineId] = event.seq;
-        }
-        if (event.seq > highestSeqApplied) {
-          highestSeqApplied = event.seq;
-        }
-        _processEvent(event);
+
+      final responseEpoch = response.streamEpoch;
+      if (response.status == null ||
+          responseEpoch == null ||
+          responseEpoch <= 0) {
+        debugPrint(
+          '[Resync] machine=$machineId outcome=unsafe '
+          'lastSeq=$lastSeq streamEpoch=$streamEpoch',
+        );
+        return ResyncResult(
+          outcome: ResyncOutcome.unsafe,
+          lastSeqUsed: lastSeq,
+          highestSeqApplied: lastSeq,
+          streamEpoch: streamEpoch,
+        );
+      }
+
+      if (cursor == null) {
+        _setReplayCursor(
+          machineId,
+          ReplayCursor(streamEpoch: responseEpoch, lastSeq: 0),
+        );
       }
 
       debugPrint(
         '[Resync] machine=$machineId response events=${response.events.length} '
-        'complete=${response.complete} highestSeqApplied=$highestSeqApplied',
+        'status=${response.status} streamEpoch=$responseEpoch '
+        'replayedThroughSeq=${response.replayedThroughSeq}',
       );
 
-      // `complete=false` means the daemon's replay buffer could not fully cover
-      // the gap since `lastSeq`, so transcript state is no longer trustworthy.
-      final complete = response.complete;
-      if (!complete) {
-        // Gap too large — event buffer overflowed.
-        // Affected sessions should be fully reloaded via session.load.
-        debugPrint(
-          '[Resync] machine=$machineId outcome=incomplete '
-          'lastSeq=$lastSeq highestSeqApplied=$highestSeqApplied',
-        );
-        return ResyncResult(
-          outcome: ResyncOutcome.incomplete,
-          lastSeqUsed: lastSeq,
-          highestSeqApplied: highestSeqApplied,
-        );
+      switch (response.status!) {
+        case ReplayResyncStatus.reset:
+          _setReplayCursor(
+            machineId,
+            ReplayCursor(streamEpoch: responseEpoch, lastSeq: 0),
+          );
+          debugPrint(
+            '[Resync] machine=$machineId outcome=${cursor == null ? 'noCursor' : 'reset'} '
+            'lastSeq=$lastSeq streamEpoch=$responseEpoch',
+          );
+          return ResyncResult(
+            outcome: cursor == null
+                ? ResyncOutcome.noCursor
+                : ResyncOutcome.reset,
+            lastSeqUsed: lastSeq,
+            highestSeqApplied: lastSeq,
+            streamEpoch: responseEpoch,
+          );
+        case ReplayResyncStatus.gap:
+          debugPrint(
+            '[Resync] machine=$machineId outcome=incomplete '
+            'lastSeq=$lastSeq streamEpoch=$responseEpoch '
+            'replayedThroughSeq=${response.replayedThroughSeq}',
+          );
+          return ResyncResult(
+            outcome: ResyncOutcome.incomplete,
+            lastSeqUsed: lastSeq,
+            highestSeqApplied: lastSeq,
+            streamEpoch: responseEpoch,
+          );
+        case ReplayResyncStatus.ok:
+          var highestSeqApplied = lastSeq;
+          if (streamEpoch != responseEpoch || cursor == null) {
+            _setReplayCursor(
+              machineId,
+              ReplayCursor(streamEpoch: responseEpoch, lastSeq: lastSeq),
+            );
+          }
+          for (final event in response.events) {
+            _processEvent(event);
+            if (event.seq > highestSeqApplied) {
+              highestSeqApplied = event.seq;
+            }
+            if (event.seq > 0) {
+              _setReplayCursor(
+                machineId,
+                ReplayCursor(streamEpoch: responseEpoch, lastSeq: event.seq),
+              );
+            }
+          }
+          if (response.replayedThroughSeq > highestSeqApplied) {
+            highestSeqApplied = response.replayedThroughSeq;
+            _setReplayCursor(
+              machineId,
+              ReplayCursor(
+                streamEpoch: responseEpoch,
+                lastSeq: response.replayedThroughSeq,
+              ),
+            );
+          }
+          debugPrint(
+            '[Resync] machine=$machineId outcome=complete '
+            'lastSeq=$lastSeq streamEpoch=$responseEpoch '
+            'highestSeqApplied=$highestSeqApplied',
+          );
+          return ResyncResult(
+            outcome: ResyncOutcome.complete,
+            lastSeqUsed: lastSeq,
+            highestSeqApplied: highestSeqApplied,
+            streamEpoch: responseEpoch,
+          );
       }
-      debugPrint(
-        '[Resync] machine=$machineId outcome=complete '
-        'lastSeq=$lastSeq highestSeqApplied=$highestSeqApplied',
-      );
-      return ResyncResult(
-        outcome: ResyncOutcome.complete,
-        lastSeqUsed: lastSeq,
-        highestSeqApplied: highestSeqApplied,
-      );
     } catch (e) {
       debugPrint(
-        '[Resync] machine=$machineId outcome=failed lastSeq=$lastSeq error=$e',
+        '[Resync] machine=$machineId outcome=failed lastSeq=$lastSeq '
+        'streamEpoch=$streamEpoch error=$e',
       );
       return ResyncResult(
         outcome: ResyncOutcome.failed,
         lastSeqUsed: lastSeq,
-        highestSeqApplied: _lastSeqByMachine[machineId] ?? lastSeq,
+        highestSeqApplied: lastSeq,
+        streamEpoch: streamEpoch,
         error: e,
       );
     }
@@ -752,6 +930,8 @@ class EventRepository {
   }
 
   void dispose() {
+    _replayCursorPersistTimer?.cancel();
+    unawaited(_persistReplayCursors());
     _sub.cancel();
     _eventController.close();
     _sessionsChangedController.close();

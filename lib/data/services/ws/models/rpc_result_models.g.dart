@@ -10,8 +10,11 @@ _$RpcResyncResponseDtoImpl _$$RpcResyncResponseDtoImplFromJson(
   Map<String, dynamic> json,
 ) => _$RpcResyncResponseDtoImpl(
   events: _requiredObjectList(json['events']),
-  complete: _requiredBool(json['complete']),
+  complete: _nullableBool(json['complete']),
   seq: json['seq'] == null ? 0 : _nullableIntWithDefaultZero(json['seq']),
+  status: _nullableResyncStatus(json['status']),
+  streamEpoch: _nullableInt(json['streamEpoch']),
+  replayedThroughSeq: _nullableInt(json['replayedThroughSeq']),
 );
 
 Map<String, dynamic> _$$RpcResyncResponseDtoImplToJson(
@@ -20,6 +23,15 @@ Map<String, dynamic> _$$RpcResyncResponseDtoImplToJson(
   'events': instance.events,
   'complete': instance.complete,
   'seq': instance.seq,
+  'status': _$RpcResyncStatusDtoEnumMap[instance.status],
+  'streamEpoch': instance.streamEpoch,
+  'replayedThroughSeq': instance.replayedThroughSeq,
+};
+
+const _$RpcResyncStatusDtoEnumMap = {
+  RpcResyncStatusDto.ok: 'ok',
+  RpcResyncStatusDto.gap: 'gap',
+  RpcResyncStatusDto.reset: 'reset',
 };
 
 _$RpcOkResponseDtoImpl _$$RpcOkResponseDtoImplFromJson(
@@ -68,18 +80,6 @@ Map<String, dynamic> _$$RpcSessionResolveResponseDtoImplToJson(
   _$RpcSessionResolveResponseDtoImpl instance,
 ) => <String, dynamic>{
   'sessions': instance.sessions.map((e) => e.toJson()).toList(),
-};
-
-_$RpcPendingApprovalsResponseDtoImpl
-_$$RpcPendingApprovalsResponseDtoImplFromJson(Map<String, dynamic> json) =>
-    _$RpcPendingApprovalsResponseDtoImpl(
-      approvals: _approvalWireListFromJson(json['approvals']),
-    );
-
-Map<String, dynamic> _$$RpcPendingApprovalsResponseDtoImplToJson(
-  _$RpcPendingApprovalsResponseDtoImpl instance,
-) => <String, dynamic>{
-  'approvals': instance.approvals.map((e) => e.toJson()).toList(),
 };
 
 _$RpcFsEntryDtoImpl _$$RpcFsEntryDtoImplFromJson(Map<String, dynamic> json) =>
