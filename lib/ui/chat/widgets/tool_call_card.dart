@@ -14,11 +14,13 @@ import 'edit_diff_view.dart';
 class ToolCallCard extends StatefulWidget {
   final ToolActivity tool;
   final List<ToolActivity> childTools;
+  final bool foldDiff;
 
   const ToolCallCard({
     super.key,
     required this.tool,
     this.childTools = const [],
+    this.foldDiff = false,
   });
 
   @override
@@ -45,6 +47,8 @@ class _ToolCallCardState extends State<ToolCallCard>
     final diffs = widget.tool.diffs;
     return diffs != null && diffs.isNotEmpty;
   }
+
+  bool get _shouldShowDiff => _isEditWithDiff && !widget.foldDiff;
 
   @override
   void initState() {
@@ -114,7 +118,7 @@ class _ToolCallCardState extends State<ToolCallCard>
           child: child,
         );
       },
-      child: _isEditWithDiff
+      child: _shouldShowDiff
           ? _buildEditLayout(kind)
           : _buildDefaultLayout(kind),
     );
@@ -262,7 +266,7 @@ class _ToolCallCardState extends State<ToolCallCard>
           ),
         ],
         // Navigate to tool detail (edit tools only)
-        if (_isEditWithDiff) ...[
+        if (_shouldShowDiff) ...[
           const SizedBox(width: 6),
           GestureDetector(
             onTap: () => Get.toNamed(

@@ -76,6 +76,31 @@ class ChatScreen extends GetView<ChatViewModel> {
                   final messageWidgets = <Widget>[];
                   String? lastUserMessageId;
 
+                  // Pre-compute which runs have a diff summary so we can
+                  // fold inline diffs on their edit tool cards.
+                  final runsWithSummary = <String>{};
+                  {
+                    String? prevUserId;
+                    for (final msg in allMessages) {
+                      if (msg.role == MessageRole.user) {
+                        if (prevUserId != null &&
+                            controller.chatState
+                                    .runDiffSummaryAfter(prevUserId) !=
+                                null) {
+                          runsWithSummary.add(prevUserId);
+                        }
+                        prevUserId = msg.id;
+                      }
+                    }
+                    if (prevUserId != null &&
+                        !isRunning &&
+                        controller.chatState
+                                .runDiffSummaryAfter(prevUserId) !=
+                            null) {
+                      runsWithSummary.add(prevUserId);
+                    }
+                  }
+
                   for (var i = 0; i < allMessages.length; i++) {
                     final msg = allMessages[i];
                     final isLast = i == allMessages.length - 1;
@@ -106,6 +131,9 @@ class ChatScreen extends GetView<ChatViewModel> {
                         pendingApprovals,
                         renderedApprovalIds,
                         isStreaming: isLast && isRunning,
+                        foldEditDiffs: msg.role != MessageRole.user &&
+                            lastUserMessageId != null &&
+                            runsWithSummary.contains(lastUserMessageId),
                       ),
                     );
                   }
@@ -572,6 +600,7 @@ class ChatScreen extends GetView<ChatViewModel> {
     List<ApprovalRequest> pendingApprovals,
     Set<String> renderedApprovalIds, {
     bool isStreaming = false,
+    bool foldEditDiffs = false,
   }) {
     final isUser = message.role == MessageRole.user;
     final widgets = <Widget>[];
@@ -630,6 +659,7 @@ class ChatScreen extends GetView<ChatViewModel> {
               key: ValueKey('tc-${tool.id}'),
               tool: tool,
               childTools: childTools,
+              foldDiff: foldEditDiffs,
             ),
           ),
         );
@@ -735,7 +765,8 @@ class ChatScreen extends GetView<ChatViewModel> {
                     key: ValueKey('tc-${part.tool!.id}'),
                     tool: part.tool!,
                     childTools: childTools,
-                        ),
+                    foldDiff: foldEditDiffs,
+                  ),
                 ),
               );
               renderLinkedApproval(part.tool!);
