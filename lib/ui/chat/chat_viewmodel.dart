@@ -45,6 +45,20 @@ class ChatViewModel extends GetxController {
        _wsRepo = wsRepo,
        _transcribe = transcribe;
 
+  @visibleForTesting
+  static bool shouldTriggerReconnectFallback({
+    required ReconnectRecoveryResult result,
+    required bool hasSeenDisconnect,
+    required ConnState connState,
+    required bool hasSession,
+  }) {
+    return hasSeenDisconnect &&
+        result.transcript == TranscriptRecoveryState.fallbackNeeded &&
+        connState == ConnState.connected &&
+        hasSession &&
+        result.sessionReady;
+  }
+
   late final String machineId;
   late final String sessionId;
   late final String cwd;
@@ -293,9 +307,12 @@ class ChatViewModel extends GetxController {
       _hasSeenDisconnect = false;
       return;
     }
-    if (connState.value != ConnState.connected ||
-        !_wsRepo.hasSession(machineId) ||
-        !result.sessionReady) {
+    if (!shouldTriggerReconnectFallback(
+      result: result,
+      hasSeenDisconnect: _hasSeenDisconnect,
+      connState: connState.value,
+      hasSession: _wsRepo.hasSession(machineId),
+    )) {
       return;
     }
 
