@@ -14,6 +14,7 @@ import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/ws_models.dart';
 import '../services/ws/ws_types.dart';
 import 'replay_cursor_repository.dart';
+import 'session_chat_cache_repository.dart';
 import 'ws_session_repository.dart';
 
 enum ResyncOutcome { complete, incomplete, failed, noCursor, reset }
@@ -47,9 +48,14 @@ class RepairStepResult {
     : ok = false;
 }
 
+class _ResyncFenceState {
+  final bufferedEvents = <AgentEvent>[];
+}
+
 class EventRepository {
   final WsSessionRepository _wsRepo;
   final ReplayCursorRepository _replayCursors;
+  final SessionChatCacheRepository? _chatCacheRepo;
   final Duration _replayCursorPersistDebounce;
   late final StreamSubscription<WsEvent> _sub;
   final _eventController = StreamController<AgentEvent>.broadcast();
@@ -74,15 +80,18 @@ class EventRepository {
   final Map<String, ReplayCursor> _replayCursorByMachine = {};
   final Map<String, Future<void>> _replayCursorBootstrapByMachine = {};
   final Map<String, int> _bootstrapObservedSeqByMachine = {};
+  final Map<String, _ResyncFenceState> _resyncFenceByMachine = {};
   Timer? _replayCursorPersistTimer;
   bool _replayCursorDirty = false;
 
   EventRepository({
     required WsSessionRepository wsRepo,
     ReplayCursorRepository? replayCursors,
+    SessionChatCacheRepository? chatCacheRepo,
     Duration replayCursorPersistDebounce = const Duration(milliseconds: 250),
   }) : _wsRepo = wsRepo,
        _replayCursors = replayCursors ?? ReplayCursorRepository(),
+       _chatCacheRepo = chatCacheRepo,
        _replayCursorPersistDebounce = replayCursorPersistDebounce {
     _sub = _wsRepo.events.listen(_onWsEvent);
   }
@@ -149,6 +158,12 @@ class EventRepository {
     final event = _parseWsEvent(wsEvent);
     if (event == null || event.type == null) return;
 
+    final fence = _resyncFenceByMachine[event.machineId];
+    if (fence != null) {
+      fence.bufferedEvents.add(event);
+      return;
+    }
+
     _trackLiveReplayCursor(event);
 
     _processEvent(event);
@@ -173,6 +188,7 @@ class EventRepository {
     _setReplayCursor(
       event.machineId,
       ReplayCursor(streamEpoch: existing.streamEpoch, lastSeq: event.seq),
+      persist: false,
     );
   }
 
@@ -230,7 +246,11 @@ class EventRepository {
     }
   }
 
-  void _setReplayCursor(String machineId, ReplayCursor cursor) {
+  void _setReplayCursor(
+    String machineId,
+    ReplayCursor cursor, {
+    bool persist = true,
+  }) {
     final existing = _replayCursorByMachine[machineId];
     if (existing != null &&
         existing.streamEpoch == cursor.streamEpoch &&
@@ -238,7 +258,9 @@ class EventRepository {
       return;
     }
     _replayCursorByMachine[machineId] = cursor;
-    _scheduleReplayCursorPersist();
+    if (persist) {
+      _scheduleReplayCursorPersist();
+    }
   }
 
   void _scheduleReplayCursorPersist() {
@@ -256,6 +278,8 @@ class EventRepository {
   }
 
   void _processEvent(AgentEvent event) {
+    _markTranscriptCacheStale(event);
+
     // Update lightweight session metadata
     _updateSessionMeta(event);
 
@@ -263,6 +287,35 @@ class EventRepository {
     _updateApprovals(event);
 
     _eventController.add(event);
+  }
+
+  void _markTranscriptCacheStale(AgentEvent event) {
+    final sessionId = event.sessionId;
+    if (_chatCacheRepo == null || sessionId == null || sessionId.isEmpty) {
+      return;
+    }
+
+    switch (event.type) {
+      case EventType.messageDelta:
+      case EventType.toolStarted:
+      case EventType.toolUpdated:
+      case EventType.toolCompleted:
+      case EventType.toolFailed:
+      case EventType.approvalRequested:
+      case EventType.approvalReplied:
+      case EventType.planUpdated:
+      case EventType.runFailed:
+        unawaited(_chatCacheRepo.markSessionCacheStale(sessionId));
+      case EventType.reasoning:
+      case EventType.sessionStatus:
+      case EventType.usageUpdate:
+      case EventType.runFinished:
+      case EventType.modeChanged:
+      case EventType.modelChanged:
+      case EventType.historyComplete:
+      case null:
+        break;
+    }
   }
 
   void _updateApprovals(AgentEvent event) {
@@ -463,6 +516,8 @@ class EventRepository {
     final cursor = _replayCursorByMachine[machineId];
     final lastSeq = cursor?.lastSeq ?? 0;
     final streamEpoch = cursor?.streamEpoch;
+    final fence = _ResyncFenceState();
+    _resyncFenceByMachine[machineId] = fence;
 
     try {
       debugPrint(
@@ -508,6 +563,11 @@ class EventRepository {
             machineId,
             ReplayCursor(streamEpoch: responseEpoch, lastSeq: 0),
           );
+          _drainResyncFence(
+            machineId,
+            fence,
+            replayedThroughSeq: response.replayedThroughSeq,
+          );
           debugPrint(
             '[Resync] machine=$machineId outcome=${cursor == null ? 'noCursor' : 'reset'} '
             'lastSeq=$lastSeq streamEpoch=$responseEpoch',
@@ -521,6 +581,11 @@ class EventRepository {
             streamEpoch: responseEpoch,
           );
         case ReplayResyncStatus.gap:
+          _drainResyncFence(
+            machineId,
+            fence,
+            replayedThroughSeq: response.replayedThroughSeq,
+          );
           debugPrint(
             '[Resync] machine=$machineId outcome=incomplete '
             'lastSeq=$lastSeq streamEpoch=$responseEpoch '
@@ -562,6 +627,11 @@ class EventRepository {
               ),
             );
           }
+          _drainResyncFence(
+            machineId,
+            fence,
+            replayedThroughSeq: highestSeqApplied,
+          );
           debugPrint(
             '[Resync] machine=$machineId outcome=complete '
             'lastSeq=$lastSeq streamEpoch=$responseEpoch '
@@ -586,7 +656,35 @@ class EventRepository {
         streamEpoch: streamEpoch,
         error: e,
       );
+    } finally {
+      final currentFence = _resyncFenceByMachine[machineId];
+      if (identical(currentFence, fence)) {
+        _resyncFenceByMachine.remove(machineId);
+        for (final event in fence.bufferedEvents) {
+          _trackLiveReplayCursor(event);
+          _processEvent(event);
+        }
+      }
     }
+  }
+
+  void _drainResyncFence(
+    String machineId,
+    _ResyncFenceState fence, {
+    required int replayedThroughSeq,
+  }) {
+    if (!identical(_resyncFenceByMachine[machineId], fence)) {
+      return;
+    }
+    _resyncFenceByMachine.remove(machineId);
+    for (final event in fence.bufferedEvents) {
+      if (event.seq > 0 && event.seq <= replayedThroughSeq) {
+        continue;
+      }
+      _trackLiveReplayCursor(event);
+      _processEvent(event);
+    }
+    fence.bufferedEvents.clear();
   }
 
   AgentEvent? _parseWsEvent(WsEvent wsEvent) {
@@ -754,25 +852,26 @@ class EventRepository {
       for (final item in resolvedSessions) {
         final sessionId = item.sessionId;
         final title = item.title;
-        final sessionCwd = item.cwd;
         final status = item.status;
         final updatedAt = item.updatedAt ?? DateTime.now();
         final existing = sessions[sessionId];
 
         if (existing == null) {
-          final session = AgentSession(
-            id: sessionId,
-            title: title,
-            status: status,
-            machineId: machineId,
-            runtime: runtime ?? '',
-            cwd: sessionCwd,
-            createdAt: updatedAt,
-            updatedAt: updatedAt,
-          );
-          sessions[sessionId] = session;
-          await SessionDatabase.insertSession(session);
-          changed = true;
+          if (runtime != null && runtime.isNotEmpty) {
+            final session = AgentSession(
+              id: sessionId,
+              title: title,
+              status: status,
+              machineId: machineId,
+              runtime: runtime,
+              cwd: '',
+              createdAt: updatedAt,
+              updatedAt: updatedAt,
+            );
+            sessions[sessionId] = session;
+            await SessionDatabase.insertSession(session);
+            changed = true;
+          }
           continue;
         }
 
@@ -796,11 +895,6 @@ class EventRepository {
           existing.runtime = runtime;
           dirty = true;
         }
-        if (sessionCwd.isNotEmpty && existing.cwd != sessionCwd) {
-          existing.cwd = sessionCwd;
-          dirty = true;
-        }
-
         if (!dirty) continue;
 
         final dbFields = <String, dynamic>{
@@ -899,6 +993,38 @@ class EventRepository {
     existing.updatedAt = DateTime.now();
     SessionDatabase.updateFields(sessionId, {
       'model': nextModel,
+      'updated_at': existing.updatedAt.toIso8601String(),
+    });
+    _sessionsChangedController.add(null);
+  }
+
+  Future<void> persistSessionRuntimeAndCwd(
+    String sessionId, {
+    required String runtime,
+    required String cwd,
+  }) async {
+    final existing = sessions[sessionId];
+    if (existing == null) {
+      return;
+    }
+
+    var changed = false;
+    if (runtime.isNotEmpty && existing.runtime != runtime) {
+      existing.runtime = runtime;
+      changed = true;
+    }
+    if (cwd.isNotEmpty && existing.cwd != cwd) {
+      existing.cwd = cwd;
+      changed = true;
+    }
+    if (!changed) {
+      return;
+    }
+
+    existing.updatedAt = DateTime.now();
+    await SessionDatabase.updateFields(sessionId, {
+      'runtime': existing.runtime,
+      'cwd': existing.cwd,
       'updated_at': existing.updatedAt.toIso8601String(),
     });
     _sessionsChangedController.add(null);

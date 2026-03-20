@@ -218,4 +218,36 @@ void main() {
       expect(identical(result, first), isTrue);
     });
   });
+
+  group('NewSessionViewModel.isRecoverableTransportError', () {
+    test('treats stale transport errors as recoverable', () {
+      expect(
+        NewSessionViewModel.isRecoverableTransportError(
+          Exception('rpc timeout'),
+        ),
+        isTrue,
+      );
+      expect(
+        NewSessionViewModel.isRecoverableTransportError(
+          Exception('machine offline'),
+        ),
+        isTrue,
+      );
+      expect(
+        NewSessionViewModel.isRecoverableTransportError(
+          Exception('socket not connected'),
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not retry ordinary application errors', () {
+      expect(
+        NewSessionViewModel.isRecoverableTransportError(
+          Exception('please select a runtime'),
+        ),
+        isFalse,
+      );
+    });
+  });
 }

@@ -9,6 +9,7 @@ import '../../data/local/session_database.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/runtime_preference_repository.dart';
+import '../../data/repositories/session_chat_cache_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/models/acp_session_models.dart';
 import '../../data/services/ws/session_config_mapper.dart';
@@ -24,11 +25,13 @@ import '../../routing/routes.dart';
 
 class NewSessionViewModel extends GetxController {
   static const _createSessionTimeout = Duration(seconds: 15);
+  static const _runtimeListTimeout = Duration(seconds: 12);
 
   final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
   final RuntimePreferenceRepository _runtimePrefs;
+  final SessionChatCacheRepository _chatCacheRepo;
   final TranscribeAudioUseCase _transcribe;
 
   NewSessionViewModel({
@@ -36,11 +39,13 @@ class NewSessionViewModel extends GetxController {
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
     required RuntimePreferenceRepository runtimePrefs,
+    required SessionChatCacheRepository chatCacheRepo,
     required TranscribeAudioUseCase transcribe,
   }) : _machineRepo = machineRepo,
        _wsRepo = wsRepo,
        _eventRepo = eventRepo,
        _runtimePrefs = runtimePrefs,
+       _chatCacheRepo = chatCacheRepo,
        _transcribe = transcribe;
 
   RxBool get relayConnected => _wsRepo.relayConnected;
@@ -135,6 +140,17 @@ class NewSessionViewModel extends GetxController {
       return onlineMachines.first;
     }
     return null;
+  }
+
+  static bool isRecoverableTransportError(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('rpc timeout') ||
+        message.contains('no active session') ||
+        message.contains('machine offline') ||
+        message.contains('session ended') ||
+        message.contains('socket closed') ||
+        message.contains('socket not connected') ||
+        message.contains('connection reset');
   }
 
   final machines = <PairedMachine>[].obs;
@@ -313,7 +329,7 @@ class NewSessionViewModel extends GetxController {
 
       if (token != _runtimeLoadToken) return;
 
-      final response = await _wsRepo.listRuntimes(machineId: machine.machineId);
+      final response = await _loadRuntimesWithRecovery(machine);
       if (token != _runtimeLoadToken) return;
       final all = response.runtimes
           .map(SessionConfigMapper.runtimeOptionFromDto)
@@ -541,11 +557,10 @@ class NewSessionViewModel extends GetxController {
         throw Exception('Failed to create session: no sessionId returned');
       }
       final runtime = createResponse.app.runtime;
-      await _rememberRuntimeSelection(
-        runtime.isNotEmpty ? runtime : selectedRuntimeId,
-      );
+      final effectiveRuntime = runtime.isNotEmpty ? runtime : selectedRuntimeId;
+      await _rememberRuntimeSelection(effectiveRuntime);
       final configSnapshot = SessionConfigMapper.snapshotFromConfigOptions(
-        runtimeId: runtime,
+        runtimeId: effectiveRuntime,
         configOptions: createResponse.acp.configOptions ?? const [],
         modes: createResponse.acp.modes,
       );
@@ -553,7 +568,7 @@ class NewSessionViewModel extends GetxController {
       final initialMode =
           configSnapshot.currentMode?.id ?? (selectedMode.value?.id ?? '');
       await _rememberModeSelection(
-        runtimeId: runtime.isNotEmpty ? runtime : selectedRuntimeId,
+        runtimeId: effectiveRuntime,
         modeId: initialMode,
       );
 
@@ -564,12 +579,17 @@ class NewSessionViewModel extends GetxController {
           title: '',
           status: SessionStatus.idle,
           machineId: machine.machineId,
-          runtime: runtime.isNotEmpty ? runtime : selectedRuntimeId,
+          runtime: effectiveRuntime,
           cwd: createResponse.app.cwd,
           mode: initialMode.isNotEmpty ? initialMode : null,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         ),
+      );
+      await _chatCacheRepo.seedEmptyCache(
+        sessionId: sessionId,
+        machineId: machine.machineId,
+        configSnapshot: configSnapshot,
       );
 
       // Navigate to chat immediately — don't wait for prompt to finish.
@@ -579,7 +599,7 @@ class NewSessionViewModel extends GetxController {
         arguments: {
           'sessionId': sessionId,
           'machineId': machine.machineId,
-          'runtime': runtime,
+          'runtime': effectiveRuntime,
           'cwd': createResponse.app.cwd,
           'sessionTitle': '',
           'isNewSession': true,
@@ -647,6 +667,41 @@ class NewSessionViewModel extends GetxController {
           onTimeout: () => throw TimeoutException(
             'session.create timeout',
             _createSessionTimeout,
+          ),
+        );
+  }
+
+  Future<AppRuntimeListResponseDto> _loadRuntimesWithRecovery(
+    PairedMachine machine,
+  ) async {
+    try {
+      return await _callListRuntimes(machine.machineId);
+    } on TimeoutException {
+      await _recoverRelaySession(machine, 'runtime.list timeout');
+      try {
+        return await _callListRuntimes(machine.machineId);
+      } on TimeoutException {
+        throw Exception(
+          'Runtime list timed out after reconnect. Relay session appears stale.',
+        );
+      }
+    } catch (e) {
+      if (!isRecoverableTransportError(e)) {
+        rethrow;
+      }
+      await _recoverRelaySession(machine, e);
+      return _callListRuntimes(machine.machineId);
+    }
+  }
+
+  Future<AppRuntimeListResponseDto> _callListRuntimes(String machineId) {
+    return _wsRepo
+        .listRuntimes(machineId: machineId)
+        .timeout(
+          _runtimeListTimeout,
+          onTimeout: () => throw TimeoutException(
+            'runtime.list timeout',
+            _runtimeListTimeout,
           ),
         );
   }

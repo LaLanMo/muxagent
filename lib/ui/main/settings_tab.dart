@@ -42,8 +42,12 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           Expanded(
             child: ClipRect(
               child: SingleChildScrollView(
-                child: Obx(
-                  () => Column(
+                child: Obx(() {
+                  controller.machines.length;
+                  controller.activeSessionIds.length;
+                  controller.connectingMachines.length;
+                  controller.relayConnected.value;
+                  return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildSectionLabel('MACHINES'),
@@ -123,8 +127,8 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                       // ),
                       const SizedBox(height: 24),
                     ],
-                  ),
-                ),
+                  );
+                }),
               ),
             ),
           ),
@@ -161,11 +165,9 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
 
   // Machine row: padding [14, 16], gap 12, alignItems center, bottom border #E5E7EB
   Widget _buildMachineRow(PairedMachine machine) {
-    final connected = controller.isMachineConnected(machine.machineId);
-    final connecting = controller.connectingMachines.contains(
-      machine.machineId,
-    );
-    final serverLost = !controller.relayConnected.value;
+    final status = controller.machineConnectionState(machine.machineId);
+    final connected = status == MachineConnectionDisplayState.online;
+    final connecting = status == MachineConnectionDisplayState.connecting;
     final hostname = machine.hostname ?? 'Unknown host';
 
     return GestureDetector(
@@ -209,11 +211,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               ),
             ),
             // Status pill
-            _buildStatusPill(
-              connected,
-              connecting: connecting,
-              serverLost: serverLost,
-            ),
+            _buildStatusPill(status),
           ],
         ),
       ),
@@ -221,31 +219,28 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   }
 
   // Status pill: cornerRadius 8, gap 5, padding [3, 8]
-  Widget _buildStatusPill(
-    bool online, {
-    bool connecting = false,
-    bool serverLost = false,
-  }) {
+  Widget _buildStatusPill(MachineConnectionDisplayState status) {
     final Color pillColor;
     final Color dotColor;
     final String textStr;
 
-    if (connecting) {
-      pillColor = AppTheme.warningBg;
-      dotColor = AppTheme.statusConnecting;
-      textStr = 'connecting';
-    } else if (online) {
-      pillColor = AppTheme.successBg;
-      dotColor = AppTheme.successText;
-      textStr = 'online';
-    } else if (serverLost) {
-      pillColor = AppTheme.serverLostBg;
-      dotColor = AppTheme.serverLostText;
-      textStr = 'server lost';
-    } else {
-      pillColor = AppTheme.idleBg;
-      dotColor = AppTheme.textTertiary;
-      textStr = 'offline';
+    switch (status) {
+      case MachineConnectionDisplayState.online:
+        pillColor = AppTheme.successBg;
+        dotColor = AppTheme.successText;
+        textStr = 'online';
+      case MachineConnectionDisplayState.connecting:
+        pillColor = AppTheme.warningBg;
+        dotColor = AppTheme.statusConnecting;
+        textStr = 'connecting';
+      case MachineConnectionDisplayState.serverLost:
+        pillColor = AppTheme.serverLostBg;
+        dotColor = AppTheme.serverLostText;
+        textStr = 'server lost';
+      case MachineConnectionDisplayState.offline:
+        pillColor = AppTheme.idleBg;
+        dotColor = AppTheme.textTertiary;
+        textStr = 'offline';
     }
 
     return Container(
@@ -257,7 +252,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (connecting)
+          if (status == MachineConnectionDisplayState.connecting)
             const SizedBox(
               width: 10,
               height: 10,

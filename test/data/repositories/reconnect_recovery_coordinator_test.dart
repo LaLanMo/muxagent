@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
 import 'package:muxagent/data/repositories/paired_machine_repository.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
+import 'package:muxagent/data/repositories/session_chat_cache_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
 import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
@@ -131,15 +132,27 @@ class _FakeEventRepository extends EventRepository {
   }
 }
 
+class _FakeSessionChatCacheRepository extends SessionChatCacheRepository {
+  final staleMarkedMachines = <String>[];
+
+  @override
+  Future<int> markMachineCachesStale(String machineId) async {
+    staleMarkedMachines.add(machineId);
+    return 1;
+  }
+}
+
 void main() {
   group('ReconnectRecoveryCoordinator', () {
     late _FakeWsSessionRepository wsRepo;
     late _FakeEventRepository eventRepo;
+    late _FakeSessionChatCacheRepository chatCacheRepo;
     late ReconnectRecoveryCoordinator coordinator;
 
     setUp(() {
       wsRepo = _FakeWsSessionRepository();
       eventRepo = _FakeEventRepository(wsRepo: wsRepo);
+      chatCacheRepo = _FakeSessionChatCacheRepository();
       coordinator = ReconnectRecoveryCoordinator(
         machines: _FakePairedMachineRepository({
           'machine-1': PairedMachine(
@@ -151,6 +164,7 @@ void main() {
         }),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
+        chatCacheRepo: chatCacheRepo,
       );
     });
 
@@ -191,12 +205,14 @@ void main() {
         final incomplete = await coordinator.recoverMachine('machine-1');
         expect(incomplete.transcript, TranscriptRecoveryState.fallbackNeeded);
         expect(incomplete.metadata, MetadataRecoveryState.complete);
+        expect(chatCacheRepo.staleMarkedMachines, ['machine-1']);
 
         wsRepo.connected = false;
         wsRepo.relayConnectedValue.value = false;
         wsRepo.activeSessionIds.clear();
         eventRepo.callOrder.clear();
         wsRepo.callOrder.clear();
+        chatCacheRepo.staleMarkedMachines.clear();
         eventRepo.nextResult = const ResyncResult(
           outcome: ResyncOutcome.noCursor,
           lastSeqUsed: 0,
@@ -206,6 +222,7 @@ void main() {
         final noCursor = await coordinator.recoverMachine('machine-1');
         expect(noCursor.transcript, TranscriptRecoveryState.fallbackNeeded);
         expect(noCursor.metadata, MetadataRecoveryState.complete);
+        expect(chatCacheRepo.staleMarkedMachines, ['machine-1']);
       },
     );
 
@@ -243,6 +260,7 @@ void main() {
         expect(result.transcript, TranscriptRecoveryState.fallbackNeeded);
         expect(result.metadata, MetadataRecoveryState.skipped);
         expect(result.sessionReady, isTrue);
+        expect(chatCacheRepo.staleMarkedMachines, ['machine-1']);
       },
     );
 

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'event_repository.dart';
 import 'paired_machine_repository.dart';
+import 'session_chat_cache_repository.dart';
 import 'ws_session_repository.dart';
 
 enum TranscriptRecoveryState { complete, fallbackNeeded, failed }
@@ -38,6 +39,7 @@ class ReconnectRecoveryCoordinator {
   final PairedMachineRepository _machines;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
+  final SessionChatCacheRepository _chatCacheRepo;
   final _notifications = StreamController<ReconnectRecoveryResult>.broadcast();
   // Join repeated recovery requests for the same machine onto one future.
   final Map<String, Future<ReconnectRecoveryResult>> _inflightByMachine = {};
@@ -49,9 +51,11 @@ class ReconnectRecoveryCoordinator {
     required PairedMachineRepository machines,
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
+    required SessionChatCacheRepository chatCacheRepo,
   }) : _machines = machines,
        _wsRepo = wsRepo,
-       _eventRepo = eventRepo;
+       _eventRepo = eventRepo,
+       _chatCacheRepo = chatCacheRepo;
 
   Stream<ReconnectRecoveryResult> get recoveries => _notifications.stream;
 
@@ -175,6 +179,9 @@ class ReconnectRecoveryCoordinator {
         approvalsOk: approvals.ok,
         transportError: transportError ?? resync.error,
       );
+      if (result.transcript == TranscriptRecoveryState.fallbackNeeded) {
+        await _chatCacheRepo.markMachineCachesStale(machineId);
+      }
       debugPrint(
         '[ReconnectRecovery] machine=$machineId '
         'transcript=${result.transcript} metadata=${result.metadata} '
@@ -192,6 +199,9 @@ class ReconnectRecoveryCoordinator {
       final transcript = sessionReady
           ? TranscriptRecoveryState.fallbackNeeded
           : TranscriptRecoveryState.failed;
+      if (transcript == TranscriptRecoveryState.fallbackNeeded) {
+        await _chatCacheRepo.markMachineCachesStale(machineId);
+      }
       debugPrint('[ReconnectRecovery] recover $machineId failed: $e');
       return _emit(
         ReconnectRecoveryResult(

@@ -6,7 +6,6 @@ import '../../config/theme.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/session.dart';
-import '../../utils/app_toast.dart';
 import '../common/relay_status_pill.dart';
 import 'history_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
@@ -178,10 +177,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
 
     return GestureDetector(
       onTap: () {
-        if (machineId.isNotEmpty && !shell.isMachineConnected(machineId)) {
-          AppToast.show('Machine is offline');
-          return;
-        }
         Get.find<EventRepository>().markAsRead(session.id);
         shell.navigateToChat(session.id, machineId, cwd, title);
       },

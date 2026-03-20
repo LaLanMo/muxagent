@@ -148,16 +148,14 @@ class SessionManager {
   void endSession(String machineId) {
     final state = _sessions.remove(machineId);
     if (state == null) return;
-    state.sessionTimer?.cancel();
-    for (final timer in state.pendingTimers.values) {
-      timer.cancel();
-    }
-    state.pendingTimers.clear();
-    state.pendingRpc.clear();
-    state.session = null;
-    state.clientEphemeralKeyPair = null;
-    state.clientEphemeralPubB64 = null;
-    state.sessionCompleter = null;
+    _disposeSessionState(state, StateError('session ended'));
+    _setActive(machineId, false);
+  }
+
+  void invalidateSession(String machineId, Object error) {
+    final state = _sessions.remove(machineId);
+    if (state == null) return;
+    _disposeSessionState(state, error);
     _setActive(machineId, false);
   }
 
@@ -212,5 +210,28 @@ class SessionManager {
 
   void _emitActiveSessions() {
     _activeSessionsController.add(Set.unmodifiable(_activeSessions));
+  }
+
+  void _disposeSessionState(SessionState state, Object error) {
+    state.sessionTimer?.cancel();
+    final sessionCompleter = state.sessionCompleter;
+    if (sessionCompleter != null && !sessionCompleter.isCompleted) {
+      sessionCompleter.completeError(error);
+    }
+    state.sessionCompleter = null;
+    for (final entry in state.pendingRpc.entries) {
+      final completer = entry.value;
+      if (!completer.isCompleted) {
+        completer.completeError(error);
+      }
+    }
+    for (final timer in state.pendingTimers.values) {
+      timer.cancel();
+    }
+    state.pendingTimers.clear();
+    state.pendingRpc.clear();
+    state.session = null;
+    state.clientEphemeralKeyPair = null;
+    state.clientEphemeralPubB64 = null;
   }
 }

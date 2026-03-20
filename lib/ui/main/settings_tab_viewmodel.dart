@@ -9,6 +9,8 @@ import '../../domain/paired_machine.dart';
 import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
 
+enum MachineConnectionDisplayState { online, connecting, serverLost, offline }
+
 class SettingsTabViewModel extends GetxController {
   final CryptoService _crypto;
   final RxList<PairedMachine> machines;
@@ -33,6 +35,19 @@ class SettingsTabViewModel extends GetxController {
     return activeSessionIds.contains(machineId);
   }
 
+  MachineConnectionDisplayState machineConnectionState(String machineId) {
+    if (activeSessionIds.contains(machineId)) {
+      return MachineConnectionDisplayState.online;
+    }
+    if (connectingMachines.contains(machineId)) {
+      return MachineConnectionDisplayState.connecting;
+    }
+    if (!relayConnected.value) {
+      return MachineConnectionDisplayState.serverLost;
+    }
+    return MachineConnectionDisplayState.offline;
+  }
+
   @override
   void onInit() {
     super.onInit();
@@ -52,6 +67,7 @@ class SettingsTabViewModel extends GetxController {
   }
 
   Future<void> connectMachine(PairedMachine machine) async {
+    if (isMachineConnected(machine.machineId)) return;
     if (connectingMachines.contains(machine.machineId)) return;
     connectingMachines.add(machine.machineId);
     try {

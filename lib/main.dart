@@ -7,6 +7,7 @@ import 'bindings/initial_binding.dart';
 import 'config/constant.dart';
 import 'config/theme.dart';
 import 'data/repositories/event_repository.dart';
+import 'data/repositories/session_chat_cache_repository.dart';
 import 'data/services/push/push_notification_service.dart';
 import 'routing/router.dart';
 import 'routing/routes.dart';
@@ -18,17 +19,22 @@ Future<void> main() async {
   // Eagerly register bindings so we can init the EventRepository.
   InitialBinding().dependencies();
 
-  // Load persisted sessions from SQLite before the UI starts.
-  await Get.find<EventRepository>().init();
+  // Load persisted session and chat-cache state before the UI starts.
+  await Future.wait([
+    Get.find<EventRepository>().init(),
+    Get.find<SessionChatCacheRepository>().init(),
+  ]);
 
   // Fire-and-forget: don't block app startup for push registration.
   Get.find<PushNotificationService>().init();
 
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
-  ));
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+    ),
+  );
 
   runApp(const MuxAgentApp());
 }

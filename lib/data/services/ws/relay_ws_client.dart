@@ -63,9 +63,17 @@ class RelayWsClient {
       await resetConnection(reason: 'switch relay to $targetRelayHttpUrl');
     }
 
-    if (relayConnected.value && _connectedRelayHttpUrl == targetRelayHttpUrl) {
+    if (relayConnected.value &&
+        _connectedRelayHttpUrl == targetRelayHttpUrl &&
+        _ws.isConnected) {
       connectionState.value = ConnState.connected;
       return;
+    }
+    if (relayConnected.value &&
+        _connectedRelayHttpUrl == targetRelayHttpUrl &&
+        !_ws.isConnected) {
+      debugPrint('[WS] stale relayConnected=true without open socket; resetting');
+      await resetConnection(reason: 'stale relay socket');
     }
     if (_connectFuture != null) {
       connectionState.value = ConnState.reconnecting;
@@ -232,16 +240,27 @@ class RelayWsClient {
       Uint8List.fromList(payloadBytes),
     );
     final completer = _sessions.registerPendingRpc(machineId, msgId);
-    _ws.sendJson(
-      WsEncryptedMessage(
-        type: WsMessageType.rpc.value,
-        machineId: machineId,
-        msgId: msgId,
-        nonce: encrypted.nonceB64,
-        ciphertext: encrypted.ciphertextB64,
-      ).toJson(),
-    );
-    return completer.future;
+    try {
+      _ws.sendJson(
+        WsEncryptedMessage(
+          type: WsMessageType.rpc.value,
+          machineId: machineId,
+          msgId: msgId,
+          nonce: encrypted.nonceB64,
+          ciphertext: encrypted.ciphertextB64,
+        ).toJson(),
+      );
+    } catch (e) {
+      _sessions.failPendingRpc(machineId, msgId, e);
+      await _handleMachineTransportFailure(machineId, e);
+      rethrow;
+    }
+    try {
+      return await completer.future;
+    } catch (e) {
+      await _handleMachineTransportFailure(machineId, e);
+      rethrow;
+    }
   }
 
   Future<T> callRpcDecoded<T>({
@@ -319,7 +338,10 @@ class RelayWsClient {
           await _handleSessionAck(WsSessionAck.fromJson(msg));
           return;
         case WsMessageType.sessionEnd:
-          _sessions.endSession(WsSessionEnd.fromJson(msg).machineId);
+          _sessions.invalidateSession(
+            WsSessionEnd.fromJson(msg).machineId,
+            StateError('session ended by relay'),
+          );
           return;
         case WsMessageType.response:
           await _handleResponse(WsEncryptedMessage.fromJson(msg));
@@ -331,8 +353,15 @@ class RelayWsClient {
           await _handleRpc(WsEncryptedMessage.fromJson(msg));
           return;
         case WsMessageType.machineOnline:
-        case WsMessageType.machineOffline:
           _machineStatus.add(WsMachineStatus.fromJson(msg));
+          return;
+        case WsMessageType.machineOffline:
+          final status = WsMachineStatus.fromJson(msg);
+          _sessions.invalidateSession(
+            status.machineId,
+            StateError('machine offline'),
+          );
+          _machineStatus.add(status);
           return;
         case WsMessageType.error:
           final error = WsErrorMessage.fromJson(msg);
@@ -522,6 +551,35 @@ class RelayWsClient {
       bytes[i] = rand.nextInt(256);
     }
     return base64UrlEncode(bytes).replaceAll('=', '');
+  }
+
+  Future<void> _handleMachineTransportFailure(
+    String machineId,
+    Object error,
+  ) async {
+    if (_isRelayTransportFailure(error)) {
+      await resetConnection(reason: error);
+      return;
+    }
+    if (_isMachineSessionFailure(error)) {
+      _sessions.invalidateSession(machineId, error);
+    }
+  }
+
+  bool _isRelayTransportFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    return message.contains('socket closed') ||
+        message.contains('socket not connected') ||
+        message.contains('connection reset') ||
+        message.contains('stale relay socket');
+  }
+
+  bool _isMachineSessionFailure(Object error) {
+    final message = error.toString().toLowerCase();
+    return _isRelayTransportFailure(error) ||
+        message.contains('rpc timeout') ||
+        message.contains('machine offline') ||
+        message.contains('session ended');
   }
 
   Future<void> _handleRpc(WsEncryptedMessage msg) async {

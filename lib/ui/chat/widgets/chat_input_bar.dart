@@ -11,6 +11,8 @@ import '../../../domain/enums.dart';
 class ChatInputBar extends StatelessWidget {
   final TextEditingController controller;
   final SessionStatus sessionStatus;
+  final bool composerEnabled;
+  final bool canCancel;
   final VoidCallback onSend;
   final VoidCallback onCancel;
   final VoidCallback onAttach;
@@ -26,6 +28,8 @@ class ChatInputBar extends StatelessWidget {
     super.key,
     required this.controller,
     required this.sessionStatus,
+    this.composerEnabled = true,
+    this.canCancel = true,
     required this.onSend,
     required this.onCancel,
     required this.onAttach,
@@ -61,7 +65,7 @@ class ChatInputBar extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                if (!_isRunning)
+                if (!_isRunning && composerEnabled)
                   GestureDetector(
                     onTap: onAttach,
                     child: Padding(
@@ -83,7 +87,7 @@ class ChatInputBar extends StatelessWidget {
                           ),
                           child: TextField(
                             controller: controller,
-                            enabled: !_isRunning,
+                            enabled: !_isRunning && composerEnabled,
                             autocorrect: false,
                             smartDashesType: SmartDashesType.disabled,
                             smartQuotesType: SmartQuotesType.disabled,
@@ -114,8 +118,10 @@ class ChatInputBar extends StatelessWidget {
                         ),
                 ),
                 const SizedBox(width: 8),
-                _isRunning
+                _isRunning && canCancel
                     ? _buildCancelButton()
+                    : _isRunning
+                    ? _buildDisabledSendButton()
                     : isTranscribing
                     ? _buildTranscribingIndicator()
                     : isRecording
@@ -215,11 +221,26 @@ class ChatInputBar extends StatelessWidget {
         final hasText = value.text.trim().isNotEmpty;
         final hasImages = imagePreviews.isNotEmpty;
 
+        if (!composerEnabled) {
+          return _buildDisabledSendButton();
+        }
         if (!hasText && !hasImages && showMic) {
           return _buildMicButton();
         }
         return _buildSendButton();
       },
+    );
+  }
+
+  Widget _buildDisabledSendButton() {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: AppTheme.inputFill,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: const Icon(LucideIcons.lock, size: 16, color: AppTheme.textMuted),
     );
   }
 

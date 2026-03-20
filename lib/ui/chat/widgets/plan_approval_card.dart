@@ -10,11 +10,13 @@ import 'code_block.dart';
 
 class PlanApprovalCard extends StatefulWidget {
   final ApprovalRequest approval;
+  final bool enabled;
   final void Function(String optionId) onReply;
 
   const PlanApprovalCard({
     super.key,
     required this.approval,
+    this.enabled = true,
     required this.onReply,
   });
 
@@ -210,6 +212,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
   }
 
   void _handleTap(PermOption option) {
+    if (!widget.enabled) return;
     widget.onReply(option.optionId);
   }
 

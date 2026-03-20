@@ -9,11 +9,13 @@ import '../../../domain/enums.dart';
 
 class PermissionCard extends StatelessWidget {
   final ApprovalRequest approval;
+  final bool enabled;
   final void Function(String optionId) onReply;
 
   const PermissionCard({
     super.key,
     required this.approval,
+    this.enabled = true,
     required this.onReply,
   });
 
@@ -155,6 +157,7 @@ class PermissionCard extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
+        if (!enabled) return;
         debugPrint('[PermCard] tapped Allow: ${option.optionId}');
         onReply(option.optionId);
       },
@@ -162,7 +165,10 @@ class PermissionCard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: AppTheme.textPrimary, width: 1.5),
+          border: Border.all(
+            color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
+            width: 1.5,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
@@ -171,7 +177,7 @@ class PermissionCard extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
+            color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
           ),
         ),
       ),
@@ -182,6 +188,7 @@ class PermissionCard extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: () {
+        if (!enabled) return;
         debugPrint('[PermCard] tapped ${option.name}: ${option.optionId}');
         onReply(option.optionId);
       },
@@ -193,7 +200,7 @@ class PermissionCard extends StatelessWidget {
           style: GoogleFonts.inter(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: color,
+            color: enabled ? color : AppTheme.textMuted,
           ),
           textAlign: TextAlign.center,
         ),

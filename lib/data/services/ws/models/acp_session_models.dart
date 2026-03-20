@@ -564,13 +564,19 @@ class AppSessionCreateResponseDto {
 class AppSessionLoadDto {
   final bool ok;
   final String runtime;
+  final String cwd;
 
-  const AppSessionLoadDto({required this.ok, required this.runtime});
+  const AppSessionLoadDto({
+    required this.ok,
+    required this.runtime,
+    required this.cwd,
+  });
 
   factory AppSessionLoadDto.fromJson(Map<String, dynamic> json) {
     return AppSessionLoadDto(
       ok: _requireBool(json, 'ok'),
       runtime: _requireString(json, 'runtime'),
+      cwd: _requireString(json, 'cwd'),
     );
   }
 }

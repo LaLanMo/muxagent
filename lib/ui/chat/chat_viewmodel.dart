@@ -11,6 +11,8 @@ import 'package:record/record.dart';
 
 import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/reconnect_recovery_coordinator.dart';
+import '../../data/repositories/session_chat_cache_dto.dart';
+import '../../data/repositories/session_chat_cache_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/session_config_mapper.dart';
 import '../../domain/approval.dart';
@@ -29,19 +31,30 @@ import '../../utils/app_toast.dart';
 import 'chat_state.dart';
 import 'widgets/mention_text_controller.dart';
 
-class ChatViewModel extends GetxController {
+enum ChatUiMode {
+  initialLoading,
+  normal,
+  rebuildingReadonly,
+  viewOnly,
+  unsupported,
+}
+
+class ChatViewModel extends GetxController with WidgetsBindingObserver {
   final EventRepository _eventRepo;
   final ReconnectRecoveryCoordinator _recovery;
+  final SessionChatCacheRepository _chatCacheRepo;
   final WsSessionRepository _wsRepo;
   final TranscribeAudioUseCase _transcribe;
 
   ChatViewModel({
     required EventRepository eventRepo,
     required ReconnectRecoveryCoordinator recovery,
+    required SessionChatCacheRepository chatCacheRepo,
     required WsSessionRepository wsRepo,
     required TranscribeAudioUseCase transcribe,
   }) : _eventRepo = eventRepo,
        _recovery = recovery,
+       _chatCacheRepo = chatCacheRepo,
        _wsRepo = wsRepo,
        _transcribe = transcribe;
 
@@ -59,10 +72,61 @@ class ChatViewModel extends GetxController {
         result.sessionReady;
   }
 
+  @visibleForTesting
+  static bool shouldRepairCachedSession({
+    required SessionChatCacheEntry? entry,
+    required bool hasRenderableVisibleState,
+    required int machineLastSeq,
+  }) {
+    if (entry == null) {
+      return !hasRenderableVisibleState;
+    }
+    if (!entry.isRenderable) {
+      return true;
+    }
+    if (entry.cacheState == SessionChatCacheState.stale) {
+      return true;
+    }
+    return machineLastSeq > entry.lastAppliedSeq;
+  }
+
+  @visibleForTesting
+  static ChatUiMode initialUiModeForCachedSession({
+    required SessionChatCacheEntry entry,
+    required bool canRepair,
+    required bool needsRepair,
+  }) {
+    if (!needsRepair && entry.cacheState == SessionChatCacheState.ready) {
+      return ChatUiMode.normal;
+    }
+    return canRepair ? ChatUiMode.rebuildingReadonly : ChatUiMode.viewOnly;
+  }
+
+  @visibleForTesting
+  static bool shouldReplaceOptimisticUserMessage({
+    required bool hasOptimisticUserMessage,
+    required MessagePartEvent? part,
+  }) {
+    return hasOptimisticUserMessage && part?.role == MessageRole.user;
+  }
+
+  @visibleForTesting
+  static bool shouldEnableComposer({
+    required ChatUiMode uiMode,
+    required ConnState connState,
+    required bool isRecoveringAfterReconnect,
+  }) {
+    return uiMode == ChatUiMode.normal &&
+        connState == ConnState.connected &&
+        !isRecoveringAfterReconnect;
+  }
+
   late final String machineId;
   late final String sessionId;
-  late final String cwd;
+  late final String routeCwd;
   late final ChatState chatState;
+  final effectiveCwd = ''.obs;
+  final uiMode = ChatUiMode.initialLoading.obs;
 
   final messages = <Message>[].obs;
   final approvals = <String, ApprovalRequest>{}.obs;
@@ -92,6 +156,22 @@ class ChatViewModel extends GetxController {
   final isFileSearchMode = false.obs;
   final usageVersion = 0.obs;
   final isRecoveringAfterReconnect = false.obs;
+  String get cwd => effectiveCwd.value;
+  bool get canPrompt => shouldEnableComposer(
+    uiMode: uiMode.value,
+    connState: connState.value,
+    isRecoveringAfterReconnect: isRecoveringAfterReconnect.value,
+  );
+  bool get canMutateSession => uiMode.value == ChatUiMode.normal;
+  bool get canReplyApprovals =>
+      uiMode.value != ChatUiMode.initialLoading &&
+      uiMode.value != ChatUiMode.rebuildingReadonly &&
+      uiMode.value != ChatUiMode.unsupported;
+  bool get canCancelRun =>
+      uiMode.value != ChatUiMode.initialLoading &&
+      uiMode.value != ChatUiMode.rebuildingReadonly &&
+      uiMode.value != ChatUiMode.unsupported;
+  bool get inputReadOnly => !canPrompt;
 
   /// Live usage info for this session (cost, tokens, context window).
   UsageInfo? get usageInfo => _eventRepo.liveUsageFor(sessionId);
@@ -109,11 +189,26 @@ class ChatViewModel extends GetxController {
   bool _userIsScrolling = false;
   bool _isAnimatingToBottom = false;
   bool _hasOptimisticUserMsg = false;
-  Completer<void>? _historyCompleter;
+  Completer<bool>? _historyCompleter;
   Timer? _historyTimeout;
   bool _hasSeenDisconnect = false;
   bool _foregroundRecoveryInFlight = false;
   int _recoveryEpoch = 0;
+  bool _subscriptionsAttached = false;
+  Timer? _cacheWriteDebounce;
+  bool _cacheFlushInFlight = false;
+  bool _cacheFlushQueued = false;
+  bool _queuedPromoteReady = false;
+  bool _queuedForceFlush = false;
+  Completer<void>? _cacheFlushCompleter;
+  bool _isRebuilding = false;
+  ChatState? _rebuildChatState;
+  final _rebuildBacklog = <AgentEvent>[];
+  SessionChatCacheEntry? _lastCacheEntry;
+  int _visibleLastAppliedSeq = 0;
+  int _rebuildLastAppliedSeq = 0;
+  String? _initialPrompt;
+  bool _didAttemptInitialPrompt = false;
 
   StreamSubscription<AgentEvent>? _eventSub;
   StreamSubscription<void>? _sessionMetaSub;
@@ -124,10 +219,11 @@ class ChatViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    WidgetsBinding.instance.addObserver(this);
     final args = Get.arguments as Map<String, dynamic>;
     machineId = args['machineId'] as String;
     sessionId = args['sessionId'] as String;
-    cwd = args['cwd'] as String? ?? '';
+    routeCwd = args['cwd'] as String? ?? '';
     sessionTitle.value = args['sessionTitle'] as String? ?? '';
     if (sessionTitle.value.isEmpty) {
       sessionTitle.value = _eventRepo.sessionById(sessionId)?.title ?? '';
@@ -140,8 +236,17 @@ class ChatViewModel extends GetxController {
       sessionStatus.value = existing.status;
       currentMode.value = _resolveMode(existing.mode);
       runtimeId.value = existing.runtime;
+      if (routeCwd.isEmpty && existing.cwd.isNotEmpty) {
+        effectiveCwd.value = existing.cwd;
+      }
     }
-    runtimeId.value = (args['runtime'] as String?) ?? runtimeId.value;
+    final routeRuntime = (args['runtime'] as String?)?.trim() ?? '';
+    if (routeRuntime.isNotEmpty) {
+      runtimeId.value = routeRuntime;
+    }
+    if (routeCwd.isNotEmpty) {
+      effectiveCwd.value = routeCwd;
+    }
 
     _eventRepo.markViewing(sessionId);
     _eventRepo.markAsRead(sessionId);
@@ -149,36 +254,46 @@ class ChatViewModel extends GetxController {
 
     scrollController.addListener(_onScrollChanged);
     inputController.addListener(_detectMention);
-    _subscribeEvents();
-    _subscribeSessionSnapshot();
-    _subscribeRecoveryNotifications();
-    _subscribeConnectionState();
     _checkSttConfig();
 
     _syncSessionSnapshotFromRepository();
 
-    final initialPrompt = args['initialPrompt'] as String?;
+    _initialPrompt = args['initialPrompt'] as String?;
     final isNewSession = args['isNewSession'] as bool? ?? false;
 
     if (isNewSession) {
-      // New sessions are already created via session.create — skip load.
       final configSnapshot = args['configSnapshot'] as SessionConfigSnapshot?;
       if (configSnapshot != null) {
-        _applyConfigSnapshot(configSnapshot);
+        _applyConfigSnapshot(configSnapshot, schedulePersist: false);
       }
+      _attachSubscriptions();
+      uiMode.value = ChatUiMode.normal;
       isLoading.value = false;
       _scheduleScrollStateSync();
-      if (initialPrompt != null && initialPrompt.isNotEmpty) {
-        sendMessage(initialPrompt);
-      }
+      _maybeSendInitialPrompt();
     } else {
-      _loadSession().then((_) {
-        _scrollToBottom();
-        if (initialPrompt != null && initialPrompt.isNotEmpty) {
-          sendMessage(initialPrompt);
-        }
-      });
+      unawaited(_openExistingSession());
     }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      unawaited(_flushSnapshotForBackground());
+    }
+  }
+
+  void _attachSubscriptions() {
+    if (_subscriptionsAttached) {
+      return;
+    }
+    _subscriptionsAttached = true;
+    _subscribeEvents();
+    _subscribeSessionSnapshot();
+    _subscribeRecoveryNotifications();
+    _subscribeConnectionState();
   }
 
   void _subscribeEvents() {
@@ -190,6 +305,7 @@ class ChatViewModel extends GetxController {
   void _subscribeSessionSnapshot() {
     _sessionMetaSub = _eventRepo.sessionsChanged.listen((_) {
       if (isClosed) return;
+      if (_isRebuilding) return;
       _syncSessionSnapshotFromRepository();
     });
   }
@@ -226,6 +342,100 @@ class ChatViewModel extends GetxController {
     }
   }
 
+  Future<void> _openExistingSession() async {
+    final hydrated = _chatCacheRepo.hydratedCacheForSession(sessionId);
+    if (hydrated != null) {
+      _applyHydratedCache(hydrated);
+      _lastCacheEntry = hydrated.entry;
+      final initialNeedsRepair = _needsRepair(
+        hydrated.entry,
+        hasRenderableVisibleState: true,
+      );
+      uiMode.value = initialUiModeForCachedSession(
+        entry: hydrated.entry,
+        canRepair: _canRepairSession(),
+        needsRepair: initialNeedsRepair,
+      );
+      isLoading.value = false;
+      _scheduleScrollStateSync();
+    }
+
+    _attachSubscriptions();
+    _syncSessionSnapshotFromRepository();
+    final refreshed = await _chatCacheRepo.reloadHydratedSession(sessionId);
+    if (refreshed != null) {
+      _lastCacheEntry = refreshed.entry;
+    } else {
+      _lastCacheEntry = await _chatCacheRepo.reloadSession(sessionId);
+    }
+
+    final needsRepair = _needsRepair(
+      _lastCacheEntry,
+      hasRenderableVisibleState: hydrated != null,
+    );
+    if (!needsRepair) {
+      uiMode.value = ChatUiMode.normal;
+      _scrollToBottom();
+      _maybeSendInitialPrompt();
+      return;
+    }
+
+    if (!_canRepairSession()) {
+      uiMode.value = hydrated != null
+          ? ChatUiMode.viewOnly
+          : ChatUiMode.unsupported;
+      isLoading.value = false;
+      return;
+    }
+
+    await _performSessionLoad(preserveVisible: hydrated != null);
+    _maybeSendInitialPrompt();
+  }
+
+  void _applyHydratedCache(SessionChatCacheHydrated hydrated) {
+    chatState.replaceWith(hydrated.chatState);
+    _visibleLastAppliedSeq = hydrated.entry.lastAppliedSeq;
+    _applyConfigSnapshot(hydrated.configSnapshot, schedulePersist: false);
+    if (hydrated.entry.title.isNotEmpty) {
+      sessionTitle.value = hydrated.entry.title;
+    }
+    messages.value = chatState.orderedMessages;
+    approvals.value = Map.from(chatState.approvals);
+    planEntries.value = List<PlanEntry>.from(chatState.planEntries);
+  }
+
+  bool _needsRepair(
+    SessionChatCacheEntry? entry, {
+    required bool hasRenderableVisibleState,
+  }) {
+    return shouldRepairCachedSession(
+      entry: entry,
+      hasRenderableVisibleState: hasRenderableVisibleState,
+      machineLastSeq: _eventRepo.lastSeqFor(machineId),
+    );
+  }
+
+  bool _canRepairSession() {
+    final runtime = runtimeId.value.trim();
+    final cwdValue = effectiveCwd.value.trim();
+    return runtime.isNotEmpty && cwdValue.isNotEmpty;
+  }
+
+  void _maybeSendInitialPrompt() {
+    if (_didAttemptInitialPrompt) {
+      return;
+    }
+    _didAttemptInitialPrompt = true;
+    final prompt = _initialPrompt?.trim() ?? '';
+    if (prompt.isEmpty) {
+      return;
+    }
+    if (!canPrompt) {
+      return;
+    }
+    unawaited(sendMessage(prompt));
+  }
+
   void _syncSessionSnapshotFromRepository() {
     final session = _eventRepo.sessionById(sessionId);
     if (session != null) {
@@ -236,6 +446,9 @@ class ChatViewModel extends GetxController {
       if (session.runtime.isNotEmpty) {
         runtimeId.value = session.runtime;
       }
+      if (session.cwd.isNotEmpty) {
+        effectiveCwd.value = session.cwd;
+      }
       if (session.model != null && session.model!.isNotEmpty) {
         currentModel.value = session.model;
       }
@@ -245,13 +458,34 @@ class ChatViewModel extends GetxController {
       }
     }
 
-    chatState.approvals
-      ..clear()
-      ..addEntries(
-        _eventRepo
-            .approvalsForSession(sessionId)
-            .map((approval) => MapEntry(approval.id, approval)),
+    for (final approval in _eventRepo.approvalsForSession(sessionId)) {
+      final existing = chatState.approvals[approval.id];
+      if (existing == null) {
+        chatState.approvals[approval.id] = approval;
+        continue;
+      }
+      chatState.approvals[approval.id] = ApprovalRequest(
+        id: existing.id,
+        sessionId: existing.sessionId,
+        toolCallId: existing.toolCallId ?? approval.toolCallId,
+        runtime: existing.runtime ?? approval.runtime,
+        title: existing.title.isNotEmpty ? existing.title : approval.title,
+        kind: existing.kind ?? approval.kind,
+        bodyText: existing.bodyText ?? approval.bodyText,
+        command: existing.command ?? approval.command,
+        cwd: existing.cwd ?? approval.cwd,
+        reason: existing.reason ?? approval.reason,
+        planMarkdown: existing.planMarkdown ?? approval.planMarkdown,
+        allowedPrompts: existing.allowedPrompts.isNotEmpty
+            ? existing.allowedPrompts
+            : approval.allowedPrompts,
+        options: existing.options.isNotEmpty
+            ? existing.options
+            : approval.options,
+        createdAt: existing.createdAt,
+        resolved: existing.resolved,
       );
+    }
     approvals.value = Map.from(chatState.approvals);
   }
 
@@ -319,25 +553,65 @@ class ChatViewModel extends GetxController {
       '[ChatRecovery] session=$sessionId machine=$machineId '
       'triggering=session.load-fallback',
     );
-    await _reloadSessionAfterReconnect();
+    final refreshed = await _chatCacheRepo.reloadSession(sessionId);
+    _lastCacheEntry = refreshed;
+    if (!_canRepairSession()) {
+      if (refreshed != null && refreshed.isRenderable) {
+        uiMode.value = ChatUiMode.viewOnly;
+      }
+      return;
+    }
+    await _performSessionLoad(
+      preserveVisible:
+          _hasVisibleTranscript || (refreshed?.isRenderable ?? false),
+    );
     if (!isClosed) {
       _hasSeenDisconnect = false;
     }
   }
 
-  void _applyConfigSnapshot(SessionConfigSnapshot snapshot) {
+  void _applyConfigSnapshot(
+    SessionConfigSnapshot snapshot, {
+    bool schedulePersist = true,
+  }) {
     modelConfigId.value = snapshot.modelConfigId ?? '';
     currentModel.value = snapshot.currentModel;
     availableModels.value = snapshot.availableModels;
     availableModes.value = snapshot.availableModes;
     currentMode.value = snapshot.currentMode;
+    if (schedulePersist) {
+      _scheduleSnapshotWrite();
+    }
   }
 
-  Future<void> _loadSession() async {
-    _historyCompleter = Completer<void>();
+  Future<void> _performSessionLoad({required bool preserveVisible}) async {
+    _historyCompleter = Completer<bool>();
+    final loadToken = ++_recoveryEpoch;
+    final loadRuntime = runtimeId.value.trim();
+    final loadCwd = effectiveCwd.value.trim();
+    final previousUiMode = uiMode.value;
+
+    isRecoveringAfterReconnect.value = preserveVisible;
+    if (preserveVisible) {
+      _isRebuilding = true;
+      _rebuildChatState = ChatState(sessionId: sessionId);
+      _rebuildLastAppliedSeq = 0;
+      _rebuildBacklog.clear();
+      uiMode.value = ChatUiMode.rebuildingReadonly;
+      isLoading.value = false;
+    } else {
+      _isRebuilding = false;
+      _rebuildChatState = null;
+      _rebuildLastAppliedSeq = 0;
+      _rebuildBacklog.clear();
+      _resetTranscriptState();
+      uiMode.value = ChatUiMode.initialLoading;
+      isLoading.value = true;
+    }
+
     try {
-      if (cwd.isEmpty) throw Exception('missing cwd for session.load');
-      if (runtimeId.value.isEmpty) {
+      if (loadCwd.isEmpty) throw Exception('missing cwd for session.load');
+      if (loadRuntime.isEmpty) {
         throw Exception('missing runtime for session.load');
       }
       final session = _eventRepo.sessionById(sessionId);
@@ -347,72 +621,91 @@ class ChatViewModel extends GetxController {
       final response = await _wsRepo.loadSession(
         machineId: machineId,
         sessionId: sessionId,
-        cwd: cwd,
-        runtime: runtimeId.value,
+        cwd: loadCwd,
+        runtime: loadRuntime,
         permissionMode: mode.isNotEmpty && mode != 'default' ? mode : null,
         model: model,
       );
 
-      // Apply config BEFORE waiting for history — immune to event race.
       final loadedRuntime = response.app.runtime;
+      final loadedCwd = response.app.cwd.isNotEmpty
+          ? response.app.cwd
+          : loadCwd;
       if (loadedRuntime.isNotEmpty) runtimeId.value = loadedRuntime;
       final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
         runtimeId: runtimeId.value,
         configOptions: response.acp.configOptions ?? const [],
         modes: response.acp.modes,
       );
-      _applyConfigSnapshot(snapshot);
+      _applyConfigSnapshot(snapshot, schedulePersist: false);
 
-      // Safety timeout — cancellable Timer, not Future.delayed.
       _historyTimeout = Timer(const Duration(seconds: 30), () {
         if (!isClosed &&
             _historyCompleter != null &&
             !_historyCompleter!.isCompleted) {
-          _historyCompleter!.complete();
+          _historyCompleter!.complete(false);
         }
       });
 
-      // Wait for history.complete signal (or timeout).
-      await _historyCompleter!.future;
+      final historyCompleted = await _historyCompleter!.future;
+      if (!historyCompleted) {
+        throw TimeoutException('session.load did not finish replaying history');
+      }
+      await _eventRepo.persistSessionRuntimeAndCwd(
+        sessionId,
+        runtime: loadedRuntime.isNotEmpty ? loadedRuntime : loadRuntime,
+        cwd: loadedCwd,
+      );
+      final updatedSession = _eventRepo.sessionById(sessionId);
+      if (updatedSession != null && updatedSession.cwd.isNotEmpty) {
+        effectiveCwd.value = updatedSession.cwd;
+      } else {
+        effectiveCwd.value = loadedCwd;
+      }
+
+      if (preserveVisible && _rebuildChatState != null) {
+        chatState.replaceWith(_rebuildChatState!);
+        _visibleLastAppliedSeq = _rebuildLastAppliedSeq;
+      }
+      _syncVisibleStateFromChatState();
+      _syncSessionSnapshotFromRepository();
+      await _flushVisibleSnapshot(promoteReady: true, force: true);
+      if (!isClosed && loadToken == _recoveryEpoch) {
+        uiMode.value = ChatUiMode.normal;
+        isLoading.value = false;
+      }
     } catch (e) {
       AppToast.show('$e');
+      if (preserveVisible) {
+        if (!isClosed && loadToken == _recoveryEpoch) {
+          uiMode.value = previousUiMode;
+        }
+      } else if (!isClosed && loadToken == _recoveryEpoch) {
+        uiMode.value = ChatUiMode.unsupported;
+      }
     } finally {
       _historyTimeout?.cancel();
       _historyTimeout = null;
       _historyCompleter = null;
+      _isRebuilding = false;
+      _rebuildChatState = null;
+      _rebuildLastAppliedSeq = 0;
+      _rebuildBacklog.clear();
+      isRecoveringAfterReconnect.value = false;
       if (!isClosed) {
-        isLoading.value = false;
-        _refreshMessages();
-        _scheduleScrollStateSync();
-      }
-    }
-  }
-
-  Future<void> _reloadSessionAfterReconnect() async {
-    if (isRecoveringAfterReconnect.value || isClosed) return;
-
-    // Guard against stale async completions mutating a newer replay attempt.
-    final token = ++_recoveryEpoch;
-    isRecoveringAfterReconnect.value = true;
-    _hasOptimisticUserMsg = false;
-    // Clear rebuild-sensitive state before daemon replay to avoid duplicate
-    // messages, tool activity, and approval cards after session.load.
-    _resetTranscriptState();
-    _syncSessionSnapshotFromRepository();
-    isLoading.value = true;
-
-    try {
-      await _loadSession();
-    } finally {
-      if (!isClosed && token == _recoveryEpoch) {
-        isRecoveringAfterReconnect.value = false;
+        if (uiMode.value != ChatUiMode.initialLoading) {
+          isLoading.value = false;
+        }
         _syncSessionSnapshotFromRepository();
+        _syncVisibleStateFromChatState();
+        _scheduleScrollStateSync();
       }
     }
   }
 
   void _resetTranscriptState() {
     chatState.reset();
+    _visibleLastAppliedSeq = 0;
     messages.clear();
     approvals.clear();
     planEntries.clear();
@@ -421,20 +714,72 @@ class ChatViewModel extends GetxController {
     _isAnimatingToBottom = false;
   }
 
+  bool get _hasVisibleTranscript =>
+      chatState.orderedMessages.isNotEmpty ||
+      chatState.approvals.isNotEmpty ||
+      chatState.planEntries.isNotEmpty;
+
+  bool get _hasPersistableVisibleTranscript =>
+      chatState.orderedMessages.any(
+        (message) =>
+            !(message.role == MessageRole.user &&
+                message.id.startsWith('local-')),
+      ) ||
+      chatState.approvals.isNotEmpty ||
+      chatState.planEntries.isNotEmpty;
+
   void _handleEvent(AgentEvent event) {
+    if (_isRebuilding && _rebuildChatState != null) {
+      _rebuildBacklog.add(event);
+      _rebuildLastAppliedSeq = _maxAppliedSeq(
+        _rebuildLastAppliedSeq,
+        event.seq,
+      );
+      _applyEventToState(
+        event,
+        _rebuildChatState!,
+        updateVisibleCollections: false,
+      );
+      if (event.type == EventType.historyComplete &&
+          _historyCompleter != null &&
+          !_historyCompleter!.isCompleted) {
+        _historyCompleter!.complete(true);
+      }
+      return;
+    }
+    _visibleLastAppliedSeq = _maxAppliedSeq(_visibleLastAppliedSeq, event.seq);
+    _applyEventToState(event, chatState, updateVisibleCollections: true);
+  }
+
+  int _maxAppliedSeq(int current, int next) {
+    if (next <= 0) {
+      return current;
+    }
+    return next > current ? next : current;
+  }
+
+  void _applyEventToState(
+    AgentEvent event,
+    ChatState target, {
+    required bool updateVisibleCollections,
+  }) {
     switch (event.type) {
       case EventType.reasoning:
       case EventType.messageDelta:
         if (event.messagePart != null) {
-          // Skip user message echoes when we already show the optimistic
-          // version created in sendMessage(). During session.load history
-          // replay _hasOptimisticUserMsg is false so messages pass through.
-          if (_hasOptimisticUserMsg &&
-              event.messagePart!.role == MessageRole.user) {
-            break;
+          if (shouldReplaceOptimisticUserMessage(
+            hasOptimisticUserMessage: _hasOptimisticUserMsg,
+            part: event.messagePart,
+          )) {
+            target.adoptLocalOptimisticUserMessage(
+              event.messagePart!.messageId,
+            );
+            _hasOptimisticUserMsg = false;
           }
-          chatState.applyDelta(event.messagePart!);
-          if (!isLoading.value) _refreshMessages();
+          target.applyDelta(event.messagePart!);
+          if (updateVisibleCollections && !isLoading.value) {
+            _refreshMessages();
+          }
         }
 
       case EventType.toolStarted:
@@ -442,25 +787,31 @@ class ChatViewModel extends GetxController {
       case EventType.toolCompleted:
       case EventType.toolFailed:
         if (event.tool != null) {
-          chatState.applyToolEvent(event.tool!);
-          if (!isLoading.value) _refreshMessages();
+          target.applyToolEvent(event.tool!);
+          if (updateVisibleCollections && !isLoading.value) {
+            _refreshMessages();
+          }
         }
 
       case EventType.approvalRequested:
         if (event.approval != null) {
-          chatState.addApproval(event.approval!);
-          _refreshApprovals();
-          sessionStatus.value = SessionStatus.waitingApproval;
+          target.addApproval(event.approval!);
+          if (updateVisibleCollections) {
+            _refreshApprovals();
+            sessionStatus.value = SessionStatus.waitingApproval;
+          }
         }
 
       case EventType.approvalReplied:
         if (event.approval != null) {
-          chatState.resolveApproval(event.approval!.id);
-          _refreshApprovals();
+          target.resolveApproval(event.approval!.id);
+          if (updateVisibleCollections) {
+            _refreshApprovals();
+          }
         }
 
       case EventType.sessionStatus:
-        if (event.session != null) {
+        if (event.session != null && updateVisibleCollections) {
           sessionStatus.value = event.session!.status;
           if (event.session!.title.isNotEmpty) {
             sessionTitle.value = event.session!.title;
@@ -468,16 +819,19 @@ class ChatViewModel extends GetxController {
         }
 
       case EventType.usageUpdate:
-        usageVersion.value++;
+        if (updateVisibleCollections) {
+          usageVersion.value++;
+        }
 
       case EventType.runFinished:
         _hasOptimisticUserMsg = false;
-        sessionStatus.value = SessionStatus.idle;
-        usageVersion.value++;
+        if (updateVisibleCollections) {
+          sessionStatus.value = SessionStatus.idle;
+          usageVersion.value++;
+        }
 
       case EventType.runFailed:
         _hasOptimisticUserMsg = false;
-        sessionStatus.value = SessionStatus.error;
         if (event.error != null && event.error!.message.isNotEmpty) {
           final errorMsg = Message(
             id: 'error-${event.at.millisecondsSinceEpoch}',
@@ -488,22 +842,33 @@ class ChatViewModel extends GetxController {
             ],
             createdAt: event.at,
           );
-          chatState.finalizeMessage(errorMsg);
-          if (!isLoading.value) _refreshMessages();
+          target.finalizeMessage(errorMsg);
+          if (updateVisibleCollections && !isLoading.value) {
+            _refreshMessages();
+          }
+        }
+        if (updateVisibleCollections) {
+          sessionStatus.value = SessionStatus.error;
         }
 
       case EventType.planUpdated:
         final entries = event.planUpdate?.entries;
         if (entries != null) {
-          chatState.updatePlan(entries);
-          planEntries.value = entries;
+          target.updatePlan(entries);
+          if (updateVisibleCollections) {
+            planEntries.value = entries;
+            _scheduleSnapshotWrite();
+          }
         }
 
       case EventType.modeChanged:
-        currentMode.value = _resolveMode(event.modeChange?.currentModeId);
+        if (updateVisibleCollections) {
+          currentMode.value = _resolveMode(event.modeChange?.currentModeId);
+          _scheduleSnapshotWrite();
+        }
 
       case EventType.modelChanged:
-        if (event.configChange != null) {
+        if (event.configChange != null && updateVisibleCollections) {
           final configChange = event.configChange!;
           currentModel.value = configChange.currentValue;
           modelConfigId.value = configChange.configId;
@@ -516,11 +881,12 @@ class ChatViewModel extends GetxController {
                 ),
               )
               .toList();
+          _scheduleSnapshotWrite();
         }
 
       case EventType.historyComplete:
         if (_historyCompleter != null && !_historyCompleter!.isCompleted) {
-          _historyCompleter!.complete();
+          _historyCompleter!.complete(true);
         }
 
       case null:
@@ -545,6 +911,7 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> changeMode(ModeOption mode) async {
+    if (!canMutateSession) return;
     showModeDropdown.value = false;
     if (mode.id == currentMode.value?.id) return;
 
@@ -577,6 +944,7 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> changeModel(String value) async {
+    if (!canMutateSession) return;
     if (value == currentModel.value) return;
     final configId = modelConfigId.value;
     if (configId.isEmpty) return;
@@ -670,6 +1038,7 @@ class ChatViewModel extends GetxController {
       messages.value = chatState.orderedMessages;
       _scrollToBottom();
       _scheduleScrollStateSync();
+      _scheduleSnapshotWrite();
     }
 
     final phase = SchedulerBinding.instance.schedulerPhase;
@@ -685,6 +1054,102 @@ class ChatViewModel extends GetxController {
     approvals.value = Map.from(chatState.approvals);
     _scrollToBottom();
     _scheduleScrollStateSync();
+    _scheduleSnapshotWrite();
+  }
+
+  void _syncVisibleStateFromChatState() {
+    messages.value = chatState.orderedMessages;
+    approvals.value = Map.from(chatState.approvals);
+    planEntries.value = List<PlanEntry>.from(chatState.planEntries);
+    _scrollToBottom();
+    _scheduleScrollStateSync();
+  }
+
+  SessionConfigSnapshot _currentConfigSnapshot() {
+    return SessionConfigSnapshot(
+      modelConfigId: modelConfigId.value,
+      currentModel: currentModel.value,
+      currentMode: currentMode.value,
+      availableModels: availableModels.toList(),
+      availableModes: availableModes.toList(),
+    );
+  }
+
+  void _scheduleSnapshotWrite() {
+    _cacheWriteDebounce?.cancel();
+    _cacheWriteDebounce = Timer(const Duration(milliseconds: 250), () {
+      unawaited(_flushVisibleSnapshot(promoteReady: false));
+    });
+  }
+
+  Future<void> _flushSnapshotForBackground() async {
+    _cacheWriteDebounce?.cancel();
+    _cacheWriteDebounce = null;
+    await _flushVisibleSnapshot(promoteReady: !_isRebuilding, force: true);
+  }
+
+  Future<void> _flushVisibleSnapshot({
+    required bool promoteReady,
+    bool force = false,
+  }) async {
+    if (isClosed) {
+      return;
+    }
+    _cacheFlushQueued = true;
+    _queuedPromoteReady = _queuedPromoteReady || promoteReady;
+    _queuedForceFlush = _queuedForceFlush || force;
+    if (_cacheFlushInFlight) {
+      await _cacheFlushCompleter?.future;
+      return;
+    }
+
+    while (_cacheFlushQueued && !isClosed) {
+      final queuedPromoteReady = _queuedPromoteReady;
+      final queuedForce = _queuedForceFlush;
+      _cacheFlushQueued = false;
+      _queuedPromoteReady = false;
+      _queuedForceFlush = false;
+
+      if (!queuedForce &&
+          uiMode.value == ChatUiMode.initialLoading &&
+          !_hasPersistableVisibleTranscript &&
+          (_lastCacheEntry == null ||
+              _lastCacheEntry!.cacheState == SessionChatCacheState.empty)) {
+        continue;
+      }
+
+      _cacheFlushInFlight = true;
+      _cacheFlushCompleter = Completer<void>();
+      try {
+        final nextState = _cacheStateForFlush(promoteReady: queuedPromoteReady);
+        final entry = await _chatCacheRepo.persistSnapshot(
+          sessionId: sessionId,
+          machineId: machineId,
+          title: sessionTitle.value,
+          chatState: chatState,
+          configSnapshot: _currentConfigSnapshot(),
+          cacheState: nextState,
+          lastAppliedSeq: _visibleLastAppliedSeq,
+        );
+        _lastCacheEntry = entry;
+      } finally {
+        _cacheFlushInFlight = false;
+        _cacheFlushCompleter?.complete();
+        _cacheFlushCompleter = null;
+      }
+    }
+  }
+
+  SessionChatCacheState _cacheStateForFlush({required bool promoteReady}) {
+    if (!_hasPersistableVisibleTranscript) {
+      return SessionChatCacheState.empty;
+    }
+    if (!promoteReady) {
+      return SessionChatCacheState.stale;
+    }
+    return _isRebuilding
+        ? SessionChatCacheState.stale
+        : SessionChatCacheState.ready;
   }
 
   Future<void> pickImage() async {
@@ -944,8 +1409,8 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> sendMessage(String text) async {
-    if (isRecoveringAfterReconnect.value) {
-      AppToast.show('Reconnecting chat. Please wait.');
+    if (!canPrompt) {
+      AppToast.show('Chat is read-only right now.');
       return;
     }
     if (showFilePicker.value) _dismissFilePicker();
@@ -1042,6 +1507,7 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> replyApproval(String requestId, String optionId) async {
+    if (!canReplyApprovals) return;
     try {
       await _wsRepo.replyApproval(
         machineId: machineId,
@@ -1059,6 +1525,7 @@ class ChatViewModel extends GetxController {
   }
 
   Future<void> cancelSession() async {
+    if (!canCancelRun) return;
     // Fast path: WS disconnected, skip RPC
     if (!_wsRepo.isConnected) {
       _resetSessionLocally();
@@ -1088,13 +1555,22 @@ class ChatViewModel extends GetxController {
     AppToast.show('Session stopped locally');
   }
 
+  Future<bool> prepareForClose() async {
+    _cacheWriteDebounce?.cancel();
+    _cacheWriteDebounce = null;
+    await _flushVisibleSnapshot(promoteReady: true, force: true);
+    return true;
+  }
+
   @override
   void onClose() {
     if (_historyCompleter != null && !_historyCompleter!.isCompleted) {
-      _historyCompleter!.complete();
+      _historyCompleter!.complete(false);
     }
     _historyTimeout?.cancel();
     _recoveryEpoch++;
+    _cacheWriteDebounce?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _eventRepo.markNotViewing(sessionId);
     _eventSub?.cancel();
     _sessionMetaSub?.cancel();

@@ -6,6 +6,7 @@ import '../data/repositories/paired_machine_repository.dart';
 import '../data/repositories/replay_cursor_repository.dart';
 import '../data/repositories/reconnect_recovery_coordinator.dart';
 import '../data/repositories/runtime_preference_repository.dart';
+import '../data/repositories/session_chat_cache_repository.dart';
 import '../data/repositories/session_manager.dart';
 import '../data/repositories/stt_repository.dart';
 import '../data/repositories/ws_session_repository.dart';
@@ -29,6 +30,10 @@ class InitialBinding extends Bindings {
     );
     Get.put<RuntimePreferenceRepository>(
       RuntimePreferenceRepository(),
+      permanent: true,
+    );
+    Get.put<SessionChatCacheRepository>(
+      SessionChatCacheRepository(),
       permanent: true,
     );
     Get.put<ReplayCursorRepository>(ReplayCursorRepository(), permanent: true);
@@ -69,6 +74,7 @@ class InitialBinding extends Bindings {
       EventRepository(
         wsRepo: Get.find<WsSessionRepository>(),
         replayCursors: Get.find<ReplayCursorRepository>(),
+        chatCacheRepo: Get.find<SessionChatCacheRepository>(),
       ),
       permanent: true,
     );
@@ -77,6 +83,7 @@ class InitialBinding extends Bindings {
         machines: Get.find<PairedMachineRepository>(),
         wsRepo: Get.find<WsSessionRepository>(),
         eventRepo: Get.find<EventRepository>(),
+        chatCacheRepo: Get.find<SessionChatCacheRepository>(),
       ),
       permanent: true,
     );

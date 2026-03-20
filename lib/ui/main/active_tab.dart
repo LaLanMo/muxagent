@@ -6,7 +6,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../domain/enums.dart';
 import '../../config/theme.dart';
 import '../../domain/session.dart';
-import '../../utils/app_toast.dart';
 import '../common/relay_status_pill.dart';
 import 'active_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
@@ -284,10 +283,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
 
     return GestureDetector(
       onTap: () {
-        if (machineId.isNotEmpty && !shell.isMachineConnected(machineId)) {
-          AppToast.show('Machine is offline');
-          return;
-        }
         shell.navigateToChat(session.id, machineId, cwd, title);
       },
       child: Container(

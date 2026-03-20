@@ -97,7 +97,7 @@ void main() {
       final relay = FakeRelayWsClient(
         nextPayload: {
           'result': {
-            'app': {'ok': true, 'runtime': 'claude-code'},
+            'app': {'ok': true, 'runtime': 'claude-code', 'cwd': '/workspace'},
             'acp': {},
           },
         },
@@ -123,6 +123,7 @@ void main() {
         'runtime': 'claude-code',
       });
       expect(response.app.runtime, 'claude-code');
+      expect(response.app.cwd, '/workspace');
     });
 
     test('file helpers map fs.list and fs.search results', () async {

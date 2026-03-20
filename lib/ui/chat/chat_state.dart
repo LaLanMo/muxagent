@@ -177,6 +177,53 @@ class ChatState {
     planEntries = entries;
   }
 
+  bool adoptLocalOptimisticUserMessage(String authoritativeMessageId) {
+    if (authoritativeMessageId.isEmpty) {
+      return false;
+    }
+
+    final optimisticMessageId = messageOrder.cast<String?>().firstWhere((
+      messageId,
+    ) {
+      if (messageId == null) {
+        return false;
+      }
+      final message = messages[messageId];
+      return message != null &&
+          message.role == MessageRole.user &&
+          message.id.startsWith('local-');
+    }, orElse: () => null);
+
+    if (optimisticMessageId == null) {
+      return false;
+    }
+
+    final optimisticMessage = messages.remove(optimisticMessageId);
+    if (optimisticMessage == null) {
+      messageOrder.remove(optimisticMessageId);
+      return false;
+    }
+
+    final messageIndex = messageOrder.indexOf(optimisticMessageId);
+    if (messageIndex >= 0) {
+      messageOrder[messageIndex] = authoritativeMessageId;
+    }
+
+    _diffSummaryCache.remove(optimisticMessageId);
+    _pendingParts.removeWhere(
+      (_, value) => value.messageId == optimisticMessageId,
+    );
+
+    messages[authoritativeMessageId] = Message(
+      id: authoritativeMessageId,
+      sessionId: optimisticMessage.sessionId,
+      role: optimisticMessage.role,
+      parts: [],
+      createdAt: optimisticMessage.createdAt,
+    );
+    return true;
+  }
+
   void reset() {
     messages.clear();
     messageOrder.clear();
@@ -184,6 +231,16 @@ class ChatState {
     approvals.clear();
     planEntries = [];
     _pendingParts.clear();
+    _diffSummaryCache.clear();
+  }
+
+  void replaceWith(ChatState other) {
+    reset();
+    messages.addAll(other.messages);
+    messageOrder.addAll(other.messageOrder);
+    tools.addAll(other.tools);
+    approvals.addAll(other.approvals);
+    planEntries = List<PlanEntry>.from(other.planEntries);
   }
 
   List<ToolActivity> childToolsOf(String parentToolId) {
@@ -247,13 +304,15 @@ class ChatState {
       final newSrc = fileNew[path]!;
       final result = computeLineDiff(oldSrc, newSrc);
       if (result.additions > 0 || result.deletions > 0) {
-        files.add(FileDiffStat(
-          path: path,
-          additions: result.additions,
-          deletions: result.deletions,
-          oldText: oldSrc,
-          newText: newSrc,
-        ));
+        files.add(
+          FileDiffStat(
+            path: path,
+            additions: result.additions,
+            deletions: result.deletions,
+            oldText: oldSrc,
+            newText: newSrc,
+          ),
+        );
         totalAdd += result.additions;
         totalDel += result.deletions;
       }

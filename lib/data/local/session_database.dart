@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -13,20 +14,53 @@ class RecentCwd {
 }
 
 class SessionDatabase {
+  static const String databaseFileName = 'muxagent.db';
+  static const int schemaVersion = 3;
+  static const String sessionsTable = 'sessions';
+  static const String sessionChatCacheTable = 'session_chat_cache';
+
   static Database? _db;
+  static String? _databasePathOverride;
 
   static Future<Database> get database async {
     _db ??= await openDatabase(
-      join(await getDatabasesPath(), 'muxagent.db'),
-      version: 1,
+      await _resolveDatabasePath(),
+      version: schemaVersion,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
     return _db!;
   }
 
+  static Future<String> _resolveDatabasePath() async {
+    return _databasePathOverride ??
+        join(await getDatabasesPath(), databaseFileName);
+  }
+
   static Future<void> _onCreate(Database db, int version) async {
+    await _createSessionsTable(db);
+    await _createSessionChatCacheTable(db);
+  }
+
+  static Future<void> _onUpgrade(
+    Database db,
+    int oldVersion,
+    int newVersion,
+  ) async {
+    if (oldVersion < 2) {
+      await _createSessionChatCacheTable(db);
+    }
+    if (oldVersion >= 2 && oldVersion < 3) {
+      await db.execute('''
+        ALTER TABLE $sessionChatCacheTable
+        ADD COLUMN last_applied_seq INTEGER NOT NULL DEFAULT 0
+      ''');
+    }
+  }
+
+  static Future<void> _createSessionsTable(Database db) async {
     await db.execute('''
-      CREATE TABLE sessions (
+      CREATE TABLE IF NOT EXISTS $sessionsTable (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'idle',
@@ -45,9 +79,43 @@ class SessionDatabase {
     ''');
   }
 
+  static Future<void> _createSessionChatCacheTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS $sessionChatCacheTable (
+        session_id TEXT PRIMARY KEY,
+        machine_id TEXT NOT NULL,
+        title TEXT NOT NULL DEFAULT '',
+        cache_state TEXT NOT NULL DEFAULT 'empty',
+        cache_version INTEGER NOT NULL DEFAULT 1,
+        last_applied_seq INTEGER NOT NULL DEFAULT 0,
+        chat_state_json TEXT NOT NULL,
+        config_snapshot_json TEXT,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_session_chat_cache_machine_updated
+      ON $sessionChatCacheTable(machine_id, updated_at DESC)
+    ''');
+  }
+
+  static Future<void> close() async {
+    final db = _db;
+    _db = null;
+    if (db != null) {
+      await db.close();
+    }
+  }
+
+  @visibleForTesting
+  static Future<void> resetForTest({String? databasePathOverride}) async {
+    await close();
+    _databasePathOverride = databasePathOverride;
+  }
+
   static Future<void> insertSession(AgentSession s) async {
     final db = await database;
-    await db.insert('sessions', {
+    await db.insert(sessionsTable, {
       'id': s.id,
       'title': s.title,
       'status': s.status.value,
@@ -67,7 +135,7 @@ class SessionDatabase {
 
   static Future<List<AgentSession>> loadAll() async {
     final db = await database;
-    final rows = await db.query('sessions', orderBy: 'updated_at DESC');
+    final rows = await db.query(sessionsTable, orderBy: 'updated_at DESC');
     return rows.map(_rowToSession).toList();
   }
 
@@ -76,12 +144,12 @@ class SessionDatabase {
     Map<String, dynamic> fields,
   ) async {
     final db = await database;
-    await db.update('sessions', fields, where: 'id = ?', whereArgs: [id]);
+    await db.update(sessionsTable, fields, where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<void> deleteSession(String id) async {
     final db = await database;
-    await db.delete('sessions', where: 'id = ?', whereArgs: [id]);
+    await db.delete(sessionsTable, where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<List<RecentCwd>> recentCwds({String? machineId}) async {

@@ -40,7 +40,7 @@ void main() {
 
   test('parses app session.load response with exact ACP payload', () {
     final dto = AppSessionLoadResponseDto.fromJson({
-      'app': {'ok': true, 'runtime': 'codex'},
+      'app': {'ok': true, 'runtime': 'codex', 'cwd': '/workspace'},
       'acp': {
         'configOptions': [
           {
@@ -59,6 +59,7 @@ void main() {
 
     expect(dto.app.ok, isTrue);
     expect(dto.app.runtime, 'codex');
+    expect(dto.app.cwd, '/workspace');
     expect(dto.acp.configOptions, isNotNull);
     expect(dto.acp.configOptions!.single.id, 'model');
     expect(dto.acp.configOptions!.single.currentValue, 'gpt-5.4');

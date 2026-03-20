@@ -27,90 +27,151 @@ class ChatScreen extends GetView<ChatViewModel> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          // Header
-          _buildHeader(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        if (await controller.prepareForClose()) {
+          Get.back(result: result);
+        }
+      },
+      child: Scaffold(
+        body: Column(
+          children: [
+            // Header
+            _buildHeader(),
 
-          // Mode dropdown panel
-          Obx(() {
-            if (!controller.hasModeOptions ||
-                !controller.showModeDropdown.value) {
-              return const SizedBox.shrink();
-            }
-            return _buildModeDropdown();
-          }),
+            // Mode dropdown panel
+            Obx(() {
+              if (!controller.hasModeOptions ||
+                  !controller.showModeDropdown.value) {
+                return const SizedBox.shrink();
+              }
+              return _buildModeDropdown();
+            }),
 
-          // Connection banner
-          Obx(() => _buildConnectionBanner(controller.connState.value)),
+            // Connection banner
+            Obx(() => _buildConnectionBanner(controller.connState.value)),
+            Obx(() => _buildUiModeBanner(controller.uiMode.value)),
 
-          // Plan panel
-          Obx(() {
-            final entries = controller.planEntries;
-            if (entries.isEmpty) return const SizedBox.shrink();
-            return _PlanPanel(entries: entries);
-          }),
+            // Plan panel
+            Obx(() {
+              final entries = controller.planEntries;
+              if (entries.isEmpty) return const SizedBox.shrink();
+              return _PlanPanel(entries: entries);
+            }),
 
-          // Messages list
-          Expanded(
-            child: Stack(
-              children: [
-                Obx(() {
-                  if (controller.isLoading.value) {
-                    return const Center(
-                      child: CircularProgressIndicator(color: AppTheme.primary),
-                    );
-                  }
+            // Messages list
+            Expanded(
+              child: Stack(
+                children: [
+                  Obx(() {
+                    final uiMode = controller.uiMode.value;
+                    if (uiMode == ChatUiMode.initialLoading) {
+                      return const Center(
+                        child: CircularProgressIndicator(
+                          color: AppTheme.primary,
+                        ),
+                      );
+                    }
+                    if (uiMode == ChatUiMode.unsupported) {
+                      return Center(
+                        child: Text(
+                          'This session cannot be restored on this device yet.',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textTertiary,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      );
+                    }
 
-                  final allMessages = controller.messages;
-                  final pendingApprovals = controller.approvals.values.toList();
+                    final allMessages = controller.messages;
+                    final pendingApprovals = controller.approvals.values
+                        .toList();
 
-                  // Track which approvals get rendered inline with their tool card
-                  final renderedApprovalIds = <String>{};
+                    // Track which approvals get rendered inline with their tool card
+                    final renderedApprovalIds = <String>{};
 
-                  // Pre-build message widgets with run diff summary cards
-                  // inserted at run boundaries.
-                  final isRunning =
-                      controller.sessionStatus.value == SessionStatus.running;
-                  final messageWidgets = <Widget>[];
-                  String? lastUserMessageId;
+                    // Pre-build message widgets with run diff summary cards
+                    // inserted at run boundaries.
+                    final isRunning =
+                        controller.sessionStatus.value == SessionStatus.running;
+                    final messageWidgets = <Widget>[];
+                    String? lastUserMessageId;
 
-                  // Pre-compute which runs have a diff summary so we can
-                  // fold inline diffs on their edit tool cards.
-                  final runsWithSummary = <String>{};
-                  {
-                    String? prevUserId;
-                    for (final msg in allMessages) {
-                      if (msg.role == MessageRole.user) {
-                        if (prevUserId != null &&
-                            controller.chatState
-                                    .runDiffSummaryAfter(prevUserId) !=
-                                null) {
-                          runsWithSummary.add(prevUserId);
+                    // Pre-compute which runs have a diff summary so we can
+                    // fold inline diffs on their edit tool cards.
+                    final runsWithSummary = <String>{};
+                    {
+                      String? prevUserId;
+                      for (final msg in allMessages) {
+                        if (msg.role == MessageRole.user) {
+                          if (prevUserId != null &&
+                              controller.chatState.runDiffSummaryAfter(
+                                    prevUserId,
+                                  ) !=
+                                  null) {
+                            runsWithSummary.add(prevUserId);
+                          }
+                          prevUserId = msg.id;
                         }
-                        prevUserId = msg.id;
+                      }
+                      if (prevUserId != null &&
+                          !isRunning &&
+                          controller.chatState.runDiffSummaryAfter(
+                                prevUserId,
+                              ) !=
+                              null) {
+                        runsWithSummary.add(prevUserId);
                       }
                     }
-                    if (prevUserId != null &&
-                        !isRunning &&
-                        controller.chatState
-                                .runDiffSummaryAfter(prevUserId) !=
-                            null) {
-                      runsWithSummary.add(prevUserId);
+
+                    for (var i = 0; i < allMessages.length; i++) {
+                      final msg = allMessages[i];
+                      final isLast = i == allMessages.length - 1;
+
+                      // Before each user message (except the first), insert a
+                      // diff summary card for the preceding run if it had edits.
+                      if (msg.role == MessageRole.user &&
+                          lastUserMessageId != null) {
+                        final summary = controller.chatState
+                            .runDiffSummaryAfter(lastUserMessageId);
+                        if (summary != null) {
+                          messageWidgets.add(
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 16),
+                              child: RunDiffSummaryCard(summary: summary),
+                            ),
+                          );
+                        }
+                      }
+
+                      if (msg.role == MessageRole.user) {
+                        lastUserMessageId = msg.id;
+                      }
+
+                      messageWidgets.add(
+                        _buildMessageItem(
+                          msg,
+                          pendingApprovals,
+                          renderedApprovalIds,
+                          isStreaming: isLast && isRunning,
+                          foldEditDiffs:
+                              msg.role != MessageRole.user &&
+                              lastUserMessageId != null &&
+                              runsWithSummary.contains(lastUserMessageId),
+                        ),
+                      );
                     }
-                  }
 
-                  for (var i = 0; i < allMessages.length; i++) {
-                    final msg = allMessages[i];
-                    final isLast = i == allMessages.length - 1;
-
-                    // Before each user message (except the first), insert a
-                    // diff summary card for the preceding run if it had edits.
-                    if (msg.role == MessageRole.user &&
-                        lastUserMessageId != null) {
-                      final summary = controller.chatState
-                          .runDiffSummaryAfter(lastUserMessageId);
+                    // Trailing run: show diff summary after the last user
+                    // message if the session is idle (run completed).
+                    if (lastUserMessageId != null && !isRunning) {
+                      final summary = controller.chatState.runDiffSummaryAfter(
+                        lastUserMessageId,
+                      );
                       if (summary != null) {
                         messageWidgets.add(
                           Padding(
@@ -121,154 +182,122 @@ class ChatScreen extends GetView<ChatViewModel> {
                       }
                     }
 
-                    if (msg.role == MessageRole.user) {
-                      lastUserMessageId = msg.id;
+                    final unlinkedApprovals = pendingApprovals
+                        .where((a) => !renderedApprovalIds.contains(a.id))
+                        .toList();
+                    final itemCount =
+                        messageWidgets.length + unlinkedApprovals.length;
+
+                    if (itemCount == 0) {
+                      return Center(
+                        child: Text(
+                          'Send a message to get started',
+                          style: GoogleFonts.inter(
+                            fontSize: 14,
+                            color: AppTheme.textTertiary,
+                          ),
+                        ),
+                      );
                     }
 
-                    messageWidgets.add(
-                      _buildMessageItem(
-                        msg,
-                        pendingApprovals,
-                        renderedApprovalIds,
-                        isStreaming: isLast && isRunning,
-                        foldEditDiffs: msg.role != MessageRole.user &&
-                            lastUserMessageId != null &&
-                            runsWithSummary.contains(lastUserMessageId),
-                      ),
-                    );
-                  }
-
-                  // Trailing run: show diff summary after the last user
-                  // message if the session is idle (run completed).
-                  if (lastUserMessageId != null && !isRunning) {
-                    final summary = controller.chatState
-                        .runDiffSummaryAfter(lastUserMessageId);
-                    if (summary != null) {
-                      messageWidgets.add(
-                        Padding(
+                    return ListView.builder(
+                      controller: controller.scrollController,
+                      reverse: true,
+                      padding: const EdgeInsets.all(16),
+                      itemCount: itemCount,
+                      itemBuilder: (context, index) {
+                        final forwardIndex = itemCount - 1 - index;
+                        if (forwardIndex < messageWidgets.length) {
+                          return messageWidgets[forwardIndex];
+                        }
+                        final approvalIndex =
+                            forwardIndex - messageWidgets.length;
+                        final approval = unlinkedApprovals[approvalIndex];
+                        return Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: RunDiffSummaryCard(summary: summary),
-                        ),
-                      );
-                    }
-                  }
-
-                  final unlinkedApprovals = pendingApprovals
-                      .where((a) => !renderedApprovalIds.contains(a.id))
-                      .toList();
-                  final itemCount =
-                      messageWidgets.length + unlinkedApprovals.length;
-
-                  if (itemCount == 0) {
-                    return Center(
-                      child: Text(
-                        'Send a message to get started',
-                        style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: AppTheme.textTertiary,
-                        ),
-                      ),
+                          child: approval.kind == 'switch_mode'
+                              ? PlanApprovalCard(
+                                  approval: approval,
+                                  enabled: controller.canReplyApprovals,
+                                  onReply: (optionId) => controller
+                                      .replyApproval(approval.id, optionId),
+                                )
+                              : PermissionCard(
+                                  approval: approval,
+                                  enabled: controller.canReplyApprovals,
+                                  onReply: (optionId) => controller
+                                      .replyApproval(approval.id, optionId),
+                                ),
+                        );
+                      },
                     );
-                  }
-
-                  return ListView.builder(
-                    controller: controller.scrollController,
-                    reverse: true,
-                    padding: const EdgeInsets.all(16),
-                    itemCount: itemCount,
-                    itemBuilder: (context, index) {
-                      // Reverse index: 0 = visual bottom = last item in forward order
-                      final forwardIndex = itemCount - 1 - index;
-                      if (forwardIndex < messageWidgets.length) {
-                        return messageWidgets[forwardIndex];
-                      }
-                      final approvalIndex =
-                          forwardIndex - messageWidgets.length;
-                      final approval = unlinkedApprovals[approvalIndex];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: approval.kind == 'switch_mode'
-                            ? PlanApprovalCard(
-                                approval: approval,
-                                onReply: (optionId) => controller.replyApproval(
-                                  approval.id,
-                                  optionId,
-                                ),
-                              )
-                            : PermissionCard(
-                                approval: approval,
-                                onReply: (optionId) => controller.replyApproval(
-                                  approval.id,
-                                  optionId,
-                                ),
+                  }),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 12,
+                    child: Obx(() {
+                      final visible = controller.showScrollToBottomButton.value;
+                      return IgnorePointer(
+                        ignoring: !visible,
+                        child: AnimatedSlide(
+                          offset: visible ? Offset.zero : const Offset(0, 1),
+                          duration: const Duration(milliseconds: 180),
+                          curve: Curves.easeOut,
+                          child: AnimatedOpacity(
+                            opacity: visible ? 1 : 0,
+                            duration: const Duration(milliseconds: 160),
+                            child: Center(
+                              child: _ScrollToBottomButton(
+                                onTap: controller.animateToBottom,
                               ),
-                      );
-                    },
-                  );
-                }),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 12,
-                  child: Obx(() {
-                    final visible = controller.showScrollToBottomButton.value;
-                    return IgnorePointer(
-                      ignoring: !visible,
-                      child: AnimatedSlide(
-                        offset: visible ? Offset.zero : const Offset(0, 1),
-                        duration: const Duration(milliseconds: 180),
-                        curve: Curves.easeOut,
-                        child: AnimatedOpacity(
-                          opacity: visible ? 1 : 0,
-                          duration: const Duration(milliseconds: 160),
-                          child: Center(
-                            child: _ScrollToBottomButton(
-                              onTap: controller.animateToBottom,
                             ),
                           ),
                         ),
-                      ),
-                    );
-                  }),
-                ),
-              ],
+                      );
+                    }),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          // File picker panel
-          Obx(() {
-            if (!controller.showFilePicker.value) {
-              return const SizedBox.shrink();
-            }
-            return FilePickerPanel(
-              entries: controller.filePickerEntries.toList(),
-              isSearchMode: controller.isFileSearchMode.value,
-              isLoading: controller.filePickerLoading.value,
-              onTap: controller.onFileEntryTap,
-              onDrillDown: controller.onFileEntryDrillDown,
-            );
-          }),
+            // File picker panel
+            Obx(() {
+              if (!controller.showFilePicker.value) {
+                return const SizedBox.shrink();
+              }
+              return FilePickerPanel(
+                entries: controller.filePickerEntries.toList(),
+                isSearchMode: controller.isFileSearchMode.value,
+                isLoading: controller.filePickerLoading.value,
+                onTap: controller.onFileEntryTap,
+                onDrillDown: controller.onFileEntryDrillDown,
+              );
+            }),
 
-          // Input bar
-          Obx(() {
-            final previews = controller.pendingPreviews.toList();
-            return ChatInputBar(
-              controller: controller.inputController,
-              sessionStatus: controller.sessionStatus.value,
-              onSend: () =>
-                  controller.sendMessage(controller.inputController.text),
-              onCancel: controller.cancelSession,
-              onAttach: controller.pickImage,
-              imagePreviews: previews,
-              onRemoveImage: controller.removeImage,
-              showMic: controller.hasSttConfig.value,
-              isRecording: controller.isVoiceRecording.value,
-              isTranscribing: controller.isTranscribing.value,
-              onMicStart: controller.startVoiceInput,
-              onMicStop: controller.stopVoiceInput,
-            );
-          }),
-        ],
+            // Input bar
+            Obx(() {
+              final previews = controller.pendingPreviews.toList();
+              return ChatInputBar(
+                controller: controller.inputController,
+                sessionStatus: controller.sessionStatus.value,
+                composerEnabled: controller.canPrompt,
+                canCancel: controller.canCancelRun,
+                onSend: () =>
+                    controller.sendMessage(controller.inputController.text),
+                onCancel: controller.cancelSession,
+                onAttach: controller.pickImage,
+                imagePreviews: previews,
+                onRemoveImage: controller.removeImage,
+                showMic: controller.hasSttConfig.value,
+                isRecording: controller.isVoiceRecording.value,
+                isTranscribing: controller.isTranscribing.value,
+                onMicStart: controller.startVoiceInput,
+                onMicStop: controller.stopVoiceInput,
+              );
+            }),
+          ],
+        ),
       ),
     );
   }
@@ -287,7 +316,11 @@ class ChatScreen extends GetView<ChatViewModel> {
           child: Row(
             children: [
               GestureDetector(
-                onTap: () => Get.back(),
+                onTap: () async {
+                  if (await controller.prepareForClose()) {
+                    Get.back();
+                  }
+                },
                 child: const Icon(
                   LucideIcons.chevronLeft,
                   size: 22,
@@ -407,6 +440,46 @@ class ChatScreen extends GetView<ChatViewModel> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUiModeBanner(ChatUiMode mode) {
+    if (mode == ChatUiMode.normal || mode == ChatUiMode.initialLoading) {
+      return const SizedBox.shrink();
+    }
+
+    final (background, foreground, text) = switch (mode) {
+      ChatUiMode.rebuildingReadonly => (
+        AppTheme.warningBg,
+        AppTheme.warning,
+        'Refreshing chat history. Actions are temporarily disabled.',
+      ),
+      ChatUiMode.viewOnly => (
+        AppTheme.idleBg,
+        AppTheme.textSecondary,
+        'Showing cached history. Sending is disabled until repair inputs are available.',
+      ),
+      ChatUiMode.unsupported => (
+        AppTheme.errorBg,
+        AppTheme.errorText,
+        'This session cannot be restored from daemon state here.',
+      ),
+      ChatUiMode.initialLoading ||
+      ChatUiMode.normal => (Colors.transparent, Colors.transparent, ''),
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: background,
+      child: Text(
+        text,
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: foreground,
+        ),
       ),
     );
   }
@@ -695,17 +768,15 @@ class ChatScreen extends GetView<ChatViewModel> {
             child: linkedApproval.kind == 'switch_mode'
                 ? PlanApprovalCard(
                     approval: linkedApproval,
-                    onReply: (optionId) => controller.replyApproval(
-                      linkedApproval.id,
-                      optionId,
-                    ),
+                    enabled: controller.canReplyApprovals,
+                    onReply: (optionId) =>
+                        controller.replyApproval(linkedApproval.id, optionId),
                   )
                 : PermissionCard(
                     approval: linkedApproval,
-                    onReply: (optionId) => controller.replyApproval(
-                      linkedApproval.id,
-                      optionId,
-                    ),
+                    enabled: controller.canReplyApprovals,
+                    onReply: (optionId) =>
+                        controller.replyApproval(linkedApproval.id, optionId),
                   ),
           ),
         );
@@ -756,8 +827,9 @@ class ChatScreen extends GetView<ChatViewModel> {
             if (shouldBreakGroup(part.tool!)) {
               // Flush any accumulated group, then render standalone
               flushToolGroup();
-              final childTools =
-                  controller.chatState.childToolsOf(part.tool!.id);
+              final childTools = controller.chatState.childToolsOf(
+                part.tool!.id,
+              );
               widgets.add(
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
