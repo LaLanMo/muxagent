@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
@@ -28,6 +29,7 @@ class SettingsTabViewModel extends GetxController {
        _connectMachine = connectMachine;
 
   final hasMasterKey = false.obs;
+  final appVersion = ''.obs;
   final connectingMachines = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
 
@@ -56,6 +58,19 @@ class SettingsTabViewModel extends GetxController {
 
   Future<void> _load() async {
     hasMasterKey.value = await _crypto.hasMasterKey();
+    appVersion.value = await _loadAppVersion();
+  }
+
+  Future<String> _loadAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      if (packageInfo.version.isEmpty) {
+        return 'Unknown';
+      }
+      return packageInfo.version;
+    } catch (_) {
+      return 'Unknown';
+    }
   }
 
   void navigateToScan() {

@@ -90,7 +90,9 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         icon: LucideIcons.info,
                         label: 'Version',
                         trailing: Text(
-                          '1.0.0',
+                          controller.appVersion.value.isEmpty
+                              ? 'Loading...'
+                              : controller.appVersion.value,
                           style: GoogleFonts.inter(
                             fontSize: 15,
                             color: AppTheme.textTertiary,
