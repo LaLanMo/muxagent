@@ -15,6 +15,7 @@ import 'base_ws_client.dart';
 import 'models/rpc_transport_models.dart';
 import 'models/ws_models.dart';
 import 'session_crypto.dart';
+import 'transport_error_classifier.dart';
 import '../../repositories/session_manager.dart';
 import 'token_service.dart';
 import 'ws_types.dart';
@@ -72,7 +73,9 @@ class RelayWsClient {
     if (relayConnected.value &&
         _connectedRelayHttpUrl == targetRelayHttpUrl &&
         !_ws.isConnected) {
-      debugPrint('[WS] stale relayConnected=true without open socket; resetting');
+      debugPrint(
+        '[WS] stale relayConnected=true without open socket; resetting',
+      );
       await resetConnection(reason: 'stale relay socket');
     }
     if (_connectFuture != null) {
@@ -567,19 +570,11 @@ class RelayWsClient {
   }
 
   bool _isRelayTransportFailure(Object error) {
-    final message = error.toString().toLowerCase();
-    return message.contains('socket closed') ||
-        message.contains('socket not connected') ||
-        message.contains('connection reset') ||
-        message.contains('stale relay socket');
+    return isRelaySocketError(error);
   }
 
   bool _isMachineSessionFailure(Object error) {
-    final message = error.toString().toLowerCase();
-    return _isRelayTransportFailure(error) ||
-        message.contains('rpc timeout') ||
-        message.contains('machine offline') ||
-        message.contains('session ended');
+    return isRecoverableSessionTransportError(error);
   }
 
   Future<void> _handleRpc(WsEncryptedMessage msg) async {

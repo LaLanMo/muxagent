@@ -171,6 +171,7 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
 
       expect(repo.lastSeqFor('machine-1'), 6);
+      expect(repo.transcriptWatermarkFor(sessionId), 6);
       expect(chatCacheRepo.staleMarked, [sessionId]);
 
       repo.dispose();
@@ -193,6 +194,61 @@ void main() {
       expect(result.outcome, ResyncOutcome.complete);
       expect(wsRepo.lastResyncSeq, 6);
       expect(wsRepo.lastResyncStreamEpoch, 77);
+    });
+
+    test(
+      'reasoning events advance transcript watermark and stale cache',
+      () async {
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'reasoning',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 7,
+              'messagePart': {
+                'app': {
+                  'partId': 'reasoning-part-1',
+                  'messageId': 'msg-1',
+                  'role': 'agent',
+                  'delta': 'thinking',
+                  'partType': 'reasoning',
+                  'fullText': 'thinking',
+                },
+              },
+            },
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repo.transcriptWatermarkFor(sessionId), 7);
+        expect(chatCacheRepo.staleMarked, [sessionId]);
+      },
+    );
+
+    test('metadata-only events do not advance transcript watermark', () async {
+      wsRepo.emitEvent(
+        WsEvent(
+          type: WsMessageType.event.value,
+          payload: {
+            'type': 'mode.changed',
+            'machineId': 'machine-1',
+            'sessionId': sessionId,
+            'seq': 11,
+            'modeChanged': {
+              'app': {'currentModeId': 'plan'},
+              'acp': {'currentModeId': 'plan'},
+            },
+          },
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(repo.transcriptWatermarkFor(sessionId), 0);
+      expect(chatCacheRepo.staleMarked, isEmpty);
     });
 
     test('resync fence buffers live events and drops replay overlap', () async {

@@ -7,6 +7,7 @@ import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/models/rpc_transport_models.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
+import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/session.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
@@ -33,6 +34,14 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
+
+  group('eventAffectsTranscript', () {
+    test('treats visible reasoning as transcript content', () {
+      expect(eventAffectsTranscript(EventType.reasoning), isTrue);
+      expect(eventAffectsTranscript(EventType.messageDelta), isTrue);
+      expect(eventAffectsTranscript(EventType.modeChanged), isFalse);
+    });
+  });
 
   group('EventRepository acknowledged config persistence', () {
     late EventRepository repo;
@@ -78,10 +87,26 @@ void main() {
       repo.setSessionMode(sessionId, 'plan');
 
       expect(repo.sessionById(sessionId)?.mode, 'plan');
+      expect(repo.transcriptWatermarkFor(sessionId), 0);
 
       final rows = await SessionDatabase.loadAll();
       final restored = rows.firstWhere((row) => row.id == sessionId);
       expect(restored.mode, 'plan');
     });
+
+    test(
+      'metadata acknowledgements do not advance transcript watermark',
+      () async {
+        repo.setSessionModel(sessionId, 'opus');
+        repo.setSessionMode(sessionId, 'plan');
+        await repo.persistSessionRuntimeAndCwd(
+          sessionId,
+          runtime: 'codex',
+          cwd: '/workspace',
+        );
+
+        expect(repo.transcriptWatermarkFor(sessionId), 0);
+      },
+    );
   });
 }

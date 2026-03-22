@@ -15,6 +15,7 @@ import '../../data/repositories/session_chat_cache_dto.dart';
 import '../../data/repositories/session_chat_cache_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/session_config_mapper.dart';
+import '../../data/services/ws/transport_error_classifier.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
@@ -76,7 +77,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   static bool shouldRepairCachedSession({
     required SessionChatCacheEntry? entry,
     required bool hasRenderableVisibleState,
-    required int machineLastSeq,
+    int transcriptWatermark = 0,
   }) {
     if (entry == null) {
       return !hasRenderableVisibleState;
@@ -87,7 +88,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (entry.cacheState == SessionChatCacheState.stale) {
       return true;
     }
-    return machineLastSeq > entry.lastAppliedSeq;
+    return transcriptWatermark > entry.lastAppliedSeq;
   }
 
   @visibleForTesting
@@ -119,6 +120,24 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     return uiMode == ChatUiMode.normal &&
         connState == ConnState.connected &&
         !isRecoveringAfterReconnect;
+  }
+
+  @visibleForTesting
+  static bool shouldToastSessionLoadError({
+    required Object error,
+    required bool preserveVisible,
+  }) {
+    return !preserveVisible || !isRecoverableSessionTransportError(error);
+  }
+
+  @visibleForTesting
+  static ChatUiMode restoredUiModeAfterSessionLoadFailure(
+    ChatUiMode previousUiMode,
+  ) {
+    if (previousUiMode == ChatUiMode.rebuildingReadonly) {
+      return ChatUiMode.viewOnly;
+    }
+    return previousUiMode;
   }
 
   late final String machineId;
@@ -205,8 +224,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   ChatState? _rebuildChatState;
   final _rebuildBacklog = <AgentEvent>[];
   SessionChatCacheEntry? _lastCacheEntry;
-  int _visibleLastAppliedSeq = 0;
-  int _rebuildLastAppliedSeq = 0;
+  Future<void>? _sessionLoadFuture;
+  int _visibleTranscriptWatermark = 0;
+  int _rebuildTranscriptWatermark = 0;
   String? _initialPrompt;
   bool _didAttemptInitialPrompt = false;
 
@@ -394,7 +414,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
   void _applyHydratedCache(SessionChatCacheHydrated hydrated) {
     chatState.replaceWith(hydrated.chatState);
-    _visibleLastAppliedSeq = hydrated.entry.lastAppliedSeq;
+    _visibleTranscriptWatermark = hydrated.entry.lastAppliedSeq;
     _applyConfigSnapshot(hydrated.configSnapshot, schedulePersist: false);
     if (hydrated.entry.title.isNotEmpty) {
       sessionTitle.value = hydrated.entry.title;
@@ -411,7 +431,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     return shouldRepairCachedSession(
       entry: entry,
       hasRenderableVisibleState: hasRenderableVisibleState,
-      machineLastSeq: _eventRepo.lastSeqFor(machineId),
+      transcriptWatermark: _eventRepo.transcriptWatermarkFor(sessionId),
     );
   }
 
@@ -585,6 +605,22 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _performSessionLoad({required bool preserveVisible}) async {
+    final inFlight = _sessionLoadFuture;
+    if (inFlight != null) {
+      return inFlight;
+    }
+
+    final future = _runSessionLoad(preserveVisible: preserveVisible);
+    _sessionLoadFuture = future;
+    future.whenComplete(() {
+      if (identical(_sessionLoadFuture, future)) {
+        _sessionLoadFuture = null;
+      }
+    });
+    return future;
+  }
+
+  Future<void> _runSessionLoad({required bool preserveVisible}) async {
     _historyCompleter = Completer<bool>();
     final loadToken = ++_recoveryEpoch;
     final loadRuntime = runtimeId.value.trim();
@@ -595,14 +631,14 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (preserveVisible) {
       _isRebuilding = true;
       _rebuildChatState = ChatState(sessionId: sessionId);
-      _rebuildLastAppliedSeq = 0;
+      _rebuildTranscriptWatermark = 0;
       _rebuildBacklog.clear();
       uiMode.value = ChatUiMode.rebuildingReadonly;
       isLoading.value = false;
     } else {
       _isRebuilding = false;
       _rebuildChatState = null;
-      _rebuildLastAppliedSeq = 0;
+      _rebuildTranscriptWatermark = 0;
       _rebuildBacklog.clear();
       _resetTranscriptState();
       uiMode.value = ChatUiMode.initialLoading;
@@ -665,7 +701,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
       if (preserveVisible && _rebuildChatState != null) {
         chatState.replaceWith(_rebuildChatState!);
-        _visibleLastAppliedSeq = _rebuildLastAppliedSeq;
+        _visibleTranscriptWatermark = _rebuildTranscriptWatermark;
       }
       _syncVisibleStateFromChatState();
       _syncSessionSnapshotFromRepository();
@@ -675,10 +711,19 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         isLoading.value = false;
       }
     } catch (e) {
-      AppToast.show('$e');
+      if (shouldToastSessionLoadError(
+        error: e,
+        preserveVisible: preserveVisible,
+      )) {
+        AppToast.show('$e');
+      } else {
+        debugPrint(
+          '[ChatRecovery] session.load recovered with preserved UI: $e',
+        );
+      }
       if (preserveVisible) {
         if (!isClosed && loadToken == _recoveryEpoch) {
-          uiMode.value = previousUiMode;
+          uiMode.value = restoredUiModeAfterSessionLoadFailure(previousUiMode);
         }
       } else if (!isClosed && loadToken == _recoveryEpoch) {
         uiMode.value = ChatUiMode.unsupported;
@@ -689,7 +734,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       _historyCompleter = null;
       _isRebuilding = false;
       _rebuildChatState = null;
-      _rebuildLastAppliedSeq = 0;
+      _rebuildTranscriptWatermark = 0;
       _rebuildBacklog.clear();
       isRecoveringAfterReconnect.value = false;
       if (!isClosed) {
@@ -705,7 +750,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
   void _resetTranscriptState() {
     chatState.reset();
-    _visibleLastAppliedSeq = 0;
+    _visibleTranscriptWatermark = 0;
     messages.clear();
     approvals.clear();
     planEntries.clear();
@@ -731,9 +776,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   void _handleEvent(AgentEvent event) {
     if (_isRebuilding && _rebuildChatState != null) {
       _rebuildBacklog.add(event);
-      _rebuildLastAppliedSeq = _maxAppliedSeq(
-        _rebuildLastAppliedSeq,
-        event.seq,
+      _rebuildTranscriptWatermark = _advanceTranscriptWatermark(
+        _rebuildTranscriptWatermark,
+        event,
       );
       _applyEventToState(
         event,
@@ -747,15 +792,25 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       }
       return;
     }
-    _visibleLastAppliedSeq = _maxAppliedSeq(_visibleLastAppliedSeq, event.seq);
+    _visibleTranscriptWatermark = _advanceTranscriptWatermark(
+      _visibleTranscriptWatermark,
+      event,
+    );
     _applyEventToState(event, chatState, updateVisibleCollections: true);
   }
 
-  int _maxAppliedSeq(int current, int next) {
-    if (next <= 0) {
+  int _advanceTranscriptWatermark(int current, AgentEvent event) {
+    if (!eventAffectsTranscript(event.type) || event.seq <= 0) {
       return current;
     }
-    return next > current ? next : current;
+    return event.seq > current ? event.seq : current;
+  }
+
+  int _persistedTranscriptWatermark() {
+    final repoWatermark = _eventRepo.transcriptWatermarkFor(sessionId);
+    return repoWatermark > _visibleTranscriptWatermark
+        ? repoWatermark
+        : _visibleTranscriptWatermark;
   }
 
   void _applyEventToState(
@@ -1129,7 +1184,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
           chatState: chatState,
           configSnapshot: _currentConfigSnapshot(),
           cacheState: nextState,
-          lastAppliedSeq: _visibleLastAppliedSeq,
+          lastAppliedSeq: _persistedTranscriptWatermark(),
         );
         _lastCacheEntry = entry;
       } finally {

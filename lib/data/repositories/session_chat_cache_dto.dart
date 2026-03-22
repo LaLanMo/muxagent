@@ -38,6 +38,8 @@ class SessionChatCacheEntry {
   final String title;
   final SessionChatCacheState cacheState;
   final int cacheVersion;
+
+  /// Highest transcript-affecting event seq represented by this cache entry.
   final int lastAppliedSeq;
   final Map<String, dynamic> chatStateJson;
   final Map<String, dynamic> configSnapshotJson;

@@ -135,7 +135,7 @@ void main() {
         ChatViewModel.shouldRepairCachedSession(
           entry: entry,
           hasRenderableVisibleState: true,
-          machineLastSeq: 8,
+          transcriptWatermark: 8,
         ),
         isTrue,
       );
@@ -149,13 +149,61 @@ void main() {
       );
     });
 
-    test('requires repair when machine cursor is ahead of ready cache', () {
+    test(
+      'requires repair when transcript watermark is newer than ready cache',
+      () {
+        final entry = SessionChatCacheEntry(
+          sessionId: 'session-1',
+          machineId: 'machine-1',
+          title: 'Cached',
+          cacheState: SessionChatCacheState.ready,
+          lastAppliedSeq: 5,
+          chatStateJson: {
+            'messages': [
+              {
+                'id': 'msg-1',
+                'role': 'agent',
+                'createdAt': DateTime(2026, 1, 1).toIso8601String(),
+                'parts': [
+                  {'type': 'text', 'text': 'hello'},
+                ],
+              },
+            ],
+            'messageOrder': ['msg-1'],
+            'toolsByCallId': const <String, dynamic>{},
+            'approvalsById': const <String, dynamic>{},
+            'planEntries': const <dynamic>[],
+          },
+          configSnapshotJson: SessionChatCacheEntry.emptyConfigSnapshotJson(),
+          updatedAt: DateTime(2026, 1, 1),
+        );
+
+        expect(
+          ChatViewModel.shouldRepairCachedSession(
+            entry: entry,
+            hasRenderableVisibleState: true,
+            transcriptWatermark: 6,
+          ),
+          isTrue,
+        );
+        expect(
+          ChatViewModel.shouldRepairCachedSession(
+            entry: entry.copyWith(lastAppliedSeq: 6),
+            hasRenderableVisibleState: true,
+            transcriptWatermark: 6,
+          ),
+          isFalse,
+        );
+      },
+    );
+
+    test('does not require repair for unchanged transcript watermark', () {
       final entry = SessionChatCacheEntry(
         sessionId: 'session-1',
         machineId: 'machine-1',
         title: 'Cached',
         cacheState: SessionChatCacheState.ready,
-        lastAppliedSeq: 5,
+        lastAppliedSeq: 9,
         chatStateJson: {
           'messages': [
             {
@@ -173,24 +221,60 @@ void main() {
           'planEntries': const <dynamic>[],
         },
         configSnapshotJson: SessionChatCacheEntry.emptyConfigSnapshotJson(),
-        updatedAt: DateTime(2026, 1, 1),
+        updatedAt: DateTime(2026, 1, 3),
       );
 
       expect(
         ChatViewModel.shouldRepairCachedSession(
           entry: entry,
           hasRenderableVisibleState: true,
-          machineLastSeq: 7,
+          transcriptWatermark: 9,
+        ),
+        isFalse,
+      );
+    });
+
+    test('silences recoverable background session load errors', () {
+      expect(
+        ChatViewModel.shouldToastSessionLoadError(
+          error: Exception('machine offline'),
+          preserveVisible: true,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldToastSessionLoadError(
+          error: Exception('broken pipe'),
+          preserveVisible: true,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldToastSessionLoadError(
+          error: Exception('missing runtime'),
+          preserveVisible: true,
         ),
         isTrue,
       );
       expect(
-        ChatViewModel.shouldRepairCachedSession(
-          entry: entry.copyWith(lastAppliedSeq: 7),
-          hasRenderableVisibleState: true,
-          machineLastSeq: 7,
+        ChatViewModel.shouldToastSessionLoadError(
+          error: Exception('machine offline'),
+          preserveVisible: false,
         ),
-        isFalse,
+        isTrue,
+      );
+    });
+
+    test('never restores rebuildingReadonly after failed session load', () {
+      expect(
+        ChatViewModel.restoredUiModeAfterSessionLoadFailure(
+          ChatUiMode.rebuildingReadonly,
+        ),
+        ChatUiMode.viewOnly,
+      );
+      expect(
+        ChatViewModel.restoredUiModeAfterSessionLoadFailure(ChatUiMode.normal),
+        ChatUiMode.normal,
       );
     });
 

@@ -13,6 +13,7 @@ import '../../data/repositories/session_chat_cache_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/ws/models/acp_session_models.dart';
 import '../../data/services/ws/session_config_mapper.dart';
+import '../../data/services/ws/transport_error_classifier.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import '../../domain/enums.dart';
@@ -143,14 +144,7 @@ class NewSessionViewModel extends GetxController {
   }
 
   static bool isRecoverableTransportError(Object error) {
-    final message = error.toString().toLowerCase();
-    return message.contains('rpc timeout') ||
-        message.contains('no active session') ||
-        message.contains('machine offline') ||
-        message.contains('session ended') ||
-        message.contains('socket closed') ||
-        message.contains('socket not connected') ||
-        message.contains('connection reset');
+    return isRecoverableSessionTransportError(error);
   }
 
   final machines = <PairedMachine>[].obs;

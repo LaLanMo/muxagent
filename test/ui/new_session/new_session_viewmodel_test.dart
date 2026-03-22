@@ -239,6 +239,18 @@ void main() {
         ),
         isTrue,
       );
+      expect(
+        NewSessionViewModel.isRecoverableTransportError(
+          Exception('transport stopped: process exited'),
+        ),
+        isTrue,
+      );
+      expect(
+        NewSessionViewModel.isRecoverableTransportError(
+          Exception('write |1: broken pipe'),
+        ),
+        isTrue,
+      );
     });
 
     test('does not retry ordinary application errors', () {

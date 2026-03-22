@@ -52,6 +52,30 @@ class _ResyncFenceState {
   final bufferedEvents = <AgentEvent>[];
 }
 
+bool eventAffectsTranscript(EventType? type) {
+  switch (type) {
+    case EventType.messageDelta:
+    case EventType.reasoning:
+    case EventType.toolStarted:
+    case EventType.toolUpdated:
+    case EventType.toolCompleted:
+    case EventType.toolFailed:
+    case EventType.approvalRequested:
+    case EventType.approvalReplied:
+    case EventType.planUpdated:
+    case EventType.runFailed:
+      return true;
+    case EventType.sessionStatus:
+    case EventType.usageUpdate:
+    case EventType.runFinished:
+    case EventType.modeChanged:
+    case EventType.modelChanged:
+    case EventType.historyComplete:
+    case null:
+      return false;
+  }
+}
+
 class EventRepository {
   final WsSessionRepository _wsRepo;
   final ReplayCursorRepository _replayCursors;
@@ -81,6 +105,7 @@ class EventRepository {
   final Map<String, Future<void>> _replayCursorBootstrapByMachine = {};
   final Map<String, int> _bootstrapObservedSeqByMachine = {};
   final Map<String, _ResyncFenceState> _resyncFenceByMachine = {};
+  final Map<String, int> _transcriptSeqBySession = {};
   Timer? _replayCursorPersistTimer;
   bool _replayCursorDirty = false;
 
@@ -103,6 +128,9 @@ class EventRepository {
 
   int lastSeqFor(String machineId) =>
       _replayCursorByMachine[machineId]?.lastSeq ?? 0;
+
+  int transcriptWatermarkFor(String sessionId) =>
+      _transcriptSeqBySession[sessionId] ?? 0;
 
   static String _preferNonEmpty(String primary, String fallback) {
     return primary.isNotEmpty ? primary : fallback;
@@ -279,6 +307,7 @@ class EventRepository {
 
   void _processEvent(AgentEvent event) {
     _markTranscriptCacheStale(event);
+    _trackTranscriptWatermark(event);
 
     // Update lightweight session metadata
     _updateSessionMeta(event);
@@ -295,26 +324,22 @@ class EventRepository {
       return;
     }
 
-    switch (event.type) {
-      case EventType.messageDelta:
-      case EventType.toolStarted:
-      case EventType.toolUpdated:
-      case EventType.toolCompleted:
-      case EventType.toolFailed:
-      case EventType.approvalRequested:
-      case EventType.approvalReplied:
-      case EventType.planUpdated:
-      case EventType.runFailed:
-        unawaited(_chatCacheRepo.markSessionCacheStale(sessionId));
-      case EventType.reasoning:
-      case EventType.sessionStatus:
-      case EventType.usageUpdate:
-      case EventType.runFinished:
-      case EventType.modeChanged:
-      case EventType.modelChanged:
-      case EventType.historyComplete:
-      case null:
-        break;
+    if (eventAffectsTranscript(event.type)) {
+      unawaited(_chatCacheRepo.markSessionCacheStale(sessionId));
+    }
+  }
+
+  void _trackTranscriptWatermark(AgentEvent event) {
+    final sessionId = event.sessionId;
+    if (sessionId == null || sessionId.isEmpty) {
+      return;
+    }
+    if (!eventAffectsTranscript(event.type) || event.seq <= 0) {
+      return;
+    }
+    final current = _transcriptSeqBySession[sessionId] ?? 0;
+    if (event.seq > current) {
+      _transcriptSeqBySession[sessionId] = event.seq;
     }
   }
 
