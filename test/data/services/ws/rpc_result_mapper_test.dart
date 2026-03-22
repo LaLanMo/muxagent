@@ -110,12 +110,21 @@ void main() {
     expect(dto.events.first['type'], 'message.delta');
   });
 
+  test('parses events.resync null events as empty list', () {
+    final dto = RpcResyncResponseDto.fromJson({
+      'events': null,
+      'status': 'reset',
+      'streamEpoch': 99,
+      'replayedThroughSeq': 0,
+    });
+
+    expect(dto.status, RpcResyncStatusDto.reset);
+    expect(dto.events, isEmpty);
+  });
+
   test('rejects events.resync envelopes missing required replay fields', () {
     expect(
-      () => RpcResyncResponseDto.fromJson({
-        'events': const [],
-        'replayedThroughSeq': 12,
-      }),
+      () => RpcResyncResponseDto.fromJson({'replayedThroughSeq': 12}),
       throwsA(isA<FormatException>()),
     );
     expect(

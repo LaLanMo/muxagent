@@ -90,8 +90,14 @@ class RpcResyncResponseDto with _$RpcResyncResponseDto {
     required int replayedThroughSeq,
   }) = _RpcResyncResponseDto;
 
-  factory RpcResyncResponseDto.fromJson(Map<String, dynamic> json) =>
-      _$RpcResyncResponseDtoFromJson(json);
+  factory RpcResyncResponseDto.fromJson(Map<String, dynamic> json) {
+    if (!json.containsKey('events')) {
+      throw FormatException('Expected events field');
+    }
+    final normalized = Map<String, dynamic>.from(json);
+    normalized['events'] ??= const <Object>[];
+    return _$RpcResyncResponseDtoFromJson(normalized);
+  }
 }
 
 @freezed
