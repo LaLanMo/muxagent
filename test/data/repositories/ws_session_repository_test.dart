@@ -225,7 +225,22 @@ void main() {
               'sessionId': 'sid-1',
               'title': 'Hello',
               'cwd': '/workspace',
+              'runtime': 'codex',
               'status': 'waiting_approval',
+              'configOptions': [
+                {
+                  'id': 'mode',
+                  'name': 'Approval Preset',
+                  'type': 'select',
+                  'category': 'mode',
+                  'currentValue': 'auto',
+                  'options': [
+                    {'value': 'full-access', 'name': 'Full Access'},
+                    {'value': 'auto', 'name': 'Auto'},
+                    {'value': 'read-only', 'name': 'Read Only'},
+                  ],
+                },
+              ],
             },
           ],
         },
@@ -243,7 +258,13 @@ void main() {
         'runtime': 'codex',
       });
       expect(sessions.single.title, 'Hello');
+      expect(sessions.single.runtime, 'codex');
       expect(sessions.single.status.value, 'waiting_approval');
+      expect(sessions.single.configSnapshot?.currentMode?.id, 'auto');
+      expect(
+        sessions.single.configSnapshot?.availableModes.map((mode) => mode.id),
+        ['full-access', 'auto', 'read-only'],
+      );
 
       relay.nextPayload = {
         'result': {

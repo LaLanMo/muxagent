@@ -353,11 +353,14 @@ class ChatScreen extends GetView<ChatViewModel> {
                               controller.currentMode.value != null) ...[
                             const SizedBox(width: 6),
                             GestureDetector(
-                              onTap: controller.toggleModeDropdown,
+                              onTap: controller.canOpenModeDropdown
+                                  ? controller.toggleModeDropdown
+                                  : null,
                               child: _buildModePill(
                                 controller.currentMode.value!,
-                                showChevron: true,
+                                showChevron: controller.canOpenModeDropdown,
                                 isOpen: controller.showModeDropdown.value,
+                                isLoading: controller.isChangingMode.value,
                               ),
                             ),
                           ],
@@ -488,6 +491,7 @@ class ChatScreen extends GetView<ChatViewModel> {
     ModeOption mode, {
     bool showChevron = false,
     bool isOpen = false,
+    bool isLoading = false,
   }) {
     final dotColor = _modeColor(mode);
     final bgColor = _modeBgColor(mode);
@@ -515,6 +519,16 @@ class ChatScreen extends GetView<ChatViewModel> {
               color: dotColor,
             ),
           ),
+          if (isLoading) ...[
+            const SizedBox(width: 6),
+            SizedBox.square(
+              dimension: 11,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.6,
+                valueColor: AlwaysStoppedAnimation<Color>(dotColor),
+              ),
+            ),
+          ],
           if (showChevron) ...[
             const SizedBox(width: 4),
             Icon(
@@ -529,6 +543,9 @@ class ChatScreen extends GetView<ChatViewModel> {
   }
 
   Widget _buildModeDropdown() {
+    if (!controller.canOpenModeDropdown) {
+      return const SizedBox.shrink();
+    }
     final modes = controller.availableModes.toList();
     if (modes.isEmpty) {
       return const SizedBox.shrink();
@@ -557,17 +574,18 @@ class ChatScreen extends GetView<ChatViewModel> {
   }
 
   Widget _buildModeRow(ModeOption mode, bool isSelected) {
+    final isBusy = controller.isChangingMode.value;
     final bgColor = isSelected ? _modeBgColor(mode) : Colors.transparent;
     final accentColor = _modeColor(mode);
     final textColor = isSelected ? accentColor : AppTheme.textPrimary;
 
     return GestureDetector(
-      onTap: () => controller.changeMode(mode),
+      onTap: isBusy ? null : () => controller.changeMode(mode),
       behavior: HitTestBehavior.opaque,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: isBusy ? bgColor.withValues(alpha: 0.7) : bgColor,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(

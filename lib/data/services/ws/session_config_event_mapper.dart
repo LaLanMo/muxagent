@@ -1,6 +1,7 @@
 import '../../../domain/enums.dart';
 import '../../../domain/event.dart';
 import '../../../domain/session_config_change.dart';
+import 'models/acp_session_models.dart';
 import 'models/session_config_event_models.dart';
 
 class SessionConfigEventMapper {
@@ -8,6 +9,17 @@ class SessionConfigEventMapper {
     ModeChangedEventEnvelopeDto dto,
     String machineId,
   ) {
+    AcpSessionConfigOptionDto? modeConfigOption;
+    final configOptions =
+        dto.modeChanged.acp?.configOptionUpdate?.configOptions;
+    if (configOptions != null) {
+      for (final option in configOptions) {
+        if (option.category == 'mode') {
+          modeConfigOption = option;
+          break;
+        }
+      }
+    }
     return AgentEvent(
       type: EventType.modeChanged,
       sessionId: dto.sessionId,
@@ -16,6 +28,19 @@ class SessionConfigEventMapper {
       machineId: machineId,
       modeChange: SessionModeChange(
         currentModeId: dto.modeChanged.app.currentModeId,
+        configId: modeConfigOption?.id,
+        values: modeConfigOption == null
+            ? const []
+            : modeConfigOption.options
+                  .flatten()
+                  .map(
+                    (value) => SessionConfigValue(
+                      value: value.value,
+                      name: value.name,
+                      description: value.description,
+                    ),
+                  )
+                  .toList(),
       ),
     );
   }

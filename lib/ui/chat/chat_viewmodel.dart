@@ -92,6 +92,33 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   @visibleForTesting
+  static bool shouldRetryRepairAfterSessionSnapshotSync({
+    required ChatUiMode uiMode,
+    required bool canRepair,
+    required bool hasPendingRepair,
+    required SessionChatCacheEntry? entry,
+    required int transcriptWatermark,
+    required bool isRebuilding,
+    required bool hasActiveSessionLoad,
+  }) {
+    if (isRebuilding || hasActiveSessionLoad) {
+      return false;
+    }
+    if (uiMode != ChatUiMode.viewOnly && uiMode != ChatUiMode.unsupported) {
+      return false;
+    }
+    if (!hasPendingRepair) {
+      return false;
+    }
+    return canRepair &&
+        shouldRepairCachedSession(
+          entry: entry,
+          hasRenderableVisibleState: entry?.isRenderable ?? false,
+          transcriptWatermark: transcriptWatermark,
+        );
+  }
+
+  @visibleForTesting
   static ChatUiMode initialUiModeForCachedSession({
     required SessionChatCacheEntry entry,
     required bool canRepair,
@@ -166,6 +193,8 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   final isVoiceRecording = false.obs;
   final isTranscribing = false.obs;
   final showModeDropdown = false.obs;
+  final isChangingMode = false.obs;
+  final pendingModeId = ''.obs;
   final showFilePicker = false.obs;
   final currentModel = Rxn<String>();
   final availableModels = <ModelInfo>[].obs;
@@ -195,8 +224,34 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   /// Live usage info for this session (cost, tokens, context window).
   UsageInfo? get usageInfo => _eventRepo.liveUsageFor(sessionId);
 
-  bool get hasModeOptions =>
-      availableModes.isNotEmpty || currentMode.value != null;
+  bool get hasModeOptions => currentMode.value != null;
+  bool get canOpenModeDropdown {
+    return canOpenModeDropdownFor(
+      currentMode: currentMode.value,
+      availableModes: availableModes,
+      isChangingMode: isChangingMode.value,
+    );
+  }
+
+  @visibleForTesting
+  static bool canOpenModeDropdownFor({
+    required ModeOption? currentMode,
+    required List<ModeOption> availableModes,
+    required bool isChangingMode,
+  }) {
+    if (isChangingMode) {
+      return false;
+    }
+    if (currentMode == null || availableModes.length < 2) {
+      return false;
+    }
+    for (final mode in availableModes) {
+      if (mode.id == currentMode.id) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   String _browsePath = '';
   int _atPosition = -1;
@@ -225,6 +280,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   final _rebuildBacklog = <AgentEvent>[];
   SessionChatCacheEntry? _lastCacheEntry;
   Future<void>? _sessionLoadFuture;
+  bool _pendingTranscriptRepair = false;
   int _visibleTranscriptWatermark = 0;
   int _rebuildTranscriptWatermark = 0;
   String? _initialPrompt;
@@ -254,7 +310,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     final existing = _eventRepo.sessionById(sessionId);
     if (existing != null) {
       sessionStatus.value = existing.status;
-      currentMode.value = _resolveMode(existing.mode);
       runtimeId.value = existing.runtime;
       if (routeCwd.isEmpty && existing.cwd.isNotEmpty) {
         effectiveCwd.value = existing.cwd;
@@ -282,11 +337,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     final isNewSession = args['isNewSession'] as bool? ?? false;
 
     if (isNewSession) {
-      final configSnapshot = args['configSnapshot'] as SessionConfigSnapshot?;
-      if (configSnapshot != null) {
-        _applyConfigSnapshot(configSnapshot, schedulePersist: false);
-      }
       _attachSubscriptions();
+      _syncSessionSnapshotFromRepository();
+      unawaited(_refreshSessionConfigInBackground());
       uiMode.value = ChatUiMode.normal;
       isLoading.value = false;
       _scheduleScrollStateSync();
@@ -327,6 +380,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       if (isClosed) return;
       if (_isRebuilding) return;
       _syncSessionSnapshotFromRepository();
+      unawaited(_maybeResumeRepairAfterSessionSnapshotSync());
     });
   }
 
@@ -371,6 +425,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         hydrated.entry,
         hasRenderableVisibleState: true,
       );
+      _pendingTranscriptRepair = initialNeedsRepair;
       uiMode.value = initialUiModeForCachedSession(
         entry: hydrated.entry,
         canRepair: _canRepairSession(),
@@ -393,7 +448,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       _lastCacheEntry,
       hasRenderableVisibleState: hydrated != null,
     );
+    _pendingTranscriptRepair = needsRepair;
     if (!needsRepair) {
+      unawaited(_refreshSessionConfigInBackground());
       uiMode.value = ChatUiMode.normal;
       _scrollToBottom();
       _maybeSendInitialPrompt();
@@ -401,6 +458,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     }
 
     if (!_canRepairSession()) {
+      unawaited(_refreshSessionConfigInBackground());
       uiMode.value = hydrated != null
           ? ChatUiMode.viewOnly
           : ChatUiMode.unsupported;
@@ -409,13 +467,13 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     }
 
     await _performSessionLoad(preserveVisible: hydrated != null);
+    unawaited(_refreshSessionConfigInBackground());
     _maybeSendInitialPrompt();
   }
 
   void _applyHydratedCache(SessionChatCacheHydrated hydrated) {
     chatState.replaceWith(hydrated.chatState);
     _visibleTranscriptWatermark = hydrated.entry.lastAppliedSeq;
-    _applyConfigSnapshot(hydrated.configSnapshot, schedulePersist: false);
     if (hydrated.entry.title.isNotEmpty) {
       sessionTitle.value = hydrated.entry.title;
     }
@@ -469,13 +527,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       if (session.cwd.isNotEmpty) {
         effectiveCwd.value = session.cwd;
       }
-      if (session.model != null && session.model!.isNotEmpty) {
-        currentModel.value = session.model;
-      }
-      final mode = _resolveMode(session.mode);
-      if (mode != null) {
-        currentMode.value = mode;
-      }
+      _applyRepositoryConfigSnapshot(session.configSnapshot);
     }
 
     for (final approval in _eventRepo.approvalsForSession(sessionId)) {
@@ -557,6 +609,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (!_hasSeenDisconnect) return;
 
     if (result.transcript == TranscriptRecoveryState.complete) {
+      unawaited(_refreshSessionConfigInBackground());
       _hasSeenDisconnect = false;
       return;
     }
@@ -575,7 +628,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     );
     final refreshed = await _chatCacheRepo.reloadSession(sessionId);
     _lastCacheEntry = refreshed;
+    _pendingTranscriptRepair = true;
     if (!_canRepairSession()) {
+      unawaited(_refreshSessionConfigInBackground());
       if (refreshed != null && refreshed.isRenderable) {
         uiMode.value = ChatUiMode.viewOnly;
       }
@@ -585,22 +640,66 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       preserveVisible:
           _hasVisibleTranscript || (refreshed?.isRenderable ?? false),
     );
+    unawaited(_refreshSessionConfigInBackground());
     if (!isClosed) {
       _hasSeenDisconnect = false;
     }
   }
 
-  void _applyConfigSnapshot(
-    SessionConfigSnapshot snapshot, {
-    bool schedulePersist = true,
-  }) {
+  void _applyRepositoryConfigSnapshot(SessionConfigSnapshot snapshot) {
     modelConfigId.value = snapshot.modelConfigId ?? '';
     currentModel.value = snapshot.currentModel;
     availableModels.value = snapshot.availableModels;
     availableModes.value = snapshot.availableModes;
     currentMode.value = snapshot.currentMode;
-    if (schedulePersist) {
-      _scheduleSnapshotWrite();
+    if (!canOpenModeDropdown) {
+      showModeDropdown.value = false;
+    }
+  }
+
+  Future<void> _maybeResumeRepairAfterSessionSnapshotSync() async {
+    final repairStillNeeded = shouldRepairCachedSession(
+      entry: _lastCacheEntry,
+      hasRenderableVisibleState: _lastCacheEntry?.isRenderable ?? false,
+      transcriptWatermark: _eventRepo.transcriptWatermarkFor(sessionId),
+    );
+    if (!repairStillNeeded) {
+      _pendingTranscriptRepair = false;
+    }
+    if (!ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+      uiMode: uiMode.value,
+      canRepair: _canRepairSession(),
+      hasPendingRepair: _pendingTranscriptRepair,
+      entry: _lastCacheEntry,
+      transcriptWatermark: _eventRepo.transcriptWatermarkFor(sessionId),
+      isRebuilding: _isRebuilding,
+      hasActiveSessionLoad: _sessionLoadFuture != null,
+    )) {
+      return;
+    }
+    await _performSessionLoad(
+      preserveVisible:
+          _hasVisibleTranscript || (_lastCacheEntry?.isRenderable ?? false),
+    );
+    unawaited(_refreshSessionConfigInBackground());
+    _maybeSendInitialPrompt();
+  }
+
+  Future<void> _refreshSessionConfigInBackground() async {
+    if (isClosed ||
+        machineId.isEmpty ||
+        connState.value != ConnState.connected ||
+        _sessionLoadFuture != null) {
+      return;
+    }
+    try {
+      await _eventRepo.refreshSessionConfig(
+        machineId: machineId,
+        sessionId: sessionId,
+        runtime: runtimeId.value.trim().isEmpty ? null : runtimeId.value.trim(),
+      );
+    } catch (e) {
+      debugPrint('[ChatVM] refresh session config failed: $e');
     }
   }
 
@@ -653,6 +752,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       final session = _eventRepo.sessionById(sessionId);
       final mode = session?.mode ?? '';
       final model = session?.model ?? '';
+      final baselineConfigRevision = _eventRepo.sessionConfigRevisionFor(
+        sessionId,
+      );
 
       final response = await _wsRepo.loadSession(
         machineId: machineId,
@@ -673,7 +775,12 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         configOptions: response.acp.configOptions ?? const [],
         modes: response.acp.modes,
       );
-      _applyConfigSnapshot(snapshot, schedulePersist: false);
+      await _eventRepo.persistSessionRuntimeAndCwd(
+        sessionId,
+        runtime: loadedRuntime.isNotEmpty ? loadedRuntime : loadRuntime,
+        cwd: loadedCwd,
+      );
+      _syncSessionSnapshotFromRepository();
 
       _historyTimeout = Timer(const Duration(seconds: 30), () {
         if (!isClosed &&
@@ -687,14 +794,17 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       if (!historyCompleted) {
         throw TimeoutException('session.load did not finish replaying history');
       }
-      await _eventRepo.persistSessionRuntimeAndCwd(
-        sessionId,
-        runtime: loadedRuntime.isNotEmpty ? loadedRuntime : loadRuntime,
-        cwd: loadedCwd,
-      );
-      final updatedSession = _eventRepo.sessionById(sessionId);
-      if (updatedSession != null && updatedSession.cwd.isNotEmpty) {
-        effectiveCwd.value = updatedSession.cwd;
+      if (_hasConfigSnapshotData(snapshot)) {
+        await _eventRepo.applySessionConfigSnapshotIfUnchanged(
+          sessionId,
+          baselineRevision: baselineConfigRevision,
+          snapshot: snapshot,
+          updatedAt: DateTime.now(),
+        );
+      }
+      final refreshedSession = _eventRepo.sessionById(sessionId);
+      if (refreshedSession != null && refreshedSession.cwd.isNotEmpty) {
+        effectiveCwd.value = refreshedSession.cwd;
       } else {
         effectiveCwd.value = loadedCwd;
       }
@@ -707,6 +817,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       _syncSessionSnapshotFromRepository();
       await _flushVisibleSnapshot(promoteReady: true, force: true);
       if (!isClosed && loadToken == _recoveryEpoch) {
+        _pendingTranscriptRepair = false;
         uiMode.value = ChatUiMode.normal;
         isLoading.value = false;
       }
@@ -763,6 +874,15 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       chatState.orderedMessages.isNotEmpty ||
       chatState.approvals.isNotEmpty ||
       chatState.planEntries.isNotEmpty;
+
+  bool _hasConfigSnapshotData(SessionConfigSnapshot snapshot) {
+    return snapshot.modeConfigId != null ||
+        snapshot.currentMode != null ||
+        snapshot.availableModes.isNotEmpty ||
+        snapshot.modelConfigId != null ||
+        snapshot.currentModel != null ||
+        snapshot.availableModels.isNotEmpty;
+  }
 
   bool get _hasPersistableVisibleTranscript =>
       chatState.orderedMessages.any(
@@ -918,25 +1038,12 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
       case EventType.modeChanged:
         if (updateVisibleCollections) {
-          currentMode.value = _resolveMode(event.modeChange?.currentModeId);
-          _scheduleSnapshotWrite();
+          _syncSessionSnapshotFromRepository();
         }
 
       case EventType.modelChanged:
         if (event.configChange != null && updateVisibleCollections) {
-          final configChange = event.configChange!;
-          currentModel.value = configChange.currentValue;
-          modelConfigId.value = configChange.configId;
-          availableModels.value = configChange.values
-              .map(
-                (value) => ModelInfo(
-                  value: value.value,
-                  name: value.name,
-                  description: value.description,
-                ),
-              )
-              .toList();
-          _scheduleSnapshotWrite();
+          _syncSessionSnapshotFromRepository();
         }
 
       case EventType.historyComplete:
@@ -961,18 +1068,17 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   void toggleModeDropdown() {
-    if (availableModes.isEmpty) return;
+    if (!canOpenModeDropdown) return;
     showModeDropdown.toggle();
   }
 
   Future<void> changeMode(ModeOption mode) async {
-    if (!canMutateSession) return;
+    if (!canMutateSession || isChangingMode.value) return;
     showModeDropdown.value = false;
     if (mode.id == currentMode.value?.id) return;
 
-    final previous = currentMode.value;
-    currentMode.value = mode;
-
+    isChangingMode.value = true;
+    pendingModeId.value = mode.id;
     try {
       await _wsRepo.setMode(
         machineId: machineId,
@@ -982,20 +1088,10 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       _eventRepo.setSessionMode(sessionId, mode.id);
     } catch (e) {
       debugPrint('[ChatVM] changeMode failed: $e');
-      currentMode.value = previous;
+    } finally {
+      isChangingMode.value = false;
+      pendingModeId.value = '';
     }
-  }
-
-  ModeOption? _resolveMode(String? modeID) {
-    final id = modeID ?? '';
-    if (id.isEmpty) return null;
-    for (final mode in availableModes) {
-      if (mode.id == id) return mode;
-    }
-    if (!ModeOption.isVisibleForRuntime(runtimeId.value, id)) {
-      return availableModes.isNotEmpty ? availableModes.first : null;
-    }
-    return ModeOption.fromId(id);
   }
 
   Future<void> changeModel(String value) async {
@@ -1007,8 +1103,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     debugPrint(
       '[ChatVM] changeModel: $currentModel → $value (configId=$configId)',
     );
-    final previous = currentModel.value;
-    currentModel.value = value;
 
     try {
       await _wsRepo.setConfigOption(
@@ -1020,7 +1114,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       _eventRepo.setSessionModel(sessionId, value);
     } catch (e) {
       debugPrint('[ChatVM] changeModel failed: $e');
-      currentModel.value = previous;
     }
   }
 
@@ -1120,16 +1213,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     _scheduleScrollStateSync();
   }
 
-  SessionConfigSnapshot _currentConfigSnapshot() {
-    return SessionConfigSnapshot(
-      modelConfigId: modelConfigId.value,
-      currentModel: currentModel.value,
-      currentMode: currentMode.value,
-      availableModels: availableModels.toList(),
-      availableModes: availableModes.toList(),
-    );
-  }
-
   void _scheduleSnapshotWrite() {
     _cacheWriteDebounce?.cancel();
     _cacheWriteDebounce = Timer(const Duration(milliseconds: 250), () {
@@ -1182,7 +1265,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
           machineId: machineId,
           title: sessionTitle.value,
           chatState: chatState,
-          configSnapshot: _currentConfigSnapshot(),
+          configSnapshot: _eventRepo.sessionConfigSnapshotFor(sessionId),
           cacheState: nextState,
           lastAppliedSeq: _persistedTranscriptWatermark(),
         );

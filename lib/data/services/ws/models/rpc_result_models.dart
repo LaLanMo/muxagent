@@ -2,6 +2,7 @@
 
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import 'acp_session_models.dart';
 import 'approval_event_models.dart';
 
 part 'rpc_result_models.freezed.dart';
@@ -17,6 +18,13 @@ List<Map<String, dynamic>> _requiredObjectList(Object? value) {
     }
     return Map<String, dynamic>.from(item);
   }).toList();
+}
+
+List<Map<String, dynamic>>? _nullableObjectList(Object? value) {
+  if (value == null) {
+    return null;
+  }
+  return _requiredObjectList(value);
 }
 
 String _requiredString(Object? value) {
@@ -96,7 +104,12 @@ class RpcResyncResponseDto with _$RpcResyncResponseDto {
     }
     final normalized = Map<String, dynamic>.from(json);
     normalized['events'] ??= const <Object>[];
-    return _$RpcResyncResponseDtoFromJson(normalized);
+    return RpcResyncResponseDto(
+      events: _requiredObjectList(normalized['events']),
+      status: _requiredResyncStatus(normalized['status']),
+      streamEpoch: _requiredPositiveInt(normalized['streamEpoch']),
+      replayedThroughSeq: _requiredInt(normalized['replayedThroughSeq']),
+    );
   }
 }
 
@@ -127,9 +140,12 @@ class RpcResolvedSessionDto with _$RpcResolvedSessionDto {
     required String sessionId,
     @JsonKey(fromJson: _nullableString) String? title,
     @JsonKey(fromJson: _nullableString) String? cwd,
+    @JsonKey(fromJson: _nullableString) String? runtime,
     @JsonKey(fromJson: _nullableString) String? status,
     @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
     DateTime? updatedAt,
+    @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+    List<AcpSessionConfigOptionDto>? configOptions,
   }) = _RpcResolvedSessionDto;
 
   factory RpcResolvedSessionDto.fromJson(Map<String, dynamic> json) =>
@@ -204,6 +220,16 @@ List<RpcResolvedSessionDto> _resolvedSessionListFromJson(Object? value) {
   return _requiredObjectList(
     value,
   ).map(RpcResolvedSessionDto.fromJson).toList();
+}
+
+List<AcpSessionConfigOptionDto>? _nullableConfigOptionListFromJson(
+  Object? value,
+) {
+  final items = _nullableObjectList(value);
+  if (items == null) {
+    return null;
+  }
+  return items.map(AcpSessionConfigOptionDto.fromJson).toList();
 }
 
 List<ApprovalWireDto> _approvalWireListFromJson(Object? value) {

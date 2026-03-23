@@ -1,7 +1,13 @@
 class SessionModeChange {
   final String currentModeId;
+  final String? configId;
+  final List<SessionConfigValue> values;
 
-  const SessionModeChange({required this.currentModeId});
+  const SessionModeChange({
+    required this.currentModeId,
+    this.configId,
+    this.values = const [],
+  });
 }
 
 class SessionConfigValue {

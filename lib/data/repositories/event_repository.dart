@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
@@ -7,11 +8,17 @@ import '../../domain/approval.dart';
 import '../../domain/cost_info.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
+import '../../domain/model_info.dart';
+import '../../domain/mode_option.dart';
 import '../../domain/session.dart';
+import '../../domain/session_config_change.dart';
+import '../../domain/session_config_snapshot.dart';
 import '../../domain/usage_info.dart';
 import '../local/session_database.dart';
+import '../services/local/session_config_snapshot_codec.dart';
 import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/ws_models.dart';
+import '../services/ws/rpc_result_mapper.dart';
 import '../services/ws/ws_types.dart';
 import 'replay_cursor_repository.dart';
 import 'session_chat_cache_repository.dart';
@@ -106,6 +113,8 @@ class EventRepository {
   final Map<String, int> _bootstrapObservedSeqByMachine = {};
   final Map<String, _ResyncFenceState> _resyncFenceByMachine = {};
   final Map<String, int> _transcriptSeqBySession = {};
+  final Map<String, int> _configRevisionBySession = {};
+  final Map<String, Future<void>> _configRefreshBySession = {};
   Timer? _replayCursorPersistTimer;
   bool _replayCursorDirty = false;
 
@@ -142,6 +151,72 @@ class EventRepository {
     return null;
   }
 
+  static bool _hasConfigSnapshotData(SessionConfigSnapshot snapshot) {
+    return snapshot.modeConfigId != null ||
+        snapshot.currentMode != null ||
+        snapshot.availableModes.isNotEmpty ||
+        snapshot.modelConfigId != null ||
+        snapshot.currentModel != null ||
+        snapshot.availableModels.isNotEmpty;
+  }
+
+  static ModeOption? _resolveModeOption({
+    required String? modeId,
+    required List<ModeOption> availableModes,
+    ModeOption? fallback,
+  }) {
+    final normalized = (modeId ?? '').trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+    for (final option in availableModes) {
+      if (option.id == normalized) {
+        return option;
+      }
+    }
+    if (fallback != null && fallback.id == normalized) {
+      return fallback;
+    }
+    return ModeOption.fromId(normalized);
+  }
+
+  static List<ModeOption> _modeOptionsFromValues(
+    String runtimeId,
+    List<SessionConfigValue> values,
+  ) {
+    return ModeOption.orderedForRuntime(
+      runtimeId,
+      values.map(
+        (value) => ModeOption.fromConfigValue(
+          value: value.value,
+          name: value.name,
+          description: value.description,
+        ),
+      ),
+    );
+  }
+
+  static List<ModelInfo> _modelOptionsFromValues(
+    List<SessionConfigValue> values,
+  ) {
+    return values
+        .map(
+          (value) => ModelInfo.fromConfigValue(
+            value: value.value,
+            name: value.name,
+            description: value.description,
+          ),
+        )
+        .toList();
+  }
+
+  int _configRevision(String sessionId) =>
+      _configRevisionBySession[sessionId] ?? 0;
+
+  void _bumpConfigRevision(String sessionId) {
+    _configRevisionBySession[sessionId] = _configRevision(sessionId) + 1;
+  }
+
   AgentSession _mergeSessionSnapshot(
     AgentSession? existing,
     AgentSession incoming,
@@ -151,11 +226,18 @@ class EventRepository {
       if (incoming.title.isEmpty) {
         incoming.title = existing.title;
       }
+      if (!_hasConfigSnapshotData(incoming.configSnapshot)) {
+        incoming.configSnapshot = existing.configSnapshot;
+      }
+      incoming.model ??= incoming.configSnapshot.currentModel ?? existing.model;
       incoming.model ??= existing.model;
       incoming.cost ??= existing.cost;
       incoming.runtime = _preferNonEmpty(incoming.runtime, existing.runtime);
       incoming.cwd = _preferNonEmpty(incoming.cwd, existing.cwd);
-      incoming.mode = _preferMode(incoming.mode, existing.mode);
+      incoming.mode = _preferMode(
+        incoming.configSnapshot.currentMode?.id,
+        _preferMode(incoming.mode, existing.mode),
+      );
       incoming.isRead = existing.isRead;
     }
 
@@ -165,6 +247,121 @@ class EventRepository {
     );
 
     return incoming;
+  }
+
+  SessionConfigSnapshot sessionConfigSnapshotFor(String sessionId) {
+    return sessions[sessionId]?.configSnapshot ?? const SessionConfigSnapshot();
+  }
+
+  int sessionConfigRevisionFor(String sessionId) => _configRevision(sessionId);
+
+  Future<void> _persistSessionConfigSnapshot(
+    AgentSession session, {
+    bool includeUpdatedAt = true,
+    bool includeRuntime = false,
+    bool includeCwd = false,
+    bool includeTitle = false,
+  }) {
+    final fields = <String, dynamic>{
+      'mode': session.mode ?? '',
+      'model': session.model,
+      'config_snapshot_json': jsonEncode(
+        serializeSessionConfigSnapshot(session.configSnapshot),
+      ),
+    };
+    if (includeUpdatedAt) {
+      fields['updated_at'] = session.updatedAt.toIso8601String();
+    }
+    if (includeRuntime) {
+      fields['runtime'] = session.runtime;
+    }
+    if (includeCwd) {
+      fields['cwd'] = session.cwd;
+    }
+    if (includeTitle) {
+      fields['title'] = session.title;
+    }
+    return SessionDatabase.updateFields(session.id, fields);
+  }
+
+  void _applySessionConfigSnapshotToSession(
+    AgentSession session,
+    SessionConfigSnapshot snapshot, {
+    DateTime? updatedAt,
+    bool notify = true,
+    bool includeRuntime = false,
+    bool includeCwd = false,
+    bool includeTitle = false,
+  }) {
+    session.configSnapshot = snapshot;
+    session.mode = snapshot.currentMode?.id;
+    session.model = snapshot.currentModel;
+    if (updatedAt != null) {
+      session.updatedAt = updatedAt;
+    }
+    _bumpConfigRevision(session.id);
+    unawaited(
+      _persistSessionConfigSnapshot(
+        session,
+        includeUpdatedAt: updatedAt != null,
+        includeRuntime: includeRuntime,
+        includeCwd: includeCwd,
+        includeTitle: includeTitle,
+      ),
+    );
+    if (notify) {
+      _sessionsChangedController.add(null);
+    }
+  }
+
+  void _applyModeChangeToSession(
+    AgentSession session,
+    SessionModeChange change,
+    DateTime updatedAt,
+  ) {
+    final runtime = session.runtime;
+    final existingSnapshot = session.configSnapshot;
+    final availableModes = change.values.isNotEmpty
+        ? _modeOptionsFromValues(runtime, change.values)
+        : existingSnapshot.availableModes;
+    final currentMode = _resolveModeOption(
+      modeId: change.currentModeId,
+      availableModes: availableModes,
+      fallback: existingSnapshot.currentMode,
+    );
+    final nextSnapshot = existingSnapshot.copyWith(
+      modeConfigId: change.configId,
+      currentMode: currentMode,
+      clearCurrentMode: currentMode == null,
+      availableModes: availableModes,
+    );
+    _applySessionConfigSnapshotToSession(
+      session,
+      nextSnapshot,
+      updatedAt: updatedAt,
+    );
+  }
+
+  void _applyModelChangeToSession(
+    AgentSession session,
+    SessionConfigChange change,
+    DateTime updatedAt,
+  ) {
+    final existingSnapshot = session.configSnapshot;
+    final availableModels = change.values.isNotEmpty
+        ? _modelOptionsFromValues(change.values)
+        : existingSnapshot.availableModels;
+    final nextSnapshot = existingSnapshot.copyWith(
+      modelConfigId: change.configId,
+      currentModel: change.currentValue,
+      clearCurrentModel: change.currentValue.isEmpty,
+      availableModels: availableModels,
+    );
+    _applySessionConfigSnapshotToSession(
+      session,
+      nextSnapshot,
+      updatedAt: updatedAt,
+    );
   }
 
   /// Load all sessions from SQLite into memory. Call once at startup.
@@ -499,25 +696,15 @@ class EventRepository {
         }
       case EventType.modeChanged:
         final existing = sessions[sessionId];
-        if (existing != null) {
-          final modeId = event.modeChange?.currentModeId;
-          if (modeId != null) {
-            existing.mode = modeId;
-            existing.updatedAt = event.at;
-            SessionDatabase.updateFields(sessionId, {'mode': modeId});
-            _sessionsChangedController.add(null);
-          }
+        final modeChange = event.modeChange;
+        if (existing != null && modeChange != null) {
+          _applyModeChangeToSession(existing, modeChange, event.at);
         }
       case EventType.modelChanged:
         final existing = sessions[sessionId];
-        if (existing != null) {
-          final currentValue = event.configChange?.currentValue;
-          if (currentValue != null) {
-            existing.model = currentValue;
-            existing.updatedAt = event.at;
-            SessionDatabase.updateFields(sessionId, {'model': currentValue});
-            _sessionsChangedController.add(null);
-          }
+        final configChange = event.configChange;
+        if (existing != null && configChange != null) {
+          _applyModelChangeToSession(existing, configChange, event.at);
         }
       case EventType.messageDelta:
       case EventType.toolStarted:
@@ -962,7 +1149,16 @@ class EventRepository {
 
   /// Register a session created via RPC (before any events arrive).
   Future<void> registerSession(AgentSession session) async {
+    if (session.mode == null || session.mode!.isEmpty) {
+      session.mode = session.configSnapshot.currentMode?.id;
+    }
+    if (session.model == null || session.model!.isEmpty) {
+      session.model = session.configSnapshot.currentModel;
+    }
     sessions[session.id] = session;
+    if (_hasConfigSnapshotData(session.configSnapshot)) {
+      _bumpConfigRevision(session.id);
+    }
     await SessionDatabase.insertSession(session);
     _sessionsChangedController.add(null);
   }
@@ -993,15 +1189,26 @@ class EventRepository {
 
     final normalized = (modeId ?? '').trim();
     final nextMode = normalized.isEmpty ? null : normalized;
-    if (existing.mode == nextMode) return;
+    if (existing.mode == nextMode &&
+        existing.configSnapshot.currentMode?.id == nextMode) {
+      return;
+    }
 
-    existing.mode = nextMode;
-    existing.updatedAt = DateTime.now();
-    SessionDatabase.updateFields(sessionId, {
-      'mode': nextMode ?? '',
-      'updated_at': existing.updatedAt.toIso8601String(),
-    });
-    _sessionsChangedController.add(null);
+    final availableModes = existing.configSnapshot.availableModes;
+    final nextSnapshot = existing.configSnapshot.copyWith(
+      currentMode: _resolveModeOption(
+        modeId: nextMode,
+        availableModes: availableModes,
+        fallback: existing.configSnapshot.currentMode,
+      ),
+      clearCurrentMode: nextMode == null,
+      availableModes: availableModes,
+    );
+    _applySessionConfigSnapshotToSession(
+      existing,
+      nextSnapshot,
+      updatedAt: DateTime.now(),
+    );
   }
 
   /// Persist a session model acknowledged by the daemon, even if the async
@@ -1012,15 +1219,151 @@ class EventRepository {
 
     final normalized = (model ?? '').trim();
     final nextModel = normalized.isEmpty ? null : normalized;
-    if (existing.model == nextModel) return;
+    if (existing.model == nextModel &&
+        existing.configSnapshot.currentModel == nextModel) {
+      return;
+    }
 
-    existing.model = nextModel;
-    existing.updatedAt = DateTime.now();
-    SessionDatabase.updateFields(sessionId, {
-      'model': nextModel,
-      'updated_at': existing.updatedAt.toIso8601String(),
+    final nextSnapshot = existing.configSnapshot.copyWith(
+      currentModel: nextModel,
+      clearCurrentModel: nextModel == null,
+      availableModels: existing.configSnapshot.availableModels,
+    );
+    _applySessionConfigSnapshotToSession(
+      existing,
+      nextSnapshot,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<void> applySessionConfigSnapshot(
+    String sessionId,
+    SessionConfigSnapshot snapshot, {
+    DateTime? updatedAt,
+  }) async {
+    final existing = sessions[sessionId];
+    if (existing == null) {
+      return;
+    }
+    _applySessionConfigSnapshotToSession(
+      existing,
+      snapshot,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+  }
+
+  Future<bool> applySessionConfigSnapshotIfUnchanged(
+    String sessionId, {
+    required int baselineRevision,
+    required SessionConfigSnapshot snapshot,
+    DateTime? updatedAt,
+  }) async {
+    final existing = sessions[sessionId];
+    if (existing == null) {
+      return false;
+    }
+    if (_configRevision(sessionId) != baselineRevision) {
+      return false;
+    }
+    _applySessionConfigSnapshotToSession(
+      existing,
+      snapshot,
+      updatedAt: updatedAt ?? DateTime.now(),
+    );
+    return true;
+  }
+
+  Future<void> refreshSessionConfig({
+    required String machineId,
+    required String sessionId,
+    String? runtime,
+  }) {
+    final pending = _configRefreshBySession[sessionId];
+    if (pending != null) {
+      return pending;
+    }
+
+    final future = _runRefreshSessionConfig(
+      machineId: machineId,
+      sessionId: sessionId,
+      runtime: runtime,
+    );
+    _configRefreshBySession[sessionId] = future;
+    future.whenComplete(() {
+      if (identical(_configRefreshBySession[sessionId], future)) {
+        _configRefreshBySession.remove(sessionId);
+      }
     });
-    _sessionsChangedController.add(null);
+    return future;
+  }
+
+  Future<void> _runRefreshSessionConfig({
+    required String machineId,
+    required String sessionId,
+    String? runtime,
+  }) async {
+    final existing = sessions[sessionId];
+    if (existing == null) {
+      return;
+    }
+
+    final baselineRevision = _configRevision(sessionId);
+    final resolvedSessions = await _wsRepo.resolveSessions(
+      machineId: machineId,
+      sessionIds: [sessionId],
+      runtime: runtime,
+    );
+    ResolvedSessionSnapshot? resolved;
+    for (final item in resolvedSessions) {
+      if (item.sessionId == sessionId) {
+        resolved = item;
+        break;
+      }
+    }
+    if (resolved == null) {
+      return;
+    }
+    final nextRuntime = resolved.runtime.isNotEmpty
+        ? resolved.runtime
+        : existing.runtime;
+    final nextCwd = resolved.cwd.isNotEmpty ? resolved.cwd : existing.cwd;
+    final persistRuntime =
+        nextRuntime.isNotEmpty && existing.runtime != nextRuntime;
+    final persistCwd = nextCwd.isNotEmpty && existing.cwd != nextCwd;
+    if (_configRevision(sessionId) != baselineRevision) {
+      if (persistRuntime || persistCwd) {
+        await persistSessionRuntimeAndCwd(
+          sessionId,
+          runtime: nextRuntime,
+          cwd: nextCwd,
+        );
+      }
+      return;
+    }
+    if (resolved.configSnapshot == null) {
+      if (persistRuntime || persistCwd) {
+        await persistSessionRuntimeAndCwd(
+          sessionId,
+          runtime: nextRuntime,
+          cwd: nextCwd,
+        );
+      }
+      return;
+    }
+    if (persistRuntime) {
+      existing.runtime = nextRuntime;
+    }
+    if (persistCwd) {
+      existing.cwd = nextCwd;
+    }
+
+    _applySessionConfigSnapshotToSession(
+      existing,
+      resolved.configSnapshot!,
+      updatedAt: resolved.updatedAt ?? DateTime.now(),
+      includeRuntime: persistRuntime,
+      includeCwd: persistCwd,
+    );
   }
 
   Future<void> persistSessionRuntimeAndCwd(

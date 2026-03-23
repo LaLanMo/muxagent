@@ -6,30 +6,6 @@ part of 'rpc_result_models.dart';
 // JsonSerializableGenerator
 // **************************************************************************
 
-_$RpcResyncResponseDtoImpl _$$RpcResyncResponseDtoImplFromJson(
-  Map<String, dynamic> json,
-) => _$RpcResyncResponseDtoImpl(
-  events: _requiredObjectList(json['events']),
-  status: _requiredResyncStatus(json['status']),
-  streamEpoch: _requiredPositiveInt(json['streamEpoch']),
-  replayedThroughSeq: _requiredInt(json['replayedThroughSeq']),
-);
-
-Map<String, dynamic> _$$RpcResyncResponseDtoImplToJson(
-  _$RpcResyncResponseDtoImpl instance,
-) => <String, dynamic>{
-  'events': instance.events,
-  'status': _$RpcResyncStatusDtoEnumMap[instance.status]!,
-  'streamEpoch': instance.streamEpoch,
-  'replayedThroughSeq': instance.replayedThroughSeq,
-};
-
-const _$RpcResyncStatusDtoEnumMap = {
-  RpcResyncStatusDto.ok: 'ok',
-  RpcResyncStatusDto.gap: 'gap',
-  RpcResyncStatusDto.reset: 'reset',
-};
-
 _$RpcOkResponseDtoImpl _$$RpcOkResponseDtoImplFromJson(
   Map<String, dynamic> json,
 ) => _$RpcOkResponseDtoImpl(ok: _requiredBool(json['ok']));
@@ -52,8 +28,10 @@ _$RpcResolvedSessionDtoImpl _$$RpcResolvedSessionDtoImplFromJson(
   sessionId: _requiredString(json['sessionId']),
   title: _nullableString(json['title']),
   cwd: _nullableString(json['cwd']),
+  runtime: _nullableString(json['runtime']),
   status: _nullableString(json['status']),
   updatedAt: _nullableDateTime(json['updatedAt']),
+  configOptions: _nullableConfigOptionListFromJson(json['configOptions']),
 );
 
 Map<String, dynamic> _$$RpcResolvedSessionDtoImplToJson(
@@ -62,8 +40,10 @@ Map<String, dynamic> _$$RpcResolvedSessionDtoImplToJson(
   'sessionId': instance.sessionId,
   'title': instance.title,
   'cwd': instance.cwd,
+  'runtime': instance.runtime,
   'status': instance.status,
   'updatedAt': instance.updatedAt?.toIso8601String(),
+  'configOptions': instance.configOptions?.map((e) => e.toJson()).toList(),
 };
 
 _$RpcSessionResolveResponseDtoImpl _$$RpcSessionResolveResponseDtoImplFromJson(

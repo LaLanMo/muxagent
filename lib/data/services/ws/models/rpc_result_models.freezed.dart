@@ -15,10 +15,6 @@ final _privateConstructorUsedError = UnsupportedError(
   'It seems like you constructed your class using `MyClass._()`. This constructor is only meant to be used by freezed and you are not supposed to need it nor use it.\nPlease check the documentation here for more information: https://github.com/rrousselGit/freezed#adding-getters-and-methods-to-our-models',
 );
 
-RpcResyncResponseDto _$RpcResyncResponseDtoFromJson(Map<String, dynamic> json) {
-  return _RpcResyncResponseDto.fromJson(json);
-}
-
 /// @nodoc
 mixin _$RpcResyncResponseDto {
   @JsonKey(fromJson: _requiredObjectList)
@@ -29,9 +25,6 @@ mixin _$RpcResyncResponseDto {
   int get streamEpoch => throw _privateConstructorUsedError;
   @JsonKey(name: 'replayedThroughSeq', fromJson: _requiredInt)
   int get replayedThroughSeq => throw _privateConstructorUsedError;
-
-  /// Serializes this RpcResyncResponseDto to a JSON map.
-  Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
 
   /// Create a copy of RpcResyncResponseDto
   /// with the given fields replaced by the non-null parameter values.
@@ -166,7 +159,7 @@ class __$$RpcResyncResponseDtoImplCopyWithImpl<$Res>
 }
 
 /// @nodoc
-@JsonSerializable()
+
 class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
   const _$RpcResyncResponseDtoImpl({
     @JsonKey(fromJson: _requiredObjectList)
@@ -177,9 +170,6 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
     @JsonKey(name: 'replayedThroughSeq', fromJson: _requiredInt)
     required this.replayedThroughSeq,
   }) : _events = events;
-
-  factory _$RpcResyncResponseDtoImpl.fromJson(Map<String, dynamic> json) =>
-      _$$RpcResyncResponseDtoImplFromJson(json);
 
   final List<Map<String, dynamic>> _events;
   @override
@@ -218,7 +208,6 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
                 other.replayedThroughSeq == replayedThroughSeq));
   }
 
-  @JsonKey(includeFromJson: false, includeToJson: false)
   @override
   int get hashCode => Object.hash(
     runtimeType,
@@ -239,11 +228,6 @@ class _$RpcResyncResponseDtoImpl implements _RpcResyncResponseDto {
         this,
         _$identity,
       );
-
-  @override
-  Map<String, dynamic> toJson() {
-    return _$$RpcResyncResponseDtoImplToJson(this);
-  }
 }
 
 abstract class _RpcResyncResponseDto implements RpcResyncResponseDto {
@@ -257,9 +241,6 @@ abstract class _RpcResyncResponseDto implements RpcResyncResponseDto {
     @JsonKey(name: 'replayedThroughSeq', fromJson: _requiredInt)
     required final int replayedThroughSeq,
   }) = _$RpcResyncResponseDtoImpl;
-
-  factory _RpcResyncResponseDto.fromJson(Map<String, dynamic> json) =
-      _$RpcResyncResponseDtoImpl.fromJson;
 
   @override
   @JsonKey(fromJson: _requiredObjectList)
@@ -627,9 +608,14 @@ mixin _$RpcResolvedSessionDto {
   @JsonKey(fromJson: _nullableString)
   String? get cwd => throw _privateConstructorUsedError;
   @JsonKey(fromJson: _nullableString)
+  String? get runtime => throw _privateConstructorUsedError;
+  @JsonKey(fromJson: _nullableString)
   String? get status => throw _privateConstructorUsedError;
   @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
   DateTime? get updatedAt => throw _privateConstructorUsedError;
+  @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+  List<AcpSessionConfigOptionDto>? get configOptions =>
+      throw _privateConstructorUsedError;
 
   /// Serializes this RpcResolvedSessionDto to a JSON map.
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
@@ -652,9 +638,12 @@ abstract class $RpcResolvedSessionDtoCopyWith<$Res> {
     @JsonKey(name: 'sessionId', fromJson: _requiredString) String sessionId,
     @JsonKey(fromJson: _nullableString) String? title,
     @JsonKey(fromJson: _nullableString) String? cwd,
+    @JsonKey(fromJson: _nullableString) String? runtime,
     @JsonKey(fromJson: _nullableString) String? status,
     @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
     DateTime? updatedAt,
+    @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+    List<AcpSessionConfigOptionDto>? configOptions,
   });
 }
 
@@ -679,8 +668,10 @@ class _$RpcResolvedSessionDtoCopyWithImpl<
     Object? sessionId = null,
     Object? title = freezed,
     Object? cwd = freezed,
+    Object? runtime = freezed,
     Object? status = freezed,
     Object? updatedAt = freezed,
+    Object? configOptions = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -696,6 +687,10 @@ class _$RpcResolvedSessionDtoCopyWithImpl<
                 ? _value.cwd
                 : cwd // ignore: cast_nullable_to_non_nullable
                       as String?,
+            runtime: freezed == runtime
+                ? _value.runtime
+                : runtime // ignore: cast_nullable_to_non_nullable
+                      as String?,
             status: freezed == status
                 ? _value.status
                 : status // ignore: cast_nullable_to_non_nullable
@@ -704,6 +699,10 @@ class _$RpcResolvedSessionDtoCopyWithImpl<
                 ? _value.updatedAt
                 : updatedAt // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
+            configOptions: freezed == configOptions
+                ? _value.configOptions
+                : configOptions // ignore: cast_nullable_to_non_nullable
+                      as List<AcpSessionConfigOptionDto>?,
           )
           as $Val,
     );
@@ -723,9 +722,12 @@ abstract class _$$RpcResolvedSessionDtoImplCopyWith<$Res>
     @JsonKey(name: 'sessionId', fromJson: _requiredString) String sessionId,
     @JsonKey(fromJson: _nullableString) String? title,
     @JsonKey(fromJson: _nullableString) String? cwd,
+    @JsonKey(fromJson: _nullableString) String? runtime,
     @JsonKey(fromJson: _nullableString) String? status,
     @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
     DateTime? updatedAt,
+    @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+    List<AcpSessionConfigOptionDto>? configOptions,
   });
 }
 
@@ -747,8 +749,10 @@ class __$$RpcResolvedSessionDtoImplCopyWithImpl<$Res>
     Object? sessionId = null,
     Object? title = freezed,
     Object? cwd = freezed,
+    Object? runtime = freezed,
     Object? status = freezed,
     Object? updatedAt = freezed,
+    Object? configOptions = freezed,
   }) {
     return _then(
       _$RpcResolvedSessionDtoImpl(
@@ -764,6 +768,10 @@ class __$$RpcResolvedSessionDtoImplCopyWithImpl<$Res>
             ? _value.cwd
             : cwd // ignore: cast_nullable_to_non_nullable
                   as String?,
+        runtime: freezed == runtime
+            ? _value.runtime
+            : runtime // ignore: cast_nullable_to_non_nullable
+                  as String?,
         status: freezed == status
             ? _value.status
             : status // ignore: cast_nullable_to_non_nullable
@@ -772,6 +780,10 @@ class __$$RpcResolvedSessionDtoImplCopyWithImpl<$Res>
             ? _value.updatedAt
             : updatedAt // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        configOptions: freezed == configOptions
+            ? _value._configOptions
+            : configOptions // ignore: cast_nullable_to_non_nullable
+                  as List<AcpSessionConfigOptionDto>?,
       ),
     );
   }
@@ -785,9 +797,12 @@ class _$RpcResolvedSessionDtoImpl implements _RpcResolvedSessionDto {
     required this.sessionId,
     @JsonKey(fromJson: _nullableString) this.title,
     @JsonKey(fromJson: _nullableString) this.cwd,
+    @JsonKey(fromJson: _nullableString) this.runtime,
     @JsonKey(fromJson: _nullableString) this.status,
     @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime) this.updatedAt,
-  });
+    @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+    final List<AcpSessionConfigOptionDto>? configOptions,
+  }) : _configOptions = configOptions;
 
   factory _$RpcResolvedSessionDtoImpl.fromJson(Map<String, dynamic> json) =>
       _$$RpcResolvedSessionDtoImplFromJson(json);
@@ -803,14 +818,27 @@ class _$RpcResolvedSessionDtoImpl implements _RpcResolvedSessionDto {
   final String? cwd;
   @override
   @JsonKey(fromJson: _nullableString)
+  final String? runtime;
+  @override
+  @JsonKey(fromJson: _nullableString)
   final String? status;
   @override
   @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
   final DateTime? updatedAt;
+  final List<AcpSessionConfigOptionDto>? _configOptions;
+  @override
+  @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+  List<AcpSessionConfigOptionDto>? get configOptions {
+    final value = _configOptions;
+    if (value == null) return null;
+    if (_configOptions is EqualUnmodifiableListView) return _configOptions;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(value);
+  }
 
   @override
   String toString() {
-    return 'RpcResolvedSessionDto(sessionId: $sessionId, title: $title, cwd: $cwd, status: $status, updatedAt: $updatedAt)';
+    return 'RpcResolvedSessionDto(sessionId: $sessionId, title: $title, cwd: $cwd, runtime: $runtime, status: $status, updatedAt: $updatedAt, configOptions: $configOptions)';
   }
 
   @override
@@ -822,15 +850,28 @@ class _$RpcResolvedSessionDtoImpl implements _RpcResolvedSessionDto {
                 other.sessionId == sessionId) &&
             (identical(other.title, title) || other.title == title) &&
             (identical(other.cwd, cwd) || other.cwd == cwd) &&
+            (identical(other.runtime, runtime) || other.runtime == runtime) &&
             (identical(other.status, status) || other.status == status) &&
             (identical(other.updatedAt, updatedAt) ||
-                other.updatedAt == updatedAt));
+                other.updatedAt == updatedAt) &&
+            const DeepCollectionEquality().equals(
+              other._configOptions,
+              _configOptions,
+            ));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, sessionId, title, cwd, status, updatedAt);
+  int get hashCode => Object.hash(
+    runtimeType,
+    sessionId,
+    title,
+    cwd,
+    runtime,
+    status,
+    updatedAt,
+    const DeepCollectionEquality().hash(_configOptions),
+  );
 
   /// Create a copy of RpcResolvedSessionDto
   /// with the given fields replaced by the non-null parameter values.
@@ -856,9 +897,12 @@ abstract class _RpcResolvedSessionDto implements RpcResolvedSessionDto {
     required final String sessionId,
     @JsonKey(fromJson: _nullableString) final String? title,
     @JsonKey(fromJson: _nullableString) final String? cwd,
+    @JsonKey(fromJson: _nullableString) final String? runtime,
     @JsonKey(fromJson: _nullableString) final String? status,
     @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
     final DateTime? updatedAt,
+    @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+    final List<AcpSessionConfigOptionDto>? configOptions,
   }) = _$RpcResolvedSessionDtoImpl;
 
   factory _RpcResolvedSessionDto.fromJson(Map<String, dynamic> json) =
@@ -875,10 +919,16 @@ abstract class _RpcResolvedSessionDto implements RpcResolvedSessionDto {
   String? get cwd;
   @override
   @JsonKey(fromJson: _nullableString)
+  String? get runtime;
+  @override
+  @JsonKey(fromJson: _nullableString)
   String? get status;
   @override
   @JsonKey(name: 'updatedAt', fromJson: _nullableDateTime)
   DateTime? get updatedAt;
+  @override
+  @JsonKey(name: 'configOptions', fromJson: _nullableConfigOptionListFromJson)
+  List<AcpSessionConfigOptionDto>? get configOptions;
 
   /// Create a copy of RpcResolvedSessionDto
   /// with the given fields replaced by the non-null parameter values.

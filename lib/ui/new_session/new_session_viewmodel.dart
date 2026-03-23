@@ -576,6 +576,7 @@ class NewSessionViewModel extends GetxController {
           runtime: effectiveRuntime,
           cwd: createResponse.app.cwd,
           mode: initialMode.isNotEmpty ? initialMode : null,
+          configSnapshot: configSnapshot,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         ),
@@ -583,7 +584,6 @@ class NewSessionViewModel extends GetxController {
       await _chatCacheRepo.seedEmptyCache(
         sessionId: sessionId,
         machineId: machine.machineId,
-        configSnapshot: configSnapshot,
       );
 
       // Navigate to chat immediately — don't wait for prompt to finish.
@@ -597,7 +597,6 @@ class NewSessionViewModel extends GetxController {
           'cwd': createResponse.app.cwd,
           'sessionTitle': '',
           'isNewSession': true,
-          'configSnapshot': configSnapshot,
           if (prompt.isNotEmpty) 'initialPrompt': prompt,
         },
       );

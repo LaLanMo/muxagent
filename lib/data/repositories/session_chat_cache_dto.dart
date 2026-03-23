@@ -4,11 +4,10 @@ import '../../domain/approval.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/message.dart';
-import '../../domain/model_info.dart';
-import '../../domain/mode_option.dart';
 import '../../domain/plan_entry.dart';
 import '../../domain/session_config_snapshot.dart';
 import '../../domain/tool_activity.dart';
+import '../services/local/session_config_snapshot_codec.dart';
 import '../../ui/chat/chat_state.dart';
 
 const int sessionChatCacheSchemaVersion = 1;
@@ -68,13 +67,7 @@ class SessionChatCacheEntry {
   }
 
   bool get isRenderable {
-    if (!isCompatible || !_isValidChatStateJson(chatStateJson)) {
-      return false;
-    }
-    if (!_isValidConfigSnapshotJson(configSnapshotJson)) {
-      return false;
-    }
-    return isNonEmpty;
+    return isCompatible && _isValidChatStateJson(chatStateJson) && isNonEmpty;
   }
 
   SessionChatCacheEntry copyWith({
@@ -174,6 +167,7 @@ class SessionChatCacheEntry {
 
   static Map<String, dynamic> emptyConfigSnapshotJson() {
     return {
+      'modeConfigId': '',
       'modelConfigId': '',
       'currentModel': null,
       'currentMode': null,
@@ -196,14 +190,6 @@ class SessionChatCacheEntry {
         json['toolsByCallId'] is Map &&
         json['approvalsById'] is Map &&
         json['planEntries'] is List;
-  }
-
-  static bool _isValidConfigSnapshotJson(Map<String, dynamic> json) {
-    return json['modelConfigId'] is String &&
-        json.containsKey('currentModel') &&
-        json.containsKey('currentMode') &&
-        json['availableModels'] is List &&
-        json['availableModes'] is List;
   }
 
   static Map<String, dynamic>? _decodeJsonMap(Object? value) {
@@ -269,10 +255,9 @@ SessionChatCacheHydrated? hydrateSessionChatCacheEntry(
   if (chatState == null) {
     return null;
   }
-  final configSnapshot = _deserializeConfigSnapshot(entry.configSnapshotJson);
-  if (configSnapshot == null) {
-    return null;
-  }
+  final configSnapshot =
+      _deserializeConfigSnapshot(entry.configSnapshotJson) ??
+      const SessionConfigSnapshot();
 
   return SessionChatCacheHydrated(
     entry: entry,
@@ -440,27 +425,7 @@ Map<String, dynamic> _serializePlanEntry(PlanEntry entry) {
 }
 
 Map<String, dynamic> _serializeConfigSnapshot(SessionConfigSnapshot snapshot) {
-  return {
-    'modelConfigId': snapshot.modelConfigId ?? '',
-    'currentModel': snapshot.currentModel,
-    'currentMode': snapshot.currentMode == null
-        ? null
-        : _serializeMode(snapshot.currentMode!),
-    'availableModels': snapshot.availableModels.map(_serializeModel).toList(),
-    'availableModes': snapshot.availableModes.map(_serializeMode).toList(),
-  };
-}
-
-Map<String, dynamic> _serializeModel(ModelInfo model) {
-  return {
-    'value': model.value,
-    'name': model.name,
-    'description': model.description,
-  };
-}
-
-Map<String, dynamic> _serializeMode(ModeOption mode) {
-  return {'id': mode.id, 'label': mode.label, 'description': mode.description};
+  return serializeSessionConfigSnapshot(snapshot);
 }
 
 ChatState? _deserializeChatState(SessionChatCacheEntry entry) {
@@ -805,70 +770,5 @@ PlanEntry? _deserializePlanEntry(Map<String, dynamic> json) {
 }
 
 SessionConfigSnapshot? _deserializeConfigSnapshot(Map<String, dynamic> json) {
-  if (json['modelConfigId'] is! String ||
-      json['availableModels'] is! List ||
-      json['availableModes'] is! List) {
-    return null;
-  }
-
-  final availableModels = <ModelInfo>[];
-  for (final rawModel in json['availableModels'] as List) {
-    if (rawModel is! Map) {
-      return null;
-    }
-    final value = rawModel['value'] as String?;
-    final name = rawModel['name'] as String?;
-    if (value == null || name == null) {
-      return null;
-    }
-    availableModels.add(
-      ModelInfo(
-        value: value,
-        name: name,
-        description: rawModel['description'] as String?,
-      ),
-    );
-  }
-
-  final availableModes = <ModeOption>[];
-  for (final rawMode in json['availableModes'] as List) {
-    if (rawMode is! Map) {
-      return null;
-    }
-    final id = rawMode['id'] as String?;
-    final label = rawMode['label'] as String?;
-    if (id == null || label == null) {
-      return null;
-    }
-    availableModes.add(
-      ModeOption(
-        id: id,
-        label: label,
-        description: rawMode['description'] as String?,
-      ),
-    );
-  }
-
-  final currentModeRaw = json['currentMode'];
-  ModeOption? currentMode;
-  if (currentModeRaw is Map) {
-    final id = currentModeRaw['id'] as String?;
-    final label = currentModeRaw['label'] as String?;
-    if (id == null || label == null) {
-      return null;
-    }
-    currentMode = ModeOption(
-      id: id,
-      label: label,
-      description: currentModeRaw['description'] as String?,
-    );
-  }
-
-  return SessionConfigSnapshot(
-    modelConfigId: json['modelConfigId'] as String,
-    currentModel: json['currentModel'] as String?,
-    currentMode: currentMode,
-    availableModels: availableModels,
-    availableModes: availableModes,
-  );
+  return deserializeSessionConfigSnapshot(json);
 }

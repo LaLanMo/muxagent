@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:muxagent/data/local/session_database.dart';
@@ -15,7 +16,10 @@ import 'package:muxagent/data/services/ws/ws_types.dart';
 import 'package:muxagent/domain/approval.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/event.dart';
+import 'package:muxagent/domain/mode_option.dart';
 import 'package:muxagent/domain/session.dart';
+import 'package:muxagent/domain/session_config_snapshot.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -41,6 +45,7 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   int? lastResyncStreamEpoch;
   int? lastResyncSeq;
   Completer<void>? resyncBlocker;
+  Completer<void>? resolveBlocker;
 
   _FakeWsSessionRepository()
     : super(relay: _NoopRelayWsClient(), sessions: SessionManager());
@@ -80,6 +85,10 @@ class _FakeWsSessionRepository extends WsSessionRepository {
     required Iterable<String> sessionIds,
     String? runtime,
   }) async {
+    final blocker = resolveBlocker;
+    if (blocker != null) {
+      await blocker.future;
+    }
     return nextResolvedSessions;
   }
 }
@@ -100,6 +109,8 @@ void main() {
   databaseFactory = databaseFactoryFfi;
 
   group('EventRepository reconnect helpers', () {
+    late Directory tempDir;
+    late String dbPath;
     late _FakeWsSessionRepository wsRepo;
     late _FakeSessionChatCacheRepository chatCacheRepo;
     late EventRepository repo;
@@ -107,6 +118,11 @@ void main() {
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
+      tempDir = await Directory.systemTemp.createTemp(
+        'muxagent-event-repo-recovery-test-',
+      );
+      dbPath = p.join(tempDir.path, SessionDatabase.databaseFileName);
+      await SessionDatabase.resetForTest(databasePathOverride: dbPath);
       wsRepo = _FakeWsSessionRepository();
       chatCacheRepo = _FakeSessionChatCacheRepository();
       repo = EventRepository(
@@ -133,6 +149,10 @@ void main() {
       repo.dispose();
       await wsRepo.disposeEvents();
       await SessionDatabase.deleteSession(sessionId);
+      await SessionDatabase.resetForTest();
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
     });
 
     test('resync reports noCursor when no event sequence exists', () async {
@@ -405,6 +425,309 @@ void main() {
         await repo.fetchPendingApprovals('machine-1');
 
         expect(repo.pendingApprovals, isEmpty);
+      },
+    );
+
+    test(
+      'refreshSessionConfig applies session-scoped config from resolve',
+      () async {
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: sessionId,
+            title: 'Resolved title',
+            cwd: '/tmp',
+            runtime: 'codex',
+            status: SessionStatus.idle,
+            updatedAt: DateTime.now(),
+            configSnapshot: const SessionConfigSnapshot(
+              modeConfigId: 'mode',
+              currentMode: ModeOption(id: 'read-only', label: 'Read Only'),
+              availableModes: [
+                ModeOption(id: 'full-access', label: 'Full Access'),
+                ModeOption(id: 'read-only', label: 'Read Only'),
+              ],
+            ),
+          ),
+        ];
+
+        await repo.refreshSessionConfig(
+          machineId: 'machine-1',
+          sessionId: sessionId,
+          runtime: 'codex',
+        );
+
+        final session = repo.sessionById(sessionId);
+        expect(session?.configSnapshot.modeConfigId, 'mode');
+        expect(session?.configSnapshot.currentMode?.id, 'read-only');
+        expect(
+          session?.configSnapshot.availableModes
+              .map((mode) => mode.id)
+              .toList(),
+          ['full-access', 'read-only'],
+        );
+        expect(session?.runtime, 'codex');
+        expect(session?.cwd, '/tmp');
+      },
+    );
+
+    test(
+      'refreshSessionConfig persists runtime and cwd even without config snapshot',
+      () async {
+        final runtimeOnlySessionId =
+            'runtime-only-${DateTime.now().microsecondsSinceEpoch}';
+        final now = DateTime.now();
+        await repo.registerSession(
+          AgentSession(
+            id: runtimeOnlySessionId,
+            machineId: 'machine-1',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: runtimeOnlySessionId,
+            title: 'Resolved title',
+            cwd: '/tmp/runtime-only',
+            runtime: 'codex',
+            status: SessionStatus.idle,
+            updatedAt: now,
+            configSnapshot: null,
+          ),
+        ];
+
+        await repo.refreshSessionConfig(
+          machineId: 'machine-1',
+          sessionId: runtimeOnlySessionId,
+        );
+
+        final session = repo.sessionById(runtimeOnlySessionId);
+        expect(session?.runtime, 'codex');
+        expect(session?.cwd, '/tmp/runtime-only');
+
+        await SessionDatabase.deleteSession(runtimeOnlySessionId);
+      },
+    );
+
+    test(
+      'refreshSessionConfig does not overwrite a newer live mode update',
+      () async {
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: sessionId,
+            title: 'Resolved title',
+            cwd: '/tmp',
+            runtime: 'codex',
+            status: SessionStatus.idle,
+            updatedAt: DateTime.now(),
+            configSnapshot: const SessionConfigSnapshot(
+              modeConfigId: 'mode',
+              currentMode: ModeOption(id: 'read-only', label: 'Read Only'),
+              availableModes: [
+                ModeOption(id: 'full-access', label: 'Full Access'),
+                ModeOption(id: 'read-only', label: 'Read Only'),
+              ],
+            ),
+          ),
+        ];
+        wsRepo.resolveBlocker = Completer<void>();
+
+        final refreshFuture = repo.refreshSessionConfig(
+          machineId: 'machine-1',
+          sessionId: sessionId,
+          runtime: 'codex',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'mode.changed',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 12,
+              'modeChanged': {
+                'app': {'currentModeId': 'full-access'},
+                'acp': {
+                  'configOptions': [
+                    {
+                      'id': 'mode',
+                      'name': 'Approval Preset',
+                      'type': 'select',
+                      'category': 'mode',
+                      'currentValue': 'full-access',
+                      'options': [
+                        {'value': 'full-access', 'name': 'Full Access'},
+                        {'value': 'read-only', 'name': 'Read Only'},
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        wsRepo.resolveBlocker!.complete();
+        await refreshFuture;
+
+        final session = repo.sessionById(sessionId);
+        expect(session?.configSnapshot.currentMode?.id, 'full-access');
+        expect(
+          session?.configSnapshot.availableModes
+              .map((mode) => mode.id)
+              .toList(),
+          ['full-access', 'read-only'],
+        );
+      },
+    );
+
+    test(
+      'refreshSessionConfig still persists runtime and cwd after a revision race',
+      () async {
+        final racingSessionId =
+            'revision-race-${DateTime.now().microsecondsSinceEpoch}';
+        final now = DateTime.now();
+        await repo.registerSession(
+          AgentSession(
+            id: racingSessionId,
+            machineId: 'machine-1',
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: racingSessionId,
+            title: 'Resolved title',
+            cwd: '/tmp/revision-race',
+            runtime: 'codex',
+            status: SessionStatus.idle,
+            updatedAt: now,
+            configSnapshot: const SessionConfigSnapshot(
+              modeConfigId: 'mode',
+              currentMode: ModeOption(id: 'read-only', label: 'Read Only'),
+              availableModes: [
+                ModeOption(id: 'full-access', label: 'Full Access'),
+                ModeOption(id: 'read-only', label: 'Read Only'),
+              ],
+            ),
+          ),
+        ];
+        wsRepo.resolveBlocker = Completer<void>();
+
+        final refreshFuture = repo.refreshSessionConfig(
+          machineId: 'machine-1',
+          sessionId: racingSessionId,
+          runtime: 'codex',
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'mode.changed',
+              'machineId': 'machine-1',
+              'sessionId': racingSessionId,
+              'seq': 34,
+              'modeChanged': {
+                'app': {'currentModeId': 'full-access'},
+                'acp': {
+                  'configOptions': [
+                    {
+                      'id': 'mode',
+                      'name': 'Approval Preset',
+                      'type': 'select',
+                      'category': 'mode',
+                      'currentValue': 'full-access',
+                      'options': [
+                        {'value': 'full-access', 'name': 'Full Access'},
+                        {'value': 'read-only', 'name': 'Read Only'},
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        wsRepo.resolveBlocker!.complete();
+        await refreshFuture;
+
+        final session = repo.sessionById(racingSessionId);
+        expect(session?.runtime, 'codex');
+        expect(session?.cwd, '/tmp/revision-race');
+        expect(session?.configSnapshot.currentMode?.id, 'full-access');
+        expect(
+          session?.configSnapshot.availableModes
+              .map((mode) => mode.id)
+              .toList(),
+          ['full-access', 'read-only'],
+        );
+
+        await SessionDatabase.deleteSession(racingSessionId);
+      },
+    );
+
+    test(
+      'applySessionConfigSnapshotIfUnchanged skips stale full snapshots after revision changes',
+      () async {
+        final baselineRevision = repo.sessionConfigRevisionFor(sessionId);
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'mode.changed',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 21,
+              'modeChanged': {
+                'app': {'currentModeId': 'full-access'},
+                'acp': {
+                  'configOptions': [
+                    {
+                      'id': 'mode',
+                      'name': 'Approval Preset',
+                      'type': 'select',
+                      'category': 'mode',
+                      'currentValue': 'full-access',
+                      'options': [
+                        {'value': 'full-access', 'name': 'Full Access'},
+                        {'value': 'read-only', 'name': 'Read Only'},
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final applied = await repo.applySessionConfigSnapshotIfUnchanged(
+          sessionId,
+          baselineRevision: baselineRevision,
+          snapshot: const SessionConfigSnapshot(
+            modeConfigId: 'mode',
+            currentMode: ModeOption(id: 'read-only', label: 'Read Only'),
+            availableModes: [
+              ModeOption(id: 'full-access', label: 'Full Access'),
+              ModeOption(id: 'read-only', label: 'Read Only'),
+            ],
+          ),
+        );
+
+        expect(applied, isFalse);
+        final session = repo.sessionById(sessionId);
+        expect(session?.configSnapshot.currentMode?.id, 'full-access');
       },
     );
   });

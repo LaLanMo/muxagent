@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -130,6 +131,7 @@ void main() {
         title: 'Cached chat',
         chatState: chatState,
         configSnapshot: const SessionConfigSnapshot(
+          modeConfigId: 'mode',
           modelConfigId: 'model',
           currentModel: 'gpt-5.4',
           currentMode: ModeOption(id: 'plan', label: 'Plan'),
@@ -149,9 +151,126 @@ void main() {
         'lib/main.dart',
       );
       expect(hydrated.chatState.approvals['approval-1']?.resolved, isTrue);
+      expect(hydrated.configSnapshot.modeConfigId, 'mode');
       expect(hydrated.configSnapshot.currentModel, 'gpt-5.4');
       expect(hydrated.configSnapshot.currentMode?.id, 'plan');
     });
+
+    test('hydrates legacy config snapshots that omit config ids', () async {
+      final repository = SessionChatCacheRepository();
+      await repository.init();
+      final now = DateTime(2026, 1, 1, 0, 0);
+
+      final db = await SessionDatabase.database;
+      await db.insert(SessionDatabase.sessionChatCacheTable, {
+        'session_id': 'session-legacy',
+        'machine_id': 'machine-1',
+        'title': 'Legacy chat',
+        'cache_state': SessionChatCacheState.ready.value,
+        'cache_version': sessionChatCacheSchemaVersion,
+        'last_applied_seq': 3,
+        'chat_state_json': jsonEncode({
+          'messages': [
+            {
+              'id': 'msg-1',
+              'sessionId': 'session-legacy',
+              'role': 'user',
+              'parts': [
+                {'type': 'text', 'text': 'legacy message'},
+              ],
+              'createdAt': now.toIso8601String(),
+            },
+          ],
+          'messageOrder': ['msg-1'],
+          'toolsByCallId': const <String, dynamic>{},
+          'approvalsById': const <String, dynamic>{},
+          'planEntries': const <dynamic>[],
+        }),
+        'config_snapshot_json': jsonEncode({
+          'currentModel': 'gpt-5.4',
+          'currentMode': {'id': 'plan', 'label': 'Plan'},
+          'availableModels': [
+            {'value': 'gpt-5.4', 'name': 'GPT-5.4'},
+          ],
+          'availableModes': [
+            {'id': 'plan', 'label': 'Plan'},
+          ],
+        }),
+        'updated_at': now.toIso8601String(),
+      });
+
+      final reloaded = SessionChatCacheRepository();
+      await reloaded.init();
+
+      final hydrated = reloaded.hydratedCacheForSession('session-legacy');
+      expect(hydrated, isNotNull);
+      expect(hydrated!.entry.isRenderable, isTrue);
+      expect(hydrated.configSnapshot.modeConfigId, isNull);
+      expect(hydrated.configSnapshot.modelConfigId, isNull);
+      expect(hydrated.configSnapshot.currentMode?.id, 'plan');
+      expect(hydrated.configSnapshot.currentModel, 'gpt-5.4');
+      expect(
+        hydrated.chatState.orderedMessages.single.parts.single.text,
+        'legacy message',
+      );
+    });
+
+    test(
+      'hydrates transcript even when config snapshot payload is invalid',
+      () async {
+        final repository = SessionChatCacheRepository();
+        await repository.init();
+        final now = DateTime(2026, 1, 1, 0, 0);
+
+        final db = await SessionDatabase.database;
+        await db.insert(SessionDatabase.sessionChatCacheTable, {
+          'session_id': 'session-invalid-config',
+          'machine_id': 'machine-1',
+          'title': 'Invalid config chat',
+          'cache_state': SessionChatCacheState.ready.value,
+          'cache_version': sessionChatCacheSchemaVersion,
+          'last_applied_seq': 4,
+          'chat_state_json': jsonEncode({
+            'messages': [
+              {
+                'id': 'msg-1',
+                'sessionId': 'session-invalid-config',
+                'role': 'user',
+                'parts': [
+                  {'type': 'text', 'text': 'hello'},
+                ],
+                'createdAt': now.toIso8601String(),
+              },
+            ],
+            'messageOrder': ['msg-1'],
+            'toolsByCallId': const <String, dynamic>{},
+            'approvalsById': const <String, dynamic>{},
+            'planEntries': const <dynamic>[],
+          }),
+          'config_snapshot_json': jsonEncode({
+            'currentModel': 123,
+            'currentMode': 'bad',
+            'availableModels': 'bad',
+            'availableModes': const <dynamic>[],
+          }),
+          'updated_at': now.toIso8601String(),
+        });
+
+        final reloaded = SessionChatCacheRepository();
+        await reloaded.init();
+
+        final hydrated = reloaded.hydratedCacheForSession(
+          'session-invalid-config',
+        );
+        expect(hydrated, isNotNull);
+        expect(hydrated!.entry.isRenderable, isTrue);
+        expect(hydrated.configSnapshot, const SessionConfigSnapshot());
+        expect(
+          hydrated.chatState.orderedMessages.single.parts.single.text,
+          'hello',
+        );
+      },
+    );
 
     test(
       'persistSnapshot keeps authoritative user message after optimistic replacement',

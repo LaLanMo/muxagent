@@ -5,6 +5,7 @@ import 'package:muxagent/data/repositories/session_chat_cache_dto.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/event.dart';
 import 'package:muxagent/domain/message.dart';
+import 'package:muxagent/domain/mode_option.dart';
 import 'package:muxagent/ui/chat/chat_state.dart';
 import 'package:muxagent/ui/chat/chat_viewmodel.dart';
 
@@ -234,6 +235,110 @@ void main() {
       );
     });
 
+    test(
+      'retries repair after session snapshot sync only for blocked repair states',
+      () {
+        final entry = SessionChatCacheEntry(
+          sessionId: 'session-1',
+          machineId: 'machine-1',
+          title: 'Cached',
+          cacheState: SessionChatCacheState.ready,
+          lastAppliedSeq: 4,
+          chatStateJson: {
+            'messages': [
+              {
+                'id': 'msg-1',
+                'role': 'agent',
+                'createdAt': DateTime(2026, 1, 1).toIso8601String(),
+                'parts': [
+                  {'type': 'text', 'text': 'hello'},
+                ],
+              },
+            ],
+            'messageOrder': ['msg-1'],
+            'toolsByCallId': const <String, dynamic>{},
+            'approvalsById': const <String, dynamic>{},
+            'planEntries': const <dynamic>[],
+          },
+          configSnapshotJson: SessionChatCacheEntry.emptyConfigSnapshotJson(),
+          updatedAt: DateTime(2026, 1, 1),
+        );
+
+        expect(
+          ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+            uiMode: ChatUiMode.viewOnly,
+            canRepair: true,
+            hasPendingRepair: true,
+            entry: entry,
+            transcriptWatermark: 5,
+            isRebuilding: false,
+            hasActiveSessionLoad: false,
+          ),
+          isTrue,
+        );
+        expect(
+          ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+            uiMode: ChatUiMode.normal,
+            canRepair: true,
+            hasPendingRepair: true,
+            entry: entry,
+            transcriptWatermark: 5,
+            isRebuilding: false,
+            hasActiveSessionLoad: false,
+          ),
+          isFalse,
+        );
+        expect(
+          ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+            uiMode: ChatUiMode.viewOnly,
+            canRepair: false,
+            hasPendingRepair: true,
+            entry: entry,
+            transcriptWatermark: 5,
+            isRebuilding: false,
+            hasActiveSessionLoad: false,
+          ),
+          isFalse,
+        );
+        expect(
+          ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+            uiMode: ChatUiMode.unsupported,
+            canRepair: true,
+            hasPendingRepair: true,
+            entry: null,
+            transcriptWatermark: 0,
+            isRebuilding: false,
+            hasActiveSessionLoad: true,
+          ),
+          isFalse,
+        );
+        expect(
+          ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+            uiMode: ChatUiMode.viewOnly,
+            canRepair: true,
+            hasPendingRepair: true,
+            entry: null,
+            transcriptWatermark: 0,
+            isRebuilding: false,
+            hasActiveSessionLoad: false,
+          ),
+          isTrue,
+        );
+        expect(
+          ChatViewModel.shouldRetryRepairAfterSessionSnapshotSync(
+            uiMode: ChatUiMode.viewOnly,
+            canRepair: true,
+            hasPendingRepair: false,
+            entry: null,
+            transcriptWatermark: 0,
+            isRebuilding: false,
+            hasActiveSessionLoad: false,
+          ),
+          isFalse,
+        );
+      },
+    );
+
     test('silences recoverable background session load errors', () {
       expect(
         ChatViewModel.shouldToastSessionLoadError(
@@ -393,6 +498,31 @@ void main() {
           uiMode: ChatUiMode.rebuildingReadonly,
           connState: ConnState.connected,
           isRecoveringAfterReconnect: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('disables mode dropdown while a mode change is in flight', () {
+      final currentMode = ModeOption(id: 'full-access', label: 'Full Access');
+      final availableModes = [
+        currentMode,
+        const ModeOption(id: 'default', label: 'Default'),
+      ];
+
+      expect(
+        ChatViewModel.canOpenModeDropdownFor(
+          currentMode: currentMode,
+          availableModes: availableModes,
+          isChangingMode: false,
+        ),
+        isTrue,
+      );
+      expect(
+        ChatViewModel.canOpenModeDropdownFor(
+          currentMode: currentMode,
+          availableModes: availableModes,
+          isChangingMode: true,
         ),
         isFalse,
       );

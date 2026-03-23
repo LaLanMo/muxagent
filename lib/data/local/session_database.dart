@@ -1,10 +1,15 @@
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import '../services/local/session_config_snapshot_codec.dart';
 import '../../domain/cost_info.dart';
 import '../../domain/enums.dart';
+import '../../domain/mode_option.dart';
 import '../../domain/session.dart';
+import '../../domain/session_config_snapshot.dart';
 
 class RecentCwd {
   final String path;
@@ -15,7 +20,7 @@ class RecentCwd {
 
 class SessionDatabase {
   static const String databaseFileName = 'muxagent.db';
-  static const int schemaVersion = 3;
+  static const int schemaVersion = 4;
   static const String sessionsTable = 'sessions';
   static const String sessionChatCacheTable = 'session_chat_cache';
 
@@ -56,6 +61,12 @@ class SessionDatabase {
         ADD COLUMN last_applied_seq INTEGER NOT NULL DEFAULT 0
       ''');
     }
+    if (oldVersion < 4) {
+      await db.execute('''
+        ALTER TABLE $sessionsTable
+        ADD COLUMN config_snapshot_json TEXT
+      ''');
+    }
   }
 
   static Future<void> _createSessionsTable(Database db) async {
@@ -72,6 +83,7 @@ class SessionDatabase {
         runtime TEXT NOT NULL DEFAULT '',
         cwd TEXT NOT NULL DEFAULT '',
         mode TEXT NOT NULL DEFAULT '',
+        config_snapshot_json TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL,
         is_read INTEGER NOT NULL DEFAULT 0
@@ -127,6 +139,9 @@ class SessionDatabase {
       'runtime': s.runtime,
       'cwd': s.cwd,
       'mode': s.mode ?? '',
+      'config_snapshot_json': jsonEncode(
+        serializeSessionConfigSnapshot(s.configSnapshot),
+      ),
       'created_at': s.createdAt.toIso8601String(),
       'updated_at': s.updatedAt.toIso8601String(),
       'is_read': s.isRead ? 1 : 0,
@@ -181,6 +196,18 @@ class SessionDatabase {
     final totalTokens = (row['total_tokens'] as num?)?.toInt() ?? 0;
 
     final hasCost = costAmount != 0 || totalTokens != 0;
+    final configSnapshotJson = row['config_snapshot_json'] as String?;
+    final decodedConfigSnapshot = _decodeConfigSnapshot(configSnapshotJson);
+    final legacyMode = (row['mode'] as String?)?.trim() ?? '';
+    final legacyModel = (row['model'] as String?)?.trim();
+    final configSnapshot =
+        decodedConfigSnapshot ??
+        SessionConfigSnapshot(
+          currentMode: legacyMode.isEmpty
+              ? null
+              : ModeOption.fromId(legacyMode),
+          currentModel: (legacyModel?.isNotEmpty ?? false) ? legacyModel : null,
+        );
 
     return AgentSession(
       id: row['id'] as String,
@@ -198,11 +225,25 @@ class SessionDatabase {
       machineId: row['machine_id'] as String? ?? '',
       runtime: row['runtime'] as String? ?? '',
       cwd: row['cwd'] as String? ?? '',
-      mode: (row['mode'] as String?)?.isNotEmpty == true
-          ? row['mode'] as String
-          : null,
+      mode: configSnapshot.currentMode?.id,
+      configSnapshot: configSnapshot,
       createdAt: DateTime.parse(row['created_at'] as String),
       updatedAt: DateTime.parse(row['updated_at'] as String),
     );
+  }
+
+  static SessionConfigSnapshot? _decodeConfigSnapshot(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) {
+        return null;
+      }
+      return deserializeSessionConfigSnapshot(decoded.cast<String, dynamic>());
+    } catch (_) {
+      return null;
+    }
   }
 }
