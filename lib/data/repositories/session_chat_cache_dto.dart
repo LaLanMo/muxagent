@@ -272,7 +272,7 @@ Map<String, dynamic> _serializeChatState(ChatState chatState) {
 
   for (final messageId in chatState.messageOrder) {
     final message = chatState.messages[messageId];
-    if (message == null || _isLocalOnlyOptimisticMessage(message)) {
+    if (message == null) {
       continue;
     }
     persistedMessages.add(message);
@@ -292,10 +292,6 @@ Map<String, dynamic> _serializeChatState(ChatState chatState) {
     },
     'planEntries': chatState.planEntries.map(_serializePlanEntry).toList(),
   };
-}
-
-bool _isLocalOnlyOptimisticMessage(Message message) {
-  return message.role == MessageRole.user && message.id.startsWith('local-');
 }
 
 Map<String, dynamic> _serializeMessage(Message message) {

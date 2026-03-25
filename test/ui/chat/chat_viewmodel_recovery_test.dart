@@ -2,10 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
 import 'package:muxagent/data/repositories/session_chat_cache_dto.dart';
+import 'package:muxagent/domain/approval.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/event.dart';
 import 'package:muxagent/domain/message.dart';
 import 'package:muxagent/domain/mode_option.dart';
+import 'package:muxagent/domain/plan_entry.dart';
 import 'package:muxagent/ui/chat/chat_state.dart';
 import 'package:muxagent/ui/chat/chat_viewmodel.dart';
 
@@ -527,6 +529,38 @@ void main() {
         isFalse,
       );
     });
+  });
+
+  group('ChatViewModel cache persistence rule', () {
+    test(
+      'treats local-only optimistic user turns as persistable transcript',
+      () {
+        expect(
+          ChatViewModel.hasPersistableVisibleTranscript(
+            messages: [
+              Message(
+                id: 'local-1',
+                sessionId: 'session-1',
+                role: MessageRole.user,
+                parts: [MessagePart(type: PartType.text, text: 'hello')],
+                createdAt: DateTime(2026, 1, 1),
+              ),
+            ],
+            approvals: const <String, ApprovalRequest>{},
+            planEntries: const <PlanEntry>[],
+          ),
+          isTrue,
+        );
+        expect(
+          ChatViewModel.hasPersistableVisibleTranscript(
+            messages: const <Message>[],
+            approvals: const <String, ApprovalRequest>{},
+            planEntries: const <PlanEntry>[],
+          ),
+          isFalse,
+        );
+      },
+    );
   });
 
   group('ChatViewModel cache promotion rule', () {

@@ -336,6 +336,52 @@ void main() {
     );
 
     test(
+      'persistSnapshot keeps local optimistic user message before authoritative replay arrives',
+      () async {
+        final repository = SessionChatCacheRepository();
+        await repository.init();
+        final chatState = ChatState(sessionId: 'session-1');
+
+        chatState.finalizeMessage(
+          Message(
+            id: 'local-1',
+            sessionId: 'session-1',
+            role: MessageRole.user,
+            parts: [MessagePart(type: PartType.text, text: 'hello')],
+            createdAt: DateTime(2026, 1, 1, 0, 0),
+          ),
+        );
+
+        await repository.persistSnapshot(
+          sessionId: 'session-1',
+          machineId: 'machine-1',
+          title: 'Cached chat',
+          chatState: chatState,
+          configSnapshot: const SessionConfigSnapshot(),
+          cacheState: SessionChatCacheState.ready,
+          lastAppliedSeq: 1,
+        );
+
+        final hydrated = repository.hydratedCacheForSession('session-1');
+        expect(hydrated, isNotNull);
+        expect(
+          hydrated!.chatState.orderedMessages
+              .map((message) => message.id)
+              .toList(),
+          ['local-1'],
+        );
+        expect(
+          hydrated.chatState.orderedMessages.single.parts.single.text,
+          'hello',
+        );
+        expect(
+          hydrated.chatState.orderedMessages.single.role,
+          MessageRole.user,
+        );
+      },
+    );
+
+    test(
       'markMachineCachesStale downgrades only ready non-empty caches',
       () async {
         final repository = SessionChatCacheRepository();

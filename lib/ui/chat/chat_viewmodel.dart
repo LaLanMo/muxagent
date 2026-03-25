@@ -168,6 +168,17 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   @visibleForTesting
+  static bool hasPersistableVisibleTranscript({
+    required Iterable<Message> messages,
+    required Map<String, ApprovalRequest> approvals,
+    required List<PlanEntry> planEntries,
+  }) {
+    return messages.isNotEmpty ||
+        approvals.isNotEmpty ||
+        planEntries.isNotEmpty;
+  }
+
+  @visibleForTesting
   static bool shouldPromoteCacheOnClose({required ChatUiMode uiMode}) {
     return uiMode == ChatUiMode.normal;
   }
@@ -884,14 +895,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         snapshot.availableModels.isNotEmpty;
   }
 
-  bool get _hasPersistableVisibleTranscript =>
-      chatState.orderedMessages.any(
-        (message) =>
-            !(message.role == MessageRole.user &&
-                message.id.startsWith('local-')),
-      ) ||
-      chatState.approvals.isNotEmpty ||
-      chatState.planEntries.isNotEmpty;
+  bool get _hasPersistableVisibleTranscript => hasPersistableVisibleTranscript(
+    messages: chatState.orderedMessages,
+    approvals: chatState.approvals,
+    planEntries: chatState.planEntries,
+  );
 
   void _handleEvent(AgentEvent event) {
     if (_isRebuilding && _rebuildChatState != null) {
@@ -1282,7 +1290,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (!_hasPersistableVisibleTranscript) {
       return SessionChatCacheState.empty;
     }
-    return promoteReady ? SessionChatCacheState.ready : SessionChatCacheState.stale;
+    return promoteReady
+        ? SessionChatCacheState.ready
+        : SessionChatCacheState.stale;
   }
 
   Future<void> pickImage() async {
