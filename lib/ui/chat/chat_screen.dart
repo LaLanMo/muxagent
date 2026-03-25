@@ -461,7 +461,7 @@ class ChatScreen extends GetView<ChatViewModel> {
       ChatUiMode.viewOnly => (
         AppTheme.idleBg,
         AppTheme.textSecondary,
-        'Showing cached history. Sending is disabled until repair inputs are available.',
+        'Showing cached history. Reconnect to continue this conversation.',
       ),
       ChatUiMode.unsupported => (
         AppTheme.errorBg,

@@ -528,4 +528,17 @@ void main() {
       );
     });
   });
+
+  group('ChatViewModel cache promotion rule', () {
+    test('only promotes cache to ready in normal mode', () {
+      for (final mode in ChatUiMode.values) {
+        expect(
+          ChatViewModel.shouldPromoteCacheOnClose(uiMode: mode),
+          mode == ChatUiMode.normal,
+          reason:
+              '$mode should ${mode == ChatUiMode.normal ? '' : 'not '}promote',
+        );
+      }
+    });
+  });
 }

@@ -167,6 +167,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     return previousUiMode;
   }
 
+  @visibleForTesting
+  static bool shouldPromoteCacheOnClose({required ChatUiMode uiMode}) {
+    return uiMode == ChatUiMode.normal;
+  }
+
   late final String machineId;
   late final String sessionId;
   late final String routeCwd;
@@ -211,14 +216,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     isRecoveringAfterReconnect: isRecoveringAfterReconnect.value,
   );
   bool get canMutateSession => uiMode.value == ChatUiMode.normal;
-  bool get canReplyApprovals =>
-      uiMode.value != ChatUiMode.initialLoading &&
-      uiMode.value != ChatUiMode.rebuildingReadonly &&
-      uiMode.value != ChatUiMode.unsupported;
-  bool get canCancelRun =>
-      uiMode.value != ChatUiMode.initialLoading &&
-      uiMode.value != ChatUiMode.rebuildingReadonly &&
-      uiMode.value != ChatUiMode.unsupported;
+  bool get _shouldPromoteCache => uiMode.value == ChatUiMode.normal;
+  bool get canReplyApprovals => uiMode.value == ChatUiMode.normal;
+  bool get canCancelRun => uiMode.value == ChatUiMode.normal;
   bool get inputReadOnly => !canPrompt;
 
   /// Live usage info for this session (cost, tokens, context window).
@@ -1223,7 +1223,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   Future<void> _flushSnapshotForBackground() async {
     _cacheWriteDebounce?.cancel();
     _cacheWriteDebounce = null;
-    await _flushVisibleSnapshot(promoteReady: !_isRebuilding, force: true);
+    await _flushVisibleSnapshot(promoteReady: _shouldPromoteCache, force: true);
   }
 
   Future<void> _flushVisibleSnapshot({
@@ -1282,12 +1282,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (!_hasPersistableVisibleTranscript) {
       return SessionChatCacheState.empty;
     }
-    if (!promoteReady) {
-      return SessionChatCacheState.stale;
-    }
-    return _isRebuilding
-        ? SessionChatCacheState.stale
-        : SessionChatCacheState.ready;
+    return promoteReady ? SessionChatCacheState.ready : SessionChatCacheState.stale;
   }
 
   Future<void> pickImage() async {
@@ -1696,7 +1691,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   Future<bool> prepareForClose() async {
     _cacheWriteDebounce?.cancel();
     _cacheWriteDebounce = null;
-    await _flushVisibleSnapshot(promoteReady: true, force: true);
+    await _flushVisibleSnapshot(promoteReady: _shouldPromoteCache, force: true);
     return true;
   }
 
