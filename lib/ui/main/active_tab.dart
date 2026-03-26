@@ -45,7 +45,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             // Force reactivity tracking
             controller.activeSessions.length;
             shell.machines.length;
-            shell.activeSessionIds.length;
 
             if (controller.activeSessions.isEmpty) {
               return _buildEmptyState();

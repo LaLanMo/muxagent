@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
+import '../../data/repositories/reconnect_recovery_coordinator.dart';
 import '../../data/services/local/crypto_service.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/ui_effect.dart';
@@ -17,14 +18,15 @@ class SettingsTabViewModel extends GetxController {
   final RxList<PairedMachine> machines;
   final RxSet<String> activeSessionIds;
   final RxBool relayConnected;
-  final Future<void> Function(PairedMachine) _connectMachine;
+  final Future<ReconnectRecoveryResult> Function(PairedMachine) _connectMachine;
 
   SettingsTabViewModel({
     required CryptoService crypto,
     required this.machines,
     required this.activeSessionIds,
     required this.relayConnected,
-    required Future<void> Function(PairedMachine) connectMachine,
+    required Future<ReconnectRecoveryResult> Function(PairedMachine)
+    connectMachine,
   }) : _crypto = crypto,
        _connectMachine = connectMachine;
 
@@ -86,8 +88,8 @@ class SettingsTabViewModel extends GetxController {
     if (connectingMachines.contains(machine.machineId)) return;
     connectingMachines.add(machine.machineId);
     try {
-      await _connectMachine(machine);
-      if (isMachineConnected(machine.machineId)) {
+      final result = await _connectMachine(machine);
+      if (result.sessionReady) {
         uiEffect.value = ShowToast(
           'Connected to ${machine.hostname ?? 'machine'}',
         );

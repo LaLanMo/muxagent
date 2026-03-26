@@ -106,7 +106,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     // Access reactive machine state so Obx tracks changes
     // (ListView.builder's itemBuilder runs outside Obx context)
     shell.machines.length;
-    shell.activeSessionIds.length;
     final groups = controller.sessionGroups;
 
     if (groups.isEmpty) {

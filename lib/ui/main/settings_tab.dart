@@ -44,7 +44,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               child: SingleChildScrollView(
                 child: Obx(() {
                   controller.machines.length;
-                  controller.activeSessionIds.length;
+                  controller.activeSessionIds.toSet();
                   controller.connectingMachines.length;
                   controller.relayConnected.value;
                   return Column(

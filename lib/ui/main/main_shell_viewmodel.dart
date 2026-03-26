@@ -74,7 +74,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
       }
       for (final machine in machines) {
         if (!_wsRepo.hasSession(machine.machineId)) {
-          await _connectMachine(machine);
+          await _connectMachineInBackground(machine);
         }
       }
     } finally {
@@ -142,21 +142,36 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
 
     for (final machine in list) {
       if (!_wsRepo.hasSession(machine.machineId)) {
-        await _connectMachine(machine);
+        await _connectMachineInBackground(machine);
       }
     }
   }
 
-  Future<void> _connectMachine(PairedMachine machine) async {
-    try {
-      await _recovery.recoverMachine(machine.machineId);
-    } catch (e) {
-      debugPrint('[MainShell] connect ${machine.machineId} failed: $e');
+  Future<void> _connectMachineInBackground(PairedMachine machine) async {
+    final result = await connectMachine(machine);
+    if (!result.sessionReady) {
+      debugPrint(
+        '[MainShell] connect ${machine.machineId} did not establish a session'
+        '${result.transportError != null ? ': ${result.transportError}' : ''}',
+      );
     }
   }
 
-  Future<void> connectMachine(PairedMachine machine) async {
-    await _connectMachine(machine);
+  Future<ReconnectRecoveryResult> connectMachine(PairedMachine machine) async {
+    try {
+      return await _recovery.recoverMachine(machine.machineId);
+    } catch (e) {
+      return ReconnectRecoveryResult(
+        machineId: machine.machineId,
+        transcript: TranscriptRecoveryState.failed,
+        metadata: MetadataRecoveryState.skipped,
+        sessionReady: false,
+        statusesOk: false,
+        titlesOk: false,
+        approvalsOk: false,
+        transportError: e,
+      );
+    }
   }
 
   void _subscribeToMachineStatus() {
@@ -166,20 +181,20 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
           (m) => m.machineId == status.machineId,
         );
         if (machine != null && !_wsRepo.hasSession(machine.machineId)) {
-          _connectMachine(machine);
+          _connectMachineInBackground(machine);
         }
       }
     });
   }
 
   void _subscribeToActiveSessions() {
-    activeSessionIds
-      ..clear()
-      ..addAll(_wsRepo.activeSessionIds);
+    _replaceActiveSessionIds(_wsRepo.activeSessionIds);
     _sessionSub = _wsRepo.activeSessions.listen((ids) {
-      activeSessionIds
-        ..clear()
-        ..addAll(ids);
+      _replaceActiveSessionIds(ids);
     });
+  }
+
+  void _replaceActiveSessionIds(Iterable<String> ids) {
+    activeSessionIds.assignAll(ids);
   }
 }
