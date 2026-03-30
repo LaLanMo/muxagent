@@ -51,3 +51,5 @@ app.*.map.json
 # Local design workspace
 *.pen
 CLAUDE.local.md
+.muxagent/
+/images/
