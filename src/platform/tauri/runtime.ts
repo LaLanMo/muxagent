@@ -1,0 +1,207 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type {
+  ArtifactListResult,
+  CommandAcceptedResult,
+  ConfigCatalogResult,
+  InitializeResult,
+  JsonRpcNotification,
+  NotificationEnvelopeParams,
+  ServiceStatusResult,
+  TaskContinueBlockedParams,
+  TaskStartParams,
+  TaskStartFollowUpParams,
+  TaskSubmitInputParams,
+  TaskGetResult,
+  TaskInputRequestResult,
+  TaskListResult,
+  TaskRetryNodeParams,
+  WorkspaceAddParams,
+  WorkspaceAddResult,
+  WorkspaceGetResult,
+  WorkspaceListResult,
+  WorkspaceRemoveParams,
+  WorkspaceRemoveResult,
+  WorkspaceUpdateParams,
+  WorkspaceUpdateResult,
+} from "@/rpc/types";
+import type {
+  DesktopRuntime,
+  RuntimeNotification,
+  ShellHost,
+  TaskBackendClient,
+} from "@/platform/contract";
+
+const notificationEvent = "app-server-notification";
+const disconnectedEvent = "app-server-disconnected";
+
+type DisconnectedPayload = {
+  message?: string;
+};
+
+class TauriTaskBackendClient implements TaskBackendClient {
+  private listeners = new Set<(notification: RuntimeNotification) => void>();
+  private connectionLossListeners = new Set<(error: Error) => void>();
+  private unlistenNotification: (() => void) | null = null;
+  private unlistenDisconnected: (() => void) | null = null;
+
+  async connect(): Promise<InitializeResult> {
+    await this.ensureSubscriptions();
+    return invoke<InitializeResult>("app_server_connect");
+  }
+
+  async disconnect(): Promise<void> {
+    await invoke("app_server_disconnect").catch(() => undefined);
+  }
+
+  status(): Promise<ServiceStatusResult> {
+    return this.request("service.status");
+  }
+
+  workspaceList(): Promise<WorkspaceListResult> {
+    return this.request("workspace.list");
+  }
+
+  workspaceAdd(params: WorkspaceAddParams): Promise<WorkspaceAddResult> {
+    return this.request("workspace.add", params);
+  }
+
+  workspaceGet(workspaceId: string): Promise<WorkspaceGetResult> {
+    return this.request("workspace.get", { workspace_id: workspaceId });
+  }
+
+  workspaceUpdate(params: WorkspaceUpdateParams): Promise<WorkspaceUpdateResult> {
+    return this.request("workspace.update", params);
+  }
+
+  workspaceRemove(params: WorkspaceRemoveParams): Promise<WorkspaceRemoveResult> {
+    return this.request("workspace.remove", params);
+  }
+
+  configCatalog(): Promise<ConfigCatalogResult> {
+    return this.request("config.catalog");
+  }
+
+  taskList(workspaceId: string): Promise<TaskListResult> {
+    return this.request("task.list", { workspace_id: workspaceId });
+  }
+
+  taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult> {
+    return this.request("task.get", { workspace_id: workspaceId, task_id: taskId });
+  }
+
+  taskInputRequest(
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+  ): Promise<TaskInputRequestResult> {
+    return this.request("task.input_request", {
+      workspace_id: workspaceId,
+      task_id: taskId,
+      node_run_id: nodeRunId,
+    });
+  }
+
+  taskStart(params: TaskStartParams): Promise<CommandAcceptedResult> {
+    return this.request("task.start", params);
+  }
+
+  taskStartFollowUp(params: TaskStartFollowUpParams): Promise<CommandAcceptedResult> {
+    return this.request("task.start_follow_up", params);
+  }
+
+  taskSubmitInput(params: TaskSubmitInputParams): Promise<CommandAcceptedResult> {
+    return this.request("task.submit_input", params);
+  }
+
+  taskRetryNode(params: TaskRetryNodeParams): Promise<CommandAcceptedResult> {
+    return this.request("task.retry_node", params);
+  }
+
+  taskContinueBlocked(
+    params: TaskContinueBlockedParams,
+  ): Promise<CommandAcceptedResult> {
+    return this.request("task.continue_blocked", params);
+  }
+
+  artifactList(workspaceId: string, taskId: string): Promise<ArtifactListResult> {
+    return this.request("artifact.list", {
+      workspace_id: workspaceId,
+      task_id: taskId,
+    });
+  }
+
+  subscribe(listener: (notification: RuntimeNotification) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  onConnectionLoss(listener: (error: Error) => void): () => void {
+    this.connectionLossListeners.add(listener);
+    return () => {
+      this.connectionLossListeners.delete(listener);
+    };
+  }
+
+  private async request<TResult, TParams = unknown>(
+    method: string,
+    params?: TParams,
+  ): Promise<TResult> {
+    return invoke<TResult>("app_server_request", { method, params });
+  }
+
+  private async ensureSubscriptions(): Promise<void> {
+    if (!this.unlistenNotification) {
+      this.unlistenNotification = await listen<JsonRpcNotification>(
+        notificationEvent,
+        (event) => {
+          const notification = event.payload;
+          const payload = {
+            method: notification.method,
+            ...(notification.params as NotificationEnvelopeParams | undefined),
+          } as RuntimeNotification;
+          for (const listener of this.listeners) {
+            listener(payload);
+          }
+        },
+      );
+    }
+
+    if (!this.unlistenDisconnected) {
+      this.unlistenDisconnected = await listen<DisconnectedPayload>(
+        disconnectedEvent,
+        (event) => {
+          const error = new Error(
+            event.payload?.message ?? "App server disconnected",
+          );
+          for (const listener of this.connectionLossListeners) {
+            listener(error);
+          }
+        },
+      );
+    }
+  }
+}
+
+class TauriShellHost implements ShellHost {
+  async pickDirectory(): Promise<string | null> {
+    return window.prompt("Workspace absolute path")?.trim() ?? null;
+  }
+
+  async readTextFile(path: string): Promise<string> {
+    return invoke<string>("read_text_file", { path });
+  }
+
+  async openPath(path: string): Promise<void> {
+    await invoke("open_path", { path });
+  }
+}
+
+export function createTauriRuntime(): DesktopRuntime {
+  return {
+    backend: new TauriTaskBackendClient(),
+    shell: new TauriShellHost(),
+  };
+}
