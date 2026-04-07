@@ -1,11 +1,9 @@
 import 'dart:io';
 
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/widgets.dart';
-import 'package:get/get.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../repositories/paired_machine_repository.dart';
-import '../../../routing/routes.dart';
 import '../api/relay_service.dart';
 import '../local/crypto_service.dart';
 import '../ws/token_service.dart';
@@ -142,18 +140,6 @@ class PushNotificationService {
 
   Future<void> _handleNotificationOpen(RemoteMessage? message) async {
     if (message == null) return;
-    await _navigateToHomeIfPossible();
-  }
-
-  Future<void> _navigateToHomeIfPossible() async {
-    final machines = await _machines.listMachines();
-    if (machines.isEmpty) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (Get.currentRoute != Routes.home) {
-        Get.offAllNamed(Routes.home);
-      }
-    });
   }
 
   Future<void> _registerTokenWithAllRelays(

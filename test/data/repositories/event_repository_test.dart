@@ -4,6 +4,7 @@ import 'package:muxagent/data/repositories/event_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
 import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
+import 'package:muxagent/data/services/ws/rpc_result_mapper.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/models/rpc_transport_models.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
@@ -27,6 +28,26 @@ class _FakeRelayWsClient extends RelayWsClient {
     Map<String, dynamic>? params,
   }) async {
     return const RpcResponseEnvelopeDto(result: {'ok': true});
+  }
+}
+
+class _NoActiveSessionWsSessionRepository extends WsSessionRepository {
+  _NoActiveSessionWsSessionRepository()
+    : super(relay: _FakeRelayWsClient(), sessions: SessionManager());
+
+  var resolveSessionsCalled = false;
+
+  @override
+  bool hasSession(String machineId) => false;
+
+  @override
+  Future<List<ResolvedSessionSnapshot>> resolveSessions({
+    required String machineId,
+    required Iterable<String> sessionIds,
+    String? runtime,
+  }) async {
+    resolveSessionsCalled = true;
+    return const <ResolvedSessionSnapshot>[];
   }
 }
 
@@ -106,6 +127,48 @@ void main() {
         );
 
         expect(repo.transcriptWatermarkFor(sessionId), 0);
+      },
+    );
+  });
+
+  group('EventRepository config refresh guard', () {
+    late _NoActiveSessionWsSessionRepository wsRepo;
+    late EventRepository repo;
+    late String sessionId;
+
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      wsRepo = _NoActiveSessionWsSessionRepository();
+      repo = EventRepository(wsRepo: wsRepo);
+      sessionId = 'test-session-${DateTime.now().microsecondsSinceEpoch}';
+      final now = DateTime.now();
+      await repo.registerSession(
+        AgentSession(
+          id: sessionId,
+          machineId: 'machine-1',
+          runtime: 'claude-code',
+          cwd: '/tmp',
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
+    });
+
+    tearDown(() async {
+      repo.dispose();
+      await SessionDatabase.deleteSession(sessionId);
+    });
+
+    test(
+      'skips session.resolve when the machine has no active session',
+      () async {
+        await repo.refreshSessionConfig(
+          machineId: 'machine-1',
+          sessionId: sessionId,
+          runtime: 'claude-code',
+        );
+
+        expect(wsRepo.resolveSessionsCalled, isFalse);
       },
     );
   });

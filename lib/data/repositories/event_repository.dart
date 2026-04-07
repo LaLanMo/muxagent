@@ -1306,6 +1306,13 @@ class EventRepository {
     if (existing == null) {
       return;
     }
+    if (!_wsRepo.hasSession(machineId)) {
+      debugPrint(
+        '[EventRepository] skip refreshSessionConfig for session=$sessionId '
+        'machine=$machineId: no active session',
+      );
+      return;
+    }
 
     final baselineRevision = _configRevision(sessionId);
     final resolvedSessions = await _wsRepo.resolveSessions(
