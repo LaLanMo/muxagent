@@ -4,6 +4,9 @@ type NewTaskModalProps = {
   open: boolean;
   description: string;
   onDescriptionChange: (value: string) => void;
+  workspaceOptions: Array<{ id: string; label: string }>;
+  selectedTargetWorkspaceId: string;
+  onTargetWorkspaceChange: (value: string) => void;
   entries: ConfigCatalogEntryDto[];
   selectedAlias: string;
   onAliasChange: (value: string) => void;
@@ -23,6 +26,9 @@ export function NewTaskModal({
   open,
   description,
   onDescriptionChange,
+  workspaceOptions,
+  selectedTargetWorkspaceId,
+  onTargetWorkspaceChange,
   entries,
   selectedAlias,
   onAliasChange,
@@ -63,6 +69,24 @@ export function NewTaskModal({
               rows={4}
               value={description}
             />
+          </label>
+
+          <label className="field-block">
+            <span className="field-block__label">Workspace</span>
+            <div className="task-modal__config-card">
+              <select
+                className="task-modal__select"
+                data-testid="new-task-workspace"
+                onChange={(event) => onTargetWorkspaceChange(event.target.value)}
+                value={selectedTargetWorkspaceId}
+              >
+                {workspaceOptions.map((workspace) => (
+                  <option key={workspace.id} value={workspace.id}>
+                    {workspace.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </label>
 
           <label className="field-block">

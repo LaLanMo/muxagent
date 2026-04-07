@@ -5,9 +5,8 @@ import {
 } from "@/application/workspace";
 import { getRuntime } from "@/app/runtime";
 import { displayWorkspaceName } from "@/domain/task-shell";
-import { useShellChrome } from "@/features/app/model/use-shell-chrome";
+import { useShellModel } from "@/features/app/model/use-shell-model";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
-import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
 export type SettingsWorkspaceRowModel = {
@@ -51,8 +50,8 @@ function actorStateLabel(state: string, reachable: boolean): string {
 }
 
 export function useSettingsScreen() {
-  const shell = useShellChrome();
-  const { selectWorkspace } = useWorkspaceSelection();
+  const shell = useShellModel();
+  const { removeWorkspaceFromState } = useWorkspaceSelection();
   const status = useWorkspaceStore((state) => state.status);
   const server = useWorkspaceStore((state) => state.server);
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -60,9 +59,6 @@ export function useSettingsScreen() {
     (state) => state.selectedWorkspaceId,
   );
   const upsertWorkspace = useWorkspaceStore((state) => state.upsertWorkspace);
-  const removeWorkspaceFromStore = useWorkspaceStore((state) => state.removeWorkspace);
-  const setSelectedWorkspace = useWorkspaceStore((state) => state.setSelectedWorkspace);
-  const resetWorkspaceTasks = useTaskSnapshotStore((state) => state.resetWorkspace);
 
   const workDir = workspaces.find(
     (workspace) => workspace.workspace_id === selectedWorkspaceId,
@@ -108,26 +104,11 @@ export function useSettingsScreen() {
   }
 
   async function removeWorkspaceAction(workspaceId: string) {
-    const nextWorkspace = workspaces.find(
-      (workspace) => workspace.workspace_id !== workspaceId,
-    );
-    const removedWasSelected = selectedWorkspaceId === workspaceId;
     setPendingRemoveId(workspaceId);
     setWorkspaceActionError(undefined);
     try {
       await removeWorkspace(getRuntime(), workspaceId);
-      resetWorkspaceTasks(workspaceId);
-      removeWorkspaceFromStore(workspaceId);
-      if (removedWasSelected) {
-        if (nextWorkspace) {
-          await selectWorkspace(nextWorkspace, {
-            persist: true,
-            navigateHomeFromTaskRoute: true,
-          });
-        } else {
-          setSelectedWorkspace(undefined);
-        }
-      }
+      await removeWorkspaceFromState(workspaceId);
       if (editingWorkspaceId === workspaceId) {
         setEditingWorkspaceId(undefined);
         setRenameDraft("");

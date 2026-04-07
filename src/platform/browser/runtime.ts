@@ -4,10 +4,29 @@ import {
   PROTOCOL_VERSION,
   type ArtifactListResult,
   type CommandAcceptedResult,
+  type ConfigCloneParams,
+  type ConfigCloneResult,
   type ConfigCatalogResult,
+  type ConfigDeleteParams,
+  type ConfigDeleteResult,
+  type ConfigGetResult,
+  type ConfigResetParams,
+  type ConfigResetResult,
+  type ConfigPromptGetResult,
+  type ConfigPromptSaveParams,
+  type ConfigPromptSaveResult,
+  type ConfigRenameParams,
+  type ConfigRenameResult,
+  type ConfigSaveParams,
+  type ConfigSaveResult,
+  type ConfigSetDefaultParams,
+  type ConfigSetDefaultResult,
+  type ConfigValidateParams,
+  type ConfigValidateResult,
   type InitializeResult,
   type JsonRpcNotification,
   type NotificationEnvelopeParams,
+  type RuntimeListResult,
   type ServiceStatusResult,
   type TaskContinueBlockedParams,
   type TaskStartParams,
@@ -133,6 +152,57 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   configCatalog(): Promise<ConfigCatalogResult> {
     return this.request("config.catalog");
+  }
+
+  configGet(alias: string): Promise<ConfigGetResult> {
+    return this.request("config.get", { alias });
+  }
+
+  configClone(params: ConfigCloneParams): Promise<ConfigCloneResult> {
+    return this.request("config.clone", params);
+  }
+
+  configRename(params: ConfigRenameParams): Promise<ConfigRenameResult> {
+    return this.request("config.rename", params);
+  }
+
+  configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
+    return this.request("config.delete", params);
+  }
+
+  configReset(params: ConfigResetParams): Promise<ConfigResetResult> {
+    return this.request("config.reset", params);
+  }
+
+  configSetDefault(
+    params: ConfigSetDefaultParams,
+  ): Promise<ConfigSetDefaultResult> {
+    return this.request("config.set_default", params);
+  }
+
+  configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {
+    return this.request("config.validate", params);
+  }
+
+  configSave(params: ConfigSaveParams): Promise<ConfigSaveResult> {
+    return this.request("config.save", params);
+  }
+
+  configPromptGet(alias: string, nodeName: string): Promise<ConfigPromptGetResult> {
+    return this.request("config.prompt.get", {
+      alias,
+      node_name: nodeName,
+    });
+  }
+
+  configPromptSave(
+    params: ConfigPromptSaveParams,
+  ): Promise<ConfigPromptSaveResult> {
+    return this.request("config.prompt.save", params);
+  }
+
+  runtimeList(): Promise<RuntimeListResult> {
+    return this.request("runtime.list");
   }
 
   taskList(workspaceId: string): Promise<TaskListResult> {

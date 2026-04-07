@@ -1,0 +1,112 @@
+.settings-panel {
+  display: grid;
+  gap: 22px;
+  max-width: 920px;
+}
+
+.settings-section {
+  display: grid;
+}
+
+.settings-section__eyebrow {
+  margin-bottom: 2px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 68px;
+  border-top: 1px solid var(--border);
+  padding: 14px 0;
+}
+
+.settings-row__copy {
+  display: grid;
+  gap: 4px;
+  max-width: 620px;
+}
+
+.settings-row__copy strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-row__hint {
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.settings-row__value {
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.workspace-settings-list {
+  display: grid;
+  gap: 12px;
+}
+
+.workspace-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: start;
+  padding: 16px 0;
+  border-top: 1px solid var(--border);
+}
+
+.workspace-settings-row__copy {
+  display: grid;
+  gap: 6px;
+}
+
+.workspace-settings-row__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspace-settings-row__heading strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.workspace-settings-row__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workspace-settings-row__input {
+  min-width: 220px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #f5f6f7;
+  box-shadow: inset 0 0 0 1px rgba(229, 231, 235, 0.95);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-section--danger .settings-row {
+  border-top: 0;
+}
+
+.settings-row--danger {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--red) 20%, white);
+  background: color-mix(in srgb, var(--red) 3%, white);
+}

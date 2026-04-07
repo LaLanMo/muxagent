@@ -1,99 +1,66 @@
-import { useEffect, useEffectEvent, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getRuntime } from "@/app/runtime";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
 import { useWorkspaceStore } from "@/state/workspace-store";
+
+type RouteSyncState =
+  | { status: "idle" }
+  | { status: "syncing"; workspaceId: string }
+  | { status: "failed"; workspaceId: string };
 
 export function useTaskRouteSelection(): "pending" | "ready" | "redirect" {
   const { workspaceId = "", taskId = "" } = useParams();
   const phase = useWorkspaceStore((state) => state.phase);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const upsertWorkspace = useWorkspaceStore((state) => state.upsertWorkspace);
   const selectedWorkspaceId = useWorkspaceStore(
     (state) => state.selectedWorkspaceId,
   );
-  const routeWorkspace = workspaces.find(
-    (workspace) => workspace.workspace_id === workspaceId,
-  );
-  const { selectWorkspace } = useWorkspaceSelection();
-  const [syncingWorkspaceId, setSyncingWorkspaceId] = useState<string | undefined>();
-  const [failedWorkspaceId, setFailedWorkspaceId] = useState<string | undefined>();
-  const [resolvingWorkspaceId, setResolvingWorkspaceId] = useState<
-    string | undefined
-  >();
-
-  useEffect(() => {
-    setSyncingWorkspaceId(undefined);
-    setFailedWorkspaceId(undefined);
-    setResolvingWorkspaceId(undefined);
-  }, [taskId, workspaceId]);
-
-  const resolveRouteWorkspace = useEffectEvent(async () => {
-    if (!workspaceId) {
-      return;
-    }
-    setResolvingWorkspaceId(workspaceId);
-    try {
-      const result = await getRuntime().backend.workspaceGet(workspaceId);
-      upsertWorkspace(result.workspace);
-    } catch {
-      setFailedWorkspaceId(workspaceId);
-    } finally {
-      setResolvingWorkspaceId((current) =>
-        current === workspaceId ? undefined : current,
-      );
-    }
+  const { selectTaskRouteWorkspace } = useWorkspaceSelection();
+  const [routeSyncState, setRouteSyncState] = useState<RouteSyncState>({
+    status: "idle",
   });
 
   useEffect(() => {
-    if (phase !== "connected" || !workspaceId || !taskId || routeWorkspace) {
+    if (phase !== "connected" || !workspaceId || !taskId) {
+      if (routeSyncState.status !== "idle") {
+        setRouteSyncState({ status: "idle" });
+      }
+      return;
+    }
+    if (selectedWorkspaceId === workspaceId) {
+      if (routeSyncState.status !== "idle") {
+        setRouteSyncState({ status: "idle" });
+      }
       return;
     }
     if (
-      resolvingWorkspaceId === workspaceId ||
-      failedWorkspaceId === workspaceId
+      routeSyncState.status === "syncing" &&
+      routeSyncState.workspaceId === workspaceId
     ) {
       return;
     }
-    void resolveRouteWorkspace();
-  }, [
-    failedWorkspaceId,
-    phase,
-    resolveRouteWorkspace,
-    resolvingWorkspaceId,
-    routeWorkspace,
-    taskId,
-    workspaceId,
-  ]);
+    if (
+      routeSyncState.status === "failed" &&
+      routeSyncState.workspaceId === workspaceId
+    ) {
+      return;
+    }
 
-  useEffect(() => {
-    if (phase !== "connected" || !routeWorkspace || !workspaceId || !taskId) {
-      return;
-    }
-    if (
-      selectedWorkspaceId === workspaceId ||
-      syncingWorkspaceId === workspaceId ||
-      failedWorkspaceId === workspaceId
-    ) {
-      return;
-    }
-    setSyncingWorkspaceId(workspaceId);
-    void selectWorkspace(routeWorkspace, {
-      persist: false,
-      navigateHomeFromTaskRoute: false,
-    }).then((selected) => {
-      setSyncingWorkspaceId((current) =>
-        current === workspaceId ? undefined : current,
-      );
-      setFailedWorkspaceId(selected ? undefined : workspaceId);
+    setRouteSyncState({ status: "syncing", workspaceId });
+    void selectTaskRouteWorkspace(workspaceId).then((result) => {
+      setRouteSyncState((current) => {
+        if (current.status !== "syncing" || current.workspaceId !== workspaceId) {
+          return current;
+        }
+        return result.status === "selected"
+          ? { status: "idle" }
+          : { status: "failed", workspaceId };
+      });
     });
   }, [
-    failedWorkspaceId,
     phase,
-    routeWorkspace,
-    selectWorkspace,
+    routeSyncState,
+    selectTaskRouteWorkspace,
     selectedWorkspaceId,
-    syncingWorkspaceId,
     taskId,
     workspaceId,
   ]);
@@ -101,22 +68,19 @@ export function useTaskRouteSelection(): "pending" | "ready" | "redirect" {
   if (!workspaceId || !taskId) {
     return "redirect";
   }
-  if (
-    phase === "idle" ||
-    phase === "connecting" ||
-    resolvingWorkspaceId === workspaceId
-  ) {
+  if (phase === "idle" || phase === "connecting") {
     return "pending";
   }
   if (
     phase !== "connected" ||
-    failedWorkspaceId === workspaceId ||
-    !routeWorkspace
+    (routeSyncState.status === "failed" &&
+      routeSyncState.workspaceId === workspaceId)
   ) {
     return "redirect";
   }
   if (
-    syncingWorkspaceId === workspaceId ||
+    (routeSyncState.status === "syncing" &&
+      routeSyncState.workspaceId === workspaceId) ||
     selectedWorkspaceId !== workspaceId
   ) {
     return "pending";

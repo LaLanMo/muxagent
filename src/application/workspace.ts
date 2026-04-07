@@ -19,6 +19,8 @@ export type WorkspaceSelectionBootstrap = {
   tasks: TaskViewDto[];
 };
 
+export type WorkspaceTasksById = Record<string, TaskViewDto[]>;
+
 export async function chooseWorkspace(
   runtime: DesktopRuntime,
 ): Promise<string | null> {
@@ -53,6 +55,18 @@ export async function addWorkspace(
     throw new Error("Workspace path is required");
   }
   const result = await runtime.backend.workspaceAdd({ path: trimmed });
+  return result.workspace;
+}
+
+export async function getWorkspace(
+  runtime: DesktopRuntime,
+  workspaceId: string,
+): Promise<WorkspaceSummaryDto> {
+  const trimmedWorkspaceId = workspaceId.trim();
+  if (!trimmedWorkspaceId) {
+    throw new Error("Workspace id is required");
+  }
+  const result = await runtime.backend.workspaceGet(trimmedWorkspaceId);
   return result.workspace;
 }
 
@@ -101,6 +115,28 @@ export async function loadWorkspaceTasks(
     workspace,
     tasks: taskList.tasks,
   };
+}
+
+export async function loadAllWorkspaceTasks(
+  runtime: DesktopRuntime,
+  workspaces: WorkspaceSummaryDto[],
+): Promise<WorkspaceTasksById> {
+  const entries = await Promise.all(
+    workspaces.map(async (workspace) => {
+      if (!workspace.reachable) {
+        return [workspace.workspace_id, []] as const;
+      }
+
+      try {
+        const taskList = await runtime.backend.taskList(workspace.workspace_id);
+        return [workspace.workspace_id, taskList.tasks] as const;
+      } catch {
+        return [workspace.workspace_id, []] as const;
+      }
+    }),
+  );
+
+  return Object.fromEntries(entries);
 }
 
 export async function disconnectServer(runtime: DesktopRuntime): Promise<void> {

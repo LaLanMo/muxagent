@@ -15,10 +15,9 @@ export function InboxScreen({ shell, items }: InboxScreenProps) {
     <DesktopShellFrame
       addWorkspaceDisabled={shell.phase !== "connected"}
       footerNav={shell.footerNav}
+      onPrimaryAction={shell.openNewTask}
+      primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
       primaryNav={shell.primaryNav}
-      secondaryNav={shell.secondaryNav}
-      sidebarStatusLabel={shell.connectionLabel}
-      sidebarStatusTone={shell.connectionTone}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
       topBarLeft={<h1 className="screen-title">Inbox</h1>}

@@ -4,11 +4,14 @@ import type {
   InputRequestDto,
   NodeRunViewDto,
   TaskViewDto,
+  WorkspaceSummaryDto,
 } from "@/rpc/types";
 import { buildTaskDetailPath } from "@/domain/routes";
 
 export type BoardFilter = "all" | "mine" | "active" | "history";
+export type TaskLayout = "board" | "list";
 export type BoardBucket = "running" | "awaiting" | "done" | "failed";
+export type BoardColumnBucket = "attention" | "running" | "completed";
 export type DetailMode =
   | "live"
   | "approval"
@@ -18,7 +21,7 @@ export type DetailMode =
   | "blocked";
 
 export type BoardColumn = {
-  key: BoardBucket;
+  key: BoardColumnBucket;
   label: string;
   tasks: TaskViewDto[];
 };
@@ -32,11 +35,25 @@ export type InboxItem = {
   updatedAt: string;
 };
 
-const columnLabels: Record<BoardBucket, string> = {
-  running: "RUNNING",
-  awaiting: "AWAITING",
-  done: "DONE",
-  failed: "FAILED",
+export type ScopedTaskView = {
+  workspaceId: string;
+  workspaceLabel: string;
+  task: TaskViewDto;
+};
+
+export type TaskListRow = {
+  id: string;
+  title: string;
+  subtitle: string;
+  time: string;
+  tone: "running" | "awaiting" | "done" | "failed" | "neutral";
+  bucket: BoardBucket;
+};
+
+const boardColumnLabels: Record<BoardColumnBucket, string> = {
+  attention: "Needs Attention",
+  running: "Running",
+  completed: "Completed",
 };
 
 const activeStatuses = new Set(["running", "queued", "starting"]);
@@ -74,25 +91,64 @@ export function groupTasksIntoColumns(
   tasks: TaskViewDto[],
   filter: BoardFilter,
 ): BoardColumn[] {
-  const filtered = tasks.filter((task) => {
+  const filtered = filterTasks(tasks, filter);
+
+  return (["attention", "running", "completed"] as const).map((key) => ({
+    key,
+    label: boardColumnLabels[key],
+    tasks: filtered.filter((task) => boardColumnBucket(task) === key),
+  }))
+  .filter((column) => column.tasks.length > 0 || filter === "all");
+}
+
+export function boardColumnBucket(task: TaskViewDto): BoardColumnBucket {
+  const bucket = taskBucket(task);
+  switch (bucket) {
+    case "awaiting":
+    case "failed":
+      return "attention";
+    case "done":
+      return "completed";
+    case "running":
+    default:
+      return "running";
+  }
+}
+
+export function filterTasks(tasks: TaskViewDto[], filter: BoardFilter): TaskViewDto[] {
+  return tasks.filter((task) => {
     const bucket = taskBucket(task);
     switch (filter) {
       case "active":
         return bucket === "running" || bucket === "awaiting";
       case "history":
-        return bucket === "done" || bucket === "failed";
+        return bucket === "done";
       case "mine":
       case "all":
       default:
         return true;
     }
   });
+}
 
-  return (["running", "awaiting", "done", "failed"] as const).map((key) => ({
-    key,
-    label: columnLabels[key],
-    tasks: filtered.filter((task) => taskBucket(task) === key),
-  }));
+export function buildTaskListRows(
+  tasks: TaskViewDto[],
+  filter: BoardFilter,
+): TaskListRow[] {
+  return filterTasks(tasks, filter).map((task) => {
+    const bucket = taskBucket(task);
+    return {
+      id: task.task.id,
+      title: task.task.description || task.task.id,
+      subtitle:
+        bucket === "failed"
+          ? task.current_issue?.reason || task.current_node_name || "failed"
+          : `node: ${task.current_node_name || "n/a"}`,
+      time: formatRelativeTime(task.task.updated_at),
+      tone: statusTone(task.status),
+      bucket,
+    };
+  });
 }
 
 export function statusTone(
@@ -190,7 +246,13 @@ export function detailModeForTask(args: {
   if (args.selectedArtifact) {
     return "artifact";
   }
+  const isBlocked =
+    args.task.current_issue?.kind === "blocked_step" ||
+    (args.task.blocked_steps?.length ?? 0) > 0;
   const bucket = taskBucket(args.task);
+  if (isBlocked) {
+    return "blocked";
+  }
   if (bucket === "failed") {
     return "failed";
   }
@@ -200,35 +262,49 @@ export function detailModeForTask(args: {
   if (args.inputRequest) {
     return "approval";
   }
-  if (bucket === "awaiting" && (args.task.blocked_steps?.length ?? 0) > 0) {
-    return "blocked";
-  }
   return "live";
 }
 
 export function buildInboxItems(
-  tasks: TaskViewDto[],
-  workspaceId: string,
+  tasks: ScopedTaskView[],
 ): InboxItem[] {
   return tasks
-    .filter((task) => {
-      const bucket = taskBucket(task);
+    .filter((entry) => {
+      const bucket = taskBucket(entry.task);
       return bucket === "awaiting" || bucket === "failed";
     })
-    .map((task) => ({
-      id: task.task.id,
-      title: task.task.description || task.task.id,
-      subtitle:
-        taskBucket(task) === "awaiting"
-          ? `Awaiting at ${task.current_node_name || "current node"}`
-          : task.current_issue?.reason || "Needs intervention",
-      tone: (taskBucket(task) === "awaiting" ? "awaiting" : "failed") as
+    .map((entry) => ({
+      id: entry.task.task.id,
+      title: entry.task.task.description || entry.task.task.id,
+      subtitle: `${
+        taskBucket(entry.task) === "awaiting"
+          ? `Awaiting at ${entry.task.current_node_name || "current node"}`
+          : entry.task.current_issue?.reason || "Needs intervention"
+      } · ${entry.workspaceLabel}`,
+      tone: (taskBucket(entry.task) === "awaiting" ? "awaiting" : "failed") as
         | "awaiting"
         | "failed",
-      href: buildTaskDetailPath(workspaceId, task.task.id),
-      updatedAt: task.task.updated_at,
+      href: buildTaskDetailPath(entry.workspaceId, entry.task.task.id),
+      updatedAt: entry.task.task.updated_at,
     }))
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+export function collectScopedTasks(
+  workspaces: WorkspaceSummaryDto[],
+  tasksByWorkspaceId: Record<string, TaskViewDto[]>,
+): ScopedTaskView[] {
+  return workspaces
+    .flatMap((workspace) =>
+      (tasksByWorkspaceId[workspace.workspace_id] ?? []).map((task) => ({
+        workspaceId: workspace.workspace_id,
+        workspaceLabel: workspace.display_name,
+        task,
+      })),
+    )
+    .sort((left, right) =>
+      right.task.task.updated_at.localeCompare(left.task.task.updated_at),
+    );
 }
 
 export function artifactPreviewLabel(artifact: ArtifactRefDto): string {

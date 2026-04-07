@@ -1,0 +1,10 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 960 } });
+await page.goto('http://127.0.0.1:4273/');
+page.once('dialog', dialog => dialog.accept('/tmp/muxagent-workspace'));
+await page.getByTestId('workspace-picker-button').click();
+await page.getByRole('link', { name: /^Configs$/i }).click();
+await page.getByTestId('config-card-default').getByRole('button', { name: /^Edit$/i }).click();
+await page.screenshot({ path: '/Users/by/Projects/cmdr/artifacts/config-editor-current.png', fullPage: true });
+await browser.close();

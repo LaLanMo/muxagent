@@ -1,32 +1,40 @@
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
+import { DesktopWorkbenchFrame } from "@/features/layout/ui/DesktopWorkbenchFrame";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
+import type { TaskDetailActionSurface } from "@/features/task-detail/model/use-task-detail-screen";
+import type { TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
 import { TaskDetailSidebar } from "@/features/task-detail/ui/TaskDetailSidebar";
 import {
-  TaskApprovalPane,
+  TaskApprovalDock,
   TaskArtifactPane,
-  TaskBlockedPane,
-  TaskCompletePane,
-  TaskFailedPane,
-  TaskLivePane,
+  TaskBlockedDock,
+  TaskClarificationDock,
+  TaskFollowUpDock,
+  TaskOverviewPane,
+  TaskRetryDock,
+  TaskRunPane,
 } from "@/features/task-detail/ui/TaskDetailPanels";
-import type { ArtifactRefDto, BlockedStepDto, NodeRunViewDto } from "@/rpc/types";
+import type {
+  ArtifactRefDto,
+  BlockedStepDto,
+  InputRequestDto,
+  NodeRunViewDto,
+  TaskViewDto,
+} from "@/rpc/types";
 
 type StageNode = {
   name: string;
   status: "done" | "current" | "pending" | "failed";
 };
 
+function formatCount(count: number, singular: string, plural: string) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 type TaskDetailScreenProps = {
   shell: ShellChromeModel;
-  task?: {
-    task: {
-      id: string;
-      updated_at: string;
-    };
-    status: string;
-    current_node_name: string;
-  };
+  task?: TaskViewDto;
   loading: boolean;
   detailError?: string;
   title: string;
@@ -37,17 +45,20 @@ type TaskDetailScreenProps = {
   stageNodes: StageNode[];
   timelineRuns: NodeRunViewDto[];
   artifacts: ArtifactRefDto[];
+  selection: TaskDetailSelection;
+  selectedRun?: NodeRunViewDto;
   selectedArtifact?: ArtifactRefDto;
   artifactContent?: string;
   artifactError?: string;
   liveOutput: string[];
-  detailMode: "live" | "approval" | "artifact" | "failed" | "complete" | "blocked";
-  inputRequest?: {
-    node_name: string;
-  };
+  actionSurface: TaskDetailActionSurface;
+  inputRequest?: InputRequestDto;
   blockedStep?: BlockedStepDto;
   feedback: string;
   setFeedback: (value: string) => void;
+  clarificationAnswers: Array<string | string[]>;
+  setClarificationAnswer: (index: number, value: string | string[]) => void;
+  submittingClarification: boolean;
   submittingDecision: boolean;
   followUpDescription: string;
   setFollowUpDescription: (value: string) => void;
@@ -55,10 +66,12 @@ type TaskDetailScreenProps = {
   submittingRetry: boolean;
   submittingContinue: boolean;
   failureReason?: string;
+  selectOverview: () => void;
+  selectRun: (runId: string) => void;
   selectArtifact: (artifact: ArtifactRefDto) => void;
-  clearArtifact: () => void;
   submitApprove: () => Promise<void>;
   submitReject: () => Promise<void>;
+  submitClarification: () => Promise<void>;
   submitFollowUp: () => Promise<void>;
   retryTask: (force?: boolean) => Promise<void>;
   continueBlockedTask: () => Promise<void>;
@@ -99,15 +112,20 @@ export function TaskDetailScreen({
   stageNodes,
   timelineRuns,
   artifacts,
+  selection,
+  selectedRun,
   selectedArtifact,
   artifactContent,
   artifactError,
   liveOutput,
-  detailMode,
+  actionSurface,
   inputRequest,
   blockedStep,
   feedback,
   setFeedback,
+  clarificationAnswers,
+  setClarificationAnswer,
+  submittingClarification,
   submittingDecision,
   followUpDescription,
   setFollowUpDescription,
@@ -115,10 +133,12 @@ export function TaskDetailScreen({
   submittingRetry,
   submittingContinue,
   failureReason,
+  selectOverview,
+  selectRun,
   selectArtifact,
-  clearArtifact,
   submitApprove,
   submitReject,
+  submitClarification,
   submitFollowUp,
   retryTask,
   continueBlockedTask,
@@ -128,53 +148,86 @@ export function TaskDetailScreen({
     : elapsedLabel
       ? `updated ${elapsedLabel.slice(11, 16)}`
       : "";
+  const runSummary = formatCount(timelineRuns.length, "run", "runs");
+  const artifactSummary = formatCount(artifacts.length, "artifact", "artifacts");
+  const actionRunId =
+    actionSurface.kind !== "none" && "run" in actionSurface
+      ? actionSurface.run?.id
+      : undefined;
+  const selectedRunArtifactCount = selectedRun
+    ? artifacts.filter(
+        (artifact) =>
+          artifact.node_run_id === selectedRun.id ||
+          selectedRun.artifact_paths?.includes(artifact.raw_path) ||
+          selectedRun.artifact_paths?.includes(artifact.preview_name),
+      ).length
+    : 0;
 
-  let rightPane = (
-    <TaskLivePane
-      lines={liveOutput}
-      title={`Output · ${task?.current_node_name ?? "task"}`}
-    />
-  );
-  if (detailMode === "approval") {
-    rightPane = (
-      <TaskApprovalPane
+  const mainPane =
+    selection.kind === "artifact" ? (
+      <TaskArtifactPane
+        artifact={selectedArtifact}
+        content={artifactContent}
+        error={artifactError}
+      />
+    ) : selection.kind === "run" ? (
+      <TaskRunPane
+        artifactCount={selectedRunArtifactCount}
+        isCurrentRun={selectedRun?.id === actionRunId || task?.current_node_name === selectedRun?.node_name}
+        liveLines={liveOutput}
+        run={selectedRun}
+      />
+    ) : (
+      <TaskOverviewPane
+        artifactCount={artifacts.length}
+        runCount={timelineRuns.length}
+        task={task}
+      />
+    );
+
+  let actionPanel = null;
+  if (actionSurface.kind === "approval") {
+    actionPanel = (
+      <TaskApprovalDock
         feedback={feedback}
-        inputRequest={inputRequest}
+        nodeName={actionSurface.run?.node_name ?? inputRequest?.node_name}
         setFeedback={setFeedback}
         submitApprove={submitApprove}
         submitReject={submitReject}
         submittingDecision={submittingDecision}
       />
     );
-  } else if (detailMode === "artifact") {
-    rightPane = (
-      <TaskArtifactPane
-        artifact={selectedArtifact}
-        content={artifactContent}
-        error={artifactError}
-        onBack={clearArtifact}
+  } else if (actionSurface.kind === "clarification") {
+    actionPanel = (
+      <TaskClarificationDock
+        answers={clarificationAnswers}
+        nodeName={actionSurface.run?.node_name ?? inputRequest?.node_name}
+        questions={inputRequest?.questions ?? []}
+        setAnswer={setClarificationAnswer}
+        submitClarification={submitClarification}
+        submittingClarification={submittingClarification}
       />
     );
-  } else if (detailMode === "blocked") {
-    rightPane = (
-      <TaskBlockedPane
+  } else if (actionSurface.kind === "blocked") {
+    actionPanel = (
+      <TaskBlockedDock
         blockedStep={blockedStep}
         onContinue={continueBlockedTask}
         submittingContinue={submittingContinue}
       />
     );
-  } else if (detailMode === "failed") {
-    rightPane = (
-      <TaskFailedPane
+  } else if (actionSurface.kind === "retry") {
+    actionPanel = (
+      <TaskRetryDock
         failureReason={failureReason}
-        latestFailure={timelineRuns.at(-1)}
         onRetry={retryTask}
+        run={actionSurface.run}
         submittingRetry={submittingRetry}
       />
     );
-  } else if (detailMode === "complete") {
-    rightPane = (
-      <TaskCompletePane
+  } else if (actionSurface.kind === "follow_up") {
+    actionPanel = (
+      <TaskFollowUpDock
         configLabel={configLabel}
         followUpDescription={followUpDescription}
         onStartFollowUp={submitFollowUp}
@@ -188,10 +241,9 @@ export function TaskDetailScreen({
     <DesktopShellFrame
       addWorkspaceDisabled={shell.phase !== "connected"}
       footerNav={shell.footerNav}
+      onPrimaryAction={shell.openNewTask}
+      primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
       primaryNav={shell.primaryNav}
-      secondaryNav={shell.secondaryNav}
-      sidebarStatusLabel={shell.connectionLabel}
-      sidebarStatusTone={shell.connectionTone}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
       topBarLeft={
@@ -207,8 +259,8 @@ export function TaskDetailScreen({
             <span className={`task-header__state task-header__state--${statusTone}`}>
               {task?.current_node_name ?? "No active node"}
             </span>
-            <span className="task-header__summary">{timelineRuns.length} runs</span>
-            <span className="task-header__summary">{artifacts.length} artifacts</span>
+            <span className="task-header__summary">{runSummary}</span>
+            <span className="task-header__summary">{artifactSummary}</span>
           </div>
         </div>
       }
@@ -230,21 +282,28 @@ export function TaskDetailScreen({
 
         <StageStrip nodes={stageNodes} />
 
-        <div className="detail-split-view">
-          <TaskDetailSidebar
-            artifacts={artifacts}
-            currentNodeName={task?.current_node_name}
-            hasTask={Boolean(task)}
-            loading={loading}
-            onSelectArtifact={selectArtifact}
-            selectedArtifact={selectedArtifact}
-            timelineRuns={timelineRuns}
-          />
-
-          <div className="detail-split-divider" />
-
-          <div className="detail-pane-host">{rightPane}</div>
-        </div>
+        <DesktopWorkbenchFrame
+          center={
+            <TaskDetailSidebar
+              actionRunId={actionRunId}
+              artifacts={artifacts}
+              currentNodeName={task?.current_node_name}
+              hasTask={Boolean(task)}
+              loading={loading}
+              onSelectOverview={selectOverview}
+              onSelectArtifact={selectArtifact}
+              onSelectRun={selectRun}
+              selection={selection}
+              timelineRuns={timelineRuns}
+            />
+          }
+          right={
+            <div className="detail-pane-host">
+              <div className="detail-pane-scroll">{mainPane}</div>
+              {actionPanel ? <div className="detail-pane-footer">{actionPanel}</div> : null}
+            </div>
+          }
+        />
       </section>
     </DesktopShellFrame>
   );

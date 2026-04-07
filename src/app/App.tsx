@@ -8,6 +8,8 @@ import { useTaskDetailScreen } from "@/features/task-detail/model/use-task-detai
 import { TaskDetailScreen } from "@/features/task-detail/ui/TaskDetailScreen";
 import { useConfigsScreen } from "@/features/configs/model/use-configs-screen";
 import { ConfigsScreen } from "@/features/configs/ui/ConfigsScreen";
+import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
+import { ConfigEditorScreen } from "@/features/configs/ui/ConfigEditorScreen";
 import { useSettingsScreen } from "@/features/settings/model/use-settings-screen";
 import { SettingsScreen } from "@/features/settings/ui/SettingsScreen";
 import { useInboxScreen } from "@/features/inbox/model/use-inbox-screen";
@@ -43,6 +45,7 @@ function EntryRoute() {
       modalOpen={model.modalOpen}
       onCloseModal={model.closeModal}
       onOpenModal={model.openModal}
+      rows={model.rows}
       shell={model.shell}
     />
   );
@@ -70,7 +73,24 @@ function ProtectedTaskDetailRoute() {
 
 function ConfigsRoute() {
   const model = useConfigsScreen();
-  return <ConfigsScreen entries={model.entries} shell={model.shell} />;
+  return (
+    <ConfigsScreen
+      actionError={model.actionError}
+      busyAlias={model.busyAlias}
+      cancelRemove={model.cancelRemove}
+      confirmRemove={model.confirmRemove}
+      count={model.count}
+      createConfig={model.createConfig}
+      entries={model.entries}
+      pendingRemoveEntry={model.pendingRemoveEntry}
+      shell={model.shell}
+    />
+  );
+}
+
+function ConfigEditorRoute() {
+  const model = useConfigEditorScreen();
+  return <ConfigEditorScreen {...model} />;
 }
 
 function SettingsRoute() {
@@ -110,6 +130,7 @@ export function App() {
         />
         <Route element={<InboxRoute />} path="/inbox" />
         <Route element={<ConfigsRoute />} path="/configs" />
+        <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
         <Route element={<SettingsRoute />} path="/settings" />
         <Route element={<Navigate replace to="/" />} path="*" />
       </Routes>

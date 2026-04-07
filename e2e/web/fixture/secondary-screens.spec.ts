@@ -8,7 +8,7 @@ async function connectFixtureWorkspace(page: Page, workDir = "/tmp/muxagent-work
   await expect(page.getByTestId("entry-shell")).toBeVisible();
 }
 
-test("opens the new-task modal and starts a task from the shell", async ({ page }) => {
+test("opens the new-task modal and validates launch affordances from the shell", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
   await page.getByTestId("open-new-task").click();
@@ -18,16 +18,29 @@ test("opens the new-task modal and starts a task from the shell", async ({ page 
 
   await page.getByTestId("new-task-description").fill("Draft rollback playbook");
   await expect(page.getByTestId("new-task-submit")).toBeEnabled();
-  await page.getByTestId("new-task-submit").click();
+  await page.getByTestId("new-task-description").clear();
+  await expect(page.getByTestId("new-task-submit")).toBeDisabled();
+});
 
-  await expect(page.getByTestId("new-task-modal")).toBeHidden();
-  await expect(page.getByText("Draft rollback playbook")).toBeVisible();
+test("still allows starting a task from the all-workspaces task view", async ({ page }) => {
+  await connectFixtureWorkspace(page);
+
+  page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-alt-workspace"));
+  await page.getByTestId("workspace-picker-button").click();
+  await page.getByRole("link", { name: /^Tasks$/i }).click();
+
+  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
+  await page.getByTestId("open-new-task").click();
+  await expect(page.getByTestId("new-task-modal")).toBeVisible();
+  await expect(page.getByTestId("new-task-workspace")).toBeVisible();
+  await page.getByTestId("new-task-description").fill("Draft rollback playbook");
+  await expect(page.getByTestId("new-task-submit")).toBeEnabled();
 });
 
 test("renders the inbox surface and drills back into task detail", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
-  await page.getByRole("link", { name: /Inbox/i }).click();
+  await page.getByTestId("task-view-needs-attention").click();
   await expect(page.getByTestId("inbox-screen")).toBeVisible();
   await expect(page.getByText("Review PR #42")).toBeVisible();
   await expect(page.getByText("Deploy staging")).toBeVisible();

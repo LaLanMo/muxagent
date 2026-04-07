@@ -14,9 +14,9 @@ export type ShellNavItem = {
 export type ShellWorkspaceItem = {
   id: string;
   label: string;
-  meta?: string;
   active?: boolean;
-  tone?: "running" | "awaiting" | "done" | "failed" | "neutral";
+  badgeCount?: number;
+  badgeTone?: "running" | "attention";
   onClick: () => void;
 };
 
@@ -27,11 +27,10 @@ type DesktopShellFrameProps = {
   workspaceItems?: ShellWorkspaceItem[];
   onAddWorkspace?: () => void;
   addWorkspaceDisabled?: boolean;
+  onPrimaryAction?: () => void;
+  primaryActionDisabled?: boolean;
   primaryNav: ShellNavItem[];
-  secondaryNav?: ShellNavItem[];
   footerNav?: ShellNavItem;
-  sidebarStatusLabel?: string;
-  sidebarStatusTone?: "running" | "awaiting" | "done" | "failed" | "neutral";
 };
 
 function ShellNavRow(item: ShellNavItem) {
@@ -58,6 +57,7 @@ function ShellNavRow(item: ShellNavItem) {
           }`
         }
         end={item.to === "/" || item.to.startsWith("/?")}
+        onClick={item.onClick}
         to={item.to}
       >
         {rowContent}
@@ -82,15 +82,24 @@ function ShellWorkspaceRow(item: ShellWorkspaceItem) {
       data-testid={`workspace-row-${item.id}`}
       className={`shell-workspace__row${item.active ? " is-active" : ""}`}
       onClick={item.onClick}
+      title={item.label}
       type="button"
     >
-      <span
-        className={`shell-workspace__mark shell-workspace__mark--${item.tone ?? "neutral"}`}
-      />
+      <span className="shell-workspace__icon">
+        <ShellIcon name="workspace" />
+      </span>
       <span className="shell-workspace__copy">
         <span className="shell-workspace__label">{item.label}</span>
-        {item.meta ? <span className="shell-workspace__meta">{item.meta}</span> : null}
       </span>
+      {item.badgeCount ? (
+        <span
+          className={`shell-workspace__badge${
+            item.badgeTone ? ` shell-workspace__badge--${item.badgeTone}` : ""
+          }`}
+        >
+          {item.badgeCount}
+        </span>
+      ) : null}
     </button>
   );
 }
@@ -102,78 +111,64 @@ export function DesktopShellFrame({
   workspaceItems = [],
   onAddWorkspace,
   addWorkspaceDisabled = false,
+  onPrimaryAction,
+  primaryActionDisabled = false,
   primaryNav,
-  secondaryNav = [],
   footerNav,
-  sidebarStatusLabel,
-  sidebarStatusTone = "neutral",
 }: DesktopShellFrameProps) {
   return (
     <main className="desktop-shell">
       <aside className="desktop-shell__sidebar">
         <div className="desktop-shell__sidebar-top">
           <div className="desktop-shell__brand-lockup">
-            <span className="desktop-shell__brand-mark">&gt;m</span>
-            <div className="desktop-shell__brand-copy">
-              <span className="desktop-shell__brand">muxagent</span>
-              {sidebarStatusLabel ? (
-                <span
-                  className={`desktop-shell__status desktop-shell__status--${sidebarStatusTone}`}
-                >
-                  <span className="desktop-shell__status-dot" />
-                  {sidebarStatusLabel}
-                </span>
-              ) : null}
-            </div>
+            <span className="desktop-shell__brand">muxagent</span>
           </div>
 
-          <div className="shell-workspace">
-            <div className="shell-workspace__header">
-              <span className="shell-workspace__eyebrow">Workspaces</span>
-              <span className="shell-workspace__header-meta">
-                {workspaceItems.length > 0 ? (
-                  <span className="shell-workspace__count">{workspaceItems.length}</span>
-                ) : null}
-                {onAddWorkspace ? (
-                  <button
-                    className="shell-workspace__add"
-                    data-testid="workspace-picker-button"
-                    disabled={addWorkspaceDisabled}
-                    onClick={onAddWorkspace}
-                    type="button"
-                  >
-                    Add
-                  </button>
-                ) : null}
-              </span>
-            </div>
-            <div className="shell-workspace__list">
-              {workspaceItems.map((item) => (
-                <ShellWorkspaceRow key={item.id} {...item} />
-              ))}
-            </div>
-          </div>
+          {onPrimaryAction ? (
+            <button
+              className="shell-primary-action"
+              data-testid="open-new-task"
+              disabled={primaryActionDisabled}
+              onClick={onPrimaryAction}
+              type="button"
+            >
+              + New Task
+            </button>
+          ) : null}
 
           <nav className="shell-nav">
-            <div className="shell-nav__section">
-              <span className="shell-nav__eyebrow">Views</span>
-              <div className="shell-nav__group">
-                {primaryNav.map((item) => (
-                  <ShellNavRow key={`${item.label}-${item.to ?? "action"}`} {...item} />
-                ))}
-              </div>
+            <div className="shell-nav__group">
+              {primaryNav.map((item) => (
+                <ShellNavRow key={`${item.label}-${item.to ?? "action"}`} {...item} />
+              ))}
             </div>
-            {secondaryNav.length > 0 ? (
-              <div className="shell-nav__section">
-                <span className="shell-nav__eyebrow">Control</span>
-                <div className="shell-nav__group">
-                  {secondaryNav.map((item) => (
-                    <ShellNavRow key={`${item.label}-${item.to ?? "action"}`} {...item} />
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </nav>
+
+          <div className="shell-section">
+            <div className="shell-section__header">
+              <span className="shell-section__title">Workspaces</span>
+              {onAddWorkspace ? (
+                <button
+                  className="shell-section__add"
+                  data-testid="workspace-picker-button"
+                  disabled={addWorkspaceDisabled}
+                  onClick={onAddWorkspace}
+                  type="button"
+                >
+                  +
+                </button>
+              ) : null}
+            </div>
+            <div className="shell-workspace__list">
+              {workspaceItems.length > 0 ? (
+                workspaceItems.map((item) => (
+                  <ShellWorkspaceRow key={item.id} {...item} />
+                ))
+              ) : (
+                <div className="shell-section__empty">No workspaces yet</div>
+              )}
+            </div>
+          </div>
         </div>
 
         {footerNav ? (

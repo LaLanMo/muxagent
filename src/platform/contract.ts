@@ -1,9 +1,28 @@
 import type {
   ArtifactListResult,
   CommandAcceptedResult,
+  ConfigCloneParams,
+  ConfigCloneResult,
   ConfigCatalogResult,
+  ConfigDeleteParams,
+  ConfigDeleteResult,
+  ConfigGetResult,
+  ConfigResetParams,
+  ConfigResetResult,
+  ConfigPromptGetResult,
+  ConfigPromptSaveParams,
+  ConfigPromptSaveResult,
+  ConfigRenameParams,
+  ConfigRenameResult,
+  ConfigSaveParams,
+  ConfigSaveResult,
+  ConfigSetDefaultParams,
+  ConfigSetDefaultResult,
+  ConfigValidateParams,
+  ConfigValidateResult,
   InitializeResult,
   NotificationEnvelopeParams,
+  RuntimeListResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
   TaskGetResult,
@@ -35,6 +54,19 @@ export interface TaskBackendClient {
   workspaceUpdate(params: WorkspaceUpdateParams): Promise<WorkspaceUpdateResult>;
   workspaceRemove(params: WorkspaceRemoveParams): Promise<WorkspaceRemoveResult>;
   configCatalog(): Promise<ConfigCatalogResult>;
+  configGet(alias: string): Promise<ConfigGetResult>;
+  configClone(params: ConfigCloneParams): Promise<ConfigCloneResult>;
+  configRename(params: ConfigRenameParams): Promise<ConfigRenameResult>;
+  configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult>;
+  configReset(params: ConfigResetParams): Promise<ConfigResetResult>;
+  configSetDefault(params: ConfigSetDefaultParams): Promise<ConfigSetDefaultResult>;
+  configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult>;
+  configSave(params: ConfigSaveParams): Promise<ConfigSaveResult>;
+  configPromptGet(alias: string, nodeName: string): Promise<ConfigPromptGetResult>;
+  configPromptSave(
+    params: ConfigPromptSaveParams,
+  ): Promise<ConfigPromptSaveResult>;
+  runtimeList(): Promise<RuntimeListResult>;
   taskList(workspaceId: string): Promise<TaskListResult>;
   taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult>;
   taskInputRequest(

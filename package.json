@@ -13,10 +13,12 @@
     "tauri:build": "tauri build --debug",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "tsx scripts/run-playwright-fixture.ts && playwright test -c playwright.real.config.ts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.10.1",
+    "@xyflow/react": "^12.10.2",
+    "elkjs": "^0.11.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.4",

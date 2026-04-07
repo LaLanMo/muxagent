@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "MuxAgent Desktop",
+  "productName": "MuxAgent",
   "version": "0.1.0",
   "identifier": "com.lalanmo.muxagentdesktop",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "MuxAgent Desktop",
+        "title": "MuxAgent",
         "width": 1440,
         "height": 960,
         "minWidth": 960,

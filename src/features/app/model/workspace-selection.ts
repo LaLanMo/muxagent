@@ -39,3 +39,31 @@ export async function selectWorkspaceIntoState({
     return false;
   }
 }
+
+export function pickPreferredWorkspace(
+  workspaces: WorkspaceSummaryDto[],
+  preferredIds: Array<string | undefined>,
+): WorkspaceSummaryDto | undefined {
+  for (const preferredId of preferredIds) {
+    const trimmed = preferredId?.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const match = workspaces.find(
+      (workspace) => workspace.workspace_id === trimmed,
+    );
+    if (match) {
+      return match;
+    }
+  }
+  return workspaces[0];
+}
+
+export function pickReplacementWorkspace(
+  workspaces: WorkspaceSummaryDto[],
+  removedWorkspaceId: string,
+): WorkspaceSummaryDto | undefined {
+  return workspaces.find(
+    (workspace) => workspace.workspace_id !== removedWorkspaceId,
+  );
+}

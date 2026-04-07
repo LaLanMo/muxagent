@@ -33,14 +33,16 @@ export function SettingsScreen({
   commitRename,
   removeWorkspace,
 }: SettingsScreenProps) {
+  const selectedWorkspaceValue = workDir ? shell.workspaceLabel : "None";
+  const selectedWorkspacePath = workDir || "No workspace selected";
+
   return (
     <DesktopShellFrame
       addWorkspaceDisabled={shell.phase !== "connected"}
       footerNav={shell.footerNav}
+      onPrimaryAction={shell.openNewTask}
+      primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
       primaryNav={shell.primaryNav}
-      secondaryNav={shell.secondaryNav}
-      sidebarStatusLabel={shell.connectionLabel}
-      sidebarStatusTone={shell.connectionTone}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
       topBarLeft={<h1 className="screen-title">Settings</h1>}
@@ -52,10 +54,10 @@ export function SettingsScreen({
             <span className="settings-section__eyebrow">General</span>
             <div className="settings-row">
               <div className="settings-row__copy">
-                <strong>Workspace</strong>
-                <p>{workDir || "Not connected"}</p>
+                <strong>Selected workspace</strong>
+                <p>{selectedWorkspacePath}</p>
               </div>
-              <span className="settings-row__value">{shell.workspaceLabel}</span>
+              <span className="settings-row__value">{selectedWorkspaceValue}</span>
             </div>
             <div className="settings-row">
               <div className="settings-row__copy">
@@ -98,8 +100,8 @@ export function SettingsScreen({
             </div>
             <div className="settings-row">
               <div className="settings-row__copy">
-                <strong>Runtime actors</strong>
-                <p>Active workspace runtime processes.</p>
+                <strong>Configured runtimes</strong>
+                <p>Runtime backends available to launch configs.</p>
               </div>
               <span className="settings-row__value">{status?.runtime_count ?? "0"}</span>
             </div>

@@ -3,9 +3,12 @@ export type ShellIconName =
   | "tasks"
   | "active"
   | "history"
+  | "list"
+  | "board"
   | "machines"
   | "configs"
-  | "settings";
+  | "settings"
+  | "workspace";
 
 type ShellIconProps = {
   name: ShellIconName;
@@ -33,6 +36,20 @@ const iconPaths: Record<ShellIconName, string[]> = {
     "M3.75 3.75v2.5h2.5",
     "M7.5 5.5v2.5l1.5 1",
   ],
+  list: [
+    "M4.25 4.5h7",
+    "M4.25 7.5h7",
+    "M4.25 10.5h7",
+    "M2.75 4.5h.5",
+    "M2.75 7.5h.5",
+    "M2.75 10.5h.5",
+  ],
+  board: [
+    "M2.75 3.5h4v3.5h-4Z",
+    "M8.25 3.5h4v3.5h-4Z",
+    "M2.75 8h4v3.5h-4Z",
+    "M8.25 8h4v3.5h-4Z",
+  ],
   machines: [
     "M2.75 4.5h10.5v5.5H2.75Z",
     "M5.5 12h5",
@@ -51,6 +68,10 @@ const iconPaths: Record<ShellIconName, string[]> = {
     "M10.35 4.65 9.3 5.7",
     "M5.7 9.3 4.65 10.35",
     "M9 7.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z",
+  ],
+  workspace: [
+    "M2.75 5.25h3l1 1h5.5v5.5h-9.5Z",
+    "M2.75 5.25V4.5h3l1 1",
   ],
 };
 

@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use rfd::FileDialog;
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
@@ -165,10 +166,7 @@ impl Session {
 }
 
 #[tauri::command]
-fn app_server_connect(
-    app: tauri::AppHandle,
-    state: State<'_, AppState>,
-) -> Result<Value, String> {
+fn app_server_connect(app: tauri::AppHandle, state: State<'_, AppState>) -> Result<Value, String> {
     state.manager.disconnect_current()?;
 
     let cli_path = resolve_cli_binary();
@@ -249,6 +247,13 @@ fn open_path(state: State<'_, AppState>, path: String) -> Result<(), String> {
     let _session = state.manager.current()?;
     let requested = resolve_absolute_path(&path)?;
     open_path_on_host(&requested)
+}
+
+#[tauri::command]
+fn pick_directory() -> Result<Option<String>, String> {
+    Ok(FileDialog::new()
+        .pick_folder()
+        .map(|path| path.to_string_lossy().to_string()))
 }
 
 fn resolve_cli_binary() -> String {
@@ -452,6 +457,7 @@ fn main() {
             app_server_connect,
             app_server_disconnect,
             app_server_request,
+            pick_directory,
             read_text_file,
             open_path
         ])

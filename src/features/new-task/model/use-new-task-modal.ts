@@ -12,13 +12,15 @@ type UseNewTaskModalArgs = {
 
 export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   const catalog = useWorkspaceStore((state) => state.catalog);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
   const selectedWorkspaceId = useWorkspaceStore(
     (state) => state.selectedWorkspaceId,
   );
-  const selectedWorkspace = useWorkspaceStore((state) =>
-    state.workspaces.find(
-      (workspace) => workspace.workspace_id === state.selectedWorkspaceId,
-    ),
+  const [selectedTargetWorkspaceId, setSelectedTargetWorkspaceId] = useState(
+    selectedWorkspaceId ?? "",
+  );
+  const selectedWorkspace = workspaces.find(
+    (workspace) => workspace.workspace_id === selectedTargetWorkspaceId,
   );
   const setTasks = useTaskSnapshotStore((state) => state.setTasks);
 
@@ -35,40 +37,59 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     if (!open) {
       return;
     }
+    setSelectedTargetWorkspaceId((current) => {
+      if (current && workspaces.some((workspace) => workspace.workspace_id === current)) {
+        return current;
+      }
+      return selectedWorkspaceId ?? workspaces[0]?.workspace_id ?? "";
+    });
     setSelectedAlias((current) => current || defaultAlias);
     setUseWorktree(catalog?.default_use_worktree ?? false);
     setError(undefined);
-  }, [catalog?.default_use_worktree, defaultAlias, open]);
+  }, [
+    catalog?.default_use_worktree,
+    defaultAlias,
+    open,
+    selectedWorkspaceId,
+    workspaces,
+  ]);
 
   const entries = (catalog?.entries ?? []).filter((entry) => entry.launchable);
   const selectedEntry =
     entries.find((entry) => entry.alias === selectedAlias) ?? entries[0];
   const canSubmit = Boolean(
-    description.trim() && selectedEntry && selectedWorkspaceId,
+    description.trim() && selectedEntry && selectedTargetWorkspaceId,
   );
 
   async function submit(): Promise<void> {
     const trimmed = description.trim();
-    if (!trimmed || !selectedEntry || !selectedWorkspaceId) {
-      setError("Task description and config are required");
+    if (!trimmed || !selectedEntry || !selectedTargetWorkspaceId) {
+      setError("Task description, workspace, and config are required");
       return;
     }
 
     setSubmitting(true);
     setError(undefined);
     try {
+      const workspaceId = selectedTargetWorkspaceId;
       await startTask(getRuntime(), {
-        workspace_id: selectedWorkspaceId,
+        workspace_id: workspaceId,
         client_command_id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()),
         description: trimmed,
         config_alias: selectedEntry.alias,
         config_path: selectedEntry.config_path,
         use_worktree: Boolean(selectedWorkspace?.worktree_available && useWorktree),
       });
-      const taskList = await getRuntime().backend.taskList(selectedWorkspaceId);
-      setTasks(selectedWorkspaceId, taskList.tasks);
       setDescription("");
       onClose();
+      void getRuntime()
+        .backend.taskList(workspaceId)
+        .then((taskList) => {
+          setTasks(workspaceId, taskList.tasks);
+        })
+        .catch(() => {
+          // Notifications or later refreshes can reconcile the list if this read races.
+        });
     } catch (submitError) {
       setError(
         submitError instanceof Error ? submitError.message : "Failed to start task",
@@ -81,6 +102,12 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   return {
     description,
     setDescription,
+    selectedTargetWorkspaceId,
+    setSelectedTargetWorkspaceId,
+    workspaceOptions: workspaces.map((workspace) => ({
+      id: workspace.workspace_id,
+      label: workspace.display_name,
+    })),
     selectedAlias,
     setSelectedAlias,
     selectedEntry,

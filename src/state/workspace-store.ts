@@ -8,6 +8,7 @@ import type {
 
 interface WorkspaceState {
   phase: "idle" | "connecting" | "connected" | "failed";
+  bootstrapPending: boolean;
   server?: InitializeResult;
   status?: ServiceStatusResult;
   catalog?: ConfigCatalogResult;
@@ -15,13 +16,16 @@ interface WorkspaceState {
   selectedWorkspaceId?: string;
   error?: string;
   setConnecting: () => void;
+  requestBootstrap: () => void;
   setConnected: (
     server: InitializeResult,
     status: ServiceStatusResult,
     catalog: ConfigCatalogResult,
     workspaces: WorkspaceSummaryDto[],
   ) => void;
+  setDisconnected: () => void;
   setSelectedWorkspace: (workspaceId?: string) => void;
+  setCatalog: (catalog?: ConfigCatalogResult) => void;
   upsertWorkspace: (workspace: WorkspaceSummaryDto) => void;
   removeWorkspace: (workspaceId: string) => void;
   setError: (message?: string) => void;
@@ -39,18 +43,32 @@ function sortWorkspaces(workspaces: WorkspaceSummaryDto[]): WorkspaceSummaryDto[
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   phase: "idle",
+  bootstrapPending: true,
   workspaces: [],
   setConnecting: () =>
     set((state) => ({
       phase: "connecting",
+      bootstrapPending: false,
       server: state.server,
       status: state.status,
       catalog: state.catalog,
       error: undefined,
     })),
+  requestBootstrap: () =>
+    set({
+      phase: "idle",
+      bootstrapPending: true,
+      server: undefined,
+      status: undefined,
+      catalog: undefined,
+      workspaces: [],
+      selectedWorkspaceId: undefined,
+      error: undefined,
+    }),
   setConnected: (server, status, catalog, workspaces) =>
     set((state) => ({
       phase: "connected",
+      bootstrapPending: false,
       server,
       status,
       catalog,
@@ -64,9 +82,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
           : undefined,
       error: undefined,
     })),
+  setDisconnected: () =>
+    set({
+      phase: "idle",
+      bootstrapPending: false,
+      server: undefined,
+      status: undefined,
+      catalog: undefined,
+      workspaces: [],
+      selectedWorkspaceId: undefined,
+      error: undefined,
+    }),
   setSelectedWorkspace: (workspaceId) =>
     set({
       selectedWorkspaceId: workspaceId,
+    }),
+  setCatalog: (catalog) =>
+    set({
+      catalog,
     }),
   upsertWorkspace: (workspace) =>
     set((state) => {
@@ -88,10 +121,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       );
       return {
         workspaces,
-        selectedWorkspaceId:
-          state.selectedWorkspaceId === workspaceId
-            ? workspaces[0]?.workspace_id
-            : state.selectedWorkspaceId,
       };
     }),
   setError: (message) =>
@@ -101,11 +130,18 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setFailed: (message) =>
     set({
       phase: "failed",
+      bootstrapPending: false,
+      server: undefined,
+      status: undefined,
+      catalog: undefined,
+      workspaces: [],
+      selectedWorkspaceId: undefined,
       error: message,
     }),
   reset: () =>
     set({
       phase: "idle",
+      bootstrapPending: true,
       server: undefined,
       status: undefined,
       catalog: undefined,

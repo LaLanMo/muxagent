@@ -123,6 +123,8 @@ export interface ConfigCatalogEntryDto {
   is_default: boolean;
   runtime_id?: string;
   runtime_name?: string;
+  runtime_explicit: boolean;
+  runtime_configured: boolean;
   node_names?: string[];
   load_error?: string;
   builtin_id?: string;
@@ -135,6 +137,181 @@ export interface ConfigCatalogResult {
   default_alias: string;
   default_use_worktree: boolean;
   entries: ConfigCatalogEntryDto[];
+}
+
+export interface ConfigDraftDto {
+  version: number;
+  description?: string;
+  runtime?: string;
+  clarification: {
+    max_questions: number;
+    max_options_per_question: number;
+    min_options_per_question: number;
+  };
+  topology: {
+    max_iterations: number;
+    entry: string;
+    nodes: Array<{
+      name: string;
+      max_iterations?: number;
+      join?: string;
+    }>;
+    edges: Array<{
+      from: string;
+      to: string;
+      when?: {
+        kind?: string;
+        field?: string;
+        equals?: unknown;
+      };
+    }>;
+  };
+  node_definitions: Record<
+    string,
+    {
+      type?: string;
+      system_prompt?: string;
+      max_clarification_rounds?: number;
+      result_schema: Record<string, unknown>;
+    }
+  >;
+}
+
+export interface ConfigDetailDto {
+  alias: string;
+  bundle_path?: string;
+  config_path: string;
+  is_default: boolean;
+  builtin_id?: string;
+  builtin: boolean;
+  revision?: string;
+  runtime_id?: string;
+  runtime_name?: string;
+  runtime_explicit: boolean;
+  runtime_configured: boolean;
+  description?: string;
+  node_names?: string[];
+  load_error?: string;
+  launchable: boolean;
+  config?: ConfigDraftDto;
+}
+
+export interface ConfigGetParams {
+  alias: string;
+}
+
+export interface ConfigGetResult {
+  entry: ConfigDetailDto;
+}
+
+export interface ConfigCloneParams {
+  source_alias: string;
+  new_alias: string;
+}
+
+export interface ConfigCloneResult {
+  entry: ConfigDetailDto;
+}
+
+export interface ConfigRenameParams {
+  alias: string;
+  new_alias: string;
+}
+
+export interface ConfigRenameResult {
+  entry: ConfigDetailDto;
+}
+
+export interface ConfigDeleteParams {
+  alias: string;
+}
+
+export interface ConfigDeleteResult {
+  removed: boolean;
+}
+
+export interface ConfigResetParams {
+  alias: string;
+}
+
+export interface ConfigResetResult {
+  entry: ConfigDetailDto;
+}
+
+export interface ConfigSetDefaultParams {
+  alias: string;
+}
+
+export interface ConfigSetDefaultResult {
+  entry: ConfigDetailDto;
+}
+
+export interface ConfigValidateParams {
+  config: ConfigDraftDto;
+}
+
+export interface ConfigValidateResult {
+  valid: boolean;
+  config?: ConfigDraftDto;
+  runtime_id?: string;
+  runtime_name?: string;
+  runtime_configured: boolean;
+  error?: string;
+}
+
+export interface ConfigSaveParams {
+  alias: string;
+  expected_revision: string;
+  config: ConfigDraftDto;
+}
+
+export interface ConfigSaveResult {
+  entry: ConfigDetailDto;
+}
+
+export interface ConfigPromptDto {
+  alias: string;
+  node_name: string;
+  node_type: string;
+  path: string;
+  resolved_path: string;
+  content: string;
+  revision?: string;
+  readonly: boolean;
+  builtin: boolean;
+}
+
+export interface ConfigPromptGetParams {
+  alias: string;
+  node_name: string;
+}
+
+export interface ConfigPromptGetResult {
+  prompt: ConfigPromptDto;
+}
+
+export interface ConfigPromptSaveParams {
+  alias: string;
+  node_name: string;
+  expected_revision?: string;
+  content: string;
+}
+
+export interface ConfigPromptSaveResult {
+  prompt: ConfigPromptDto;
+}
+
+export interface RuntimeEntryDto {
+  runtime_id: string;
+  runtime_name: string;
+  command?: string;
+  args?: string[];
+  cwd?: string;
+  env_keys?: string[];
+}
+
+export interface RuntimeListResult {
+  runtimes: RuntimeEntryDto[];
 }
 
 export interface TaskDto {
@@ -206,6 +383,7 @@ export interface InputQuestionDto {
   question: string;
   why_it_matters?: string;
   options?: InputQuestionOptionDto[];
+  multi_select?: boolean;
 }
 
 export interface InputRequestDto {
