@@ -29,6 +29,9 @@ class PushNotificationService {
       FlutterLocalNotificationsPlugin();
 
   String? _currentToken;
+  String? _lastRegisteredToken;
+  String? _activeRegistrationToken;
+  Future<bool>? _activeRegistrationFuture;
   bool _localNotificationsReady = false;
   int _nextForegroundNotificationId = 1;
 
@@ -48,28 +51,25 @@ class PushNotificationService {
       final messaging = FirebaseMessaging.instance;
 
       final settings = await messaging.requestPermission();
+      debugPrint(
+        '[Push] Notification permission status=${settings.authorizationStatus.name}',
+      );
       if (settings.authorizationStatus != AuthorizationStatus.authorized &&
           settings.authorizationStatus != AuthorizationStatus.provisional) {
         debugPrint('[Push] Notification permission denied');
         return;
       }
-
-      final token = await messaging.getToken();
-      if (token == null) {
-        debugPrint('[Push] Failed to get FCM token');
-        return;
-      }
-
-      _currentToken = token;
-      await _registerTokenWithAllRelays(token);
+      await _configureForegroundPresentation(messaging);
 
       final initialMessage = await messaging.getInitialMessage();
       await _handleNotificationOpen(initialMessage);
 
-      // Listen for token refresh
+      // Listen for token refresh before the initial token fetch so late APNs
+      // registration can still complete without another app launch.
       messaging.onTokenRefresh.listen((newToken) async {
         try {
           _currentToken = newToken;
+          debugPrint('[Push] Token refresh received ${_maskToken(newToken)}');
           await _registerTokenWithAllRelays(newToken);
         } catch (e) {
           debugPrint('[Push] Token refresh registration failed: $e');
@@ -77,14 +77,88 @@ class PushNotificationService {
       });
 
       FirebaseMessaging.onMessage.listen((message) async {
+        debugPrint(
+          '[Push] Foreground message received event=${message.data['event'] ?? 'unknown'} title=${message.notification?.title ?? ''}',
+        );
+        if (_shouldPresentForegroundWithSystemUi(message)) {
+          debugPrint(
+            '[Push] iOS system UI will present this foreground notification',
+          );
+          return;
+        }
         await _showForegroundNotification(message);
       });
       FirebaseMessaging.onMessageOpenedApp.listen((message) async {
+        debugPrint(
+          '[Push] Notification opened event=${message.data['event'] ?? 'unknown'}',
+        );
         await _handleNotificationOpen(message);
       });
+
+      final token = await _loadInitialFcmToken(messaging);
+      if (token == null) {
+        debugPrint('[Push] FCM token unavailable during init');
+        return;
+      }
+
+      _currentToken = token;
+      debugPrint('[Push] Initial FCM token ready ${_maskToken(token)}');
+      await _registerTokenWithAllRelays(token);
     } catch (e) {
       debugPrint('[Push] Init failed: $e');
     }
+  }
+
+  Future<String?> _loadInitialFcmToken(FirebaseMessaging messaging) async {
+    if (!Platform.isIOS) {
+      final token = await messaging.getToken();
+      if (token != null) {
+        debugPrint('[Push] Non-iOS FCM token ready ${_maskToken(token)}');
+      }
+      return token;
+    }
+
+    final apnsToken = await _waitForApnsToken(messaging);
+    if (apnsToken == null) {
+      debugPrint(
+        '[Push] APNs token unavailable after waiting; deferring FCM token fetch',
+      );
+      return null;
+    }
+
+    debugPrint('[Push] APNs token ready ${_maskToken(apnsToken)}');
+    return messaging.getToken();
+  }
+
+  Future<void> _configureForegroundPresentation(
+    FirebaseMessaging messaging,
+  ) async {
+    if (!Platform.isIOS) {
+      return;
+    }
+
+    await messaging.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+  }
+
+  Future<String?> _waitForApnsToken(FirebaseMessaging messaging) async {
+    String? token = await messaging.getAPNSToken();
+    if (token != null && token.isNotEmpty) {
+      return token;
+    }
+
+    for (var attempt = 0; attempt < 12; attempt++) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      token = await messaging.getAPNSToken();
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    }
+
+    return null;
   }
 
   Future<void> _handleNotificationOpen(RemoteMessage? message) async {
@@ -147,7 +221,12 @@ class PushNotificationService {
         priority: Priority.high,
         icon: 'ic_notification',
       ),
-      iOS: const DarwinNotificationDetails(),
+      iOS: const DarwinNotificationDetails(
+        presentBanner: true,
+        presentList: true,
+        presentSound: true,
+        presentBadge: true,
+      ),
     );
 
     await _localNotifications.show(
@@ -157,6 +236,10 @@ class PushNotificationService {
       notificationDetails: details,
       payload: jsonEncode(message.data),
     );
+  }
+
+  bool _shouldPresentForegroundWithSystemUi(RemoteMessage message) {
+    return Platform.isIOS && message.notification != null;
   }
 
   (String, String) _notificationContent(RemoteMessage message) {
@@ -177,15 +260,70 @@ class PushNotificationService {
     };
   }
 
-  Future<void> _registerTokenWithAllRelays(String fcmToken) async {
+  Future<void> _registerTokenWithAllRelays(
+    String fcmToken, {
+    bool force = false,
+  }) async {
+    if (!force && _lastRegisteredToken == fcmToken) {
+      debugPrint('[Push] Token already registered ${_maskToken(fcmToken)}');
+      return;
+    }
+
+    if (!force && _activeRegistrationToken == fcmToken) {
+      debugPrint(
+        '[Push] Registration already in progress for ${_maskToken(fcmToken)}',
+      );
+      final pending = _activeRegistrationFuture;
+      if (pending != null) {
+        await pending;
+      }
+      return;
+    }
+
+    if (force && _activeRegistrationToken == fcmToken) {
+      final pending = _activeRegistrationFuture;
+      if (pending != null) {
+        await pending;
+      }
+    }
+
+    final registration = _performRelayRegistration(fcmToken);
+    _activeRegistrationToken = fcmToken;
+    _activeRegistrationFuture = registration;
+
+    try {
+      final registeredAnyRelay = await registration;
+      if (registeredAnyRelay) {
+        _lastRegisteredToken = fcmToken;
+      }
+    } finally {
+      if (identical(_activeRegistrationFuture, registration)) {
+        _activeRegistrationFuture = null;
+        _activeRegistrationToken = null;
+      }
+    }
+  }
+
+  Future<bool> _performRelayRegistration(String fcmToken) async {
     try {
       final masterKey = await _crypto.loadMasterKey();
-      if (masterKey == null) return;
+      if (masterKey == null) {
+        debugPrint('[Push] Relay registration skipped: no master key');
+        return false;
+      }
 
       final machines = await _machines.listMachines();
-      if (machines.isEmpty) return;
+      if (machines.isEmpty) {
+        debugPrint(
+          '[Push] Relay registration skipped: no paired machines for ${_maskToken(fcmToken)}',
+        );
+        return false;
+      }
 
       final platform = Platform.isIOS ? 'ios' : 'android';
+      debugPrint(
+        '[Push] Registering ${_maskToken(fcmToken)} with ${machines.length} machine(s) on $platform',
+      );
 
       // Group machines by relay URL to avoid duplicate registrations
       final relayUrls = <String>{};
@@ -193,6 +331,7 @@ class PushNotificationService {
         relayUrls.add(machine.relayHttpUrl);
       }
 
+      var registeredAnyRelay = false;
       for (final relayUrl in relayUrls) {
         try {
           final connectToken = await _tokens.buildConnectToken(
@@ -205,19 +344,32 @@ class PushNotificationService {
             fcmToken,
             platform,
           );
+          registeredAnyRelay = true;
+          debugPrint(
+            '[Push] Relay registration succeeded for $relayUrl with ${_maskToken(fcmToken)}',
+          );
         } catch (e) {
           debugPrint('[Push] Failed to register with $relayUrl: $e');
         }
       }
+      return registeredAnyRelay;
     } catch (e) {
       debugPrint('[Push] Register failed: $e');
+      return false;
     }
   }
 
   /// Re-register the current token (e.g. after pairing a new machine)
   Future<void> refreshRegistration() async {
     if (_currentToken != null) {
-      await _registerTokenWithAllRelays(_currentToken!);
+      await _registerTokenWithAllRelays(_currentToken!, force: true);
     }
+  }
+
+  String _maskToken(String token) {
+    if (token.length <= 12) {
+      return token;
+    }
+    return '${token.substring(0, 6)}...${token.substring(token.length - 6)}';
   }
 }
