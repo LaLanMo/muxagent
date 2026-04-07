@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'cost_info.dart';
 import 'enums.dart';
 import 'tool_activity.dart';
@@ -8,8 +11,17 @@ class MediaPart {
   final String? mimeType;
   final String? name;
   final int? size;
+  Uint8List? _decodedBytesCache;
 
   MediaPart({this.url, this.base64, this.mimeType, this.name, this.size});
+
+  Uint8List? get decodedBytes {
+    final encoded = base64;
+    if (encoded == null || encoded.isEmpty) {
+      return null;
+    }
+    return _decodedBytesCache ??= base64Decode(encoded);
+  }
 
   Map<String, dynamic> toJson() => {
     if (url != null) 'url': url,

@@ -470,6 +470,46 @@ void main() {
       expect(chatState.messages.containsKey('local-1'), isFalse);
     });
 
+    test(
+      'adopting optimistic user message preserves local media attachments',
+      () {
+        final chatState = ChatState(sessionId: 'session-1');
+        chatState.finalizeMessage(
+          Message(
+            id: 'local-1',
+            sessionId: 'session-1',
+            role: MessageRole.user,
+            parts: [
+              MessagePart(
+                type: PartType.media,
+                media: MediaPart(base64: 'ZmFrZS1pbWFnZS1ieXRlcw=='),
+              ),
+              MessagePart(type: PartType.text, text: 'look at this'),
+            ],
+            createdAt: DateTime(2026, 1, 1, 0, 0),
+          ),
+        );
+
+        expect(chatState.adoptLocalOptimisticUserMessage('user-1'), isTrue);
+        chatState.applyDelta(
+          MessagePartEvent(
+            partId: 'user-part-1',
+            messageId: 'user-1',
+            role: MessageRole.user,
+            delta: 'look at this',
+            partType: 'text',
+          ),
+        );
+
+        final parts = chatState.messages['user-1']!.parts;
+        expect(parts, hasLength(2));
+        expect(parts.first.type, PartType.media);
+        expect(parts.first.media?.base64, 'ZmFrZS1pbWFnZS1ieXRlcw==');
+        expect(parts.last.type, PartType.text);
+        expect(parts.last.text, 'look at this');
+      },
+    );
+
     test('disables composer while transport is reconnecting', () {
       expect(
         ChatViewModel.shouldEnableComposer(

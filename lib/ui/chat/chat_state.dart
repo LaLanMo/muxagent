@@ -214,11 +214,26 @@ class ChatState {
       (_, value) => value.messageId == optimisticMessageId,
     );
 
+    // Keep optimistic non-text parts like local image attachments. The daemon
+    // replay only streams authoritative text deltas, so dropping these parts
+    // makes image prompts blink or disappear as soon as the reply starts.
+    final preservedParts = optimisticMessage.parts
+        .where((part) => part.type != PartType.text)
+        .map(
+          (part) => MessagePart(
+            type: part.type,
+            text: part.text,
+            media: part.media,
+            tool: part.tool,
+          ),
+        )
+        .toList();
+
     messages[authoritativeMessageId] = Message(
       id: authoritativeMessageId,
       sessionId: optimisticMessage.sessionId,
       role: optimisticMessage.role,
-      parts: [],
+      parts: preservedParts,
       createdAt: optimisticMessage.createdAt,
     );
     return true;

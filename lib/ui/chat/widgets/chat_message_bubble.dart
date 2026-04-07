@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
@@ -36,8 +34,9 @@ class ChatMessageBubble extends StatelessWidget {
   }
 
   Widget _buildUserBubble() {
-    final imageParts =
-        parts.where((p) => p.type == PartType.media && p.media != null).toList();
+    final imageParts = parts
+        .where((p) => p.type == PartType.media && p.media != null)
+        .toList();
     final text = parts
         .where((p) => p.type == PartType.text && p.text != null)
         .map((p) => p.text!)
@@ -82,23 +81,23 @@ class ChatMessageBubble extends StatelessWidget {
       spacing: 6,
       runSpacing: 6,
       children: imageParts
-          .map((p) => SizedBox(
-                width: 120,
-                height: 120,
-                child: _buildImageWidget(p.media!),
-              ))
+          .map(
+            (p) => SizedBox(
+              width: 120,
+              height: 120,
+              child: _buildImageWidget(p.media!),
+            ),
+          )
           .toList(),
     );
   }
 
   Widget _buildImageWidget(MediaPart media) {
-    if (media.base64 != null && media.base64!.isNotEmpty) {
+    final bytes = media.decodedBytes;
+    if (bytes != null && bytes.isNotEmpty) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.memory(
-          base64Decode(media.base64!),
-          fit: BoxFit.cover,
-        ),
+        child: Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
       );
     }
     // Fallback placeholder for loaded sessions
@@ -110,7 +109,11 @@ class ChatMessageBubble extends StatelessWidget {
         border: Border.all(color: AppTheme.border),
       ),
       child: const Center(
-        child: Icon(Icons.image_outlined, color: AppTheme.textTertiary, size: 24),
+        child: Icon(
+          Icons.image_outlined,
+          color: AppTheme.textTertiary,
+          size: 24,
+        ),
       ),
     );
   }
