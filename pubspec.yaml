@@ -61,9 +61,6 @@ dependencies:
   json_annotation: ^4.9.0
   freezed_annotation: ^2.4.0
 
-  # Google Fonts
-  google_fonts: ^6.0.0
-
   # Lucide icons (Linear-style)
   lucide_icons: ^0.257.0
 

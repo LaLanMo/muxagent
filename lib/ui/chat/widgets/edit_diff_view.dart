@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 import '../../../config/theme.dart';
 import '../../../utils/diff_utils.dart';
@@ -149,7 +149,7 @@ class _EditDiffViewState extends State<EditDiffView> {
                   onTap: () => setState(() => _expanded = true),
                   child: Text(
                     'Show $hiddenCount more line${hiddenCount == 1 ? '' : 's'}',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textSecondary,
@@ -163,7 +163,7 @@ class _EditDiffViewState extends State<EditDiffView> {
                   onTap: () => setState(() => _expanded = false),
                   child: Text(
                     'Collapse',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textSecondary,
@@ -264,7 +264,7 @@ class _EditDiffViewState extends State<EditDiffView> {
         if (_diff.additions > 0)
           Text(
             '+${_diff.additions}',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: _kAddedAccent,
@@ -275,7 +275,7 @@ class _EditDiffViewState extends State<EditDiffView> {
         if (_diff.deletions > 0)
           Text(
             '-${_diff.deletions}',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: _kRemovedAccent,
@@ -286,7 +286,7 @@ class _EditDiffViewState extends State<EditDiffView> {
   }
 
   TextStyle _codeStyle({Color? color, double fontSize = 12}) {
-    return GoogleFonts.jetBrainsMono(
+    return AppTypography.mono(
       fontSize: fontSize,
       fontWeight: FontWeight.w400,
       color: color,

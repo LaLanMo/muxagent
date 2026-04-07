@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -51,7 +51,7 @@ class RelayStatusPill extends StatelessWidget {
             const SizedBox(width: 5),
             Text(
               label,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: fg,

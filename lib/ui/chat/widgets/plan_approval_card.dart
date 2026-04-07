@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -66,7 +66,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
                 const SizedBox(width: 8),
                 Text(
                   widget.approval.resolved ? 'Plan (Rejected)' : 'Review Plan',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: widget.approval.resolved
@@ -90,7 +90,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
               child: SelectionArea(
                 child: GptMarkdown(
                   _planText!,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 13,
                     fontWeight: FontWeight.w400,
                     color: AppTheme.textPrimary,
@@ -117,7 +117,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
                 children: [
                   Text(
                     'Requested Permissions',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.textSecondary,
@@ -138,7 +138,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
                           Expanded(
                             child: Text(
                               item,
-                              style: GoogleFonts.inter(
+                              style: AppTypography.sans(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w400,
                                 color: AppTheme.textSecondary,
@@ -177,7 +177,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
       children: [
         Text(
           'Ready to code?',
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
@@ -230,7 +230,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
         alignment: Alignment.center,
         child: Text(
           option.name,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: Colors.white,
@@ -256,7 +256,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
         alignment: Alignment.center,
         child: Text(
           option.name,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: AppTheme.textPrimary,
@@ -277,7 +277,7 @@ class _PlanApprovalCardState extends State<PlanApprovalCard> {
         alignment: Alignment.center,
         child: Text(
           option.name,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: AppTheme.textMetadata,

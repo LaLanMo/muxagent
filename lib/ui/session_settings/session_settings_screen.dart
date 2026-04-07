@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -39,7 +39,7 @@ class SessionSettingsScreen extends StatelessWidget {
                       child: Center(
                         child: Text(
                           'No model options available',
-                          style: GoogleFonts.inter(
+                          style: AppTypography.sans(
                             fontSize: 14,
                             color: AppTheme.textTertiary,
                           ),
@@ -100,7 +100,7 @@ class SessionSettingsScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Text(
                 'Session Settings',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -116,7 +116,7 @@ class SessionSettingsScreen extends StatelessWidget {
   Widget _sectionLabel(String text) {
     return Text(
       text,
-      style: GoogleFonts.inter(
+      style: AppTypography.sans(
         fontSize: 11,
         fontWeight: FontWeight.w600,
         color: AppTheme.textMetadata,
@@ -191,7 +191,7 @@ class SessionSettingsScreen extends StatelessWidget {
         children: [
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: isPrimary ? 14 : 13,
               fontWeight: FontWeight.normal,
               color: isPrimary
@@ -201,7 +201,7 @@ class SessionSettingsScreen extends StatelessWidget {
           ),
           Text(
             value,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: isPrimary ? 14 : 13,
               fontWeight: isPrimary ? FontWeight.w600 : FontWeight.w500,
               color: isPrimary
@@ -241,7 +241,7 @@ class SessionSettingsScreen extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -250,7 +250,7 @@ class SessionSettingsScreen extends StatelessWidget {
               if (percentLabel.isNotEmpty)
                 Text(
                   percentLabel,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: const Color(0xFF2563EB),
@@ -312,7 +312,7 @@ class SessionSettingsScreen extends StatelessWidget {
                 children: [
                   Text(
                     model.name,
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textPrimary,
@@ -324,7 +324,7 @@ class SessionSettingsScreen extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 2),
                       child: Text(
                         model.description!,
-                        style: GoogleFonts.inter(
+                        style: AppTypography.sans(
                           fontSize: 12,
                           color: isSelected
                               ? const Color(0xFF2563EB)

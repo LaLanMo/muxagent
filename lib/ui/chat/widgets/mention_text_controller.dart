@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 /// A TextEditingController that visually highlights @file mentions
 /// with blue text and a light blue background.
@@ -9,10 +10,9 @@ import 'package:flutter/material.dart';
 class MentionTextEditingController extends TextEditingController {
   static final _mentionRe = RegExp(r'(?<=^|\s)@[^\s]+');
 
-  static const _mentionStyle = TextStyle(
-    color: Color(0xFF3B82F6),
-    backgroundColor: Color(0xFFEFF6FF),
-    fontFamily: 'JetBrains Mono',
+  static final _mentionStyle = AppTypography.mono(
+    color: const Color(0xFF3B82F6),
+    backgroundColor: const Color(0xFFEFF6FF),
     fontSize: 13,
     fontWeight: FontWeight.w500,
   );

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -28,7 +28,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               children: [
                 Text(
                   'Settings',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.textPrimary,
@@ -93,7 +93,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                           controller.appVersion.value.isEmpty
                               ? 'Loading...'
                               : controller.appVersion.value,
-                          style: GoogleFonts.inter(
+                          style: AppTypography.sans(
                             fontSize: 15,
                             color: AppTheme.textTertiary,
                           ),
@@ -139,13 +139,13 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     );
   }
 
-  // Section label: padding [20, 16, 8, 16], Inter 13 w500 #808690 letterSpacing 1
+  // Section label: padding [20, 16, 8, 16], system sans 13 w500 #808690 letterSpacing 1
   Widget _buildSectionLabel(String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Text(
         text,
-        style: GoogleFonts.inter(
+        style: AppTypography.sans(
           fontSize: 13,
           fontWeight: FontWeight.w500,
           letterSpacing: 1,
@@ -188,14 +188,14 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
             // Monitor icon 20x20 #6B6F76
             Icon(LucideIcons.monitor, size: 20, color: AppTheme.textSecondary),
             const SizedBox(width: 12),
-            // Machine name: Inter 15 normal #1D1D1F, fill_container
+            // Machine name: system sans 15 normal #1D1D1F, fill_container
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     hostname,
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 15,
                       fontWeight: FontWeight.normal,
                       color: AppTheme.textPrimary,
@@ -204,7 +204,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                   if (!connected && !connecting)
                     Text(
                       'Tap to reconnect',
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 12,
                         color: AppTheme.textTertiary,
                       ),
@@ -275,7 +275,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           const SizedBox(width: 5),
           Text(
             textStr,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 12,
               fontWeight: FontWeight.normal,
               color: dotColor,
@@ -310,11 +310,11 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
             // Left icon 20x20 #6B6F76
             Icon(icon, size: 20, color: AppTheme.textSecondary),
             const SizedBox(width: 12),
-            // Label: Inter 15 normal #1D1D1F, fill_container
+            // Label: system sans 15 normal #1D1D1F, fill_container
             Expanded(
               child: Text(
                 label,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 15,
                   fontWeight: FontWeight.normal,
                   color: AppTheme.textPrimary,

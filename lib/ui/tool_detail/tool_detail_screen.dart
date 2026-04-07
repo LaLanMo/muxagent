@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -34,7 +34,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           ),
           title: Text(
             tool.title ?? tool.name,
-            style: GoogleFonts.jetBrainsMono(
+            style: AppTypography.mono(
               fontSize: 16,
               fontWeight: FontWeight.w600,
               color: AppTheme.textPrimary,
@@ -56,7 +56,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
               if (tool.title != null && tool.title!.isNotEmpty) ...[
                 Text(
                   tool.title!,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
                     color: AppTheme.textPrimary,
@@ -172,7 +172,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
               Expanded(
                 child: Text(
                   loc.line != null ? '${loc.path}:${loc.line}' : loc.path,
-                  style: GoogleFonts.jetBrainsMono(
+                  style: AppTypography.mono(
                     fontSize: 12,
                     color: AppTheme.textPrimary,
                   ),
@@ -195,7 +195,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           children: [
             Text(
               diff.path,
-              style: GoogleFonts.jetBrainsMono(
+              style: AppTypography.mono(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textSecondary,
@@ -232,7 +232,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
             const SizedBox(width: 8),
             Text(
               '$count $noun completed',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textSecondary,
@@ -262,7 +262,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   Widget _buildSectionLabel(String label) {
     return Text(
       label,
-      style: GoogleFonts.inter(
+      style: AppTypography.sans(
         fontSize: 11,
         fontWeight: FontWeight.w600,
         letterSpacing: 2,

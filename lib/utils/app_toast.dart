@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 class AppToast {
   AppToast._();
@@ -101,7 +101,7 @@ class _ToastState extends State<_ToastWidget> {
               ),
               child: Text(
                 widget.message,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: Colors.white,

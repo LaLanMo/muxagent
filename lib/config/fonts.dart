@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 class AppFonts {
   static TextStyle code({
@@ -8,7 +8,7 @@ class AppFonts {
     Color? color,
     double? height,
   }) {
-    return GoogleFonts.jetBrainsMono(
+    return AppTypography.mono(
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,

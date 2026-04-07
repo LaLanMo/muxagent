@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
 import 'auth_viewmodel.dart';
@@ -14,7 +14,7 @@ class AuthScreen extends GetView<AuthViewModel> {
       appBar: AppBar(
         title: Text(
           'Authorize Device',
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 20,
             fontWeight: FontWeight.w600,
           ),
@@ -54,7 +54,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 16),
           Text(
             'Checking request...',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 16,
               color: AppTheme.textSecondary,
             ),
@@ -87,7 +87,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             const SizedBox(height: 24),
             Text(
               'New Device',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
@@ -113,7 +113,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             Text(
               'Do you want to authorize this device to connect?',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 16,
                 color: AppTheme.textSecondary,
               ),
@@ -151,7 +151,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 16),
           Text(
             'Approving...',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 16,
               color: AppTheme.textSecondary,
             ),
@@ -182,7 +182,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 24),
           Text(
             'Device Authorized',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 24,
               fontWeight: FontWeight.w700,
             ),
@@ -190,7 +190,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 16),
           Text(
             'The device can now connect to the relay',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 16,
               color: AppTheme.textSecondary,
             ),
@@ -229,7 +229,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 24),
           Text(
             'Request Expired',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 24,
               fontWeight: FontWeight.w700,
             ),
@@ -237,7 +237,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           const SizedBox(height: 16),
           Text(
             'Please scan a new QR code from the CLI',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 16,
               color: AppTheme.textSecondary,
             ),
@@ -278,7 +278,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             const SizedBox(height: 24),
             Text(
               'Error',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
@@ -287,7 +287,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             Text(
               controller.errorMessage.value ?? 'Unknown error',
               textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 16,
                 color: AppTheme.textSecondary,
               ),
@@ -322,14 +322,14 @@ class AuthScreen extends GetView<AuthViewModel> {
       children: [
         Text(
           label,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 14,
             color: AppTheme.textSecondary,
           ),
         ),
         Text(
           value,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),

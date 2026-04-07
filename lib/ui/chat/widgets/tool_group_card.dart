@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/theme.dart';
@@ -166,7 +166,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
           const SizedBox(width: 10),
           Text(
             '$count $noun',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: AppTheme.textPrimary,
@@ -179,7 +179,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
               children: [
                 Text(
                   'running',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
@@ -190,7 +190,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
                   width: 18,
                   child: Text(
                     '.' * _dotCount,
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.5,
@@ -221,7 +221,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
       padding: const EdgeInsets.only(left: 26, top: 4),
       child: Text(
         _summaryText(),
-        style: GoogleFonts.inter(
+        style: AppTypography.sans(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: AppTheme.textMetadata,
@@ -269,7 +269,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
           Expanded(
             child: Text(
               '$preview$suffix',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.failedRed,
@@ -321,7 +321,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
             Expanded(
               child: Text(
                 preview,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   color: isFailed ? AppTheme.failedRed : AppTheme.textPrimary,
@@ -333,7 +333,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
             const SizedBox(width: 8),
             Text(
               _kindLabel(kind).toUpperCase(),
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
                 letterSpacing: 0.5,

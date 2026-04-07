@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 
 import '../../../config/theme.dart';
@@ -62,7 +62,7 @@ class ChatMessageBubble extends StatelessWidget {
             if (text.isNotEmpty)
               SelectableText(
                 text,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 14,
                   fontWeight: FontWeight.w400,
                   color: AppTheme.textPrimary,
@@ -118,7 +118,7 @@ class ChatMessageBubble extends StatelessWidget {
   Widget _buildAgentText(String text) {
     final markdown = GptMarkdown(
       text,
-      style: GoogleFonts.inter(
+      style: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: AppTheme.textPrimary,

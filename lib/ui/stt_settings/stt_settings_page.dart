@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -27,7 +27,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                     // Subtitle
                     Text(
                       'Full transcription endpoint URL',
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 13,
                         color: AppTheme.textTertiary,
                       ),
@@ -63,7 +63,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                         const SizedBox(width: 4),
                         Text(
                           'Stored securely in device keychain',
-                          style: GoogleFonts.inter(
+                          style: AppTypography.sans(
                             fontSize: 12,
                             color: AppTheme.textTertiary,
                           ),
@@ -96,7 +96,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                     const SizedBox(height: 6),
                     Text(
                       'Record a short clip to verify your configuration.',
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 13,
                         color: AppTheme.textTertiary,
                       ),
@@ -139,7 +139,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
             const SizedBox(width: 12),
             Text(
               'Speech to Text',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textPrimary,
@@ -154,7 +154,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
   Widget _buildLabel(String text) {
     return Text(
       text,
-      style: GoogleFonts.inter(
+      style: AppTypography.sans(
         fontSize: 13,
         fontWeight: FontWeight.w500,
         color: AppTheme.textSecondary,
@@ -174,13 +174,13 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
       keyboardType: keyboardType,
       autocorrect: false,
       enableSuggestions: false,
-      style: GoogleFonts.inter(
+      style: AppTypography.sans(
         fontSize: 15,
         color: AppTheme.textPrimary,
       ),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: GoogleFonts.inter(
+        hintStyle: AppTypography.sans(
           fontSize: 15,
           color: AppTheme.textTertiary,
         ),
@@ -203,7 +203,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           const SizedBox(width: 10),
           Text(
             'Transcribing...',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 14,
               color: AppTheme.textSecondary,
             ),
@@ -253,7 +253,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           children: [
             Text(
               result.text.isEmpty ? '(empty transcription)' : result.text,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 14,
                 color: AppTheme.textPrimary,
               ),
@@ -261,7 +261,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
             const SizedBox(height: 4),
             Text(
               '${result.duration.inMilliseconds}ms',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 12,
                 color: AppTheme.textTertiary,
               ),
@@ -281,7 +281,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
         ),
         child: Text(
           error,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             color: AppTheme.errorText,
           ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
 import '../../domain/enums.dart';
@@ -94,7 +94,7 @@ class StatusIndicator extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: color,

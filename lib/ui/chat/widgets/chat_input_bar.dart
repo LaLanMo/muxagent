@@ -2,7 +2,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/theme.dart';
@@ -94,7 +94,7 @@ class ChatInputBar extends StatelessWidget {
                             keyboardType: TextInputType.multiline,
                             decoration: InputDecoration(
                               hintText: 'Type a message...',
-                              hintStyle: GoogleFonts.inter(
+                              hintStyle: AppTypography.sans(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w400,
                                 color: AppTheme.textMuted,
@@ -106,7 +106,7 @@ class ChatInputBar extends StatelessWidget {
                               ),
                               isDense: true,
                             ),
-                            style: GoogleFonts.inter(
+                            style: AppTypography.sans(
                               fontSize: 14,
                               fontWeight: FontWeight.w400,
                               color: AppTheme.textPrimary,

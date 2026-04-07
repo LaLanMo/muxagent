@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
@@ -50,10 +50,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Title: Inter 17 w600 #1D1D1F
+                    // Title: system sans 17 w600 #1D1D1F
                     Text(
                       'New Session',
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 17,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.textPrimary,
@@ -141,11 +141,11 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  // Label: Inter 13 w500 #6B6F76
+  // Label: system sans 13 w500 #6B6F76
   Widget _buildFieldLabel(String text) {
     return Text(
       text,
-      style: GoogleFonts.inter(
+      style: AppTypography.sans(
         fontSize: 13,
         fontWeight: FontWeight.w500,
         color: AppTheme.textSecondary,
@@ -184,7 +184,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           const SizedBox(width: 8),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: color,
@@ -225,11 +225,11 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               color: AppTheme.textTertiary,
             ),
             const SizedBox(width: 8),
-            // Machine name: Inter 14 normal #1D1D1F
+            // Machine name: system sans 14 normal #1D1D1F
             Expanded(
               child: Text(
                 hostname,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
                   color: selected != null
@@ -272,7 +272,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             const SizedBox(width: 10),
             Text(
               'Loading runtimes...',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 14,
                 color: AppTheme.textSecondary,
               ),
@@ -293,7 +293,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         ),
         child: Text(
           'No runtimes available',
-          style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+          style: AppTypography.sans(fontSize: 14, color: AppTheme.textSecondary),
         ),
       );
     }
@@ -332,7 +332,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         ),
         child: Text(
           'Use runtime default mode',
-          style: GoogleFonts.inter(fontSize: 14, color: AppTheme.textSecondary),
+          style: AppTypography.sans(fontSize: 14, color: AppTheme.textSecondary),
         ),
       );
     }
@@ -394,7 +394,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               Expanded(
                 child: Text(
                   runtime.label,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
                     color: labelColor,
@@ -509,7 +509,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   mode.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 13,
                     fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                     color: isSelected ? Colors.white : AppTheme.textSecondary,
@@ -558,7 +558,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 'Select Machine',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 17,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -578,7 +578,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 ),
                 title: Text(
                   name,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 15,
                     color: isOnline ? AppTheme.textPrimary : AppTheme.textMuted,
                   ),
@@ -704,7 +704,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                       padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                       child: Text(
                         'No recent directories',
-                        style: GoogleFonts.inter(
+                        style: AppTypography.sans(
                           fontSize: 12,
                           color: const Color(0xFF9CA0A8),
                         ),
@@ -724,7 +724,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                             padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
                             child: Text(
                               'RECENT',
-                              style: GoogleFonts.inter(
+                              style: AppTypography.sans(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF9CA0A8),
@@ -771,7 +771,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                                       const SizedBox(height: 2),
                                       Text(
                                         _relativeTime(cwd.lastUsed),
-                                        style: GoogleFonts.inter(
+                                        style: AppTypography.sans(
                                           fontSize: 11,
                                           color: const Color(0xFF9CA0A8),
                                         ),
@@ -841,7 +841,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 children: [
                   Text(
                     'Use Worktree',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 13,
                       fontWeight: isOn ? FontWeight.w600 : FontWeight.w500,
                       color: isOn
@@ -852,7 +852,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   const SizedBox(height: 2),
                   Text(
                     'Agent works on an isolated branch',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 11,
                       color: isOn
                           ? AppTheme.textSecondary
@@ -898,7 +898,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     autocorrect: false,
                     smartDashesType: SmartDashesType.disabled,
                     smartQuotesType: SmartQuotesType.disabled,
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 14,
                       fontWeight: FontWeight.normal,
                       color: AppTheme.textPrimary,
@@ -910,7 +910,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
                       hintText: 'Describe what you want to do...',
-                      hintStyle: GoogleFonts.inter(
+                      hintStyle: AppTypography.sans(
                         fontSize: 14,
                         fontWeight: FontWeight.normal,
                         color: AppTheme.textMuted,
@@ -999,7 +999,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   // Create Button: cornerRadius 8, fill #1D1D1F, height 48, center
-  // Text: "Start Session", Inter 15 w600 #FFFFFF
+  // Text: "Start Session", system sans 15 w600 #FFFFFF
   Widget _buildCreateButton() {
     return Obx(() {
       final hasMachine = controller.selectedMachine.value != null;
@@ -1037,7 +1037,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 )
               : Text(
                   'Start Session',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: canCreate ? Colors.white : AppTheme.textTertiary,

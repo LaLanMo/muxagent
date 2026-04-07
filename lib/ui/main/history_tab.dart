@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
 import '../../data/repositories/event_repository.dart';
@@ -29,7 +29,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             children: [
               Text(
                 'History',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 28,
                   fontWeight: FontWeight.w700,
                   color: AppTheme.textPrimary,
@@ -79,8 +79,8 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   }
 
   Widget _buildChip(String label, bool selected, VoidCallback onTap) {
-    // Selected: cornerRadius 16, fill #1D1D1F, padding [6,14], text Inter 13px w500 #FFFFFF
-    // Unselected: cornerRadius 16, fill transparent, padding [6,14], border 1px #E0E2E6, text Inter 13px w500 #6B6F76
+    // Selected: cornerRadius 16, fill #1D1D1F, padding [6,14], text system sans 13px w500 #FFFFFF
+    // Unselected: cornerRadius 16, fill transparent, padding [6,14], border 1px #E0E2E6, text system sans 13px w500 #6B6F76
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -92,7 +92,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         ),
         child: Text(
           label,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: selected ? Colors.white : AppTheme.textSecondary,
@@ -116,7 +116,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
           children: [
             Text(
               hasFilter ? 'No sessions found' : 'No completed sessions yet',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 15,
                 color: AppTheme.textSecondary,
               ),
@@ -125,7 +125,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
               const SizedBox(height: 4),
               Text(
                 'Try selecting a different machine',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 13,
                   color: AppTheme.textTertiary,
                 ),
@@ -151,12 +151,12 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
       itemBuilder: (_, i) {
         final item = items[i];
         if (item.isHeader) {
-          // Date Label: padding [12, 16, 4, 16], text Inter 13px w500 #808690
+          // Date Label: padding [12, 16, 4, 16], text system sans 13px w500 #808690
           return Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Text(
               item.headerLabel!,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textTertiary,
@@ -205,7 +205,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
                     children: [
                       Text(
                         title,
-                        style: GoogleFonts.inter(
+                        style: AppTypography.sans(
                           fontSize: 15,
                           fontWeight: hasIndicator
                               ? FontWeight.w600
@@ -220,7 +220,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
                       const SizedBox(height: 2),
                       Text(
                         cwd.isNotEmpty ? cwd : '~',
-                        style: GoogleFonts.inter(
+                        style: AppTypography.sans(
                           fontSize: 13,
                           fontWeight: FontWeight.w400,
                           color: hasIndicator
@@ -234,7 +234,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
                       if (machineId.isNotEmpty)
                         Text(
                           shell.machineDisplayName(machineId),
-                          style: GoogleFonts.inter(
+                          style: AppTypography.sans(
                             fontSize: 12,
                             fontWeight: FontWeight.w400,
                             color: hasIndicator

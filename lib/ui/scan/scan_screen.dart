@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../config/theme.dart';
@@ -18,7 +18,7 @@ class ScanScreen extends GetView<ScanViewModel> {
         foregroundColor: Colors.white,
         title: Text(
           'Scan QR Code',
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 20,
             fontWeight: FontWeight.w600,
             color: Colors.white,
@@ -62,7 +62,7 @@ class ScanScreen extends GetView<ScanViewModel> {
               child: Text(
                 'Point camera at the QR code displayed on your CLI',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   color: Colors.white,
                   fontSize: 16,
                   shadows: const [
@@ -92,7 +92,7 @@ class ScanScreen extends GetView<ScanViewModel> {
                     Expanded(
                       child: Text(
                         error,
-                        style: GoogleFonts.inter(color: Colors.white),
+                        style: AppTypography.sans(color: Colors.white),
                       ),
                     ),
                     IconButton(

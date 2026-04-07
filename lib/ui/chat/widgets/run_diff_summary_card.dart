@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/fonts.dart';
@@ -46,7 +46,7 @@ class RunDiffSummaryCard extends StatelessWidget {
               children: [
                 Text(
                   '${summary.fileCount} file${summary.fileCount == 1 ? '' : 's'} changed',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFF1A1A1A),

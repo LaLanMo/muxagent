@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
@@ -53,7 +53,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
                     const SizedBox(height: 12),
                     Text(
                       'cwd: ${approval.cwd!}',
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
                         color: AppTheme.textSecondary,
@@ -100,7 +100,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
             const SizedBox(width: 12),
             Text(
               'Permission Request',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 17,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.textPrimary,
@@ -135,7 +135,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
               alignment: Alignment.center,
               child: Text(
                 option.name,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -156,7 +156,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
               child: Center(
                 child: Text(
                   option.name,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                     color: AppTheme.textTertiary,

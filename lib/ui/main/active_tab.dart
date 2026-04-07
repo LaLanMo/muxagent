@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../domain/enums.dart';
@@ -29,7 +29,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             children: [
               Text(
                 'Active',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
@@ -68,22 +68,22 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             // Check icon: lucide circle-check, 48x48, #C8CBD0
             Icon(LucideIcons.checkCircle, size: 48, color: AppTheme.textMuted),
             const SizedBox(height: 16),
-            // Title: "All clear", Inter 20px w500 #6B6F76
+            // Title: "All clear", system sans 20px w500 #6B6F76
             Text(
               'All clear',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 20,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textSecondary,
               ),
             ),
             const SizedBox(height: 16),
-            // Description: Inter 14px #808690, textAlign center, width 260
+            // Description: system sans 14px #808690, textAlign center, width 260
             SizedBox(
               width: 260,
               child: Text(
                 'No sessions need your attention right now.',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 14,
                   color: AppTheme.textTertiary,
                 ),
@@ -94,7 +94,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             // Machine section card
             Obx(() => _buildMachineCard()),
             const SizedBox(height: 16),
-            // "Start New Session" text: Inter 15px w600 #1D1D1F (tappable text)
+            // "Start New Session" text: system sans 15px w600 #1D1D1F (tappable text)
             Semantics(
               label: 'Start New Session',
               button: true,
@@ -102,7 +102,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                 onTap: shell.navigateToNewSession,
                 child: Text(
                   'Start New Session',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.textPrimary,
@@ -156,11 +156,11 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               color: AppTheme.textSecondary,
             ),
             const SizedBox(width: 10),
-            // Machine name: Inter 14px normal #1D1D1F, fill_container
+            // Machine name: system sans 14px normal #1D1D1F, fill_container
             Expanded(
               child: Text(
                 machine.hostname ?? machine.machineId,
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 14,
                   fontWeight: FontWeight.normal,
                   color: AppTheme.textPrimary,
@@ -197,10 +197,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
           const SizedBox(width: 5),
-          // Text: Inter 11px w500
+          // Text: system sans 11px w500
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 11,
               fontWeight: FontWeight.w500,
               color: dotColor,
@@ -255,10 +255,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Label: Inter 15px w500, color = status color
+                // Label: system sans 15px w500, color = status color
                 Text(
                   label,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 15,
                     fontWeight: FontWeight.w500,
                     color: statusColor,
@@ -302,10 +302,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Session Name: Inter 15px w500 #1D1D1F
+                  // Session Name: system sans 15px w500 #1D1D1F
                   Text(
                     title,
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textPrimary,
@@ -315,10 +315,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                   ),
                   if (cwd.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    // Working Directory: Inter 13px normal #808690
+                    // Working Directory: system sans 13px normal #808690
                     Text(
                       cwd,
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 13,
                         fontWeight: FontWeight.normal,
                         color: AppTheme.textTertiary,
@@ -328,10 +328,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                     ),
                   ],
                   const SizedBox(height: 2),
-                  // Machine + Duration: Inter 12px normal #C8CBD0
+                  // Machine + Duration: system sans 12px normal #C8CBD0
                   Text(
                     _buildMachineDurationText(machineId, session),
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 12,
                       fontWeight: FontWeight.normal,
                       color: AppTheme.textMuted,

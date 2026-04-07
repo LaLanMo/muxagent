@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/fonts.dart';
@@ -78,7 +78,7 @@ class ChatScreen extends GetView<ChatViewModel> {
                       return Center(
                         child: Text(
                           'This session cannot be restored on this device yet.',
-                          style: GoogleFonts.inter(
+                          style: AppTypography.sans(
                             fontSize: 14,
                             color: AppTheme.textTertiary,
                           ),
@@ -192,7 +192,7 @@ class ChatScreen extends GetView<ChatViewModel> {
                       return Center(
                         child: Text(
                           'Send a message to get started',
-                          style: GoogleFonts.inter(
+                          style: AppTypography.sans(
                             fontSize: 14,
                             color: AppTheme.textTertiary,
                           ),
@@ -436,7 +436,7 @@ class ChatScreen extends GetView<ChatViewModel> {
           const SizedBox(width: 5),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 12,
               fontWeight: FontWeight.w400,
               color: dotColor,
@@ -478,7 +478,7 @@ class ChatScreen extends GetView<ChatViewModel> {
       color: background,
       child: Text(
         text,
-        style: GoogleFonts.inter(
+        style: AppTypography.sans(
           fontSize: 12,
           fontWeight: FontWeight.w500,
           color: foreground,
@@ -513,7 +513,7 @@ class ChatScreen extends GetView<ChatViewModel> {
           const SizedBox(width: 5),
           Text(
             mode.label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: dotColor,
@@ -601,7 +601,7 @@ class ChatScreen extends GetView<ChatViewModel> {
             const SizedBox(width: 10),
             Text(
               mode.label,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                 color: textColor,
@@ -615,7 +615,7 @@ class ChatScreen extends GetView<ChatViewModel> {
             Flexible(
               child: Text(
                 _modeDescription(mode),
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 12,
                   color: isSelected
                       ? accentColor.withValues(alpha: 0.7)
@@ -909,7 +909,7 @@ class ChatScreen extends GetView<ChatViewModel> {
           const SizedBox(width: 8),
           Text(
             label,
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 13,
               fontWeight: FontWeight.w500,
               color: color,
@@ -958,7 +958,7 @@ class _ScrollToBottomButton extends StatelessWidget {
               const SizedBox(width: 6),
               Text(
                 'Jump to latest',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: AppTheme.textPrimary,
@@ -1011,7 +1011,7 @@ class _PlanPanelState extends State<_PlanPanel> {
                   const SizedBox(width: 8),
                   Text(
                     'Plan',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textSecondary,
@@ -1020,7 +1020,7 @@ class _PlanPanelState extends State<_PlanPanel> {
                   const SizedBox(width: 8),
                   Text(
                     '$completed / $total',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 12,
                       color: AppTheme.textTertiary,
                     ),
@@ -1092,7 +1092,7 @@ class _PlanPanelState extends State<_PlanPanel> {
           Expanded(
             child: Text(
               entry.content,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 13,
                 fontWeight: fontWeight,
                 color: textColor,
@@ -1132,7 +1132,7 @@ class _CollapsibleReasoningBlockState
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = GoogleFonts.inter(
+    final textStyle = AppTypography.sans(
       fontSize: 13,
       color: AppTheme.textTertiary,
       height: 1.5,

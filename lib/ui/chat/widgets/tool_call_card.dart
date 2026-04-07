@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/theme.dart';
@@ -155,7 +155,7 @@ class _ToolCallCardState extends State<ToolCallCard>
           const SizedBox(width: 6),
           Text(
             '$count $noun',
-            style: GoogleFonts.inter(
+            style: AppTypography.sans(
               fontSize: 12,
               fontWeight: FontWeight.w500,
               color: const Color(0xFF9CA3AF),
@@ -188,7 +188,7 @@ class _ToolCallCardState extends State<ToolCallCard>
                 if (extraDiffCount > 0) ...[
                   Text(
                     'Previewing 1 of ${diffs.length} file changes',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textSecondary,
@@ -206,7 +206,7 @@ class _ToolCallCardState extends State<ToolCallCard>
                   const SizedBox(height: 6),
                   Text(
                     '+$extraDiffCount more file ${extraDiffCount == 1 ? 'change' : 'changes'} in details',
-                    style: GoogleFonts.inter(
+                    style: AppTypography.sans(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
                       color: AppTheme.textSecondary,
@@ -243,7 +243,7 @@ class _ToolCallCardState extends State<ToolCallCard>
             children: [
               Text(
                 _runningLabel(kind),
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                   letterSpacing: 0.5,
@@ -254,7 +254,7 @@ class _ToolCallCardState extends State<ToolCallCard>
                 width: 18,
                 child: Text(
                   '.' * _dotCount,
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
@@ -365,8 +365,7 @@ class _ToolCallCardState extends State<ToolCallCard>
     }
   }
 
-  static const _previewStyle = TextStyle(
-    fontFamily: 'Inter',
+  static final _previewStyle = AppTypography.sans(
     fontSize: 13,
     fontWeight: FontWeight.w500,
   );

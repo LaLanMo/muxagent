@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -128,7 +128,7 @@ class PillTabBar extends StatelessWidget {
               child: Center(
                 child: Text(
                   activeBadgeCount > 9 ? '9+' : '$activeBadgeCount',
-                  style: GoogleFonts.inter(
+                  style: AppTypography.sans(
                     fontSize: 9,
                     fontWeight: FontWeight.w700,
                     color: Colors.white,

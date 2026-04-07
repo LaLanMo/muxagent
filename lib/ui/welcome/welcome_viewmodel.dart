@@ -15,6 +15,10 @@ class WelcomeViewModel extends GetxController {
   final urlController = TextEditingController();
   final urlError = RxnString();
 
+  void dismissKeyboard() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   @override
   void onClose() {
     urlController.dispose();
@@ -22,10 +26,12 @@ class WelcomeViewModel extends GetxController {
   }
 
   void onScanPressed() {
+    dismissKeyboard();
     Get.toNamed(Routes.scan);
   }
 
   void onManualConnect() {
+    dismissKeyboard();
     final url = urlController.text.trim();
     if (url.isEmpty) {
       urlError.value = 'Please enter a URL';
@@ -53,6 +59,7 @@ class WelcomeViewModel extends GetxController {
   }
 
   void onGithubPressed() {
+    dismissKeyboard();
     launchUrl(
       Uri.parse('https://github.com/LaLanMo/muxagent-cli'),
       mode: LaunchMode.externalApplication,
@@ -60,6 +67,7 @@ class WelcomeViewModel extends GetxController {
   }
 
   void onCopyCommand() {
+    dismissKeyboard();
     Clipboard.setData(const ClipboardData(text: welcomeInstallCommand));
     AppToast.show('Installation command copied');
   }

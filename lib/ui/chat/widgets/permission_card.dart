@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/fonts.dart';
@@ -45,7 +45,7 @@ class PermissionCard extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 'Permission Required',
-                style: GoogleFonts.inter(
+                style: AppTypography.sans(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
@@ -59,7 +59,7 @@ class PermissionCard extends StatelessWidget {
           if (approval.descriptionText != null)
             Text(
               approval.descriptionText!,
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
                 color: AppTheme.textSecondary,
@@ -91,7 +91,7 @@ class PermissionCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               'cwd: ${approval.cwd!}',
-              style: GoogleFonts.inter(
+              style: AppTypography.sans(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.textTertiary,
@@ -174,7 +174,7 @@ class PermissionCard extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           option.name,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w600,
             color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
@@ -197,7 +197,7 @@ class PermissionCard extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           option.name,
-          style: GoogleFonts.inter(
+          style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
             color: enabled ? color : AppTheme.textMuted,

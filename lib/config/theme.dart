@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 class AppTheme {
   // Brand colors
@@ -91,7 +91,7 @@ class AppTheme {
           statusBarIconBrightness: Brightness.dark,
           statusBarBrightness: Brightness.light,
         ),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: AppTypography.sans(
           fontSize: 22,
           fontWeight: FontWeight.w600,
           color: textPrimary,
@@ -115,7 +115,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           minimumSize: const Size(double.infinity, 48),
-          textStyle: GoogleFonts.inter(
+          textStyle: AppTypography.sans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
@@ -129,7 +129,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           minimumSize: const Size(0, 48),
-          textStyle: GoogleFonts.inter(
+          textStyle: AppTypography.sans(
             fontSize: 16,
             fontWeight: FontWeight.w500,
           ),
@@ -154,7 +154,7 @@ class AppTheme {
           horizontal: 16,
           vertical: 14,
         ),
-        hintStyle: GoogleFonts.inter(
+        hintStyle: AppTypography.sans(
           fontSize: 14,
           color: textTertiary,
         ),
@@ -196,7 +196,7 @@ class AppTheme {
           statusBarIconBrightness: Brightness.light,
           statusBarBrightness: Brightness.dark,
         ),
-        titleTextStyle: GoogleFonts.inter(
+        titleTextStyle: AppTypography.sans(
           fontSize: 22,
           fontWeight: FontWeight.w600,
           color: Colors.white,
@@ -220,7 +220,7 @@ class AppTheme {
             borderRadius: BorderRadius.circular(12),
           ),
           minimumSize: const Size(double.infinity, 48),
-          textStyle: GoogleFonts.inter(
+          textStyle: AppTypography.sans(
             fontSize: 16,
             fontWeight: FontWeight.w600,
           ),
@@ -255,7 +255,7 @@ class AppTheme {
           horizontal: 16,
           vertical: 14,
         ),
-        hintStyle: GoogleFonts.inter(
+        hintStyle: AppTypography.sans(
           fontSize: 14,
           color: const Color(0xFF666666),
         ),
@@ -273,63 +273,63 @@ class AppTheme {
     final color = dark ? Colors.white : textPrimary;
     final secondary = dark ? const Color(0xFF888888) : textSecondary;
     return TextTheme(
-      headlineLarge: GoogleFonts.inter(
+      headlineLarge: AppTypography.sans(
         fontSize: 32,
         fontWeight: FontWeight.w700,
         color: color,
       ),
-      headlineMedium: GoogleFonts.inter(
+      headlineMedium: AppTypography.sans(
         fontSize: 22,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      headlineSmall: GoogleFonts.inter(
+      headlineSmall: AppTypography.sans(
         fontSize: 20,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      titleLarge: GoogleFonts.inter(
+      titleLarge: AppTypography.sans(
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      titleMedium: GoogleFonts.inter(
+      titleMedium: AppTypography.sans(
         fontSize: 16,
         fontWeight: FontWeight.w500,
         color: color,
       ),
-      titleSmall: GoogleFonts.inter(
+      titleSmall: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w500,
         color: color,
       ),
-      bodyLarge: GoogleFonts.inter(
+      bodyLarge: AppTypography.sans(
         fontSize: 16,
         fontWeight: FontWeight.w400,
         color: color,
       ),
-      bodyMedium: GoogleFonts.inter(
+      bodyMedium: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w400,
         color: color,
       ),
-      bodySmall: GoogleFonts.inter(
+      bodySmall: AppTypography.sans(
         fontSize: 12,
         fontWeight: FontWeight.w400,
         color: secondary,
       ),
-      labelLarge: GoogleFonts.inter(
+      labelLarge: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w600,
         color: color,
       ),
-      labelMedium: GoogleFonts.inter(
+      labelMedium: AppTypography.sans(
         fontSize: 11,
         fontWeight: FontWeight.w600,
         letterSpacing: 2,
         color: secondary,
       ),
-      labelSmall: GoogleFonts.inter(
+      labelSmall: AppTypography.sans(
         fontSize: 10,
         fontWeight: FontWeight.w500,
         color: secondary,

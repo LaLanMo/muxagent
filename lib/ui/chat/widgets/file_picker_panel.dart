@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/fonts.dart';
@@ -58,7 +58,7 @@ class FilePickerPanel extends StatelessWidget {
                   child: Center(
                     child: Text(
                       'No files found',
-                      style: GoogleFonts.inter(
+                      style: AppTypography.sans(
                         fontSize: 13,
                         color: AppTheme.textTertiary,
                       ),
@@ -123,7 +123,7 @@ class _FileEntryTile extends StatelessWidget {
                         fontSize: 13,
                         color: AppTheme.textPrimary,
                       )
-                    : GoogleFonts.inter(
+                    : AppTypography.sans(
                         fontSize: 14,
                         color: AppTheme.textPrimary,
                       ),
