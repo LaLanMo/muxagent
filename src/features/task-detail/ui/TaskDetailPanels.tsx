@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import type { TranscriptSnapshot } from "@/domain/session-history";
 import { detailStatusLabel } from "@/domain/task-shell";
+import { DocumentContent } from "@/features/shared/ui/DocumentContent";
 import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
 import type {
   ArtifactRefDto,
@@ -161,63 +162,6 @@ function DetailSurface({
         {children}
       </div>
     </section>
-  );
-}
-
-function renderDocumentLine(line: string, index: number): ReactNode {
-  const trimmed = line.trim();
-  if (!trimmed) {
-    return <div className="detail-document-preview__spacer" key={`spacer-${index}`} />;
-  }
-
-  if (trimmed.startsWith("### ")) {
-    return (
-      <h4
-        className="detail-document-preview__heading detail-document-preview__heading--minor"
-        key={index}
-      >
-        {trimmed.slice(4)}
-      </h4>
-    );
-  }
-
-  if (trimmed.startsWith("## ")) {
-    return (
-      <h3 className="detail-document-preview__heading" key={index}>
-        {trimmed.slice(3)}
-      </h3>
-    );
-  }
-
-  if (trimmed.startsWith("# ")) {
-    return (
-      <h2 className="detail-document-preview__title" key={index}>
-        {trimmed.slice(2)}
-      </h2>
-    );
-  }
-
-  if (trimmed.startsWith("- ")) {
-    return (
-      <div className="detail-document-preview__bullet" key={index}>
-        <span className="detail-document-preview__bullet-mark">•</span>
-        <span>{trimmed.slice(2)}</span>
-      </div>
-    );
-  }
-
-  return (
-    <p className="detail-document-preview__paragraph" key={index}>
-      {line}
-    </p>
-  );
-}
-
-function DocumentPreview({ content }: { content: string }) {
-  return (
-    <article className="detail-document-preview">
-      {content.split("\n").map((line, index) => renderDocumentLine(line, index))}
-    </article>
   );
 }
 
@@ -667,11 +611,11 @@ export function TaskArtifactPane({
         label="Preview"
         testId="detail-preview-surface"
       >
-        {artifact?.markdown && content ? (
-          <DocumentPreview content={content} />
-        ) : (
-          <pre className="detail-document">{content ?? "Loading artifact..."}</pre>
-        )}
+        <DocumentContent
+          content={content ?? "Loading artifact..."}
+          format={artifact?.markdown ? "markdown" : "text"}
+          variant="detail"
+        />
       </DetailSurface>
     </div>
   );
