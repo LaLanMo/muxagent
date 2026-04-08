@@ -1,5 +1,15 @@
+import { detailStatusLabel, formatRelativeTime } from "@/domain/task-shell";
 import type { TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
+import { FileIcon, StatusIcon } from "@/features/task-detail/ui/NavigatorIcons";
 import type { ArtifactRefDto, NodeRunViewDto } from "@/rpc/types";
+
+type ActionKind =
+  | "approval"
+  | "clarification"
+  | "retry"
+  | "blocked"
+  | "follow_up"
+  | "none";
 
 type TaskDetailSidebarProps = {
   loading: boolean;
@@ -9,6 +19,7 @@ type TaskDetailSidebarProps = {
   artifacts: ArtifactRefDto[];
   selection: TaskDetailSelection;
   actionRunId?: string;
+  actionKind?: ActionKind;
   onSelectOverview: () => void;
   onSelectRun: (runId: string) => void;
   onSelectArtifact: (artifact: ArtifactRefDto) => void;
@@ -19,21 +30,8 @@ function formatRunTime(run: NodeRunViewDto): string {
   return timestamp ? timestamp.slice(11, 16) : "";
 }
 
-function timelineStatusLabel(status: string): string {
-  const normalized = status.toLowerCase();
-  if (normalized.includes("await")) {
-    return "awaiting";
-  }
-  if (normalized.includes("run") || normalized.includes("start")) {
-    return "running";
-  }
-  if (normalized.includes("fail") || normalized.includes("error")) {
-    return "failed";
-  }
-  if (normalized.includes("done") || normalized.includes("success")) {
-    return "done";
-  }
-  return normalized;
+function artifactCountLabel(count: number): string {
+  return `${count} ${count === 1 ? "artifact" : "artifacts"}`;
 }
 
 function artifactsForRun(
@@ -51,87 +49,167 @@ function artifactsForRun(
   });
 }
 
+function navigatorMeta(args: {
+  run: NodeRunViewDto;
+  artifactCount: number;
+  actionRunId?: string;
+  actionKind?: ActionKind;
+}) {
+  const { run, artifactCount, actionRunId, actionKind } = args;
+  const statusLabel = detailStatusLabel(run.status);
+
+  if (actionRunId === run.id) {
+    if (actionKind === "clarification") {
+      return "awaiting · clarification needed";
+    }
+    if (actionKind === "approval") {
+      return "awaiting · approval required";
+    }
+    if (actionKind === "blocked") {
+      return "awaiting · waiting to continue";
+    }
+    if (actionKind === "retry") {
+      return "failed · retry available";
+    }
+  }
+
+  if (statusLabel === "running") {
+    return `running · ${formatRelativeTime(run.started_at)}`;
+  }
+
+  if (statusLabel === "done" && artifactCount > 0) {
+    return `done · ${artifactCountLabel(artifactCount)}`;
+  }
+
+  if (statusLabel === "awaiting") {
+    return "awaiting";
+  }
+
+  if (statusLabel === "failed" && run.failure_reason) {
+    return `failed · ${run.failure_reason}`;
+  }
+
+  if (artifactCount > 0) {
+    return `${statusLabel} · ${artifactCountLabel(artifactCount)}`;
+  }
+
+  return statusLabel;
+}
+
+function ArtifactNavigatorRow({
+  artifact,
+  selected,
+  onSelectArtifact,
+}: {
+  artifact: ArtifactRefDto;
+  selected: boolean;
+  onSelectArtifact: (artifact: ArtifactRefDto) => void;
+}) {
+  return (
+    <button
+      aria-label={`Open artifact ${artifact.preview_name}`}
+      aria-pressed={selected}
+      className={`detail-nav-artifact${selected ? " is-selected" : ""}`}
+      key={artifact.resolved_path}
+      onClick={() => onSelectArtifact(artifact)}
+      type="button"
+    >
+      <FileIcon />
+      <span className="detail-nav-artifact__name">{artifact.preview_name}</span>
+    </button>
+  );
+}
+
+function OverviewRow({
+  selected,
+  onSelectOverview,
+}: {
+  selected: boolean;
+  onSelectOverview: () => void;
+}) {
+  return (
+    <button
+      aria-pressed={selected}
+      className={`detail-nav-row${selected ? " is-selected" : ""}`}
+      data-testid="detail-overview-row"
+      onClick={onSelectOverview}
+      type="button"
+    >
+      <span className="detail-nav-row__title">Overview</span>
+      <span className="detail-nav-row__description detail-nav-row__description--flush">
+        Task summary and task-level actions
+      </span>
+    </button>
+  );
+}
+
 function RunNavigatorRow({
   run,
-  currentNodeName,
   selected,
   actionRunId,
+  actionKind,
   artifacts,
   onSelectRun,
   onSelectArtifact,
   selectedArtifactPath,
 }: {
   run: NodeRunViewDto;
-  currentNodeName?: string;
   selected: boolean;
   actionRunId?: string;
+  actionKind?: ActionKind;
   artifacts: ArtifactRefDto[];
   onSelectRun: (runId: string) => void;
   onSelectArtifact: (artifact: ArtifactRefDto) => void;
   selectedArtifactPath?: string;
 }) {
-  const statusLabel = timelineStatusLabel(run.status);
-  const isCurrent = currentNodeName === run.node_name;
+  const statusLabel = detailStatusLabel(run.status);
   const runArtifacts = artifactsForRun(run, artifacts);
-  const isSelected =
-    selected ||
-    runArtifacts.some(
-      (artifact) => artifact.resolved_path === selectedArtifactPath,
-    );
+  const rowSelected = selected;
+  const meta = navigatorMeta({
+    run,
+    artifactCount: runArtifacts.length,
+    actionRunId,
+    actionKind,
+  });
 
   return (
-    <div className="detail-nav-group">
+    <div
+      className={`detail-nav-row detail-nav-row--node${rowSelected ? " is-selected" : ""}`}
+    >
       <button
-        className={`timeline-run timeline-run--${statusLabel}${isSelected ? " is-selected" : ""}`}
+        aria-label={`Open ${run.node_name} run`}
+        aria-pressed={rowSelected}
+        className="detail-nav-row__button"
         data-testid={`detail-run-${run.id}`}
         onClick={() => onSelectRun(run.id)}
         type="button"
       >
-        <div className="timeline-run__header">
-          <div className="timeline-run__title">
-            <span className={`timeline-run__mark timeline-run__mark--${run.status.toLowerCase()}`}>
-              {run.status.toLowerCase().includes("done")
-                ? "✓"
-                : run.status.toLowerCase().includes("fail")
-                  ? "×"
-                  : "•"}
+        <div className="detail-nav-row__top">
+          <span className="detail-nav-row__title-group">
+            <span
+              aria-hidden="true"
+              className={`detail-nav-row__status detail-nav-row__status--${statusLabel}`}
+            >
+              <StatusIcon status={statusLabel} />
             </span>
-            <span>{run.node_name}</span>
-          </div>
-          <span className="timeline-run__time">{formatRunTime(run)}</span>
-        </div>
-
-        <div className="timeline-run__meta-row">
-          <span className="timeline-run__status">{statusLabel}</span>
-          {isCurrent ? <span className="timeline-run__current">current</span> : null}
-          {actionRunId === run.id ? <span className="timeline-run__current">needs input</span> : null}
-          {runArtifacts.length > 0 ? (
-            <span className="timeline-run__status">
-              {runArtifacts.length} {runArtifacts.length === 1 ? "artifact" : "artifacts"}
-            </span>
-          ) : null}
-          {run.failure_reason ? (
-            <span className="timeline-run__reason">{run.failure_reason}</span>
+            <span className={`detail-nav-row__title${statusLabel === "pending" ? " detail-nav-row__title--pending" : ""}`}>{run.node_name}</span>
+          </span>
+          {formatRunTime(run) ? (
+            <span className="detail-nav-row__time">{formatRunTime(run)}</span>
           ) : null}
         </div>
+        {statusLabel !== "pending" && meta ? <span className="detail-nav-row__description">{meta}</span> : null}
       </button>
 
-      {runArtifacts.length > 0 ? (
-        <div className="timeline-artifact-tree">
+      {statusLabel !== "pending" && runArtifacts.length > 0 ? (
+        <div className="detail-nav-row__artifacts">
           {runArtifacts.map((artifact) => (
-            <button
-              className={`artifact-row artifact-row--nested${
-                selectedArtifactPath === artifact.resolved_path ? " is-selected" : ""
-              }`}
+            <ArtifactNavigatorRow
+              artifact={artifact}
               key={artifact.resolved_path}
-              onClick={() => onSelectArtifact(artifact)}
-              type="button"
-            >
-              <span className="artifact-row__copy">
-                <span className="artifact-row__name">{artifact.preview_name}</span>
-                <span className="artifact-row__meta">{artifact.source_label}</span>
-              </span>
-            </button>
+              onSelectArtifact={onSelectArtifact}
+              selected={selectedArtifactPath === artifact.resolved_path}
+            />
           ))}
         </div>
       ) : null}
@@ -142,50 +220,47 @@ function RunNavigatorRow({
 export function TaskDetailSidebar({
   loading,
   hasTask,
-  currentNodeName,
   timelineRuns,
   artifacts,
   selection,
   actionRunId,
+  actionKind = "none",
   onSelectOverview,
   onSelectRun,
   onSelectArtifact,
 }: TaskDetailSidebarProps) {
   const selectedArtifactPath =
     selection.kind === "artifact" ? selection.artifactPath : undefined;
+  const groupedArtifactPaths = new Set(
+    timelineRuns.flatMap((run) =>
+      artifactsForRun(run, artifacts).map((artifact) => artifact.resolved_path),
+    ),
+  );
   const ungroupedArtifacts = artifacts.filter(
-    (artifact) =>
-      artifact.node_run_id &&
-      !timelineRuns.some((run) => run.id === artifact.node_run_id),
+    (artifact) => !groupedArtifactPaths.has(artifact.resolved_path),
   );
 
   return (
-    <aside className="timeline-pane">
-      <div className="timeline-pane__group">
-        <div className="timeline-pane__section-head">
-          <span className="timeline-pane__eyebrow">Task detail</span>
-          <span className="timeline-pane__count">{timelineRuns.length}</span>
-        </div>
+    <aside className="detail-navigator">
+      <div className="detail-navigator__header">
+        <span className="detail-navigator__eyebrow">Navigator</span>
+        <span className="detail-navigator__count">{timelineRuns.length}</span>
+      </div>
+      <div className="detail-navigator__divider" />
+      <div className="detail-navigator__body">
         {loading && !hasTask ? <p className="muted-copy">Loading task…</p> : null}
         {hasTask ? (
           <>
-            <button
-              className={`overview-row${
-                selection.kind === "overview" ? " is-selected" : ""
-              }`}
-              data-testid="detail-overview-row"
-              onClick={onSelectOverview}
-              type="button"
-            >
-              <span className="overview-row__title">Overview</span>
-              <span className="overview-row__meta">Task summary</span>
-            </button>
+            <OverviewRow
+              onSelectOverview={onSelectOverview}
+              selected={selection.kind === "overview"}
+            />
 
             {timelineRuns.map((run) => (
               <RunNavigatorRow
+                actionKind={actionKind}
                 actionRunId={actionRunId}
                 artifacts={artifacts}
-                currentNodeName={currentNodeName}
                 key={run.id}
                 onSelectArtifact={onSelectArtifact}
                 onSelectRun={onSelectRun}
@@ -196,28 +271,16 @@ export function TaskDetailSidebar({
             ))}
 
             {ungroupedArtifacts.length > 0 ? (
-              <div className="timeline-pane__group timeline-pane__group--ungrouped">
-                <div className="timeline-pane__section-head">
-                  <span className="timeline-pane__eyebrow">Other artifacts</span>
-                  <span className="timeline-pane__count">{ungroupedArtifacts.length}</span>
-                </div>
-                <div className="timeline-artifact-tree">
+              <div className="detail-nav-ungrouped">
+                <span className="detail-navigator__eyebrow">Other artifacts</span>
+                <div className="detail-nav-row__artifacts detail-nav-row__artifacts--loose">
                   {ungroupedArtifacts.map((artifact) => (
-                    <button
-                      className={`artifact-row artifact-row--nested${
-                        selectedArtifactPath === artifact.resolved_path
-                          ? " is-selected"
-                          : ""
-                      }`}
+                    <ArtifactNavigatorRow
+                      artifact={artifact}
                       key={artifact.resolved_path}
-                      onClick={() => onSelectArtifact(artifact)}
-                      type="button"
-                    >
-                      <span className="artifact-row__copy">
-                        <span className="artifact-row__name">{artifact.preview_name}</span>
-                        <span className="artifact-row__meta">{artifact.source_label}</span>
-                      </span>
-                    </button>
+                      onSelectArtifact={onSelectArtifact}
+                      selected={selectedArtifactPath === artifact.resolved_path}
+                    />
                   ))}
                 </div>
               </div>

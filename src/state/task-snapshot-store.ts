@@ -1,10 +1,13 @@
 import { create } from "zustand";
-import { mergeStreamLines } from "@/application/tasks";
+import {
+  mergeSessionHistoryEvents,
+  type NormalizedTaskRunHistoryResult,
+  type SessionHistoryEvent,
+} from "@/domain/session-history";
 import type {
   ArtifactRefDto,
   ConfigViewDto,
   InputRequestDto,
-  TaskRunHistoryResult,
   TaskViewDto,
 } from "@/rpc/types";
 
@@ -14,33 +17,28 @@ function sortTasks(tasks: TaskViewDto[]): TaskViewDto[] {
   );
 }
 
-function reconcileHydratedLiveOutput(
-  existingLines: string[],
-  hydratedLines: string[],
-): string[] {
-  if (hydratedLines.length === 0) {
-    return [...existingLines];
+function reconcileHydratedLiveEvents(
+  existingEvents: SessionHistoryEvent[],
+  hydratedEvents: SessionHistoryEvent[],
+): SessionHistoryEvent[] {
+  if (hydratedEvents.length === 0) {
+    return [...existingEvents];
   }
-  if (existingLines.length === 0) {
-    return [...hydratedLines];
+  if (existingEvents.length === 0) {
+    return [...hydratedEvents];
   }
-
-  const merged = mergeStreamLines(existingLines, hydratedLines);
-  if (merged.length < existingLines.length + hydratedLines.length) {
-    return merged;
-  }
-  return [...existingLines];
+  return mergeSessionHistoryEvents(existingEvents, hydratedEvents);
 }
 
 type TasksByWorkspace = Record<string, TaskViewDto[]>;
-type OutputByWorkspace = Record<string, Record<string, string[]>>;
-type OutputRunIdsByWorkspace = Record<string, Record<string, string | undefined>>;
+type LiveEventsByWorkspace = Record<string, Record<string, SessionHistoryEvent[]>>;
+type LiveEventRunIdsByWorkspace = Record<string, Record<string, string | undefined>>;
 type TaskDetailsByWorkspace = Record<string, Record<string, TaskDetailCacheEntry>>;
 
 export type RunHistoryCacheEntry = {
   loading: boolean;
   signature?: string;
-  result?: TaskRunHistoryResult;
+  result?: NormalizedTaskRunHistoryResult;
   error?: string;
 };
 
@@ -49,7 +47,7 @@ export type TaskDetailCacheEntry = {
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
   artifacts: ArtifactRefDto[];
-  liveOutputRunId?: string;
+  liveEventsRunId?: string;
   runHistoryByRunId: Record<string, RunHistoryCacheEntry>;
   loading: boolean;
   stale: boolean;
@@ -58,23 +56,23 @@ export type TaskDetailCacheEntry = {
 
 interface TaskSnapshotState {
   tasksByWorkspaceId: TasksByWorkspace;
-  liveOutputByWorkspaceId: OutputByWorkspace;
-  liveOutputRunIdsByWorkspaceId: OutputRunIdsByWorkspace;
+  liveEventsByWorkspaceId: LiveEventsByWorkspace;
+  liveEventRunIdsByWorkspaceId: LiveEventRunIdsByWorkspace;
   taskDetailsByWorkspaceId: TaskDetailsByWorkspace;
   setTasks: (workspaceId: string, tasks: TaskViewDto[]) => void;
   upsertTask: (workspaceId: string, task: TaskViewDto) => void;
-  hydrateLiveOutput: (
+  hydrateLiveEvents: (
     workspaceId: string,
     taskId: string,
     taskStatus: string,
     runId: string | undefined,
-    lines: string[],
+    events: SessionHistoryEvent[],
   ) => void;
-  appendLiveOutput: (
+  appendLiveEvents: (
     workspaceId: string,
     taskId: string,
     runId: string | undefined,
-    lines: string[],
+    events: SessionHistoryEvent[],
   ) => void;
   beginTaskDetailLoad: (workspaceId: string, taskId: string) => void;
   resolveTaskDetail: (
@@ -85,7 +83,7 @@ interface TaskSnapshotState {
       config?: ConfigViewDto;
       inputRequest?: InputRequestDto;
       artifacts: ArtifactRefDto[];
-      liveOutputRunId?: string;
+      liveEventsRunId?: string;
     },
   ) => void;
   beginRunHistoryLoad: (
@@ -99,7 +97,7 @@ interface TaskSnapshotState {
     taskId: string,
     nodeRunId: string,
     signature: string,
-    result: TaskRunHistoryResult,
+    result: NormalizedTaskRunHistoryResult,
   ) => void;
   failRunHistory: (
     workspaceId: string,
@@ -137,8 +135,8 @@ function updateTaskDetailEntry(
 
 export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
   tasksByWorkspaceId: {},
-  liveOutputByWorkspaceId: {},
-  liveOutputRunIdsByWorkspaceId: {},
+  liveEventsByWorkspaceId: {},
+  liveEventRunIdsByWorkspaceId: {},
   taskDetailsByWorkspaceId: {},
   setTasks: (workspaceId, tasks) =>
     set((state) => ({
@@ -173,26 +171,26 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           : state.taskDetailsByWorkspaceId,
       };
     }),
-  hydrateLiveOutput: (workspaceId, taskId, taskStatus, runId, lines) =>
+  hydrateLiveEvents: (workspaceId, taskId, taskStatus, runId, events) =>
     set((state) => {
-      const workspaceOutput = state.liveOutputByWorkspaceId[workspaceId] ?? {};
-      const workspaceRunIds = state.liveOutputRunIdsByWorkspaceId[workspaceId] ?? {};
+      const workspaceOutput = state.liveEventsByWorkspaceId[workspaceId] ?? {};
+      const workspaceRunIds = state.liveEventRunIdsByWorkspaceId[workspaceId] ?? {};
       const existingRunId = workspaceRunIds[taskId];
-      const existingLines = workspaceOutput[taskId] ?? [];
-      const nextLines =
+      const existingEvents = workspaceOutput[taskId] ?? [];
+      const nextEvents =
         taskStatus === "running" && runId && existingRunId === runId
-          ? reconcileHydratedLiveOutput(existingLines, lines).slice(-120)
-          : [...lines].slice(-120);
+          ? reconcileHydratedLiveEvents(existingEvents, events).slice(-200)
+          : [...events].slice(-200);
       return {
-        liveOutputByWorkspaceId: {
-          ...state.liveOutputByWorkspaceId,
+        liveEventsByWorkspaceId: {
+          ...state.liveEventsByWorkspaceId,
           [workspaceId]: {
             ...workspaceOutput,
-            [taskId]: nextLines,
+            [taskId]: nextEvents,
           },
         },
-        liveOutputRunIdsByWorkspaceId: {
-          ...state.liveOutputRunIdsByWorkspaceId,
+        liveEventRunIdsByWorkspaceId: {
+          ...state.liveEventRunIdsByWorkspaceId,
           [workspaceId]: {
             ...workspaceRunIds,
             [taskId]: runId,
@@ -200,24 +198,27 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         },
       };
     }),
-  appendLiveOutput: (workspaceId, taskId, runId, lines) =>
+  appendLiveEvents: (workspaceId, taskId, runId, events) =>
     set((state) => {
-      const workspaceOutput = state.liveOutputByWorkspaceId[workspaceId] ?? {};
-      const workspaceRunIds = state.liveOutputRunIdsByWorkspaceId[workspaceId] ?? {};
+      const workspaceOutput = state.liveEventsByWorkspaceId[workspaceId] ?? {};
+      const workspaceRunIds = state.liveEventRunIdsByWorkspaceId[workspaceId] ?? {};
       const existingRunId = workspaceRunIds[taskId];
       const reset = Boolean(runId) && runId !== existingRunId;
       const existing = reset ? [] : workspaceOutput[taskId] ?? [];
-      const next = lines.length > 0 ? [...existing, ...lines].slice(-120) : existing;
+      const next =
+        events.length > 0
+          ? mergeSessionHistoryEvents(existing, events).slice(-200)
+          : existing;
       return {
-        liveOutputByWorkspaceId: {
-          ...state.liveOutputByWorkspaceId,
+        liveEventsByWorkspaceId: {
+          ...state.liveEventsByWorkspaceId,
           [workspaceId]: {
             ...workspaceOutput,
             [taskId]: next,
           },
         },
-        liveOutputRunIdsByWorkspaceId: {
-          ...state.liveOutputRunIdsByWorkspaceId,
+        liveEventRunIdsByWorkspaceId: {
+          ...state.liveEventRunIdsByWorkspaceId,
           [workspaceId]: {
             ...workspaceRunIds,
             [taskId]: runId,
@@ -236,7 +237,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: true,
           stale: false,
@@ -255,7 +256,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
-          liveOutputRunId: detail.liveOutputRunId,
+          liveEventsRunId: detail.liveEventsRunId,
           runHistoryByRunId: state.taskDetailsByWorkspaceId[workspaceId]?.[taskId]
             ?.runHistoryByRunId ?? {},
           loading: false,
@@ -275,7 +276,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: {
             ...(current?.runHistoryByRunId ?? {}),
             [nodeRunId]: {
@@ -302,7 +303,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: {
             ...(current?.runHistoryByRunId ?? {}),
             [nodeRunId]: {
@@ -329,7 +330,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: {
             ...(current?.runHistoryByRunId ?? {}),
             [nodeRunId]: {
@@ -356,7 +357,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: false,
           stale: false,
@@ -375,7 +376,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: current?.loading ?? false,
           stale: current?.stale ?? false,
@@ -394,7 +395,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
-          liveOutputRunId: current?.liveOutputRunId,
+          liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: current?.loading ?? false,
           stale: true,
@@ -406,24 +407,24 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
     set((state) => {
       const { [workspaceId]: _tasks, ...tasksByWorkspaceId } =
         state.tasksByWorkspaceId;
-      const { [workspaceId]: _output, ...liveOutputByWorkspaceId } =
-        state.liveOutputByWorkspaceId;
-      const { [workspaceId]: _outputRunIds, ...liveOutputRunIdsByWorkspaceId } =
-        state.liveOutputRunIdsByWorkspaceId;
+      const { [workspaceId]: _output, ...liveEventsByWorkspaceId } =
+        state.liveEventsByWorkspaceId;
+      const { [workspaceId]: _outputRunIds, ...liveEventRunIdsByWorkspaceId } =
+        state.liveEventRunIdsByWorkspaceId;
       const { [workspaceId]: _details, ...taskDetailsByWorkspaceId } =
         state.taskDetailsByWorkspaceId;
       return {
         tasksByWorkspaceId,
-        liveOutputByWorkspaceId,
-        liveOutputRunIdsByWorkspaceId,
+        liveEventsByWorkspaceId,
+        liveEventRunIdsByWorkspaceId,
         taskDetailsByWorkspaceId,
       };
     }),
   reset: () =>
     set({
       tasksByWorkspaceId: {},
-      liveOutputByWorkspaceId: {},
-      liveOutputRunIdsByWorkspaceId: {},
+      liveEventsByWorkspaceId: {},
+      liveEventRunIdsByWorkspaceId: {},
       taskDetailsByWorkspaceId: {},
     }),
 }));

@@ -23,6 +23,7 @@ export type ShellWorkspaceItem = {
 type DesktopShellFrameProps = {
   topBarLeft: ReactNode;
   topBarRight?: ReactNode;
+  topBarClassName?: string;
   children: ReactNode;
   workspaceItems?: ShellWorkspaceItem[];
   onAddWorkspace?: () => void;
@@ -107,6 +108,7 @@ function ShellWorkspaceRow(item: ShellWorkspaceItem) {
 export function DesktopShellFrame({
   topBarLeft,
   topBarRight,
+  topBarClassName,
   children,
   workspaceItems = [],
   onAddWorkspace,
@@ -132,7 +134,10 @@ export function DesktopShellFrame({
               onClick={onPrimaryAction}
               type="button"
             >
-              + New Task
+              <span aria-hidden="true" className="shell-primary-action__plus">
+                +
+              </span>
+              <span>New Task</span>
             </button>
           ) : null}
 
@@ -155,7 +160,7 @@ export function DesktopShellFrame({
                   onClick={onAddWorkspace}
                   type="button"
                 >
-                  +
+                  <span aria-hidden="true">+</span>
                 </button>
               ) : null}
             </div>
@@ -181,9 +186,17 @@ export function DesktopShellFrame({
       <div className="desktop-shell__divider" />
 
       <section className="desktop-shell__main">
-        <header className="desktop-shell__topbar">
+        <header
+          className={
+            topBarClassName
+              ? `desktop-shell__topbar ${topBarClassName}`
+              : "desktop-shell__topbar"
+          }
+        >
           <div className="desktop-shell__topbar-left">{topBarLeft}</div>
-          <div className="desktop-shell__topbar-right">{topBarRight}</div>
+          {topBarRight ? (
+            <div className="desktop-shell__topbar-right">{topBarRight}</div>
+          ) : null}
         </header>
         <div className="desktop-shell__topbar-divider" />
         <div className="desktop-shell__content">{children}</div>

@@ -29,6 +29,12 @@
   },
   "bundle": {
     "active": false,
-    "icon": []
+    "icon": [
+      "icons/icon-32x32.png",
+      "icons/icon-128x128.png",
+      "icons/icon-256x256.png",
+      "icons/icon.png",
+      "icons/icon.icns"
+    ]
   }
 }

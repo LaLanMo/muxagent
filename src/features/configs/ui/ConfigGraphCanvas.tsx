@@ -88,7 +88,7 @@ export function ConfigGraphCanvas({
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: "#aeb8c4",
+          color: "#CDCED3", /* --border-strong */
           width: 20,
           height: 20,
         },
@@ -174,8 +174,8 @@ function ConfigEdgeView({
       }}
       labelShowBg={Boolean(data.label)}
       labelStyle={{
-        fill: "#7f8894",
-        fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+        fill: "#8A8F97", /* --text-tertiary */
+        fontFamily: '"Geist Mono Variable", "Geist Mono", ui-monospace, monospace',
         fontSize: 10,
         fontWeight: 650,
       }}
@@ -184,7 +184,7 @@ function ConfigEdgeView({
       markerEnd={markerEnd}
       path={data.path}
       style={{
-        stroke: "#b6c0cb",
+        stroke: "#CDCED3", /* --border-strong */
         strokeLinecap: "round",
         strokeLinejoin: "round",
         strokeWidth: 2.25,

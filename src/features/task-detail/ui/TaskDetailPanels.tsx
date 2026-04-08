@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { detailStatusLabel } from "@/domain/task-shell";
+import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
@@ -18,6 +19,7 @@ type OverviewPaneProps = {
 type RunPaneProps = {
   run?: NodeRunViewDto;
   streamLines: string[];
+  transcriptItems: TranscriptTimelineItem[];
   streamSource: "live" | "replay" | "loading" | "none";
   isCurrentRun: boolean;
   artifactCount: number;
@@ -314,6 +316,7 @@ export function TaskOverviewPane({
 export function TaskRunPane({
   run,
   streamLines,
+  transcriptItems,
   streamSource,
   isCurrentRun,
   artifactCount,
@@ -338,6 +341,49 @@ export function TaskRunPane({
   const resultContent = prettyResult(run.result);
   const clarificationHistory = run.clarifications ?? [];
   const hasStreamOutput = streamLines.length > 0;
+
+  function renderTranscriptItem(item: TranscriptTimelineItem) {
+    if (item.kind === "message") {
+      return (
+        <div className="detail-transcript-row" key={item.id}>
+          <strong className="detail-transcript-row__title">
+            {item.partType === "reasoning" ? "thinking" : item.role}
+          </strong>
+          <p className="detail-transcript-row__text">{item.text}</p>
+        </div>
+      );
+    }
+    if (item.kind === "tool") {
+      return (
+        <div className="detail-transcript-row" key={item.id}>
+          <strong className="detail-transcript-row__title">
+            {item.status && item.subject
+              ? `${item.label} ${item.status}: ${item.subject}`
+              : item.subject
+                ? `${item.label}: ${item.subject}`
+                : item.status
+                  ? `${item.label} ${item.status}`
+                  : item.label}
+          </strong>
+          {item.errorText ? (
+            <p className="detail-transcript-row__text">{item.errorText}</p>
+          ) : null}
+        </div>
+      );
+    }
+    if (item.kind === "plan" || item.kind === "usage") {
+      return (
+        <div className="detail-transcript-row" key={item.id}>
+          <strong className="detail-transcript-row__title">{item.summary}</strong>
+        </div>
+      );
+    }
+    return (
+      <div className="detail-transcript-row" key={item.id}>
+        <pre className="detail-code-block detail-code-block--inline">{item.text}</pre>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -391,7 +437,11 @@ export function TaskRunPane({
           label="Output"
           testId="detail-output-surface"
         >
-          {hasStreamOutput ? (
+          {transcriptItems.length > 0 ? (
+            <div className="detail-list-card detail-list-card--transcript">
+              {transcriptItems.map((item) => renderTranscriptItem(item))}
+            </div>
+          ) : hasStreamOutput ? (
             <pre className="detail-code-block">{streamLines.join("\n")}</pre>
           ) : resultContent ? (
             <pre className="detail-code-block">{resultContent}</pre>

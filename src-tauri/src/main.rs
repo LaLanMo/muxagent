@@ -1,13 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use rfd::FileDialog;
+use serde::Deserialize;
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
     fs,
     io::{BufRead, BufReader, Read, Write},
+    net::{Shutdown, TcpStream},
     path::{Path, PathBuf},
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::Command,
     sync::{
         atomic::{AtomicU64, Ordering},
         mpsc, Arc, Mutex,
@@ -34,10 +36,16 @@ struct SessionManager {
     next_session_id: AtomicU64,
 }
 
+#[derive(Debug, Deserialize)]
+struct AppServerEnsureResult {
+    address: String,
+    token: String,
+    instance_id: String,
+}
+
 struct Session {
     id: u64,
-    child: Mutex<Child>,
-    stdin: Mutex<ChildStdin>,
+    stream: Mutex<TcpStream>,
     pending: Mutex<HashMap<u64, mpsc::Sender<Result<Value, String>>>>,
     next_request_id: AtomicU64,
 }
@@ -132,17 +140,17 @@ impl Session {
     }
 
     fn write_frame(&self, payload: &[u8]) -> Result<(), String> {
-        let mut stdin = self
-            .stdin
+        let mut stream = self
+            .stream
             .lock()
-            .map_err(|_| "failed to lock app-server stdin".to_string())?;
-        stdin
+            .map_err(|_| "failed to lock app-server stream".to_string())?;
+        stream
             .write_all(format!("Content-Length: {}\r\n\r\n", payload.len()).as_bytes())
             .map_err(|error| format!("write frame header: {error}"))?;
-        stdin
+        stream
             .write_all(payload)
             .map_err(|error| format!("write frame payload: {error}"))?;
-        stdin
+        stream
             .flush()
             .map_err(|error| format!("flush frame payload: {error}"))
     }
@@ -159,8 +167,8 @@ impl Session {
 
     fn shutdown(&self, reason: &str) {
         self.reject_pending(reason);
-        if let Ok(mut child) = self.child.lock() {
-            terminate_child(&mut child);
+        if let Ok(stream) = self.stream.lock() {
+            let _ = stream.shutdown(Shutdown::Both);
         }
     }
 }
@@ -170,38 +178,31 @@ fn app_server_connect(app: tauri::AppHandle, state: State<'_, AppState>) -> Resu
     state.manager.disconnect_current()?;
 
     let cli_path = resolve_cli_binary();
-    let mut child = Command::new(&cli_path)
-        .arg("app-server")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("failed to spawn {cli_path}: {error}"))?;
+    let ensured = ensure_app_server_daemon(&cli_path)?;
 
-    let stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| "failed to capture app-server stdin".to_string())?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or_else(|| "failed to capture app-server stdout".to_string())?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or_else(|| "failed to capture app-server stderr".to_string())?;
+    let stream = TcpStream::connect(&ensured.address)
+        .map_err(|error| format!("connect app-server daemon {}: {error}", ensured.address))?;
+    stream
+        .set_nodelay(true)
+        .map_err(|error| format!("configure app-server daemon stream: {error}"))?;
+    let reader_stream = stream
+        .try_clone()
+        .map_err(|error| format!("clone app-server daemon stream: {error}"))?;
 
     let session = Arc::new(Session {
         id: state.manager.next_session_id(),
-        child: Mutex::new(child),
-        stdin: Mutex::new(stdin),
+        stream: Mutex::new(stream),
         pending: Mutex::new(HashMap::new()),
         next_request_id: AtomicU64::new(0),
     });
 
     state.manager.set_current(session.clone())?;
-    spawn_reader_thread(app.clone(), state.manager.clone(), session.clone(), stdout);
-    spawn_stderr_thread(session.id, stderr);
+    spawn_reader_thread(
+        app.clone(),
+        state.manager.clone(),
+        session.clone(),
+        reader_stream,
+    );
 
     let initialize = session.request(
         "initialize",
@@ -209,8 +210,20 @@ fn app_server_connect(app: tauri::AppHandle, state: State<'_, AppState>) -> Resu
             "client_name": "muxagent-desktop-tauri",
             "client_version": env!("CARGO_PKG_VERSION"),
             "protocol_version": PROTOCOL_VERSION,
+            "auth_token": ensured.token,
         }),
     );
+
+    let initialize = match initialize {
+        Ok(result) => {
+            verify_instance_id(&result, &ensured.instance_id)?;
+            Ok(result)
+        }
+        Err(error) => {
+            eprintln!("app_server_connect initialize failed: {error}");
+            Err(error)
+        }
+    };
 
     if initialize.is_err() {
         let _ = state.manager.clear_if_current(session.id);
@@ -232,7 +245,13 @@ fn app_server_request(
     params: Option<Value>,
 ) -> Result<Value, String> {
     let session = state.manager.current()?;
-    session.request(&method, params.unwrap_or(Value::Object(Default::default())))
+    match session.request(&method, params.unwrap_or(Value::Object(Default::default()))) {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            eprintln!("app_server_request {method} failed: {error}");
+            Err(error)
+        }
+    }
 }
 
 #[tauri::command]
@@ -264,50 +283,79 @@ fn resolve_cli_binary() -> String {
         .unwrap_or_else(|| "muxagent".to_string())
 }
 
-fn spawn_stderr_thread(session_id: u64, stderr: impl Read + Send + 'static) {
-    thread::spawn(move || {
-        let mut reader = BufReader::new(stderr);
-        let mut line = String::new();
-        loop {
-            line.clear();
-            match reader.read_line(&mut line) {
-                Ok(0) => break,
-                Ok(_) => eprint!("[muxagent app-server:{session_id}] {line}"),
-                Err(error) => {
-                    eprintln!("[muxagent app-server:{session_id}] stderr read failed: {error}");
-                    break;
-                }
-            }
-        }
-    });
+fn resolve_app_server_state_dir() -> Option<String> {
+    std::env::var("MUXAGENT_APP_SERVER_STATE_DIR")
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn ensure_app_server_daemon(cli_path: &str) -> Result<AppServerEnsureResult, String> {
+    let mut command = Command::new(cli_path);
+    command.arg("app-server").arg("ensure");
+    if let Some(state_dir) = resolve_app_server_state_dir() {
+        command.arg("--state-dir").arg(state_dir);
+    }
+
+    let output = command
+        .output()
+        .map_err(|error| format!("run `{cli_path} app-server ensure`: {error}"))?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        let detail = if !stderr.is_empty() {
+            stderr
+        } else if !stdout.is_empty() {
+            stdout
+        } else {
+            format!("exit status {}", output.status)
+        };
+        return Err(format!("app-server ensure failed: {detail}"));
+    }
+
+    serde_json::from_slice::<AppServerEnsureResult>(&output.stdout)
+        .map_err(|error| format!("decode app-server ensure output: {error}"))
+}
+
+fn verify_instance_id(initialize_result: &Value, expected_instance_id: &str) -> Result<(), String> {
+    let actual = initialize_result
+        .get("instance_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if actual == expected_instance_id {
+        return Ok(());
+    }
+    Err(format!(
+        "app-server instance mismatch: expected {}, got {}",
+        expected_instance_id, actual
+    ))
 }
 
 fn spawn_reader_thread(
     app: tauri::AppHandle,
     manager: Arc<SessionManager>,
     session: Arc<Session>,
-    stdout: ChildStdout,
+    stream: TcpStream,
 ) {
     thread::spawn(move || {
-        let mut reader = BufReader::new(stdout);
+        let mut reader = BufReader::new(stream);
         let reason = loop {
             match read_frame(&mut reader) {
                 Ok(Some(frame)) => match handle_frame(&app, &session, &frame) {
                     Ok(()) => continue,
                     Err(error) => break error,
                 },
-                Ok(None) => break "app-server stdout closed".to_string(),
+                Ok(None) => break "app-server connection closed".to_string(),
                 Err(error) => break error,
             }
         };
 
         session.reject_pending(&reason);
+        eprintln!("app-server reader thread disconnected: {reason}");
         if manager.clear_if_current(session.id).unwrap_or(false) {
             let _ = app.emit(DISCONNECTED_EVENT, json!({ "message": reason }));
         }
-        if let Ok(mut child) = session.child.lock() {
-            terminate_child(&mut child);
-        }
+        session.shutdown(&reason);
     });
 }
 
@@ -360,7 +408,7 @@ fn handle_frame(app: &tauri::AppHandle, session: &Session, frame: &[u8]) -> Resu
     Ok(())
 }
 
-fn read_frame(reader: &mut BufReader<ChildStdout>) -> Result<Option<Vec<u8>>, String> {
+fn read_frame<R: Read>(reader: &mut BufReader<R>) -> Result<Option<Vec<u8>>, String> {
     let mut content_length: Option<usize> = None;
 
     loop {
@@ -441,13 +489,6 @@ fn open_path_on_host(path: &Path) -> Result<(), String> {
         }
         return Err(format!("open path failed with status {status}"));
     }
-}
-
-fn terminate_child(child: &mut Child) {
-    if let Ok(None) = child.try_wait() {
-        let _ = child.kill();
-    }
-    let _ = child.wait();
 }
 
 fn main() {

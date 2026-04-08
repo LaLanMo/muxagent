@@ -13,7 +13,7 @@ export function useTaskDetailData({
   taskId,
   connected,
 }: UseTaskDetailDataArgs) {
-  const { task, detailEntry, liveOutput, liveOutputRunId } = useTaskDetailStoreEntry({
+  const { task, detailEntry, liveEvents, liveEventsRunId } = useTaskDetailStoreEntry({
     workspaceId,
     taskId,
   });
@@ -27,8 +27,8 @@ export function useTaskDetailData({
   return {
     task,
     detailEntry,
-    liveOutput,
-    liveOutputRunId,
+    liveEvents,
+    liveEventsRunId,
     loadDetail,
   };
 }

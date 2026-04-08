@@ -25,8 +25,8 @@ export function useTaskDetailHydration({
   const beginTaskDetailLoad = useTaskSnapshotStore(
     (state) => state.beginTaskDetailLoad,
   );
-  const hydrateLiveOutput = useTaskSnapshotStore(
-    (state) => state.hydrateLiveOutput,
+  const hydrateLiveEvents = useTaskSnapshotStore(
+    (state) => state.hydrateLiveEvents,
   );
   const resolveTaskDetail = useTaskSnapshotStore(
     (state) => state.resolveTaskDetail,
@@ -46,19 +46,19 @@ export function useTaskDetailHydration({
       try {
         const detail = await hydrateTaskDetail(getRuntime(), workspaceId, taskId);
         upsertTask(workspaceId, detail.task);
-        hydrateLiveOutput(
+        hydrateLiveEvents(
           workspaceId,
           taskId,
           detail.task.status,
-          detail.liveOutputRunId,
-          detail.liveOutput,
+          detail.liveEventsRunId,
+          detail.liveEvents,
         );
         resolveTaskDetail(workspaceId, taskId, {
           task: detail.task,
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
-          liveOutputRunId: detail.liveOutputRunId,
+          liveEventsRunId: detail.liveEventsRunId,
         });
         return detail;
       } catch (error) {

@@ -1,0 +1,389 @@
+import type {
+  SessionHistoryEvent,
+  SessionHistoryMessageEvent,
+  SessionHistoryPlanEvent,
+  SessionHistoryRawEvent,
+  SessionHistoryToolEvent,
+  SessionHistoryUsageEvent,
+} from "@/features/task-history/model/events";
+import type {
+  TranscriptMessage,
+  TranscriptSnapshot,
+  TranscriptToolCall,
+} from "@/features/task-history/model/transcript";
+
+export type TranscriptTimelineItem =
+  | {
+      id: string;
+      kind: "message";
+      role: string;
+      partType: string;
+      text: string;
+    }
+  | {
+      id: string;
+      kind: "tool";
+      label: string;
+      status?: string;
+      subject?: string;
+      errorText?: string;
+    }
+  | {
+      id: string;
+      kind: "plan";
+      summary: string;
+    }
+  | {
+      id: string;
+      kind: "usage";
+      summary: string;
+    }
+  | {
+      id: string;
+      kind: "raw";
+      text: string;
+    };
+
+function collapseWhitespace(value: string | undefined): string {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function compactPaths(paths: string[] | undefined): string[] {
+  const results: string[] = [];
+  for (const rawPath of paths ?? []) {
+    const normalized = rawPath.trim();
+    if (!normalized) {
+      continue;
+    }
+    const parts = normalized.split(/[\\/]/).filter(Boolean);
+    results.push(parts.at(-1) ?? normalized);
+  }
+  return results;
+}
+
+function prettifyToolName(name: string | undefined): string {
+  const trimmed = name?.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim()
+    .toLowerCase();
+}
+
+function toolLabel(event: SessionHistoryToolEvent): string {
+  switch (event.toolKind?.trim()) {
+    case "shell":
+      return "shell";
+    case "search":
+      return "search";
+    case "read":
+      return "read";
+    case "edit":
+      return "edit";
+    case "write":
+      return "write";
+    case "fetch":
+      return "fetch";
+    case "file_change":
+      return "files";
+    case "structured_output":
+      return "structured output";
+    default:
+      return prettifyToolName(event.name) || "tool";
+  }
+}
+
+function toolSubject(event: SessionHistoryToolEvent): string {
+  const inputSummary = collapseWhitespace(event.inputSummary);
+  if (inputSummary) {
+    return inputSummary;
+  }
+  const paths = compactPaths(event.paths);
+  if (paths.length > 0) {
+    return paths.join(", ");
+  }
+  return collapseWhitespace(event.title);
+}
+
+function toolStatusText(status: string | undefined): string {
+  switch (status?.trim()) {
+    case "in_progress":
+    case "pending":
+      return "running";
+    case "failed":
+      return "failed";
+    default:
+      return "";
+  }
+}
+
+function messageItem(
+  message: TranscriptMessage,
+  partId: string | undefined,
+): TranscriptTimelineItem | undefined {
+  const part =
+    message.parts.find((entry) => entry.id === partId) ??
+    message.parts.at(-1);
+  if (!part) {
+    return undefined;
+  }
+  const text = collapseWhitespace(part.text);
+  if (!text) {
+    return undefined;
+  }
+  return {
+    id: `${message.id}:${part.id}`,
+    kind: "message",
+    role: message.role || "assistant",
+    partType: part.type || "text",
+    text,
+  };
+}
+
+function summarizeMessage(
+  event: SessionHistoryMessageEvent,
+): TranscriptTimelineItem | undefined {
+  const text = collapseWhitespace(event.text);
+  if (!text) {
+    return undefined;
+  }
+  return {
+    id: event.id,
+    kind: "message",
+    role: event.role || "assistant",
+    partType: event.partType || "text",
+    text,
+  };
+}
+
+function normalizeToolLike(
+  tool: TranscriptToolCall | SessionHistoryToolEvent,
+): SessionHistoryToolEvent {
+  if ("eventIds" in tool) {
+    return {
+      id: tool.id,
+      kind: "tool",
+      source: "replay",
+      callId: tool.callId,
+      parentCallId: tool.parentCallId,
+      name: tool.name,
+      toolKind: tool.toolKind,
+      title: tool.title,
+      status: tool.status,
+      inputSummary: tool.inputSummary,
+      outputText: tool.outputText,
+      errorText: tool.errorText,
+      paths: tool.paths,
+      diffs: tool.diffs,
+      rawInputJson: tool.rawInputJson,
+      rawOutputJson: tool.rawOutputJson,
+    };
+  }
+  return tool;
+}
+
+function summarizeTool(
+  tool: TranscriptToolCall | SessionHistoryToolEvent,
+): TranscriptTimelineItem {
+  const normalizedTool = normalizeToolLike(tool);
+  return {
+    id: normalizedTool.id,
+    kind: "tool",
+    label: toolLabel(normalizedTool),
+    status: toolStatusText(normalizedTool.status),
+    subject: toolSubject(normalizedTool),
+    errorText: normalizedTool.errorText,
+  };
+}
+
+function summarizePlan(event: SessionHistoryPlanEvent): TranscriptTimelineItem {
+  const total = event.steps.length;
+  const completed = event.steps.filter((step) => step.status === "completed").length;
+  const next = event.steps.find((step) => step.status !== "completed")?.text;
+  return {
+    id: event.id,
+    kind: "plan",
+    summary: next
+      ? `plan: ${completed}/${total} complete, next ${collapseWhitespace(next)}`
+      : `plan: ${completed}/${total} complete`,
+  };
+}
+
+function summarizeUsage(event: SessionHistoryUsageEvent): TranscriptTimelineItem {
+  if (event.usage.inputTokens || event.usage.outputTokens) {
+    return {
+      id: event.id,
+      kind: "usage",
+      summary: `usage: ${event.usage.inputTokens ?? 0} in, ${event.usage.outputTokens ?? 0} out`,
+    };
+  }
+  return {
+    id: event.id,
+    kind: "usage",
+    summary: `usage: ${event.usage.totalTokens ?? 0} tokens`,
+  };
+}
+
+function summarizeRaw(event: SessionHistoryRawEvent): TranscriptTimelineItem {
+  return {
+    id: event.id,
+    kind: "raw",
+    text: event.raw,
+  };
+}
+
+export function timelineItemForEvent(
+  event: SessionHistoryEvent,
+): TranscriptTimelineItem | undefined {
+  switch (event.kind) {
+    case "message":
+      return summarizeMessage(event);
+    case "tool":
+      return summarizeTool(event);
+    case "plan":
+      return summarizePlan(event);
+    case "usage":
+      return summarizeUsage(event);
+    case "raw":
+      return summarizeRaw(event);
+    default:
+      return undefined;
+  }
+}
+
+export function deriveTranscriptTimelineItems(
+  transcript: TranscriptSnapshot,
+): TranscriptTimelineItem[] {
+  const lastMessagePartEventId = new Set<string>();
+  for (const messageId of transcript.messageOrder) {
+    const message = transcript.messages[messageId];
+    if (!message) {
+      continue;
+    }
+    for (const part of message.parts) {
+      const lastEventId = part.eventIds.at(-1);
+      if (lastEventId) {
+        lastMessagePartEventId.add(lastEventId);
+      }
+    }
+  }
+
+  const lastToolEventId = new Map<string, string>();
+  for (const toolId of transcript.toolOrder) {
+    const tool = transcript.tools[toolId];
+    const lastEventId = tool?.eventIds.at(-1);
+    if (tool && lastEventId) {
+      lastToolEventId.set(lastEventId, toolId);
+    }
+  }
+
+  const timelineItems: TranscriptTimelineItem[] = [];
+  let latestPlanInserted = false;
+  let latestUsageInserted = false;
+
+  for (const event of transcript.events) {
+    if (event.kind === "message") {
+      if (!lastMessagePartEventId.has(event.id)) {
+        continue;
+      }
+      const messageId = event.messageId || `message:${event.id}`;
+      const message = transcript.messages[messageId];
+      if (!message) {
+        const fallback = timelineItemForEvent(event);
+        if (fallback) {
+          timelineItems.push(fallback);
+        }
+        continue;
+      }
+      const item = messageItem(message, event.partId || `part:${event.id}`);
+      if (item) {
+        timelineItems.push(item);
+      }
+      continue;
+    }
+
+    if (event.kind === "tool") {
+      const toolId = lastToolEventId.get(event.id);
+      if (!toolId) {
+        continue;
+      }
+      const tool = transcript.tools[toolId];
+      if (!tool) {
+        const fallback = timelineItemForEvent(event);
+        if (fallback) {
+          timelineItems.push(fallback);
+        }
+        continue;
+      }
+      timelineItems.push(summarizeTool(tool));
+      continue;
+    }
+
+    if (event.kind === "plan") {
+      if (!latestPlanInserted && transcript.latestPlan && transcript.latestPlan.id === event.id) {
+        timelineItems.push(summarizePlan(transcript.latestPlan));
+        latestPlanInserted = true;
+      }
+      continue;
+    }
+
+    if (event.kind === "usage") {
+      if (!latestUsageInserted && transcript.latestUsage && transcript.latestUsage.id === event.id) {
+        timelineItems.push(summarizeUsage(transcript.latestUsage));
+        latestUsageInserted = true;
+      }
+      continue;
+    }
+
+    if (event.kind === "raw") {
+      timelineItems.push(summarizeRaw(event));
+    }
+  }
+
+  return timelineItems;
+}
+
+export function timelineItemsToLines(
+  items: TranscriptTimelineItem[],
+): string[] {
+  const lines: string[] = [];
+  for (const item of items) {
+    if (item.kind === "message") {
+      const prefix = item.partType === "reasoning" ? "thinking" : item.role;
+      const text = collapseWhitespace(item.text);
+      if (text) {
+        lines.push(`${prefix}: ${text}`);
+      }
+      continue;
+    }
+    if (item.kind === "tool") {
+      if (item.label && item.status && item.subject) {
+        lines.push(`${item.label} ${item.status}: ${item.subject}`);
+      } else if (item.label && item.subject) {
+        lines.push(`${item.label}: ${item.subject}`);
+      } else if (item.label && item.status) {
+        lines.push(`${item.label} ${item.status}`);
+      } else if (item.label) {
+        lines.push(item.label);
+      }
+      if (item.errorText) {
+        lines.push(item.errorText);
+      }
+      continue;
+    }
+    if (item.kind === "plan") {
+      lines.push(item.summary);
+      continue;
+    }
+    if (item.kind === "raw") {
+      if (item.text.trim()) {
+        lines.push(item.text);
+      }
+      continue;
+    }
+  }
+  return lines;
+}

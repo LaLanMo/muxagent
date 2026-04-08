@@ -8,7 +8,7 @@ import { useWorkspaceStore } from "@/state/workspace-store";
 
 export function useRuntimeSync(): void {
   const upsertTask = useTaskSnapshotStore((state) => state.upsertTask);
-  const appendLiveOutput = useTaskSnapshotStore((state) => state.appendLiveOutput);
+  const appendLiveEvents = useTaskSnapshotStore((state) => state.appendLiveEvents);
   const invalidateTaskDetail = useTaskSnapshotStore(
     (state) => state.invalidateTaskDetail,
   );
@@ -47,12 +47,12 @@ export function useRuntimeSync(): void {
       upsertTask(taskNotification.workspaceId, taskNotification.taskView);
     }
 
-    if (taskNotification.progressLines.length > 0 || taskNotification.nodeRunId) {
-      appendLiveOutput(
+    if (taskNotification.progressEvents.length > 0 || taskNotification.nodeRunId) {
+      appendLiveEvents(
         taskNotification.workspaceId,
         taskNotification.taskId,
         taskNotification.nodeRunId,
-        taskNotification.progressLines,
+        taskNotification.progressEvents,
       );
     }
 

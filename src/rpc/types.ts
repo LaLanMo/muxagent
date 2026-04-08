@@ -409,7 +409,7 @@ export interface TaskGetResult {
   task: TaskViewDto;
   config?: ConfigViewDto;
   input_request?: InputRequestDto;
-  live_output?: string[];
+  live_events?: SessionHistoryEventDto[];
   live_output_run_id?: string;
 }
 
@@ -417,18 +417,14 @@ export interface TaskInputRequestResult {
   input_request?: InputRequestDto;
 }
 
-export interface RunHistoryChunkDto {
-  recorded_at: string;
-  progress: ProgressInfoDto;
-}
-
 export interface TaskRunHistoryResult {
   task_id: string;
   node_run_id: string;
   session_id?: string;
-  source: string;
-  complete: boolean;
-  history?: RunHistoryChunkDto[];
+  provenance: string;
+  completeness: string;
+  last_seq?: number;
+  events?: SessionHistoryEventDto[];
 }
 
 export interface ArtifactRefDto {
@@ -493,20 +489,86 @@ export interface TaskContinueBlockedParams {
   task_id: string;
 }
 
-export interface StreamEventDto {
-  kind: string;
-  session_id?: string;
-  raw?: string;
-  message?: Record<string, unknown>;
-  tool?: Record<string, unknown>;
-  plan?: Record<string, unknown>;
-  usage?: Record<string, unknown>;
+export interface SessionHistoryToolDiffDto {
+  path?: string;
+  old_text?: string;
+  new_text?: string;
 }
+
+export interface SessionHistoryPlanStepDto {
+  text: string;
+  status?: string;
+}
+
+interface SessionHistoryEventBaseDto {
+  event_id?: string;
+  seq?: number;
+  emitted_at?: string;
+  recorded_at?: string;
+  session_id?: string;
+  provider_record_id?: string;
+  provider_subindex?: number;
+  provenance?: string;
+  kind: "message" | "tool" | "plan" | "usage" | "raw";
+}
+
+export interface SessionHistoryMessageEventDto extends SessionHistoryEventBaseDto {
+  kind: "message";
+  message_id?: string;
+  part_id?: string;
+  role?: string;
+  part_type?: string;
+  text?: string;
+}
+
+export interface SessionHistoryToolEventDto extends SessionHistoryEventBaseDto {
+  kind: "tool";
+  call_id?: string;
+  parent_call_id?: string;
+  name?: string;
+  tool_kind?: string;
+  title?: string;
+  status?: string;
+  input_summary?: string;
+  output_text?: string;
+  error_text?: string;
+  paths?: string[];
+  diffs?: SessionHistoryToolDiffDto[];
+  raw_input_json?: string;
+  raw_output_json?: string;
+}
+
+export interface SessionHistoryPlanEventDto extends SessionHistoryEventBaseDto {
+  kind: "plan";
+  plan_id?: string;
+  steps?: SessionHistoryPlanStepDto[];
+}
+
+export interface SessionHistoryUsageEventDto extends SessionHistoryEventBaseDto {
+  kind: "usage";
+  input_tokens?: number;
+  cached_input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  duration_ms?: number;
+}
+
+export interface SessionHistoryRawEventDto extends SessionHistoryEventBaseDto {
+  kind: "raw";
+  raw?: string;
+}
+
+export type SessionHistoryEventDto =
+  | SessionHistoryMessageEventDto
+  | SessionHistoryToolEventDto
+  | SessionHistoryPlanEventDto
+  | SessionHistoryUsageEventDto
+  | SessionHistoryRawEventDto;
 
 export interface ProgressInfoDto {
   message?: string;
   session_id?: string;
-  events?: StreamEventDto[];
+  events?: SessionHistoryEventDto[];
 }
 
 export interface RunEventDto {

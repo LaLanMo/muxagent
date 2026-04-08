@@ -12,8 +12,46 @@ import { useShellModel } from "@/features/app/model/use-shell-model";
 import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
+import type { TaskViewDto } from "@/rpc/types";
 
 const emptyTasks: never[] = [];
+
+function compactTaskPath(workDir?: string, fallbackLabel?: string): string {
+  const normalized = workDir?.replace(/[\\/]+$/, "");
+  if (!normalized) {
+    return fallbackLabel ?? "workspace";
+  }
+  const parts = normalized.split(/[\\/]/).filter(Boolean);
+  const projectsIndex = parts.lastIndexOf("Projects");
+  if (projectsIndex >= 0 && projectsIndex < parts.length - 1) {
+    const projectPath = parts.slice(projectsIndex, Math.min(projectsIndex + 2, parts.length)).join("/");
+    return `~/${projectPath}`;
+  }
+  if (parts[0] === "tmp") {
+    return `~/${parts.at(-1) || fallbackLabel || "workspace"}`;
+  }
+  const tail = parts.slice(-2).join("/");
+  return `~/${tail || parts.at(-1) || fallbackLabel || "workspace"}`;
+}
+
+function buildBoardMeta(task: TaskViewDto, fallbackLabel?: string): string {
+  return compactTaskPath(task.task.work_dir, fallbackLabel);
+}
+
+function buildListSubtitle(task: TaskViewDto, fallbackLabel?: string): string {
+  const path = compactTaskPath(task.task.work_dir, fallbackLabel);
+  const bucket = taskBucket(task);
+  if (bucket === "failed") {
+    return `${task.current_node_name ?? "failed"}  ·  ${formatRelativeTime(task.task.updated_at)}  ·  ${path}`;
+  }
+  if (bucket === "awaiting") {
+    return `${task.current_node_name ?? "awaiting"}  ·  ${formatRelativeTime(task.task.updated_at)}  ·  ${path}`;
+  }
+  if (bucket === "done") {
+    return `done  ·  ${formatRelativeTime(task.task.updated_at)}  ·  ${path}`;
+  }
+  return path;
+}
 
 export function useEntryScreen() {
   const shell = useShellModel();
@@ -58,11 +96,7 @@ export function useEntryScreen() {
         workspaceId: scope?.workspaceId,
         href: scope ? buildTaskDetailPath(scope.workspaceId, task.task.id) : "/",
         title: task.task.description || task.task.id,
-        meta: `${
-          task.current_issue?.reason ||
-          task.current_node_name ||
-          task.status.toLowerCase()
-        }${scope && !selectedWorkspaceId ? ` · ${scope.workspaceLabel}` : ""}`,
+        meta: buildBoardMeta(task, scope?.workspaceLabel),
         time: formatRelativeTime(task.task.updated_at),
         tone: statusTone(task.status),
       };
@@ -74,11 +108,7 @@ export function useEntryScreen() {
       id: task.task.id,
       workspaceId: scope?.workspaceId,
       title: task.task.description || task.task.id,
-      subtitle: `${
-        task.current_issue?.reason
-          ? task.current_issue.reason
-          : `node: ${task.current_node_name || "n/a"}`
-      }${scope && !selectedWorkspaceId ? ` · ${scope.workspaceLabel}` : ""}`,
+      subtitle: buildListSubtitle(task, scope?.workspaceLabel),
       time: formatRelativeTime(task.task.updated_at),
       tone: statusTone(task.status),
       bucket: taskBucket(task),

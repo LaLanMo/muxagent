@@ -31,11 +31,12 @@ test("merges replay history with live output for the selected running run", asyn
 
   await page.getByTestId("list-row-task-live-fixture").click();
 
-  await expect(page.getByTestId("detail-output-surface")).toBeVisible();
-  await expect(page.getByText("search: auth middleware entry points")).toBeVisible();
-  await expect(page.getByText("assistant: drafted middleware patch plan")).toBeVisible();
-  await expect(page.getByText("edit running: src/auth/middleware.ts")).toBeVisible();
-  await expect(page.getByText("assistant: applying middleware changes")).toBeVisible();
+  const outputSurface = page.getByTestId("detail-output-surface");
+  await expect(outputSurface).toBeVisible();
+  await expect(outputSurface).toContainText("search: auth middleware entry points");
+  await expect(outputSurface).toContainText("drafted middleware patch plan");
+  await expect(outputSurface).toContainText("edit running: src/auth/middleware.ts");
+  await expect(outputSurface).toContainText("applying middleware changes");
 });
 
 test("task deep links restore the route workspace even after switching to another workspace", async ({
@@ -165,9 +166,10 @@ test("keeps run history visible while showing the clarification action surface",
   ).toBeVisible();
   await expect(page.getByTestId("detail-run-run-clarify-implement")).toBeVisible();
   await page.getByTestId("detail-run-run-clarify-plan").click();
-  await expect(page.getByTestId("detail-output-surface")).toBeVisible();
-  await expect(page.getByText("read: docs/deploy.md")).toBeVisible();
-  await expect(page.getByText("assistant: deployment plan drafted")).toBeVisible();
+  const outputSurface = page.getByTestId("detail-output-surface");
+  await expect(outputSurface).toBeVisible();
+  await expect(outputSurface).toContainText("read: docs/deploy.md");
+  await expect(outputSurface).toContainText("deployment plan drafted");
   await expect(page).toHaveURL(/[\?&]run=run-clarify-plan/);
 });
 
@@ -289,5 +291,36 @@ test("keeps long board cards readable and allows horizontal overflow on narrower
   expect(cardBox?.height ?? 0).toBeLessThan(220);
   expect((titleBox?.y ?? 0) + (titleBox?.height ?? 0)).toBeLessThanOrEqual(
     (metaBox?.y ?? 0) + 1,
+  );
+});
+
+test("keeps dense completed-column cards at their natural height instead of shrinking them", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(page.getByTestId("workspace-picker-button")).toBeEnabled();
+  page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
+  await page.getByTestId("workspace-picker-button").click();
+
+  await page.getByTestId("task-layout-board").click();
+  const completedCard = page.getByTestId("board-card-task-done-login");
+  const meta = completedCard.locator(".task-board-card__meta");
+  const stamp = completedCard.locator(".task-board-card__stamp");
+
+  await expect(completedCard).toBeVisible();
+  await expect(meta).toBeVisible();
+  await expect(stamp).toBeVisible();
+
+  const cardBox = await completedCard.boundingBox();
+  const metaBox = await meta.boundingBox();
+  const stampBox = await stamp.boundingBox();
+
+  expect(cardBox).not.toBeNull();
+  expect(metaBox).not.toBeNull();
+  expect(stampBox).not.toBeNull();
+  expect(cardBox?.height ?? 0).toBeGreaterThanOrEqual(54);
+  expect((stampBox?.y ?? 0) + (stampBox?.height ?? 0)).toBeLessThanOrEqual(
+    (cardBox?.y ?? 0) + (cardBox?.height ?? 0) + 1,
   );
 });

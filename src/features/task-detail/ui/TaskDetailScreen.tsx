@@ -1,8 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
-import { mergeStreamLines, summarizeRunHistory } from "@/application/tasks";
 import { Link } from "react-router-dom";
 import { formatRelativeTime } from "@/domain/task-shell";
+import {
+  buildTranscriptSnapshot,
+  type SessionHistoryEvent,
+} from "@/domain/session-history";
+import {
+  deriveTranscriptTimelineItems,
+  timelineItemsToLines,
+} from "@/features/task-history/model/timeline";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { Toast } from "@/features/shared/ui/Toast";
 import { DesktopWorkbenchFrame } from "@/features/layout/ui/DesktopWorkbenchFrame";
@@ -69,8 +76,8 @@ type TaskDetailScreenProps = {
   selectedArtifact?: ArtifactRefDto;
   artifactContent?: string;
   artifactError?: string;
-  liveOutput: string[];
-  liveOutputRunId?: string;
+  liveEvents: SessionHistoryEvent[];
+  liveEventsRunId?: string;
   selectedRunHistory?: RunHistoryCacheEntry;
   actionSurface: TaskDetailActionSurface;
   inputRequest?: InputRequestDto;
@@ -147,8 +154,8 @@ export function TaskDetailScreen({
   selectedArtifact,
   artifactContent,
   artifactError,
-  liveOutput,
-  liveOutputRunId,
+  liveEvents,
+  liveEventsRunId,
   selectedRunHistory,
   actionSurface,
   inputRequest,
@@ -203,15 +210,16 @@ export function TaskDetailScreen({
           selectedRun.artifact_paths?.includes(artifact.preview_name),
       ).length
     : 0;
-  const replayLines = summarizeRunHistory(selectedRunHistory?.result);
-  const liveSelectedRunLines =
-    selectedRun?.id && liveOutputRunId === selectedRun.id ? liveOutput : [];
-  const selectedRunStreamLines =
-    liveSelectedRunLines.length > 0
-      ? mergeStreamLines(replayLines, liveSelectedRunLines)
-      : replayLines;
+  const liveSelectedRunEvents =
+    selectedRun?.id && liveEventsRunId === selectedRun.id ? liveEvents : [];
+  const transcript = buildTranscriptSnapshot({
+    replay: selectedRunHistory?.result,
+    liveEvents: liveSelectedRunEvents,
+  });
+  const selectedRunTimelineItems = deriveTranscriptTimelineItems(transcript);
+  const selectedRunStreamLines = timelineItemsToLines(selectedRunTimelineItems);
   const selectedRunStreamSource =
-    liveSelectedRunLines.length > 0
+    liveSelectedRunEvents.length > 0
       ? "live"
       : selectedRunStreamLines.length > 0
         ? "replay"
@@ -246,6 +254,7 @@ export function TaskDetailScreen({
         isCurrentRun={selectedRun?.id === currentRunId}
         streamLines={selectedRunStreamLines}
         streamSource={selectedRunStreamSource}
+        transcriptItems={selectedRunTimelineItems}
         run={selectedRun}
         showEmptyOutput={Boolean(selectedRun)}
       />

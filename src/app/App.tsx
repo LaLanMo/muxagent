@@ -12,8 +12,6 @@ import { useConfigEditorScreen } from "@/features/configs/model/use-config-edito
 import { ConfigEditorScreen } from "@/features/configs/ui/ConfigEditorScreen";
 import { useSettingsScreen } from "@/features/settings/model/use-settings-screen";
 import { SettingsScreen } from "@/features/settings/ui/SettingsScreen";
-import { useInboxScreen } from "@/features/inbox/model/use-inbox-screen";
-import { InboxScreen } from "@/features/inbox/ui/InboxScreen";
 import { useTaskRouteSelection } from "@/features/app/model/use-task-route-selection";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
@@ -59,7 +57,16 @@ function TaskDetailRoute() {
 function ProtectedTaskDetailRoute() {
   const routeState = useTaskRouteSelection();
   if (routeState === "pending") {
-    return null;
+    return (
+      <main
+        aria-busy="true"
+        aria-live="polite"
+        className="route-pending"
+        data-testid="task-route-pending"
+      >
+        <p className="muted-copy">Loading task…</p>
+      </main>
+    );
   }
   if (routeState === "redirect") {
     return <Navigate replace to="/" />;
@@ -113,11 +120,6 @@ function SettingsRoute() {
   );
 }
 
-function InboxRoute() {
-  const model = useInboxScreen();
-  return <InboxScreen items={model.items} shell={model.shell} />;
-}
-
 export function App() {
   return (
     <BrowserRouter>
@@ -128,7 +130,6 @@ export function App() {
           element={<ProtectedTaskDetailRoute />}
           path="/workspaces/:workspaceId/tasks/:taskId"
         />
-        <Route element={<InboxRoute />} path="/inbox" />
         <Route element={<ConfigsRoute />} path="/configs" />
         <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
         <Route element={<SettingsRoute />} path="/settings" />

@@ -50,18 +50,91 @@ export type FixtureTask = {
   };
   node_runs: FixtureNodeRun[];
   task_artifact_paths?: string[];
-  live_output?: string[];
+  live_events?: Array<{
+    event_id?: string;
+    seq?: number;
+    emitted_at?: string;
+    recorded_at?: string;
+    session_id?: string;
+    provider_record_id?: string;
+    provider_subindex?: number;
+    provenance?: string;
+    kind: "message" | "tool" | "plan" | "usage" | "raw";
+    raw?: string;
+    message_id?: string;
+    part_id?: string;
+    role?: string;
+    part_type?: string;
+    text?: string;
+    call_id?: string;
+    parent_call_id?: string;
+    name?: string;
+    tool_kind?: string;
+    title?: string;
+    status?: string;
+    input_summary?: string;
+    output_text?: string;
+    error_text?: string;
+    paths?: string[];
+    diffs?: Array<{
+      path?: string;
+      old_text?: string;
+      new_text?: string;
+    }>;
+    raw_input_json?: string;
+    raw_output_json?: string;
+    plan_id?: string;
+    steps?: Array<{ text: string; status?: string }>;
+    input_tokens?: number;
+    cached_input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    duration_ms?: number;
+  }>;
   live_output_run_id?: string;
   blocked_steps?: Array<Record<string, unknown>>;
   run_history_by_run_id?: Record<
     string,
     Array<{
-      recorded_at: string;
-      progress: {
-        message?: string;
-        session_id?: string;
-        events?: Array<Record<string, unknown>>;
-      };
+      event_id?: string;
+      seq?: number;
+      emitted_at?: string;
+      recorded_at?: string;
+      session_id?: string;
+      provider_record_id?: string;
+      provider_subindex?: number;
+      provenance?: string;
+      kind: "message" | "tool" | "plan" | "usage" | "raw";
+      raw?: string;
+      message_id?: string;
+      part_id?: string;
+      role?: string;
+      part_type?: string;
+      text?: string;
+      call_id?: string;
+      parent_call_id?: string;
+      name?: string;
+      tool_kind?: string;
+      title?: string;
+      status?: string;
+      input_summary?: string;
+      output_text?: string;
+      error_text?: string;
+      paths?: string[];
+      diffs?: Array<{
+        path?: string;
+        old_text?: string;
+        new_text?: string;
+      }>;
+      raw_input_json?: string;
+      raw_output_json?: string;
+      plan_id?: string;
+      steps?: Array<{ text: string; status?: string }>;
+      input_tokens?: number;
+      cached_input_tokens?: number;
+      output_tokens?: number;
+      total_tokens?: number;
+      duration_ms?: number;
     }>
   >;
 };
@@ -524,7 +597,7 @@ export class FixtureRuntime {
         return this.respond(id, {
           task,
           input_request: task.input_request,
-          live_output: task.live_output,
+          live_events: task.live_events,
           live_output_run_id: task.live_output_run_id,
         });
       }
@@ -551,9 +624,20 @@ export class FixtureRuntime {
         return this.respond(id, {
           task_id: taskId,
           node_run_id: nodeRunId,
-          source: task.run_history_by_run_id?.[nodeRunId]?.length ? "persisted" : "none",
-          complete: run.status !== "running" && run.status !== "awaiting_user",
-          history: task.run_history_by_run_id?.[nodeRunId] ?? [],
+          provenance: task.run_history_by_run_id?.[nodeRunId]?.length
+            ? "executor_persisted"
+            : "none",
+          completeness:
+            run.status !== "running" && run.status !== "awaiting_user"
+              ? "complete"
+              : task.run_history_by_run_id?.[nodeRunId]?.length
+                ? "open"
+                : "none",
+          last_seq:
+            task.run_history_by_run_id?.[nodeRunId]?.[
+              (task.run_history_by_run_id?.[nodeRunId]?.length ?? 1) - 1
+            ]?.seq ?? 0,
+          events: task.run_history_by_run_id?.[nodeRunId] ?? [],
         });
       }
       case "task.input_request": {
@@ -1171,7 +1255,7 @@ export class FixtureRuntime {
     currentIssue?: FixtureTask["current_issue"];
     inputRequest?: FixtureTask["input_request"];
     blockedSteps?: FixtureTask["blocked_steps"];
-    liveOutput?: FixtureTask["live_output"];
+    liveEvents?: FixtureTask["live_events"];
     liveOutputRunId?: FixtureTask["live_output_run_id"];
     runHistoryByRunId?: FixtureTask["run_history_by_run_id"];
   }): FixtureTask {
@@ -1206,7 +1290,7 @@ export class FixtureRuntime {
       input_request: params.inputRequest,
       node_runs: params.nodeRuns,
       task_artifact_paths: params.taskArtifactPaths,
-      live_output: params.liveOutput,
+      live_events: params.liveEvents,
       live_output_run_id: params.liveOutputRunId,
       blocked_steps: params.blockedSteps,
       run_history_by_run_id: params.runHistoryByRunId,
@@ -1230,9 +1314,35 @@ export class FixtureRuntime {
         currentNodeType: "agent",
         taskArtifactPaths: ["summary.md"],
         liveOutputRunId: "run-live-implement",
-        liveOutput: [
-          "edit running: src/auth/middleware.ts",
-          "assistant: applying middleware changes",
+        liveEvents: [
+          {
+            event_id: "evt-live-edit",
+            seq: 7,
+            emitted_at: makeTime(8),
+            recorded_at: makeTime(8),
+            session_id: "session-live-implement",
+            provenance: "executor_persisted",
+            kind: "tool",
+            call_id: "tool-edit-live",
+            name: "Edit",
+            tool_kind: "edit",
+            status: "in_progress",
+            input_summary: "src/auth/middleware.ts",
+          },
+          {
+            event_id: "evt-live-message",
+            seq: 8,
+            emitted_at: makeTime(9),
+            recorded_at: makeTime(9),
+            session_id: "session-live-implement",
+            provenance: "executor_persisted",
+            kind: "message",
+            message_id: "msg-live-1",
+            part_id: "part-live-1",
+            role: "assistant",
+            part_type: "text",
+            text: "applying middleware changes",
+          },
         ],
         nodeRuns: [
           {
@@ -1255,27 +1365,29 @@ export class FixtureRuntime {
         runHistoryByRunId: {
           "run-live-implement": [
             {
+              event_id: "evt_fixture_live_1",
+              seq: 1,
+              emitted_at: makeTime(2),
               recorded_at: makeTime(2),
-              progress: {
-                session_id: "fixture-live-implement-session",
-                events: [
-                  {
-                    kind: "tool",
-                    tool: {
-                      name: "Search",
-                      kind: "search",
-                      status: "completed",
-                      input_summary: "auth middleware entry points",
-                    },
-                  },
-                ],
-              },
+              session_id: "fixture-live-implement-session",
+              provenance: "executor_persisted",
+              kind: "tool",
+              name: "Search",
+              tool_kind: "search",
+              status: "completed",
+              input_summary: "auth middleware entry points",
             },
             {
+              event_id: "evt_fixture_live_2",
+              seq: 2,
+              emitted_at: makeTime(3),
               recorded_at: makeTime(3),
-              progress: {
-                message: "assistant: drafted middleware patch plan",
-              },
+              session_id: "fixture-live-implement-session",
+              provenance: "executor_persisted",
+              kind: "message",
+              role: "assistant",
+              part_type: "text",
+              text: "drafted middleware patch plan",
             },
           ],
         },
@@ -1406,27 +1518,29 @@ export class FixtureRuntime {
         runHistoryByRunId: {
           "run-clarify-plan": [
             {
+              event_id: "evt_fixture_plan_1",
+              seq: 1,
+              emitted_at: makeTime(-24),
               recorded_at: makeTime(-24),
-              progress: {
-                session_id: "fixture-plan-session",
-                events: [
-                  {
-                    kind: "tool",
-                    tool: {
-                      name: "Read",
-                      kind: "read",
-                      status: "completed",
-                      input_summary: "docs/deploy.md",
-                    },
-                  },
-                ],
-              },
+              session_id: "fixture-plan-session",
+              provenance: "executor_persisted",
+              kind: "tool",
+              name: "Read",
+              tool_kind: "read",
+              status: "completed",
+              input_summary: "docs/deploy.md",
             },
             {
+              event_id: "evt_fixture_plan_2",
+              seq: 2,
+              emitted_at: makeTime(-23),
               recorded_at: makeTime(-23),
-              progress: {
-                message: "assistant: deployment plan drafted",
-              },
+              session_id: "fixture-plan-session",
+              provenance: "executor_persisted",
+              kind: "message",
+              role: "assistant",
+              part_type: "text",
+              text: "deployment plan drafted",
             },
           ],
         },

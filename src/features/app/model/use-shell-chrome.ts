@@ -21,6 +21,7 @@ function parseBoardFilter(raw: string | null): BoardFilter {
     case "mine":
     case "active":
     case "history":
+    case "attention":
       return raw;
     default:
       return "all";
@@ -128,8 +129,8 @@ export function useShellChrome(): ShellChromeState {
     },
     {
       label: "Needs Attention",
-      to: "/inbox",
-      active: location.pathname === "/inbox",
+      to: buildTaskSurfacePath("attention", taskLayout),
+      active: location.pathname === "/" && boardFilter === "attention",
       count: inboxItems.length || undefined,
     },
     {

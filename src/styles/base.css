@@ -1,21 +1,61 @@
 :root {
   color-scheme: light;
-  font-family: Inter, "SF Pro Text", "Helvetica Neue", sans-serif;
-  background: #fafafa;
-  color: #1d1d1f;
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --surface-muted: #edeef1;
-  --surface-selected: #ebebec;
-  --border: #e5e7eb;
-  --text: #1d1d1f;
-  --text-secondary: #6b6f76;
-  --text-tertiary: #c8cbd0;
-  --green: #4cb782;
-  --yellow: #e8b730;
-  --red: #e5484d;
+  font-family: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #FAFAFA;
+  color: #1A1A1C;
+
+  /* Surfaces */
+  --bg: #FAFAFA;
+  --surface: #FFFFFF;
+  --surface-1: #F4F4F5;
+  --surface-2: #EBEBEC;
+  --surface-hover: #F0F0F1;
+  --surface-muted: #EDEEF1;
+  --surface-selected: #EAEAEC;
+
+  /* Borders */
+  --border: #E2E3E7;
+  --border-subtle: #EDEDEF;
+  --border-strong: #CDCED3;
+  --border-focus: #0D6E6E;
+
+  /* Text */
+  --text: #1A1A1C;
+  --text-secondary: #5C6068;
+  --text-tertiary: #8A8F97;
+  --text-ghost: #C0C3C9;
+  --text-disabled: #B0B4BA;
+
+  /* Accent */
+  --accent: #0D6E6E;
+  --accent-hover: #0A5B5B;
+  --accent-subtle: #E8F5F0;
+
+  /* Status */
+  --green: #4CB782;
+  --yellow: #E8B730;
+  --red: #E5484D;
+  --status-running: #4CB782;
+  --status-running-bg: #E8F5ED;
+  --status-awaiting: #E0A316;
+  --status-awaiting-bg: #FDF4E0;
+  --status-done: #70757E;
+  --status-done-bg: #F0F1F3;
+  --status-failed: #E5484D;
+  --status-failed-bg: #FEF2F2;
+  --status-draft: #9B9FA7;
+  --status-draft-bg: #F4F4F5;
+  --status-approval: #E8B730;
+
+  /* Error */
+  --error: #DC2626;
+  --error-bg: #FEF2F2;
+  --error-bg-hover: #FDE8E8;
+  --error-border: #FECACA;
+
+  /* Layout */
   --shadow: 0 24px 60px rgba(17, 24, 39, 0.14);
-  --sidebar-width: 184px;
+  --sidebar-width: 240px;
 }
 
 * {
@@ -33,6 +73,13 @@ body {
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
+}
+
+.route-pending {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 32px;
 }
 
 button,
@@ -91,7 +138,7 @@ ul {
 }
 
 .secondary-action:hover {
-  background: #f7f7f8;
+  background: var(--surface-1);
   color: var(--text);
 }
 
@@ -107,16 +154,20 @@ ul {
 .primary-action {
   border-radius: 999px;
   padding: 8px 14px;
-  background: var(--text);
-  color: var(--surface);
+  background: var(--accent);
+  color: #fff;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
 
+.primary-action:hover {
+  background: var(--accent-hover);
+}
+
 .primary-action:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.45;
 }
 
 .text-action {
@@ -127,7 +178,7 @@ ul {
 }
 
 .text-action:hover {
-  color: #2e8f60;
+  color: var(--accent-hover);
 }
 
 .icon-button {
@@ -137,46 +188,59 @@ ul {
   padding: 2px;
 }
 
+.status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+}
+
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 24px;
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 4px 9px;
   font-size: 11px;
   font-weight: 500;
 }
 
 .status-badge--mono {
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 11px;
   font-weight: 400;
 }
 
 .status-badge--running {
-  color: var(--green);
-  background: color-mix(in srgb, var(--green) 10%, white);
+  color: var(--text);
+  background: var(--status-running-bg);
 }
+.status-badge--running .status-badge__dot { background: var(--status-running); }
 
 .status-badge--awaiting {
-  color: var(--yellow);
-  background: color-mix(in srgb, var(--yellow) 12%, white);
+  color: var(--text);
+  background: var(--status-awaiting-bg);
 }
+.status-badge--awaiting .status-badge__dot { background: var(--status-awaiting); }
 
 .status-badge--done {
-  color: var(--green);
-  background: color-mix(in srgb, var(--green) 12%, white);
+  color: var(--text-tertiary);
+  background: var(--status-done-bg);
 }
+.status-badge--done .status-badge__dot { background: var(--status-done); }
 
 .status-badge--failed {
-  color: var(--red);
-  background: color-mix(in srgb, var(--red) 10%, white);
+  color: var(--text);
+  background: var(--status-failed-bg);
+  box-shadow: inset 0 0 0 1px var(--status-failed);
 }
+.status-badge--failed .status-badge__dot { background: var(--status-failed); }
 
 .status-badge--neutral {
   color: var(--text-secondary);
-  background: #f4f5f6;
+  background: var(--surface-1);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .inline-banner {
@@ -192,10 +256,74 @@ ul {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--red) 18%, white);
 }
 
+/* Toast */
+.toast-container {
+  position: fixed;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.08);
+  font-size: 13px;
+  pointer-events: auto;
+  animation: toast-enter 200ms ease-out;
+}
+
+.toast--error {
+  box-shadow: inset 0 0 0 1px var(--status-failed), 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.toast--exiting {
+  animation: toast-exit 200ms ease-in forwards;
+}
+
+.toast__icon { flex: none; }
+.toast__icon--success { color: var(--status-done); }
+.toast__icon--error { color: var(--status-failed); }
+
+.toast__message {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+
+.toast__dismiss {
+  flex: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+}
+
+.toast__dismiss:hover {
+  color: var(--text-secondary);
+}
+
+@keyframes toast-enter {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-exit {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-8px); }
+}
+
 .muted-copy,
 .task-board-card__meta,
 .config-card p,
-.inbox-row p,
 .detail-pane__header p,
 .field-block__hint,
 .task-modal__config-description,
@@ -207,7 +335,7 @@ ul {
 
 .field-block__label {
   color: var(--text-secondary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.12em;
@@ -217,4 +345,17 @@ ul {
 .screen-error {
   color: var(--red);
   font-size: 13px;
+}
+
+/* Focus rings */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 2px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--border-focus);
 }

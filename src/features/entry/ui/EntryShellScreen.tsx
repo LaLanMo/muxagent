@@ -57,25 +57,6 @@ export function EntryShellScreen({
   modalOpen,
   onCloseModal,
 }: EntryShellScreenProps) {
-  const totalTasks = columns.reduce((sum, column) => sum + column.cards.length, 0);
-  const taskSummary = `${totalTasks} ${totalTasks === 1 ? "task" : "tasks"}`;
-  const shellSubtitle =
-    shell.phase === "connecting" || shell.bootstrapPending
-      ? "Connecting local task control plane"
-      : shell.phase === "failed"
-        ? "App-server disconnected"
-        : shell.phase !== "connected"
-          ? "Reconnect the local task control plane"
-          : shell.workspaceCount === 0
-            ? "Add a workspace to start"
-            : totalTasks > 0
-              ? shell.workDir
-                ? `Review and start tasks in ${shell.workspaceLabel} · ${taskSummary}`
-                : `Review and start tasks across all workspaces · ${taskSummary}`
-              : shell.workDir
-                ? `Review and start tasks in ${shell.workspaceLabel}`
-                : "Review and start tasks across all workspaces";
-
   return (
     <>
       <DesktopShellFrame
@@ -91,9 +72,6 @@ export function EntryShellScreen({
         topBarLeft={
           <div className="screen-heading screen-heading--shell">
             <h1 className="screen-title">Tasks</h1>
-            <div className="screen-heading__subline">
-              <span className="screen-heading__support">{shellSubtitle}</span>
-            </div>
           </div>
         }
         topBarRight={
@@ -115,9 +93,6 @@ export function EntryShellScreen({
                     to={item.to ?? "/"}
                   >
                     <span>{item.label}</span>
-                    {item.count != null ? (
-                      <span className="task-view-switch__count">{item.count}</span>
-                    ) : null}
                   </NavLink>
                 ))}
               </div>
@@ -154,7 +129,10 @@ export function EntryShellScreen({
           )
         }
       >
-        <section className="board-screen" data-testid="entry-shell">
+        <section
+          className={`board-screen board-screen--${shell.taskLayout}`}
+          data-testid="entry-shell"
+        >
           {shell.error ? (
             <div className="inline-banner inline-banner--failed" data-testid="shell-error">
               {shell.error}

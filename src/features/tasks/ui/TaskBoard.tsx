@@ -19,6 +19,10 @@ type TaskBoardProps = {
   columns: TaskBoardColumnModel[];
 };
 
+function hasAttentionAccent(tone: TaskBoardCardModel["tone"]) {
+  return tone === "awaiting" || tone === "failed";
+}
+
 function TaskBoardColumn({ column }: { column: TaskBoardColumnModel }) {
   return (
     <section className="board-column">
@@ -35,15 +39,13 @@ function TaskBoardColumn({ column }: { column: TaskBoardColumnModel }) {
       <div className="board-column__stack">
         {column.cards.map((card) => (
           <Link
-            className="task-board-card"
+            className={`task-board-card${
+              hasAttentionAccent(card.tone) ? ` task-board-card--${card.tone}` : ""
+            }`}
             data-testid={`board-card-${card.id}`}
             key={`${card.workspaceId ?? "global"}:${card.id}`}
             to={card.href}
           >
-            <span
-              className={`task-board-card__rail task-board-card__rail--${card.tone}`}
-              aria-hidden="true"
-            />
             <div className="task-board-card__body">
               <div className="task-board-card__header">
                 <h3>{card.title}</h3>

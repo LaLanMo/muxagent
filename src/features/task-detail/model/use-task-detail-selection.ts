@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
@@ -11,6 +12,69 @@ export type TaskDetailSelection =
   | { kind: "overview" }
   | { kind: "run"; runId: string }
   | { kind: "artifact"; artifactPath: string };
+
+function readSelectionFromSearchParams(
+  searchParams: URLSearchParams,
+): TaskDetailSelection | undefined {
+  const artifactPath = searchParams.get("artifact");
+  if (artifactPath) {
+    return { kind: "artifact", artifactPath };
+  }
+
+  const runId = searchParams.get("run");
+  if (runId) {
+    return { kind: "run", runId };
+  }
+
+  if (searchParams.get("view") === "overview") {
+    return { kind: "overview" };
+  }
+
+  return undefined;
+}
+
+function writeSelectionToSearchParams(
+  current: URLSearchParams,
+  selection?: TaskDetailSelection,
+): URLSearchParams {
+  const next = new URLSearchParams(current);
+  next.delete("view");
+  next.delete("run");
+  next.delete("artifact");
+
+  if (!selection) {
+    return next;
+  }
+
+  if (selection.kind === "overview") {
+    next.set("view", "overview");
+  } else if (selection.kind === "run") {
+    next.set("run", selection.runId);
+  } else {
+    next.set("artifact", selection.artifactPath);
+  }
+
+  return next;
+}
+
+function selectionsMatch(
+  left: TaskDetailSelection | undefined,
+  right: TaskDetailSelection,
+) {
+  if (!left || left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === "overview") {
+    return true;
+  }
+  if (left.kind === "run" && right.kind === "run") {
+    return left.runId === right.runId;
+  }
+  if (left.kind === "artifact" && right.kind === "artifact") {
+    return left.artifactPath === right.artifactPath;
+  }
+  return false;
+}
 
 function isMarkerOnlyRun(run: NodeRunViewDto) {
   const name = run.node_name.trim().toLowerCase();
@@ -90,38 +154,53 @@ export function useTaskDetailSelection({
   inputRequest?: InputRequestDto;
   blockedStep?: BlockedStepDto;
 }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigatorRuns = useMemo(
     () => (task?.node_runs ?? []).filter((run) => !isMarkerOnlyRun(run)),
     [task],
   );
-  const [selection, setSelection] = useState<TaskDetailSelection>({
-    kind: "overview",
-  });
+  const requestedSelection = useMemo(
+    () => readSelectionFromSearchParams(searchParams),
+    [searchParams],
+  );
+  const selection = useMemo(() => {
+    if (!taskId) {
+      return { kind: "overview" } satisfies TaskDetailSelection;
+    }
+
+    if (
+      requestedSelection?.kind === "run" &&
+      navigatorRuns.some((run) => run.id === requestedSelection.runId)
+    ) {
+      return requestedSelection;
+    }
+
+    if (
+      requestedSelection?.kind === "artifact" &&
+      artifacts.some(
+        (artifact) => artifact.resolved_path === requestedSelection.artifactPath,
+      )
+    ) {
+      return requestedSelection;
+    }
+
+    if (requestedSelection?.kind === "overview") {
+      return requestedSelection;
+    }
+
+    return buildDefaultSelection({
+      runs: navigatorRuns,
+      inputRequest,
+      blockedStep,
+    });
+  }, [artifacts, blockedStep, inputRequest, navigatorRuns, requestedSelection, taskId]);
 
   useEffect(() => {
-    setSelection((current) => {
-      if (!taskId) {
-        return { kind: "overview" };
-      }
-      if (
-        current.kind === "run" &&
-        navigatorRuns.some((run) => run.id === current.runId)
-      ) {
-        return current;
-      }
-      if (
-        current.kind === "artifact" &&
-        artifacts.some((artifact) => artifact.resolved_path === current.artifactPath)
-      ) {
-        return current;
-      }
-      return buildDefaultSelection({
-        runs: navigatorRuns,
-        inputRequest,
-        blockedStep,
-      });
-    });
-  }, [artifacts, blockedStep, inputRequest, navigatorRuns, taskId]);
+    if (!requestedSelection || selectionsMatch(requestedSelection, selection)) {
+      return;
+    }
+    setSearchParams(writeSelectionToSearchParams(searchParams), { replace: true });
+  }, [requestedSelection, searchParams, selection, setSearchParams]);
 
   const selectedArtifact =
     selection.kind === "artifact"
@@ -142,12 +221,31 @@ export function useTaskDetailSelection({
     selection,
     selectedRun,
     selectedArtifact,
-    selectOverview: () => setSelection({ kind: "overview" }),
-    selectRun: (runId: string) => setSelection({ kind: "run", runId }),
+    selectOverview: () =>
+      setSearchParams(
+        (current) =>
+          writeSelectionToSearchParams(current, {
+            kind: "overview",
+          }),
+        { replace: false },
+      ),
+    selectRun: (runId: string) =>
+      setSearchParams(
+        (current) =>
+          writeSelectionToSearchParams(current, {
+            kind: "run",
+            runId,
+          }),
+        { replace: false },
+      ),
     selectArtifact: (artifact: ArtifactRefDto) =>
-      setSelection({
-        kind: "artifact",
-        artifactPath: artifact.resolved_path,
-      }),
+      setSearchParams(
+        (current) =>
+          writeSelectionToSearchParams(current, {
+            kind: "artifact",
+            artifactPath: artifact.resolved_path,
+          }),
+        { replace: false },
+      ),
   };
 }

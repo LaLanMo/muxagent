@@ -61,7 +61,7 @@ export function useTaskDetailScreen() {
   const shell = useShellModel();
   const { taskId = "", workspaceId = "" } = useParams();
   const configEntries = useWorkspaceStore((state) => state.catalog?.entries) ?? emptyConfigEntries;
-  const { task: resolvedTask, detailEntry, liveOutput, liveOutputRunId, loadDetail } =
+  const { task: resolvedTask, detailEntry, liveEvents, liveEventsRunId, loadDetail } =
     useTaskDetailData({
       workspaceId,
       taskId,
@@ -197,8 +197,8 @@ export function useTaskDetailScreen() {
     artifactError,
     artifacts,
     inputRequest,
-    liveOutput,
-    liveOutputRunId,
+    liveEvents,
+    liveEventsRunId,
     selectedRunHistory,
     feedback,
     setFeedback,

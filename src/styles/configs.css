@@ -20,11 +20,15 @@
   min-height: 28px;
   border-radius: 8px;
   padding: 0 11px;
-  background: #17181b;
+  background: var(--accent);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.01em;
+}
+
+.topbar-action:hover {
+  background: var(--accent-hover);
 }
 
 .topbar-action:disabled {
@@ -47,7 +51,7 @@
 }
 
 .config-banner--warning {
-  color: #8b6b11;
+  color: var(--status-awaiting);
   background: color-mix(in srgb, var(--yellow) 12%, white);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--yellow) 24%, white);
 }
@@ -117,9 +121,9 @@
   min-height: 22px;
   border-radius: 999px;
   padding: 0 9px;
-  background: #f4f5f6;
+  background: var(--surface-1);
   color: var(--text-secondary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 10px;
 }
 
@@ -142,7 +146,7 @@
   min-height: 26px;
   border-radius: 8px;
   padding: 0 10px;
-  background: #f4f5f6;
+  background: var(--surface-1);
   color: var(--text-secondary);
   font-size: 11px;
   font-weight: 500;
@@ -150,7 +154,7 @@
 
 .config-inline-button:hover {
   color: var(--text);
-  background: #eceef1;
+  background: var(--surface-muted);
 }
 
 .config-inline-button:disabled {
@@ -178,7 +182,7 @@
   grid-template-rows: auto minmax(0, 1fr) auto;
   min-width: 0;
   min-height: 0;
-  background: #f7f8fa;
+  background: var(--surface-1);
   color: var(--text);
 }
 
@@ -209,19 +213,19 @@
 }
 
 .config-editor-canvas .config-inline-button {
-  background: #eef1f5;
+  background: var(--surface-muted);
   color: var(--text-secondary);
   box-shadow: inset 0 0 0 1px rgba(220, 224, 230, 0.92);
 }
 
 .config-editor-canvas .config-inline-button:hover {
-  background: #e7ebf0;
+  background: var(--surface-selected);
   color: var(--text);
 }
 
 .config-editor-canvas .config-inline-button--danger {
-  background: #f9eff1;
-  color: #a04a55;
+  background: var(--error-bg);
+  color: var(--error);
   box-shadow: inset 0 0 0 1px rgba(238, 207, 213, 0.95);
 }
 
@@ -286,9 +290,9 @@
   min-height: 24px;
   border-radius: 999px;
   padding: 0 10px;
-  background: #eef1f5;
+  background: var(--surface-muted);
   color: var(--text-secondary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 10px;
 }
 
@@ -317,7 +321,7 @@
   padding: 14px;
   background: rgba(255, 255, 255, 0.98);
   color: var(--text);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 12px;
   line-height: 1.6;
   resize: vertical;
@@ -393,8 +397,8 @@
   border-radius: 999px;
   padding: 0 6px;
   background: rgba(91, 189, 146, 0.12);
-  color: #398a66;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  color: var(--status-running);
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -464,7 +468,7 @@
 
 .config-field > span {
   color: var(--text-secondary);
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -480,7 +484,7 @@
   border: 0;
   border-radius: 8px;
   padding: 0 11px;
-  background: #f5f6f7;
+  background: var(--surface-1);
   color: var(--text);
   box-shadow: inset 0 0 0 1px rgba(229, 231, 235, 0.95);
 }
@@ -521,7 +525,7 @@
 
 .config-schema-editor {
   min-height: 168px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
   font-size: 11px;
   line-height: 1.5;
 }
@@ -536,7 +540,7 @@
   gap: 10px;
   border-radius: 10px;
   padding: 12px;
-  background: #fafafb;
+  background: var(--bg);
   box-shadow: inset 0 0 0 1px rgba(229, 231, 235, 0.92);
 }
 

@@ -8,7 +8,7 @@ import type {
 } from "@/rpc/types";
 import { buildTaskDetailPath } from "@/domain/routes";
 
-export type BoardFilter = "all" | "mine" | "active" | "history";
+export type BoardFilter = "all" | "mine" | "active" | "history" | "attention";
 export type TaskLayout = "board" | "list";
 export type BoardBucket = "running" | "awaiting" | "done" | "failed";
 export type BoardColumnBucket = "attention" | "running" | "completed";
@@ -60,6 +60,13 @@ const activeStatuses = new Set(["running", "queued", "starting"]);
 const awaitingStatuses = new Set(["awaiting_user", "awaiting_input", "blocked"]);
 const doneStatuses = new Set(["done", "completed", "success"]);
 const failedStatuses = new Set(["failed", "error", "cancelled"]);
+
+export type DetailStatusLabel =
+  | "running"
+  | "awaiting"
+  | "done"
+  | "failed"
+  | "pending";
 
 export function displayWorkspaceName(workDir?: string): string {
   if (!workDir) {
@@ -119,8 +126,10 @@ export function filterTasks(tasks: TaskViewDto[], filter: BoardFilter): TaskView
   return tasks.filter((task) => {
     const bucket = taskBucket(task);
     switch (filter) {
+      case "attention":
+        return bucket === "awaiting" || bucket === "failed";
       case "active":
-        return bucket === "running" || bucket === "awaiting";
+        return bucket === "running";
       case "history":
         return bucket === "done";
       case "mine":
@@ -166,6 +175,57 @@ export function statusTone(
       return "failed";
     default:
       return "neutral";
+  }
+}
+
+export function detailStatusLabel(status: string): DetailStatusLabel {
+  const normalized = status.toLowerCase();
+  if (
+    awaitingStatuses.has(normalized) ||
+    normalized.includes("await") ||
+    normalized.includes("block")
+  ) {
+    return "awaiting";
+  }
+  if (
+    failedStatuses.has(normalized) ||
+    normalized.includes("fail") ||
+    normalized.includes("error")
+  ) {
+    return "failed";
+  }
+  if (
+    doneStatuses.has(normalized) ||
+    normalized.includes("done") ||
+    normalized.includes("success") ||
+    normalized.includes("complete")
+  ) {
+    return "done";
+  }
+  if (
+    activeStatuses.has(normalized) ||
+    normalized.includes("run") ||
+    normalized.includes("start") ||
+    normalized.includes("queue")
+  ) {
+    return "running";
+  }
+  return "pending";
+}
+
+export function detailStatusTitle(status: string): string {
+  switch (detailStatusLabel(status)) {
+    case "running":
+      return "Running";
+    case "awaiting":
+      return "Awaiting";
+    case "done":
+      return "Done";
+    case "failed":
+      return "Failed";
+    case "pending":
+    default:
+      return "Pending";
   }
 }
 

@@ -48,6 +48,7 @@ export function useTaskDetailActions({
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [submittingClarification, setSubmittingClarification] = useState(false);
   const [followUpDescription, setFollowUpDescription] = useState("");
+  const [followUpConfigAlias, setFollowUpConfigAlias] = useState<string | undefined>();
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
@@ -70,10 +71,16 @@ export function useTaskDetailActions({
     try {
       await action();
     } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string" && error.trim()
+            ? error
+            : fallbackMessage;
       failTaskDetail(
         workspaceId,
         taskId,
-        error instanceof Error ? error.message : fallbackMessage,
+        message,
       );
     }
   }
@@ -156,6 +163,7 @@ export function useTaskDetailActions({
             taskId,
             task,
             description: trimmed,
+            configAliasOverride: followUpConfigAlias,
           }),
         );
         setFollowUpDescription("");
@@ -218,6 +226,8 @@ export function useTaskDetailActions({
     submittingClarification,
     followUpDescription,
     setFollowUpDescription,
+    followUpConfigAlias,
+    setFollowUpConfigAlias,
     submittingFollowUp,
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,

@@ -1,8 +1,9 @@
+import type { SessionHistoryEvent } from "@/domain/session-history";
 import type { TaskViewDto } from "@/rpc/types";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 
 const emptyTasks: never[] = [];
-const emptyLiveOutput: string[] = [];
+const emptyLiveEvents: SessionHistoryEvent[] = [];
 
 type UseTaskDetailStoreEntryArgs = {
   workspaceId: string;
@@ -25,16 +26,16 @@ export function useTaskDetailStoreEntry({
         ? state.taskDetailsByWorkspaceId[workspaceId]?.[taskId]
         : undefined),
   );
-  const liveOutput = useTaskSnapshotStore(
+  const liveEvents = useTaskSnapshotStore(
     (state) =>
       (workspaceId
-        ? state.liveOutputByWorkspaceId[workspaceId]?.[taskId]
-        : undefined) ?? emptyLiveOutput,
+        ? state.liveEventsByWorkspaceId[workspaceId]?.[taskId]
+        : undefined) ?? emptyLiveEvents,
   );
-  const liveOutputRunId = useTaskSnapshotStore(
+  const liveEventsRunId = useTaskSnapshotStore(
     (state) =>
       workspaceId
-        ? state.liveOutputRunIdsByWorkspaceId[workspaceId]?.[taskId]
+        ? state.liveEventRunIdsByWorkspaceId[workspaceId]?.[taskId]
         : undefined,
   );
   const taskFromList = tasks.find((entry: TaskViewDto) => entry.task.id === taskId);
@@ -42,7 +43,7 @@ export function useTaskDetailStoreEntry({
   return {
     task: detailEntry?.task ?? taskFromList,
     detailEntry,
-    liveOutput,
-    liveOutputRunId,
+    liveEvents,
+    liveEventsRunId,
   };
 }
