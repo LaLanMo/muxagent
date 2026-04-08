@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import type { TranscriptSnapshot } from "@/domain/session-history";
 import { detailStatusLabel } from "@/domain/task-shell";
 import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
 import type {
@@ -9,6 +10,7 @@ import type {
   NodeRunViewDto,
   TaskViewDto,
 } from "@/rpc/types";
+import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
 
 type OverviewPaneProps = {
   task?: TaskViewDto;
@@ -19,7 +21,9 @@ type OverviewPaneProps = {
 type RunPaneProps = {
   run?: NodeRunViewDto;
   streamLines: string[];
+  transcript: TranscriptSnapshot;
   transcriptItems: TranscriptTimelineItem[];
+  historyEntry?: RunHistoryCacheEntry;
   streamSource: "live" | "replay" | "loading" | "none";
   isCurrentRun: boolean;
   artifactCount: number;
@@ -95,13 +99,15 @@ function DetailInfoCard({
   label,
   value,
   detail,
+  testId,
 }: {
   label: string;
   value: string | number;
   detail?: string;
+  testId?: string;
 }) {
   return (
-    <div className="detail-info-card">
+    <div className="detail-info-card" data-testid={testId}>
       <span className="detail-info-card__label">{label}</span>
       <strong className="detail-info-card__value">{value}</strong>
       {detail ? <p className="detail-info-card__detail">{detail}</p> : null}
@@ -243,6 +249,114 @@ function formatClarificationAnswer(selected: unknown): string {
   return typeof selected === "string" ? selected : "";
 }
 
+function formatHistoryProvenance(value: string | undefined): string {
+  const normalized = value?.trim();
+  switch (normalized) {
+    case "executor_persisted":
+      return "persisted replay";
+    case "provider_backfilled":
+      return "provider transcript";
+    case "mixed_recovered":
+      return "recovered merge";
+    case "none":
+    case "":
+    case undefined:
+      return "not available";
+    default:
+      return normalized.replace(/[_-]+/g, " ");
+  }
+}
+
+function formatHistoryCompleteness(value: string | undefined): string {
+  const normalized = value?.trim();
+  switch (normalized) {
+    case "complete":
+      return "complete";
+    case "open":
+      return "open";
+    case "partial":
+      return "partial";
+    case "none":
+    case "":
+    case undefined:
+      return "not started";
+    default:
+      return normalized.replace(/[_-]+/g, " ");
+  }
+}
+
+function shortenSessionId(value: string | undefined): string {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return "pending";
+  }
+  if (trimmed.length <= 18) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, 8)}…${trimmed.slice(-6)}`;
+}
+
+function describeHistoryStatus(
+  streamSource: RunPaneProps["streamSource"],
+  transcript: TranscriptSnapshot,
+) {
+  const parts: string[] = [];
+  if (transcript.replayEventCount > 0) {
+    parts.push(
+      `${transcript.replayEventCount} replay event${transcript.replayEventCount === 1 ? "" : "s"}`,
+    );
+  }
+  if (transcript.liveEventCount > 0) {
+    parts.push(
+      `${transcript.liveEventCount} live event${transcript.liveEventCount === 1 ? "" : "s"}`,
+    );
+  }
+  if (parts.length > 0) {
+    return parts.join(" · ");
+  }
+  if (streamSource === "loading") {
+    return "loading persisted events";
+  }
+  if (streamSource === "live") {
+    return "live stream attached";
+  }
+  return "no structured transcript yet";
+}
+
+function describeTranscriptAvailability(
+  streamSource: RunPaneProps["streamSource"],
+  transcript: TranscriptSnapshot,
+  run: NodeRunViewDto,
+  isCurrentRun: boolean,
+) {
+  if (streamSource === "loading") {
+    return {
+      title: "Loading run history…",
+      detail: "Fetching persisted session events for this node run.",
+    };
+  }
+  if (isCurrentRun) {
+    return {
+      title: "Waiting for live output…",
+      detail: run.session_id
+        ? `Live stream events for session ${run.session_id} will appear here when the executor emits them.`
+        : "This run is active. Stream events will appear here when the executor emits them.",
+    };
+  }
+  if (transcript.completeness === "open") {
+    return {
+      title: "Partial transcript available",
+      detail:
+        "This run still has open history. Re-open it shortly to refresh newly recovered transcript events.",
+    };
+  }
+  return {
+    title: "No persisted stream for this run",
+    detail:
+      "Use the navigator artifacts or current action surface to inspect what happened in this step.",
+  };
+}
+
 function RecoveryCard({
   tone,
   title,
@@ -316,6 +430,7 @@ export function TaskOverviewPane({
 export function TaskRunPane({
   run,
   streamLines,
+  transcript,
   transcriptItems,
   streamSource,
   isCurrentRun,
@@ -341,14 +456,23 @@ export function TaskRunPane({
   const resultContent = prettyResult(run.result);
   const clarificationHistory = run.clarifications ?? [];
   const hasStreamOutput = streamLines.length > 0;
+  const historyProvenance = formatHistoryProvenance(transcript.provenance);
+  const historyCompleteness = formatHistoryCompleteness(transcript.completeness);
+  const historyStatusDetail = describeHistoryStatus(streamSource, transcript);
+  const transcriptAvailability = describeTranscriptAvailability(
+    streamSource,
+    transcript,
+    run,
+    isCurrentRun,
+  );
 
   function renderTranscriptItem(item: TranscriptTimelineItem) {
     if (item.kind === "message") {
       return (
-        <div className="detail-transcript-row" key={item.id}>
-          <strong className="detail-transcript-row__title">
+        <div className="detail-transcript-row detail-transcript-row--message" key={item.id}>
+          <span className="detail-transcript-row__eyebrow">
             {item.partType === "reasoning" ? "thinking" : item.role}
-          </strong>
+          </span>
           <p className="detail-transcript-row__text">{item.text}</p>
         </div>
       );
@@ -365,22 +489,60 @@ export function TaskRunPane({
                   ? `${item.label} ${item.status}`
                   : item.label}
           </strong>
+          {item.outputText ? (
+            <pre className="detail-code-block detail-code-block--inline">
+              {item.outputText}
+            </pre>
+          ) : null}
           {item.errorText ? (
             <p className="detail-transcript-row__text">{item.errorText}</p>
+          ) : null}
+          {item.paths.length > 0 ? (
+            <p className="detail-transcript-row__meta">
+              {item.paths.join(" · ")}
+            </p>
+          ) : null}
+          {item.diffs.length > 0 ? (
+            <div className="detail-transcript-row__list">
+              {item.diffs.map((diff, index) => (
+                <span key={`${item.id}-diff-${index}`}>{diff.path || "file change"}</span>
+              ))}
+            </div>
           ) : null}
         </div>
       );
     }
-    if (item.kind === "plan" || item.kind === "usage") {
+    if (item.kind === "plan") {
       return (
-        <div className="detail-transcript-row" key={item.id}>
+        <div className="detail-transcript-row detail-transcript-row--plan" key={item.id}>
           <strong className="detail-transcript-row__title">{item.summary}</strong>
+          {item.steps.length > 0 ? (
+            <div className="detail-transcript-row__list">
+              {item.steps.map((step, index) => (
+                <span key={`${item.id}-step-${index}`}>
+                  {step.status === "completed" ? "✓" : "•"} {step.text}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+    if (item.kind === "usage") {
+      return (
+        <div className="detail-transcript-row detail-transcript-row--usage" key={item.id}>
+          <strong className="detail-transcript-row__title">{item.summary}</strong>
+          <p className="detail-transcript-row__meta">
+            total {item.usage.totalTokens ?? 0}
+            {item.usage.durationMs ? ` · ${item.usage.durationMs} ms` : ""}
+          </p>
         </div>
       );
     }
     return (
-      <div className="detail-transcript-row" key={item.id}>
-        <pre className="detail-code-block detail-code-block--inline">{item.text}</pre>
+      <div className="detail-transcript-row detail-transcript-row--raw" key={item.id}>
+        <span className="detail-transcript-row__eyebrow">raw</span>
+        <pre className="detail-code-block detail-code-block--inline">{item.raw}</pre>
       </div>
     );
   }
@@ -396,6 +558,30 @@ export function TaskRunPane({
         <DetailInfoCard label="Node" value={run.node_name} />
         <DetailInfoCard label="Status" value={detailStatusLabel(run.status)} />
         <DetailInfoCard label="Artifacts" value={artifactCount} />
+        <DetailInfoCard
+          label="Session"
+          value={shortenSessionId(transcript.sessionId || run.session_id)}
+          detail={transcript.sessionId || run.session_id || "Awaiting session id"}
+          testId="detail-run-session"
+        />
+        <DetailInfoCard
+          label="History"
+          value={historyProvenance}
+          detail={historyStatusDetail}
+          testId="detail-run-history-source"
+        />
+        <DetailInfoCard
+          label="Transcript"
+          value={historyCompleteness}
+          detail={
+            transcript.lastSeq != null
+              ? `last event seq ${transcript.lastSeq}`
+              : transcript.events.length > 0
+                ? `${transcript.events.length} event${transcript.events.length === 1 ? "" : "s"} loaded`
+                : "No persisted event sequence yet"
+          }
+          testId="detail-run-history-completeness"
+        />
         {run.triggered_by ? (
           <DetailInfoCard label="Triggered by" value={run.triggered_by.reason} />
         ) : null}
@@ -447,22 +633,13 @@ export function TaskRunPane({
             <pre className="detail-code-block">{resultContent}</pre>
           ) : streamSource === "loading" ? (
             <div className="detail-empty-card detail-empty-card--embedded">
-              <strong>Loading run history…</strong>
-              <p>Fetching persisted session events for this node run.</p>
-            </div>
-          ) : isCurrentRun ? (
-            <div className="detail-empty-card detail-empty-card--embedded">
-              <strong>Waiting for live output…</strong>
-              <p>
-                {run.session_id
-                  ? `Live stream events for session ${run.session_id} will appear here when the executor emits them.`
-                  : "This run is active. Stream events will appear here when the executor emits them."}
-              </p>
+              <strong>{transcriptAvailability.title}</strong>
+              <p>{transcriptAvailability.detail}</p>
             </div>
           ) : (
             <div className="detail-empty-card detail-empty-card--embedded">
-              <strong>No persisted stream for this run</strong>
-              <p>Use the navigator artifacts or current action surface to inspect what happened in this step.</p>
+              <strong>{transcriptAvailability.title}</strong>
+              <p>{transcriptAvailability.detail}</p>
             </div>
           )}
         </DetailSurface>

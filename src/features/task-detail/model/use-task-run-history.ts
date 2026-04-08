@@ -16,6 +16,11 @@ type UseTaskRunHistoryArgs = {
   detailEntry?: TaskDetailCacheEntry;
 };
 
+function isOpenRunStatus(status: string | undefined): boolean {
+  const normalized = status?.trim().toLowerCase() ?? "";
+  return normalized.includes("run") || normalized.includes("await");
+}
+
 function runHistorySignature(run: NodeRunViewDto | undefined): string {
   if (!run) {
     return "";
@@ -76,6 +81,17 @@ export function useTaskRunHistory({
   const historyEntry = selectedRunId
     ? detailEntry?.runHistoryByRunId?.[selectedRunId]
     : undefined;
+  const shouldPollOpenHistory =
+    Boolean(selectedRunId) &&
+    connected &&
+    historyEntry?.signature === signature &&
+    !historyEntry?.loading &&
+    isOpenRunStatus(selectedRun?.status) &&
+    (
+      historyEntry?.result?.completeness !== "complete" ||
+      historyEntry?.result?.provenance === "none" ||
+      Boolean(historyEntry?.error)
+    );
 
   useEffect(() => {
     if (!selectedRunId || !connected) {
@@ -84,14 +100,39 @@ export function useTaskRunHistory({
     if (historyEntry?.loading) {
       return;
     }
+    const shouldRefreshOpenReplay =
+      historyEntry?.signature === signature &&
+      Boolean(detailEntry?.stale) &&
+      (isOpenRunStatus(selectedRun?.status) ||
+        historyEntry?.result?.completeness !== "complete" ||
+        historyEntry?.result?.provenance === "none");
     if (
       historyEntry?.signature === signature &&
-      (historyEntry?.result || historyEntry?.error)
+      (historyEntry?.result || historyEntry?.error) &&
+      !shouldRefreshOpenReplay
     ) {
       return;
     }
     void loadRunHistory(selectedRunId, signature);
-  }, [connected, historyEntry, loadRunHistory, selectedRunId, signature]);
+  }, [
+    connected,
+    detailEntry?.stale,
+    historyEntry,
+    loadRunHistory,
+    selectedRun?.status,
+    selectedRunId,
+    signature,
+  ]);
+
+  useEffect(() => {
+    if (!selectedRunId || !shouldPollOpenHistory) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void loadRunHistory(selectedRunId, signature);
+    }, 2000);
+    return () => window.clearTimeout(timer);
+  }, [loadRunHistory, selectedRunId, shouldPollOpenHistory, signature]);
 
   return historyEntry;
 }

@@ -37,6 +37,9 @@ test("merges replay history with live output for the selected running run", asyn
   await expect(outputSurface).toContainText("drafted middleware patch plan");
   await expect(outputSurface).toContainText("edit running: src/auth/middleware.ts");
   await expect(outputSurface).toContainText("applying middleware changes");
+  await expect(page.getByTestId("detail-run-history-source")).toContainText("persisted replay");
+  await expect(page.getByTestId("detail-run-history-completeness")).toContainText("open");
+  await expect(page.getByTestId("detail-run-session")).toContainText("session-live-implement");
 });
 
 test("task deep links restore the route workspace even after switching to another workspace", async ({
@@ -225,6 +228,15 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   await page.getByTestId("list-row-task-done-login").click();
   await expect(page.getByTestId("complete-pane")).toBeVisible();
   await expect(page.getByTestId("start-follow-up")).toBeVisible();
+  await expect(page.getByTestId("detail-run-history-source")).toContainText(
+    "provider transcript",
+  );
+  await expect(page.getByTestId("detail-run-session")).toContainText(
+    "session-login-implement",
+  );
+  await expect(page.getByTestId("detail-output-surface")).toContainText(
+    "patched the login guard to preserve the authenticated session cookie.",
+  );
 });
 
 test("renders the blocked task surface", async ({ page }) => {

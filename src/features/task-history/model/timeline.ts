@@ -19,6 +19,8 @@ export type TranscriptTimelineItem =
       role: string;
       partType: string;
       text: string;
+      source?: string;
+      provenance?: string;
     }
   | {
       id: string;
@@ -26,22 +28,51 @@ export type TranscriptTimelineItem =
       label: string;
       status?: string;
       subject?: string;
+      title?: string;
+      outputText?: string;
       errorText?: string;
+      paths: string[];
+      diffs: Array<{
+        path?: string;
+        oldText?: string;
+        newText?: string;
+      }>;
+      rawOutputJson?: string;
+      source?: string;
+      provenance?: string;
     }
   | {
       id: string;
       kind: "plan";
       summary: string;
+      steps: Array<{
+        text: string;
+        status?: string;
+      }>;
+      source?: string;
+      provenance?: string;
     }
   | {
       id: string;
       kind: "usage";
       summary: string;
+      usage: {
+        inputTokens?: number;
+        cachedInputTokens?: number;
+        outputTokens?: number;
+        totalTokens?: number;
+        durationMs?: number;
+      };
+      source?: string;
+      provenance?: string;
     }
   | {
       id: string;
       kind: "raw";
       text: string;
+      raw: string;
+      source?: string;
+      provenance?: string;
     };
 
 function collapseWhitespace(value: string | undefined): string {
@@ -140,6 +171,7 @@ function messageItem(
     role: message.role || "assistant",
     partType: part.type || "text",
     text,
+    source: "replay",
   };
 }
 
@@ -156,6 +188,8 @@ function summarizeMessage(
     role: event.role || "assistant",
     partType: event.partType || "text",
     text,
+    source: event.source,
+    provenance: event.provenance,
   };
 }
 
@@ -195,7 +229,14 @@ function summarizeTool(
     label: toolLabel(normalizedTool),
     status: toolStatusText(normalizedTool.status),
     subject: toolSubject(normalizedTool),
+    title: normalizedTool.title,
+    outputText: normalizedTool.outputText,
     errorText: normalizedTool.errorText,
+    paths: normalizedTool.paths,
+    diffs: normalizedTool.diffs,
+    rawOutputJson: normalizedTool.rawOutputJson,
+    source: normalizedTool.source,
+    provenance: normalizedTool.provenance,
   };
 }
 
@@ -209,6 +250,9 @@ function summarizePlan(event: SessionHistoryPlanEvent): TranscriptTimelineItem {
     summary: next
       ? `plan: ${completed}/${total} complete, next ${collapseWhitespace(next)}`
       : `plan: ${completed}/${total} complete`,
+    steps: event.steps,
+    source: event.source,
+    provenance: event.provenance,
   };
 }
 
@@ -218,12 +262,18 @@ function summarizeUsage(event: SessionHistoryUsageEvent): TranscriptTimelineItem
       id: event.id,
       kind: "usage",
       summary: `usage: ${event.usage.inputTokens ?? 0} in, ${event.usage.outputTokens ?? 0} out`,
+      usage: event.usage,
+      source: event.source,
+      provenance: event.provenance,
     };
   }
   return {
     id: event.id,
     kind: "usage",
     summary: `usage: ${event.usage.totalTokens ?? 0} tokens`,
+    usage: event.usage,
+    source: event.source,
+    provenance: event.provenance,
   };
 }
 
@@ -232,6 +282,9 @@ function summarizeRaw(event: SessionHistoryRawEvent): TranscriptTimelineItem {
     id: event.id,
     kind: "raw",
     text: event.raw,
+    raw: event.raw,
+    source: event.source,
+    provenance: event.provenance,
   };
 }
 

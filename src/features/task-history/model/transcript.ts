@@ -60,6 +60,7 @@ export type TranscriptUsageSummary = {
 export type TranscriptSnapshot = {
   nodeRunId?: string;
   sessionId?: string;
+  provenance?: string;
   events: SessionHistoryEvent[];
   messages: Record<string, TranscriptMessage>;
   messageOrder: string[];
@@ -70,6 +71,8 @@ export type TranscriptSnapshot = {
   usageSummary?: TranscriptUsageSummary;
   lastSeq?: number;
   completeness: string;
+  replayEventCount: number;
+  liveEventCount: number;
   hasStructuredEvents: boolean;
 };
 
@@ -78,6 +81,7 @@ export type TranscriptState = TranscriptSnapshot;
 export type NormalizedTranscriptReplay = {
   nodeRunId?: string;
   sessionId?: string;
+  provenance?: string;
   completeness?: string;
   lastSeq?: number;
   events?: SessionHistoryEvent[];
@@ -249,16 +253,21 @@ export function buildTranscriptSnapshot({
 }: BuildTranscriptSnapshotArgs): TranscriptSnapshot {
   const replayData = replay ?? history;
   const normalizedEvents: SessionHistoryEvent[] = [];
+  let replayEventCount = 0;
+  let liveEventCount = 0;
   for (const event of replayData?.events ?? []) {
     normalizedEvents.push(event);
+    replayEventCount += 1;
   }
   for (const event of liveEvents ?? []) {
     normalizedEvents.push(event);
+    liveEventCount += 1;
   }
   for (const [index, line] of (liveLegacyLines ?? []).entries()) {
     normalizedEvents.push(
       normalizeLiveOutputLine(line, "hydrated_live", nodeRunId, liveLegacyRunId, index),
     );
+    liveEventCount += 1;
   }
 
   const eventLedger = dedupeAndOrderEvents(normalizedEvents);
@@ -339,6 +348,7 @@ export function buildTranscriptSnapshot({
   return {
     nodeRunId: nodeRunId ?? replayData?.nodeRunId,
     sessionId: latestSessionId,
+    provenance: replayData?.provenance,
     events: eventLedger,
     messages,
     messageOrder,
@@ -349,6 +359,8 @@ export function buildTranscriptSnapshot({
     usageSummary,
     lastSeq,
     completeness: replayData?.completeness ?? "none",
+    replayEventCount,
+    liveEventCount,
     hasStructuredEvents: eventLedger.some((event) => event.kind !== "raw"),
   };
 }
@@ -365,6 +377,7 @@ export function buildTranscriptState({
     ? {
         nodeRunId: replay.node_run_id,
         sessionId: replay.session_id,
+        provenance: replay.provenance,
         completeness: replay.completeness,
         lastSeq: replay.last_seq,
         events: (replay.events ?? []).map((event, index) =>

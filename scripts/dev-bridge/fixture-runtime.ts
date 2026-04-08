@@ -8,6 +8,7 @@ export type FixtureNodeRun = {
   status: string;
   started_at: string;
   completed_at?: string;
+  session_id?: string;
   failure_reason?: string;
   result?: Record<string, unknown>;
   artifact_paths?: string[];
@@ -238,6 +239,21 @@ type FixtureNotificationEmitter = (
 type HandleFixtureRpcOptions = {
   emitNotification: FixtureNotificationEmitter;
 };
+
+function fixtureHistoryProvenance(
+  events:
+    | NonNullable<FixtureTask["run_history_by_run_id"]>[string]
+    | undefined,
+): string {
+  const values = [...new Set((events ?? []).map((event) => event.provenance).filter(Boolean))];
+  if (values.length === 0) {
+    return "none";
+  }
+  if (values.length === 1) {
+    return values[0] ?? "none";
+  }
+  return "mixed_recovered";
+}
 
 export class FixtureRuntime {
   private readonly fileContents = new Map<string, string>();
@@ -621,23 +637,22 @@ export class FixtureRuntime {
         if (!run) {
           return this.fail(id, -32602, "node run not found");
         }
+        const events = task.run_history_by_run_id?.[nodeRunId] ?? [];
         return this.respond(id, {
           task_id: taskId,
           node_run_id: nodeRunId,
-          provenance: task.run_history_by_run_id?.[nodeRunId]?.length
-            ? "executor_persisted"
-            : "none",
+          session_id:
+            run.session_id ??
+            events.find((event) => event.session_id?.trim())?.session_id,
+          provenance: fixtureHistoryProvenance(events),
           completeness:
             run.status !== "running" && run.status !== "awaiting_user"
               ? "complete"
-              : task.run_history_by_run_id?.[nodeRunId]?.length
+              : events.length
                 ? "open"
                 : "none",
-          last_seq:
-            task.run_history_by_run_id?.[nodeRunId]?.[
-              (task.run_history_by_run_id?.[nodeRunId]?.length ?? 1) - 1
-            ]?.seq ?? 0,
-          events: task.run_history_by_run_id?.[nodeRunId] ?? [],
+          last_seq: events[(events.length || 1) - 1]?.seq ?? 0,
+          events,
         });
       }
       case "task.input_request": {
@@ -1676,8 +1691,43 @@ export class FixtureRuntime {
             status: "done",
             started_at: makeTime(-88),
             completed_at: makeTime(-79),
+            session_id: "session-login-implement",
           },
         ],
+        runHistoryByRunId: {
+          "run-login-implement": [
+            {
+              event_id: "evt_login_provider_1",
+              seq: 1,
+              emitted_at: makeTime(-88),
+              recorded_at: makeTime(-79),
+              session_id: "session-login-implement",
+              provenance: "provider_backfilled",
+              kind: "tool",
+              call_id: "tool-login-read",
+              name: "Read",
+              tool_kind: "read",
+              status: "completed",
+              input_summary: "src/auth/login.ts",
+              output_text: "Loaded the login controller and traced the null session path.",
+              paths: ["src/auth/login.ts"],
+            },
+            {
+              event_id: "evt_login_provider_2",
+              seq: 2,
+              emitted_at: makeTime(-87),
+              recorded_at: makeTime(-79),
+              session_id: "session-login-implement",
+              provenance: "provider_backfilled",
+              kind: "message",
+              message_id: "msg-login-1",
+              part_id: "part-login-1",
+              role: "assistant",
+              part_type: "text",
+              text: "patched the login guard to preserve the authenticated session cookie.",
+            },
+          ],
+        },
       }),
       this.makeFixtureTask({
         workspacePath,

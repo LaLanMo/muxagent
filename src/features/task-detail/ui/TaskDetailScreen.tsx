@@ -254,6 +254,7 @@ export function TaskDetailScreen({
         isCurrentRun={selectedRun?.id === currentRunId}
         streamLines={selectedRunStreamLines}
         streamSource={selectedRunStreamSource}
+        transcript={transcript}
         transcriptItems={selectedRunTimelineItems}
         run={selectedRun}
         showEmptyOutput={Boolean(selectedRun)}
