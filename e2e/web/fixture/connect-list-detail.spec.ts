@@ -11,6 +11,9 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("list-row-task-live-fixture")).toContainText(
     "Refactor auth middleware",
   );
+  await expect(page.getByTestId("list-row-task-live-fixture")).toContainText(
+    "/tmp/muxagent-workspace",
+  );
 
   await page.getByTestId("list-row-task-live-fixture").click();
 

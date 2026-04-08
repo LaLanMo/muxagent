@@ -16,22 +16,38 @@ import type { TaskViewDto } from "@/rpc/types";
 
 const emptyTasks: never[] = [];
 
+function homeRelativePath(normalized: string): string | undefined {
+  const unixMatch = normalized.match(/^\/(?:Users|home)\/[^/]+(\/.*)?$/);
+  if (unixMatch) {
+    return `~${unixMatch[1] ?? ""}` || "~";
+  }
+
+  const windowsMatch = normalized.match(/^[A-Za-z]:\/Users\/[^/]+(\/.*)?$/);
+  if (windowsMatch) {
+    return `~${windowsMatch[1] ?? ""}` || "~";
+  }
+
+  return undefined;
+}
+
 function compactTaskPath(workDir?: string, fallbackLabel?: string): string {
-  const normalized = workDir?.replace(/[\\/]+$/, "");
+  const normalized = workDir?.replace(/\\/g, "/").replace(/\/+$/, "");
   if (!normalized) {
     return fallbackLabel ?? "workspace";
   }
-  const parts = normalized.split(/[\\/]/).filter(Boolean);
-  const projectsIndex = parts.lastIndexOf("Projects");
-  if (projectsIndex >= 0 && projectsIndex < parts.length - 1) {
-    const projectPath = parts.slice(projectsIndex).join("/");
-    return `~/${projectPath}`;
+
+  const homeRelative = homeRelativePath(normalized);
+  if (homeRelative) {
+    return homeRelative || "~";
   }
-  if (parts[0] === "tmp") {
-    return `~/${parts.at(-1) || fallbackLabel || "workspace"}`;
+
+  const absolutePrefix = normalized.startsWith("/") ? "/" : "";
+  const parts = normalized.split("/").filter(Boolean);
+  if (parts.length <= 3) {
+    return `${absolutePrefix}${parts.join("/")}` || normalized;
   }
-  const tail = parts.slice(-2).join("/");
-  return `~/${tail || parts.at(-1) || fallbackLabel || "workspace"}`;
+
+  return `…/${parts.slice(-3).join("/")}`;
 }
 
 function buildBoardMeta(task: TaskViewDto, fallbackLabel?: string): string {
