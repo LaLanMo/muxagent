@@ -24,7 +24,7 @@ function compactTaskPath(workDir?: string, fallbackLabel?: string): string {
   const parts = normalized.split(/[\\/]/).filter(Boolean);
   const projectsIndex = parts.lastIndexOf("Projects");
   if (projectsIndex >= 0 && projectsIndex < parts.length - 1) {
-    const projectPath = parts.slice(projectsIndex, Math.min(projectsIndex + 2, parts.length)).join("/");
+    const projectPath = parts.slice(projectsIndex).join("/");
     return `~/${projectPath}`;
   }
   if (parts[0] === "tmp") {
