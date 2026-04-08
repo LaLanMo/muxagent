@@ -31,11 +31,18 @@ export function useTaskDetailStoreEntry({
         ? state.liveOutputByWorkspaceId[workspaceId]?.[taskId]
         : undefined) ?? emptyLiveOutput,
   );
+  const liveOutputRunId = useTaskSnapshotStore(
+    (state) =>
+      workspaceId
+        ? state.liveOutputRunIdsByWorkspaceId[workspaceId]?.[taskId]
+        : undefined,
+  );
   const taskFromList = tasks.find((entry: TaskViewDto) => entry.task.id === taskId);
 
   return {
     task: detailEntry?.task ?? taskFromList,
     detailEntry,
     liveOutput,
+    liveOutputRunId,
   };
 }

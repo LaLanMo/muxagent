@@ -29,6 +29,7 @@ import {
   type RuntimeListResult,
   type ServiceStatusResult,
   type TaskContinueBlockedParams,
+  type TaskRunHistoryResult,
   type TaskStartParams,
   type TaskStartFollowUpParams,
   type TaskSubmitInputParams,
@@ -211,6 +212,18 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult> {
     return this.request("task.get", { workspace_id: workspaceId, task_id: taskId });
+  }
+
+  taskRunHistory(
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+  ): Promise<TaskRunHistoryResult> {
+    return this.request("task.run_history", {
+      workspace_id: workspaceId,
+      task_id: taskId,
+      node_run_id: nodeRunId,
+    });
   }
 
   taskInputRequest(

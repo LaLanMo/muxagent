@@ -4,3 +4,4 @@ test-results/
 src-tauri/target/
 .DS_Store
 .tmp-debug-*.mjs
+*.pen

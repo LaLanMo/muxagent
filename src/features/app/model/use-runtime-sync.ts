@@ -47,10 +47,11 @@ export function useRuntimeSync(): void {
       upsertTask(taskNotification.workspaceId, taskNotification.taskView);
     }
 
-    if (taskNotification.progressLines.length > 0) {
+    if (taskNotification.progressLines.length > 0 || taskNotification.nodeRunId) {
       appendLiveOutput(
         taskNotification.workspaceId,
         taskNotification.taskId,
+        taskNotification.nodeRunId,
         taskNotification.progressLines,
       );
     }

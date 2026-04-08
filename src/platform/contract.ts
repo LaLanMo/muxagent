@@ -29,6 +29,7 @@ import type {
   TaskInputRequestResult,
   TaskListResult,
   TaskRetryNodeParams,
+  TaskRunHistoryResult,
   TaskStartParams,
   TaskStartFollowUpParams,
   TaskSubmitInputParams,
@@ -69,6 +70,11 @@ export interface TaskBackendClient {
   runtimeList(): Promise<RuntimeListResult>;
   taskList(workspaceId: string): Promise<TaskListResult>;
   taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult>;
+  taskRunHistory(
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+  ): Promise<TaskRunHistoryResult>;
   taskInputRequest(
     workspaceId: string,
     taskId: string,

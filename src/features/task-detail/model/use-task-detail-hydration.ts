@@ -25,6 +25,9 @@ export function useTaskDetailHydration({
   const beginTaskDetailLoad = useTaskSnapshotStore(
     (state) => state.beginTaskDetailLoad,
   );
+  const hydrateLiveOutput = useTaskSnapshotStore(
+    (state) => state.hydrateLiveOutput,
+  );
   const resolveTaskDetail = useTaskSnapshotStore(
     (state) => state.resolveTaskDetail,
   );
@@ -43,11 +46,19 @@ export function useTaskDetailHydration({
       try {
         const detail = await hydrateTaskDetail(getRuntime(), workspaceId, taskId);
         upsertTask(workspaceId, detail.task);
+        hydrateLiveOutput(
+          workspaceId,
+          taskId,
+          detail.task.status,
+          detail.liveOutputRunId,
+          detail.liveOutput,
+        );
         resolveTaskDetail(workspaceId, taskId, {
           task: detail.task,
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
+          liveOutputRunId: detail.liveOutputRunId,
         });
         return detail;
       } catch (error) {

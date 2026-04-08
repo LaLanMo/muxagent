@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { detailStatusLabel } from "@/domain/task-shell";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
+  ConfigCatalogEntryDto,
   InputQuestionDto,
   NodeRunViewDto,
   TaskViewDto,
@@ -15,9 +17,11 @@ type OverviewPaneProps = {
 
 type RunPaneProps = {
   run?: NodeRunViewDto;
-  liveLines: string[];
+  streamLines: string[];
+  streamSource: "live" | "replay" | "loading" | "none";
   isCurrentRun: boolean;
   artifactCount: number;
+  showEmptyOutput: boolean;
 };
 
 type ArtifactPaneProps = {
@@ -37,6 +41,7 @@ type ApprovalDockProps = {
 
 type ClarificationDockProps = {
   nodeName?: string;
+  requestKey?: string;
   questions: InputQuestionDto[];
   answers: Array<string | string[]>;
   setAnswer: (index: number, value: string | string[]) => void;
@@ -52,9 +57,11 @@ type RetryDockProps = {
 };
 
 type FollowUpDockProps = {
-  configLabel: string;
+  configEntries: ConfigCatalogEntryDto[];
+  followUpConfigAlias: string;
   followUpDescription: string;
   setFollowUpDescription: (value: string) => void;
+  onConfigChange: (alias: string) => void;
   submittingFollowUp: boolean;
   onStartFollowUp: () => Promise<void>;
 };
@@ -68,11 +75,9 @@ type BlockedDockProps = {
 function PanelHeader({
   title,
   subtitle,
-  action,
 }: {
   title: string;
   subtitle: string;
-  action?: ReactNode;
 }) {
   return (
     <div className="detail-pane__header">
@@ -80,8 +85,74 @@ function PanelHeader({
         <h3>{title}</h3>
         <p>{subtitle}</p>
       </div>
-      {action}
     </div>
+  );
+}
+
+function DetailInfoCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+}) {
+  return (
+    <div className="detail-info-card">
+      <span className="detail-info-card__label">{label}</span>
+      <strong className="detail-info-card__value">{value}</strong>
+      {detail ? <p className="detail-info-card__detail">{detail}</p> : null}
+    </div>
+  );
+}
+
+function DetailSection({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`detail-section${className ? ` ${className}` : ""}`}>
+      <span className="detail-section__label">{label}</span>
+      {children}
+    </section>
+  );
+}
+
+function DetailSurface({
+  label,
+  children,
+  className = "",
+  bodyClassName = "",
+  testId,
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+  testId?: string;
+}) {
+  return (
+    <section
+      className={`detail-surface-card${className ? ` ${className}` : ""}`}
+      data-testid={testId}
+    >
+      <div className="detail-surface-card__header">
+        <span className="detail-surface-card__label">{label}</span>
+      </div>
+      <div
+        className={`detail-surface-card__body${
+          bodyClassName ? ` ${bodyClassName}` : ""
+        }`}
+      >
+        {children}
+      </div>
+    </section>
   );
 }
 
@@ -145,12 +216,13 @@ function DocumentPreview({ content }: { content: string }) {
 function formatRunSubtitle(run: NodeRunViewDto) {
   const started = run.started_at ? run.started_at.slice(11, 16) : undefined;
   const completed = run.completed_at ? run.completed_at.slice(11, 16) : undefined;
-  const pieces = [run.status.toLowerCase()];
+  const status = detailStatusLabel(run.status);
+  const pieces: string[] = [status];
   if (started) {
     pieces.push(`started ${started}`);
   }
   if (completed) {
-    pieces.push(`ended ${completed}`);
+    pieces.push(`${status.includes("await") ? "paused" : "ended"} ${completed}`);
   }
   return pieces.join(" · ");
 }
@@ -169,6 +241,33 @@ function formatClarificationAnswer(selected: unknown): string {
   return typeof selected === "string" ? selected : "";
 }
 
+function RecoveryCard({
+  tone,
+  title,
+  description,
+  actions,
+  testId,
+}: {
+  tone: "failed" | "blocked";
+  title: string;
+  description: string;
+  actions: ReactNode;
+  testId: string;
+}) {
+  return (
+    <section
+      className={`detail-recovery-card detail-recovery-card--${tone}`}
+      data-testid={testId}
+    >
+      <div className="detail-recovery-card__copy">
+        <strong className="detail-recovery-card__title">{title}</strong>
+        <p className="detail-recovery-card__description">{description}</p>
+      </div>
+      <div className="detail-recovery-card__actions">{actions}</div>
+    </section>
+  );
+}
+
 export function TaskOverviewPane({
   task,
   runCount,
@@ -177,34 +276,36 @@ export function TaskOverviewPane({
   return (
     <div className="detail-pane" data-testid="overview-pane">
       <PanelHeader
-        subtitle="Overview"
+        subtitle="Task summary and task-level actions"
         title={task?.task.description || "Task"}
       />
-      <div className="detail-overview-grid">
-        <div className="detail-overview-card">
-          <span className="field-block__label">Status</span>
-          <strong>{task?.status ?? "Unknown"}</strong>
-          <p>Current node: {task?.current_node_name || "None"}</p>
-        </div>
-        <div className="detail-overview-card">
-          <span className="field-block__label">Runs</span>
-          <strong>{runCount}</strong>
-          <p>Recorded node runs for this task.</p>
-        </div>
-        <div className="detail-overview-card">
-          <span className="field-block__label">Artifacts</span>
-          <strong>{artifactCount}</strong>
-          <p>Outputs produced across the recorded runs.</p>
-        </div>
+
+      <div className="detail-info-cards">
+        <DetailInfoCard
+          detail={task?.current_node_name || "No active node"}
+          label="Status"
+          value={task ? detailStatusLabel(task.status) : "Unknown"}
+        />
+        <DetailInfoCard
+          detail="Across task history"
+          label="Runs"
+          value={runCount}
+        />
+        <DetailInfoCard
+          detail="Files and previews attached to the task"
+          label="Artifacts"
+          value={artifactCount}
+        />
       </div>
+
       {task?.current_issue ? (
-        <div className="detail-callout detail-callout--issue">
-          <div className="detail-callout__eyebrow">Current issue</div>
+        <section className="detail-note-card detail-note-card--warning">
+          <span className="detail-section__label">Current issue</span>
           <strong>{task.current_issue.reason}</strong>
           <p>
             {task.current_issue.node_name} · iteration {task.current_issue.iteration}
           </p>
-        </div>
+        </section>
       ) : null}
     </div>
   );
@@ -212,18 +313,20 @@ export function TaskOverviewPane({
 
 export function TaskRunPane({
   run,
-  liveLines,
+  streamLines,
+  streamSource,
   isCurrentRun,
   artifactCount,
+  showEmptyOutput,
 }: RunPaneProps) {
   if (!run) {
     return (
       <div className="detail-pane" data-testid="run-pane">
         <PanelHeader
-          subtitle="Run detail"
-          title="Select a run"
+          subtitle="Select a run from the navigator to inspect its detail."
+          title="Run detail"
         />
-        <div className="live-output-empty">
+        <div className="detail-empty-card">
           <strong>No run selected</strong>
           <p>Choose a run from the navigator to inspect its history, outputs, and artifacts.</p>
         </div>
@@ -234,47 +337,27 @@ export function TaskRunPane({
   const liveTitle = `Run · ${run.node_name}`;
   const resultContent = prettyResult(run.result);
   const clarificationHistory = run.clarifications ?? [];
-  const hasLiveOutput = isCurrentRun && liveLines.length > 0;
+  const hasStreamOutput = streamLines.length > 0;
 
   return (
     <div
       className="detail-pane detail-pane--run"
-      data-testid={hasLiveOutput ? "live-pane" : "run-pane"}
+      data-testid={streamSource === "live" ? "live-pane" : "run-pane"}
     >
       <PanelHeader subtitle={formatRunSubtitle(run)} title={liveTitle} />
 
-      <div className="detail-record-list">
-        <div className="detail-record-row">
-          <span className="field-block__label">Node</span>
-          <span>{run.node_name}</span>
-        </div>
-        <div className="detail-record-row">
-          <span className="field-block__label">Status</span>
-          <span>{run.status}</span>
-        </div>
-        <div className="detail-record-row">
-          <span className="field-block__label">Artifacts</span>
-          <span>{artifactCount}</span>
-        </div>
+      <div className="detail-info-cards">
+        <DetailInfoCard label="Node" value={run.node_name} />
+        <DetailInfoCard label="Status" value={detailStatusLabel(run.status)} />
+        <DetailInfoCard label="Artifacts" value={artifactCount} />
         {run.triggered_by ? (
-          <div className="detail-record-row">
-            <span className="field-block__label">Triggered by</span>
-            <span>{run.triggered_by.reason}</span>
-          </div>
+          <DetailInfoCard label="Triggered by" value={run.triggered_by.reason} />
         ) : null}
       </div>
 
-      {run.failure_reason ? (
-        <div className="detail-callout detail-callout--issue">
-          <div className="detail-callout__eyebrow">Failure reason</div>
-          <strong>{run.failure_reason}</strong>
-        </div>
-      ) : null}
-
       {clarificationHistory.length > 0 ? (
-        <div className="detail-pane__section">
-          <span className="field-block__label">Clarification history</span>
-          <div className="clarification-history">
+        <DetailSection label="Clarifications">
+          <div className="detail-list-card">
             {clarificationHistory.map((exchange, index) => {
               const request = (exchange.request ?? {}) as {
                 questions?: Array<{ question?: string }>;
@@ -283,7 +366,7 @@ export function TaskRunPane({
                 answers?: Array<{ selected?: unknown }>;
               };
               return (
-                <div className="clarification-history__item" key={`${run.id}-clarification-${index}`}>
+                <div className="detail-list-card__row" key={`${run.id}-clarification-${index}`}>
                   <strong>
                     {request.questions?.[0]?.question ?? `Clarification ${index + 1}`}
                   </strong>
@@ -299,21 +382,41 @@ export function TaskRunPane({
               );
             })}
           </div>
-        </div>
+        </DetailSection>
       ) : null}
 
-      {hasLiveOutput ? (
-        <div className="live-output-surface">
-          <pre className="detail-code-block">{liveLines.join("\n")}</pre>
-        </div>
-      ) : resultContent ? (
-        <pre className="detail-code-block">{resultContent}</pre>
-      ) : (
-        <div className="live-output-empty">
-          <strong>No persisted stream for this run</strong>
-          <p>Use the navigator artifacts or current action surface to inspect what happened in this step.</p>
-        </div>
-      )}
+      {hasStreamOutput || resultContent || showEmptyOutput ? (
+        <DetailSurface
+          bodyClassName="detail-output-card"
+          label="Output"
+          testId="detail-output-surface"
+        >
+          {hasStreamOutput ? (
+            <pre className="detail-code-block">{streamLines.join("\n")}</pre>
+          ) : resultContent ? (
+            <pre className="detail-code-block">{resultContent}</pre>
+          ) : streamSource === "loading" ? (
+            <div className="detail-empty-card detail-empty-card--embedded">
+              <strong>Loading run history…</strong>
+              <p>Fetching persisted session events for this node run.</p>
+            </div>
+          ) : isCurrentRun ? (
+            <div className="detail-empty-card detail-empty-card--embedded">
+              <strong>Waiting for live output…</strong>
+              <p>
+                {run.session_id
+                  ? `Live stream events for session ${run.session_id} will appear here when the executor emits them.`
+                  : "This run is active. Stream events will appear here when the executor emits them."}
+              </p>
+            </div>
+          ) : (
+            <div className="detail-empty-card detail-empty-card--embedded">
+              <strong>No persisted stream for this run</strong>
+              <p>Use the navigator artifacts or current action surface to inspect what happened in this step.</p>
+            </div>
+          )}
+        </DetailSurface>
+      ) : null}
     </div>
   );
 }
@@ -326,15 +429,23 @@ export function TaskArtifactPane({
   return (
     <div className="detail-pane" data-testid="artifact-pane">
       <PanelHeader
-        subtitle={artifact?.source_label ?? "artifact"}
+        subtitle={artifact?.node_name ?? "Artifact preview"}
         title={artifact?.preview_name ? `Preview · ${artifact.preview_name}` : "Preview"}
       />
+
       {error ? <p className="screen-error">{error}</p> : null}
-      {artifact?.markdown && content ? (
-        <DocumentPreview content={content} />
-      ) : (
-        <pre className="detail-document">{content ?? "Loading artifact..."}</pre>
-      )}
+
+      <DetailSurface
+        bodyClassName="detail-output-card detail-output-card--artifact"
+        label="Preview"
+        testId="detail-preview-surface"
+      >
+        {artifact?.markdown && content ? (
+          <DocumentPreview content={content} />
+        ) : (
+          <pre className="detail-document">{content ?? "Loading artifact..."}</pre>
+        )}
+      </DetailSurface>
     </div>
   );
 }
@@ -348,41 +459,46 @@ export function TaskApprovalDock({
   nodeName,
 }: ApprovalDockProps) {
   return (
-    <div className="detail-action-card" data-testid="approval-pane">
-      <div className="detail-action-card__meta">
-        <span>{nodeName ? `${nodeName} needs approval` : "Approval required"}</span>
+    <section className="detail-surface-panel" data-testid="approval-pane">
+      <div className="detail-surface-panel__header">
+        <span className="detail-surface-panel__title">
+          {nodeName ? `${nodeName} needs approval` : "Approval required"}
+        </span>
       </div>
-      <div className="approval-actions">
-        <button
-          className="primary-action"
-          data-testid="approval-approve"
-          disabled={submittingDecision}
-          onClick={() => void submitApprove()}
-          type="button"
-        >
-          Approve
-        </button>
-        <button
-          className="secondary-action secondary-action--danger"
-          data-testid="approval-reject"
-          disabled={submittingDecision}
-          onClick={() => void submitReject()}
-          type="button"
-        >
-          Reject
-        </button>
+      <div className="detail-surface-panel__body">
+        <label className="field-block">
+          <span className="field-block__hint">Feedback (optional)</span>
+          <textarea
+            className="approval-feedback approval-feedback--compact"
+            onChange={(event) => setFeedback(event.target.value)}
+            placeholder="Add feedback…"
+            rows={2}
+            value={feedback}
+          />
+        </label>
+
+        <div className="detail-surface-panel__footer">
+          <button
+            className="secondary-action secondary-action--danger"
+            data-testid="approval-reject"
+            disabled={submittingDecision}
+            onClick={() => void submitReject()}
+            type="button"
+          >
+            Reject
+          </button>
+          <button
+            className="primary-action"
+            data-testid="approval-approve"
+            disabled={submittingDecision}
+            onClick={() => void submitApprove()}
+            type="button"
+          >
+            Approve
+          </button>
+        </div>
       </div>
-      <label className="field-block">
-        <span className="field-block__hint">Feedback (optional)</span>
-        <textarea
-          className="approval-feedback approval-feedback--compact"
-          onChange={(event) => setFeedback(event.target.value)}
-          placeholder="Add feedback…"
-          rows={2}
-          value={feedback}
-        />
-      </label>
-    </div>
+    </section>
   );
 }
 
@@ -391,103 +507,253 @@ function ClarificationQuestionField({
   index,
   answer,
   setAnswer,
+  labelId,
+  descriptionId,
 }: {
   question: InputQuestionDto;
   index: number;
   answer: string | string[];
   setAnswer: (index: number, value: string | string[]) => void;
+  labelId: string;
+  descriptionId?: string;
 }) {
   const options = question.options ?? [];
   const isMultiSelect = question.multi_select;
 
+  if (options.length === 0) {
+    return (
+      <textarea
+        aria-describedby={descriptionId}
+        aria-labelledby={labelId}
+        className="approval-feedback approval-feedback--compact"
+        onChange={(event) => setAnswer(index, event.target.value)}
+        placeholder="Answer this clarification…"
+        rows={3}
+        value={typeof answer === "string" ? answer : answer.join(", ")}
+      />
+    );
+  }
+
+  const isOther = !isMultiSelect
+    ? typeof answer === "string" && !options.some((o) => o.label === answer) && answer !== ""
+    : false;
+  const [otherText, setOtherText] = useState(isOther ? (answer as string) : "");
+  const otherSelected = isOther || (!isMultiSelect && answer === `__other__:${otherText}`);
+
   return (
-    <div className="clarification-question">
-      <div className="clarification-question__copy">
-        <strong>{question.question}</strong>
-        {question.why_it_matters ? <p>{question.why_it_matters}</p> : null}
-      </div>
-      {options.length > 0 ? (
-        <div className="clarification-question__options">
-          {options.map((option) => {
-            const checked = Array.isArray(answer)
-              ? answer.includes(option.label)
-              : answer === option.label;
-            return (
-              <label className="clarification-option" key={option.label}>
-                <input
-                  checked={checked}
-                  name={`clarification-${index}`}
-                  onChange={(event) => {
-                    if (isMultiSelect) {
-                      const current = Array.isArray(answer) ? answer : [];
-                      const next = event.target.checked
-                        ? [...new Set([...current, option.label])]
-                        : current.filter((entry) => entry !== option.label);
-                      setAnswer(index, next);
-                    } else {
-                      setAnswer(index, option.label);
-                    }
-                  }}
-                  type={isMultiSelect ? "checkbox" : "radio"}
-                />
-                <span>
-                  <strong>{option.label}</strong>
-                  {option.description ? <small>{option.description}</small> : null}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      ) : (
-        <textarea
-          className="approval-feedback approval-feedback--compact"
-          onChange={(event) => setAnswer(index, event.target.value)}
-          placeholder="Answer this clarification…"
-          rows={2}
-          value={typeof answer === "string" ? answer : answer.join(", ")}
+    <div className={`detail-choice-list${isMultiSelect ? " detail-choice-list--multi" : ""}`}>
+      {options.map((option) => {
+        const checked = Array.isArray(answer)
+          ? answer.includes(option.label)
+          : answer === option.label;
+        return (
+          <label className={`detail-choice${checked ? " is-selected" : ""}`} key={option.label}>
+            <input
+              checked={checked}
+              className="detail-choice__input"
+              name={`clarification-${index}`}
+              onChange={(event) => {
+                if (isMultiSelect) {
+                  const current = Array.isArray(answer) ? answer : [];
+                  const next = event.target.checked
+                    ? [...new Set([...current, option.label])]
+                    : current.filter((entry) => entry !== option.label);
+                  setAnswer(index, next);
+                } else {
+                  setAnswer(index, option.label);
+                }
+              }}
+              type={isMultiSelect ? "checkbox" : "radio"}
+            />
+            <span className="detail-choice__control" aria-hidden="true" />
+            <span className="detail-choice__copy">
+              <strong>{option.label}</strong>
+              {option.description ? <small>{option.description}</small> : null}
+            </span>
+          </label>
+        );
+      })}
+      <label className={`detail-choice detail-choice--other${otherSelected ? " is-selected" : ""}`}>
+        <input
+          checked={otherSelected}
+          className="detail-choice__input"
+          name={`clarification-${index}`}
+          onChange={() => {
+            if (isMultiSelect) {
+              const current = Array.isArray(answer) ? answer : [];
+              if (!otherText) return;
+              if (!current.includes(otherText)) {
+                setAnswer(index, [...current, otherText]);
+              }
+            } else {
+              setAnswer(index, otherText || "");
+            }
+          }}
+          type={isMultiSelect ? "checkbox" : "radio"}
         />
-      )}
+        <span className="detail-choice__control" aria-hidden="true" />
+        <span className="detail-choice__copy detail-choice__copy--other">
+          <strong>Other:</strong>
+          <input
+            className="detail-choice__other-input"
+            onChange={(event) => {
+              setOtherText(event.target.value);
+              if (isMultiSelect) {
+                const current = Array.isArray(answer) ? answer : [];
+                const withoutOld = current.filter((v) => v !== otherText);
+                if (event.target.value) {
+                  setAnswer(index, [...withoutOld, event.target.value]);
+                } else {
+                  setAnswer(index, withoutOld);
+                }
+              } else {
+                setAnswer(index, event.target.value);
+              }
+            }}
+            onFocus={() => {
+              if (!isMultiSelect) {
+                setAnswer(index, otherText || "");
+              }
+            }}
+            placeholder="Type your own answer..."
+            type="text"
+            value={otherText}
+          />
+        </span>
+      </label>
     </div>
   );
 }
 
 export function TaskClarificationDock({
   nodeName,
+  requestKey,
   questions,
   answers,
   setAnswer,
   submittingClarification,
   submitClarification,
 }: ClarificationDockProps) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [requestKey]);
+
+  useEffect(() => {
+    setActiveIndex((current) =>
+      Math.min(current, Math.max(questions.length - 1, 0)),
+    );
+  }, [questions.length]);
+
+  const activeQuestion = questions[activeIndex];
+  const activeAnswer = answers[activeIndex] ?? (activeQuestion?.multi_select ? [] : "");
+  const questionId = `clarification-question-${requestKey ?? "task"}-${activeIndex}`;
+  const descriptionId = activeQuestion?.why_it_matters
+    ? `clarification-why-${requestKey ?? "task"}-${activeIndex}`
+    : undefined;
+
   return (
-    <div className="detail-action-card" data-testid="clarification-pane">
-      <div className="detail-action-card__meta">
-        <span>
-          {nodeName ? `${nodeName} needs clarification` : "Clarification required"}
+    <section className="detail-surface-panel" data-testid="clarification-pane">
+      <div className="detail-surface-panel__header detail-surface-panel__header--attention">
+        <span className="detail-surface-panel__title">
+          <svg
+            aria-hidden="true"
+            className="detail-surface-panel__title-icon"
+            fill="none"
+            height="14"
+            viewBox="0 0 14 14"
+            width="14"
+          >
+            <path
+              d="M4.667 10.5 2.333 11.667V3.5a1.167 1.167 0 0 1 1.167-1.167h7a1.167 1.167 0 0 1 1.167 1.167v5.833A1.167 1.167 0 0 1 10.5 10.5H4.667Z"
+              stroke="currentColor"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="1.1"
+            />
+          </svg>
+          {nodeName ? `${nodeName} needs clarification` : "Clarification needed"}
         </span>
+        {questions.length > 1 ? (
+          <div className="detail-clarification__nav">
+            <button
+              aria-label="Previous clarification"
+              className="detail-clarification__nav-button"
+              disabled={activeIndex === 0}
+              onClick={() => setActiveIndex((current) => Math.max(current - 1, 0))}
+              type="button"
+            >
+              <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 14 14" width="14">
+                <path
+                  d="M8.75 3.5 5.25 7l3.5 3.5"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.2"
+                />
+              </svg>
+            </button>
+            <span className="detail-clarification__nav-count">
+              {activeIndex + 1} / {questions.length}
+            </span>
+            <button
+              aria-label="Next clarification"
+              className="detail-clarification__nav-button"
+              disabled={activeIndex === questions.length - 1}
+              onClick={() =>
+                setActiveIndex((current) => Math.min(current + 1, questions.length - 1))
+              }
+              type="button"
+            >
+              <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 14 14" width="14">
+                <path
+                  d="M5.25 3.5 8.75 7l-3.5 3.5"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.2"
+                />
+              </svg>
+            </button>
+          </div>
+        ) : null}
       </div>
-      <div className="clarification-form">
-        {questions.map((question, index) => (
-          <ClarificationQuestionField
-            answer={answers[index] ?? (question.multi_select ? [] : "")}
-            index={index}
-            key={`${question.question}-${index}`}
-            question={question}
-            setAnswer={setAnswer}
-          />
-        ))}
+
+      <div className="detail-surface-panel__body">
+        {activeQuestion ? (
+          <div className="detail-clarification__question">
+            <div className="detail-clarification__copy">
+              <strong id={questionId}>{activeQuestion.question}</strong>
+              {activeQuestion.why_it_matters ? (
+                <p id={descriptionId}>{activeQuestion.why_it_matters}</p>
+              ) : null}
+            </div>
+            <ClarificationQuestionField
+              answer={activeAnswer}
+              index={activeIndex}
+              descriptionId={descriptionId}
+              labelId={questionId}
+              question={activeQuestion}
+              setAnswer={setAnswer}
+            />
+          </div>
+        ) : (
+          <p className="muted-copy">No clarification questions were provided.</p>
+        )}
+
+        <div className="detail-surface-panel__footer">
+          <button
+            className="primary-action"
+            disabled={submittingClarification}
+            onClick={() => void submitClarification()}
+            type="button"
+          >
+            {submittingClarification ? "Sending…" : "Submit"}
+          </button>
+        </div>
       </div>
-      <div className="approval-actions">
-        <button
-          className="primary-action"
-          disabled={submittingClarification}
-          onClick={() => void submitClarification()}
-          type="button"
-        >
-          {submittingClarification ? "Sending…" : "Send response"}
-        </button>
-      </div>
-    </div>
+    </section>
   );
 }
 
@@ -498,14 +764,8 @@ export function TaskRetryDock({
   onRetry,
 }: RetryDockProps) {
   return (
-    <div className="detail-action-card" data-testid="failed-pane">
-      <div className="detail-action-card__meta">
-        <span>{run?.node_name ? `Retry ${run.node_name}` : "Retry this run"}</span>
-      </div>
-      <div className="failure-panel__summary">
-        <strong>{failureReason ?? "The current task requires intervention."}</strong>
-      </div>
-      <div className="failure-panel__actions">
+    <RecoveryCard
+      actions={
         <button
           className="primary-action"
           data-testid="retry-step"
@@ -513,59 +773,79 @@ export function TaskRetryDock({
           onClick={() => void onRetry(false)}
           type="button"
         >
-          Retry step
+          {submittingRetry ? "Retrying…" : "Retry"}
         </button>
-        <button
-          className="secondary-action"
-          data-testid="force-retry-step"
-          disabled={submittingRetry || !run}
-          onClick={() => void onRetry(true)}
-          type="button"
-        >
-          Force retry
-        </button>
-      </div>
-    </div>
+      }
+      description={failureReason ?? "The current task requires intervention."}
+      testId="failed-pane"
+      title={run?.node_name ? `Task failed at ${run.node_name} node` : "Task failed"}
+      tone="failed"
+    />
   );
 }
 
 export function TaskFollowUpDock({
-  configLabel,
+  configEntries,
+  followUpConfigAlias,
   followUpDescription,
   setFollowUpDescription,
+  onConfigChange,
   submittingFollowUp,
   onStartFollowUp,
 }: FollowUpDockProps) {
+  const launchable = configEntries.filter((e) => e.launchable);
+  const selectedDescription = launchable.find((e) => e.alias === followUpConfigAlias)?.description;
+
   return (
-    <div className="detail-action-card" data-testid="complete-pane">
-      <div className="detail-action-card__meta">
-        <span>Follow-up task</span>
+    <section className="detail-surface-panel" data-testid="complete-pane">
+      <div className="detail-surface-panel__header">
+        <span className="detail-surface-panel__title">Follow-up task</span>
       </div>
-      <label className="field-block">
-        <textarea
-          className="approval-feedback approval-feedback--compact"
-          data-testid="follow-up-description"
-          onChange={(event) => setFollowUpDescription(event.target.value)}
-          placeholder="Continue from here..."
-          rows={2}
-          value={followUpDescription}
-        />
-      </label>
-      <div className="complete-panel__footer">
-        <span className="status-badge status-badge--neutral status-badge--mono">
-          {configLabel}
-        </span>
-        <button
-          className="primary-action"
-          data-testid="start-follow-up"
-          disabled={submittingFollowUp || !followUpDescription.trim()}
-          onClick={() => void onStartFollowUp()}
-          type="button"
-        >
-          {submittingFollowUp ? "Starting…" : "Start"}
-        </button>
+      <div className="detail-surface-panel__body">
+        {launchable.length > 1 ? (
+          <div className="follow-up-config">
+            <div className="follow-up-config__pills">
+              {launchable.map((entry) => (
+                <button
+                  className={`follow-up-config__pill${entry.alias === followUpConfigAlias ? " is-selected" : ""}`}
+                  key={entry.alias}
+                  onClick={() => onConfigChange(entry.alias)}
+                  type="button"
+                >
+                  {entry.alias}
+                </button>
+              ))}
+            </div>
+            {selectedDescription ? (
+              <span className="follow-up-config__desc">{selectedDescription}</span>
+            ) : null}
+          </div>
+        ) : null}
+        <label className="field-block">
+          <span className="field-block__label">Describe the follow-up</span>
+          <textarea
+            aria-label="Describe the follow-up"
+            className="approval-feedback approval-feedback--compact"
+            data-testid="follow-up-description"
+            onChange={(event) => setFollowUpDescription(event.target.value)}
+            placeholder="Continue from here..."
+            rows={3}
+            value={followUpDescription}
+          />
+        </label>
+        <div className="detail-surface-panel__footer">
+          <button
+            className="primary-action"
+            data-testid="start-follow-up"
+            disabled={submittingFollowUp || !followUpDescription.trim()}
+            onClick={() => void onStartFollowUp()}
+            type="button"
+          >
+            {submittingFollowUp ? "Starting…" : "Start follow-up"}
+          </button>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -575,18 +855,8 @@ export function TaskBlockedDock({
   onContinue,
 }: BlockedDockProps) {
   return (
-    <div className="detail-action-card" data-testid="blocked-pane">
-      <div className="detail-action-card__meta">
-        <span>
-          {blockedStep?.node_name
-            ? `Continue ${blockedStep.node_name}`
-            : "Continue task"}
-        </span>
-      </div>
-      <div className="blocked-callout">
-        <strong>{blockedStep?.reason ?? "The current task is waiting to continue."}</strong>
-      </div>
-      <div className="failure-panel__actions">
+    <RecoveryCard
+      actions={
         <button
           className="primary-action"
           data-testid="continue-blocked"
@@ -596,7 +866,15 @@ export function TaskBlockedDock({
         >
           {submittingContinue ? "Continuing…" : "Continue"}
         </button>
-      </div>
-    </div>
+      }
+      description={blockedStep?.reason ?? "The current task is waiting to continue."}
+      testId="blocked-pane"
+      title={
+        blockedStep?.node_name
+          ? `Task paused at ${blockedStep.node_name}`
+          : "Task is waiting to continue"
+      }
+      tone="blocked"
+    />
   );
 }

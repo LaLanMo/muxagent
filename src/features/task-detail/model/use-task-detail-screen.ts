@@ -1,16 +1,19 @@
 import { useParams } from "react-router-dom";
 import {
   buildStageNodes,
+  detailStatusTitle,
   latestRun,
   stageStatusForNode,
   statusTone,
   taskBucket,
 } from "@/domain/task-shell";
 import { useShellModel } from "@/features/app/model/use-shell-model";
+import { useWorkspaceStore } from "@/state/workspace-store";
 import { useTaskDetailActions } from "@/features/task-detail/model/use-task-detail-actions";
 import { useTaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
 import { useTaskDetailData } from "@/features/task-detail/model/use-task-detail-data";
 import { useTaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
+import { useTaskRunHistory } from "@/features/task-detail/model/use-task-run-history";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
@@ -19,6 +22,10 @@ import type {
 } from "@/rpc/types";
 
 const emptyArtifacts: ArtifactRefDto[] = [];
+function isOpenRun(run: NodeRunViewDto) {
+  const status = run.status.toLowerCase();
+  return status.includes("run") || status.includes("await");
+}
 
 export type TaskDetailActionSurface =
   | {
@@ -48,10 +55,13 @@ export type TaskDetailActionSurface =
       kind: "none";
     };
 
+const emptyConfigEntries: import("@/rpc/types").ConfigCatalogEntryDto[] = [];
+
 export function useTaskDetailScreen() {
   const shell = useShellModel();
   const { taskId = "", workspaceId = "" } = useParams();
-  const { task: resolvedTask, detailEntry, liveOutput, loadDetail } =
+  const configEntries = useWorkspaceStore((state) => state.catalog?.entries) ?? emptyConfigEntries;
+  const { task: resolvedTask, detailEntry, liveOutput, liveOutputRunId, loadDetail } =
     useTaskDetailData({
       workspaceId,
       taskId,
@@ -81,16 +91,30 @@ export function useTaskDetailScreen() {
   });
   const { artifactContent, artifactError } =
     useTaskDetailArtifactPreview(selectedArtifact);
+  const selectedRunHistory = useTaskRunHistory({
+    workspaceId,
+    taskId,
+    connected: shell.phase === "connected",
+    selectedRun,
+    detailEntry,
+  });
 
   const stageNodes = resolvedTask ? buildStageNodes(resolvedTask) : [];
   const latest = resolvedTask ? latestRun(resolvedTask) : undefined;
+  const currentRun = navigatorRuns.length
+    ? [...navigatorRuns].reverse().find((run) => isOpenRun(run))
+    : undefined;
   const latestFailedRun = navigatorRuns.length
     ? [...navigatorRuns]
         .reverse()
         .find((run) => run.status.toLowerCase().includes("fail"))
     : undefined;
+  const retryRun =
+    resolvedTask && taskBucket(resolvedTask) === "failed"
+      ? latestFailedRun
+      : undefined;
   const failureReason =
-    latestFailedRun?.failure_reason || resolvedTask?.current_issue?.reason || undefined;
+    retryRun?.failure_reason || resolvedTask?.current_issue?.reason || undefined;
   const {
     feedback,
     setFeedback,
@@ -100,6 +124,8 @@ export function useTaskDetailScreen() {
     submittingClarification,
     followUpDescription,
     setFollowUpDescription,
+    followUpConfigAlias,
+    setFollowUpConfigAlias,
     submittingFollowUp,
     submittingRetry,
     submittingContinue,
@@ -114,7 +140,7 @@ export function useTaskDetailScreen() {
     taskId,
     task: resolvedTask,
     inputRequest,
-    latestFailedRunId: latestFailedRun?.id,
+    latestFailedRunId: retryRun?.id,
     loadDetail,
   });
   const blockedRun = latestBlockedStep
@@ -127,7 +153,7 @@ export function useTaskDetailScreen() {
       ? navigatorRuns.find((run) => run.id === inputRequest.node_run_id)
       : undefined) ??
     blockedRun ??
-    latestFailedRun;
+    retryRun;
   const actionSurface: TaskDetailActionSurface = inputRequest
     ? inputRequest.kind === "clarification"
       ? {
@@ -146,10 +172,10 @@ export function useTaskDetailScreen() {
           blockedStep: latestBlockedStep,
           run: actionRun,
         }
-      : latestFailedRun
+      : retryRun
         ? {
             kind: "retry",
-            run: latestFailedRun,
+            run: retryRun,
             failureReason,
           }
         : resolvedTask && taskBucket(resolvedTask) === "done"
@@ -172,6 +198,8 @@ export function useTaskDetailScreen() {
     artifacts,
     inputRequest,
     liveOutput,
+    liveOutputRunId,
+    selectedRunHistory,
     feedback,
     setFeedback,
     clarificationAnswers,
@@ -180,6 +208,8 @@ export function useTaskDetailScreen() {
     submittingClarification,
     followUpDescription,
     setFollowUpDescription,
+    followUpConfigAlias,
+    setFollowUpConfigAlias,
     submittingFollowUp,
     submittingRetry,
     submittingContinue,
@@ -193,11 +223,13 @@ export function useTaskDetailScreen() {
         }))
       : [],
     title: resolvedTask?.task.description || resolvedTask?.task.id || "Task detail",
-    statusLabel: resolvedTask?.status || "running",
+    statusLabel: resolvedTask ? detailStatusTitle(resolvedTask.status) : "Running",
     statusTone: resolvedTask ? statusTone(resolvedTask.status) : "neutral",
     configLabel: resolvedTask?.task.config_alias || "default",
+    configEntries,
     elapsedLabel: latest?.started_at ? latest.started_at : "",
     timelineRuns: navigatorRuns,
+    currentRun,
     latestRun: latest,
     selectOverview,
     selectRun,

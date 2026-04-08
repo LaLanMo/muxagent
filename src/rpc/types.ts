@@ -409,10 +409,26 @@ export interface TaskGetResult {
   task: TaskViewDto;
   config?: ConfigViewDto;
   input_request?: InputRequestDto;
+  live_output?: string[];
+  live_output_run_id?: string;
 }
 
 export interface TaskInputRequestResult {
   input_request?: InputRequestDto;
+}
+
+export interface RunHistoryChunkDto {
+  recorded_at: string;
+  progress: ProgressInfoDto;
+}
+
+export interface TaskRunHistoryResult {
+  task_id: string;
+  node_run_id: string;
+  session_id?: string;
+  source: string;
+  complete: boolean;
+  history?: RunHistoryChunkDto[];
 }
 
 export interface ArtifactRefDto {
