@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
@@ -166,7 +167,8 @@ export function ConfigEditorScreen({
                       onClick={addNode}
                       type="button"
                     >
-                      + Node
+                      <Plus aria-hidden="true" size={14} strokeWidth={2.2} />
+                      <span>Node</span>
                     </button>
                     {selectedNodeName ? (
                       <button
@@ -529,7 +531,8 @@ export function ConfigEditorScreen({
                           onClick={addOutgoingEdge}
                           type="button"
                         >
-                          + Edge
+                          <Plus aria-hidden="true" size={14} strokeWidth={2.2} />
+                          <span>Edge</span>
                         </button>
                       </div>
                       <div className="config-edges">

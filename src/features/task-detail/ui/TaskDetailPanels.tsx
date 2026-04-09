@@ -1,4 +1,10 @@
 import { useEffect, useState, type ReactNode } from "react";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  MessageCircle,
+} from "lucide-react";
 import type { TranscriptSnapshot } from "@/domain/session-history";
 import { detailStatusLabel } from "@/domain/task-shell";
 import { DocumentContent } from "@/features/shared/ui/DocumentContent";
@@ -378,39 +384,23 @@ function summarizeToolKinds(tools: ToolItem[]): string {
 
 function ExpandChevron({ open }: { open: boolean }) {
   return (
-    <svg
+    <ChevronRight
       aria-hidden="true"
       className={`transcript-chevron${open ? " transcript-chevron--open" : ""}`}
-      fill="none"
-      height="12"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="12"
-    >
-      <path d="m9 18 6-6-6-6" />
-    </svg>
+      size={12}
+      strokeWidth={2}
+    />
   );
 }
 
 function DoneCheck() {
   return (
-    <svg
+    <Check
       aria-hidden="true"
       className="transcript-status-icon transcript-status-icon--done"
-      fill="none"
-      height="14"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-      viewBox="0 0 24 24"
-      width="14"
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
+      size={14}
+      strokeWidth={2.2}
+    />
   );
 }
 
@@ -1188,22 +1178,12 @@ export function TaskClarificationDock({
     <section className="detail-surface-panel" data-testid="clarification-pane">
       <div className="detail-surface-panel__header detail-surface-panel__header--attention">
         <span className="detail-surface-panel__title">
-          <svg
+          <MessageCircle
             aria-hidden="true"
             className="detail-surface-panel__title-icon"
-            fill="none"
-            height="14"
-            viewBox="0 0 14 14"
-            width="14"
-          >
-            <path
-              d="M4.667 10.5 2.333 11.667V3.5a1.167 1.167 0 0 1 1.167-1.167h7a1.167 1.167 0 0 1 1.167 1.167v5.833A1.167 1.167 0 0 1 10.5 10.5H4.667Z"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1.1"
-            />
-          </svg>
+            size={14}
+            strokeWidth={1.8}
+          />
           {nodeName ? `${nodeName} needs clarification` : "Clarification needed"}
         </span>
         {questions.length > 1 ? (
@@ -1215,15 +1195,7 @@ export function TaskClarificationDock({
               onClick={() => setActiveIndex((current) => Math.max(current - 1, 0))}
               type="button"
             >
-              <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 14 14" width="14">
-                <path
-                  d="M8.75 3.5 5.25 7l3.5 3.5"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.2"
-                />
-              </svg>
+              <ChevronLeft aria-hidden="true" size={14} strokeWidth={1.7} />
             </button>
             <span className="detail-clarification__nav-count">
               {activeIndex + 1} / {questions.length}
@@ -1237,15 +1209,7 @@ export function TaskClarificationDock({
               }
               type="button"
             >
-              <svg aria-hidden="true" fill="none" height="14" viewBox="0 0 14 14" width="14">
-                <path
-                  d="M5.25 3.5 8.75 7l-3.5 3.5"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.2"
-                />
-              </svg>
+              <ChevronRight aria-hidden="true" size={14} strokeWidth={1.7} />
             </button>
           </div>
         ) : null}

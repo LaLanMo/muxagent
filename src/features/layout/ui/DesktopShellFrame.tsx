@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { ShellIcon, type ShellIconName } from "@/features/layout/ui/ShellIcon";
 
@@ -134,9 +135,12 @@ export function DesktopShellFrame({
               onClick={onPrimaryAction}
               type="button"
             >
-              <span aria-hidden="true" className="shell-primary-action__plus">
-                +
-              </span>
+              <Plus
+                aria-hidden="true"
+                className="shell-primary-action__plus"
+                size={14}
+                strokeWidth={2.2}
+              />
               <span>New Task</span>
             </button>
           ) : null}
@@ -160,7 +164,7 @@ export function DesktopShellFrame({
                   onClick={onAddWorkspace}
                   type="button"
                 >
-                  <span aria-hidden="true">+</span>
+                  <Plus aria-hidden="true" size={12} strokeWidth={2.2} />
                 </button>
               ) : null}
             </div>

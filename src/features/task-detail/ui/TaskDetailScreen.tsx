@@ -1,4 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
+  Check,
+  CircleDashed,
+  CircleX,
+  Loader,
+  type LucideIcon,
+} from "lucide-react";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { Link } from "react-router-dom";
 import { formatRelativeTime } from "@/domain/task-shell";
@@ -41,6 +49,19 @@ type StageNode = {
   name: string;
   status: "done" | "current" | "pending" | "failed";
 };
+
+const stageStatusIcons: Record<StageNode["status"], LucideIcon> = {
+  done: Check,
+  current: Loader,
+  pending: CircleDashed,
+  failed: CircleX,
+};
+
+function StageNodeIcon({ status }: { status: StageNode["status"] }) {
+  const Icon = stageStatusIcons[status];
+
+  return <Icon size={10} strokeWidth={2.2} />;
+}
 
 function formatUpdatedStamp(iso: string | undefined) {
   if (!iso) {
@@ -119,13 +140,7 @@ function StageStrip({ nodes }: { nodes: StageNode[] }) {
         {nodes.map((node) => (
           <div className={`stage-node stage-node--${node.status}`} key={node.name}>
             <span className="stage-node__icon" aria-hidden="true">
-              {node.status === "done"
-                ? "✓"
-                : node.status === "current"
-                  ? "•"
-                  : node.status === "failed"
-                    ? "×"
-                    : "○"}
+              <StageNodeIcon status={node.status} />
             </span>
             <span className="stage-node__name">{node.name}</span>
           </div>
@@ -341,21 +356,7 @@ export function TaskDetailScreen({
               data-testid="task-detail-back"
               to="/"
             >
-              <svg
-                aria-hidden="true"
-                fill="none"
-                height="16"
-                viewBox="0 0 16 16"
-                width="16"
-              >
-                <path
-                  d="M9.75 3.5 5.25 8l4.5 4.5"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1.4"
-                />
-              </svg>
+              <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.8} />
             </Link>
             <h1 className="detail-topbar__title">{title}</h1>
           </div>

@@ -17,6 +17,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 28px;
   border-radius: 8px;
   padding: 0 11px;
@@ -143,6 +144,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   min-height: 26px;
   border-radius: 8px;
   padding: 0 10px;

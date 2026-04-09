@@ -1,3 +1,4 @@
+import { Plus } from "lucide-react";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
@@ -57,7 +58,8 @@ export function ConfigsScreen({
           <div className="configs-topbar">
             <span className="screen-meta">{count} configs</span>
             <button className="topbar-action" onClick={() => void createConfig()} type="button">
-              + New Config
+              <Plus aria-hidden="true" size={14} strokeWidth={2.2} />
+              <span>New Config</span>
             </button>
           </div>
         }

@@ -1,85 +1,24 @@
 import { useEffect, useRef } from "react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Folder,
+  GitBranch,
+  SlidersHorizontal,
+  X,
+} from "lucide-react";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 
-/* ── Inline Lucide icons (24x24 viewBox, stroke 2) ── */
+const secondaryIconStyle = {
+  color: "var(--text-secondary)",
+  flexShrink: 0,
+} as const;
 
-const svgBase = {
-  "aria-hidden": true as const,
-  fill: "none",
-  stroke: "currentColor",
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-  strokeWidth: 2,
-  viewBox: "0 0 24 24",
-};
-
-function CloseIcon() {
-  return (
-    <svg {...svgBase} width={16} height={16}>
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
-  );
-}
-
-function FolderIcon() {
-  return (
-    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
-      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
-    </svg>
-  );
-}
-
-function SlidersIcon() {
-  return (
-    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
-      <line x1="4" x2="4" y1="21" y2="14" />
-      <line x1="4" x2="4" y1="10" y2="3" />
-      <line x1="12" x2="12" y1="21" y2="12" />
-      <line x1="12" x2="12" y1="8" y2="3" />
-      <line x1="20" x2="20" y1="21" y2="16" />
-      <line x1="20" x2="20" y1="12" y2="3" />
-      <line x1="2" x2="6" y1="14" y2="14" />
-      <line x1="10" x2="14" y1="8" y2="8" />
-      <line x1="18" x2="22" y1="16" y2="16" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronUpIcon() {
-  return (
-    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>
-      <path d="m18 15-6-6-6 6" />
-    </svg>
-  );
-}
-
-function GitBranchIcon() {
-  return (
-    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
-      <line x1="6" x2="6" y1="3" y2="15" />
-      <circle cx="18" cy="6" r="3" />
-      <circle cx="6" cy="18" r="3" />
-      <path d="M18 9a9 9 0 0 1-9 9" />
-    </svg>
-  );
-}
-
-function CheckIcon({ size = 14, color }: { size?: number; color?: string }) {
-  return (
-    <svg {...svgBase} width={size} height={size} style={{ color: color ?? "currentColor", flexShrink: 0 }}>
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
+const tertiaryIconStyle = {
+  color: "var(--text-tertiary)",
+  flexShrink: 0,
+} as const;
 
 /* ── Helpers ── */
 
@@ -199,7 +138,7 @@ export function NewTaskModal({
         <header className="task-modal__header">
           <h2>New Task</h2>
           <button className="icon-button task-modal__close" onClick={onClose} type="button">
-            <CloseIcon />
+            <X aria-hidden="true" size={16} strokeWidth={2} />
           </button>
         </header>
 
@@ -222,13 +161,23 @@ export function NewTaskModal({
             <span className="field-block__label">Workspace</span>
             <div className="task-modal__ws-card">
               <div className="task-modal__ws-left">
-                <FolderIcon />
+                <Folder
+                  aria-hidden="true"
+                  size={14}
+                  strokeWidth={2}
+                  style={secondaryIconStyle}
+                />
                 <span className="task-modal__ws-name">{selectedWorkspace?.label ?? ""}</span>
               </div>
               <span className="task-modal__ws-path">
                 {shortenPath(selectedWorkspace?.path ?? "")}
               </span>
-              <ChevronDownIcon />
+              <ChevronDown
+                aria-hidden="true"
+                size={14}
+                strokeWidth={2}
+                style={tertiaryIconStyle}
+              />
               <select
                 data-testid="new-task-workspace"
                 onChange={(event) => onTargetWorkspaceChange(event.target.value)}
@@ -260,11 +209,30 @@ export function NewTaskModal({
               />
               <div className="task-modal__cfg-header" onClick={handleHeaderClick}>
                 <div className="task-modal__cfg-left">
-                  <SlidersIcon />
+                  <SlidersHorizontal
+                    aria-hidden="true"
+                    size={14}
+                    strokeWidth={2}
+                    style={secondaryIconStyle}
+                  />
                   <span className="task-modal__cfg-name">{selectedAlias}</span>
                 </div>
                 <span style={{ display: "grid", placeItems: "center" }}>
-                  {configPicking ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                  {configPicking ? (
+                    <ChevronDown
+                      aria-hidden="true"
+                      size={14}
+                      strokeWidth={2}
+                      style={tertiaryIconStyle}
+                    />
+                  ) : (
+                    <ChevronUp
+                      aria-hidden="true"
+                      size={14}
+                      strokeWidth={2}
+                      style={tertiaryIconStyle}
+                    />
+                  )}
                 </span>
               </div>
 
@@ -318,7 +286,12 @@ export function NewTaskModal({
                           {entry.alias}
                         </span>
                         {entry.alias === selectedAlias && (
-                          <CheckIcon size={14} color="var(--accent)" />
+                          <Check
+                            aria-hidden="true"
+                            color="var(--accent)"
+                            size={14}
+                            strokeWidth={2.2}
+                          />
                         )}
                       </div>
                       {entry.description ? (
@@ -348,9 +321,16 @@ export function NewTaskModal({
             <div className="task-modal__wt-card">
               <div className="task-modal__wt-row" onClick={() => onToggleWorktree(!useWorktree)}>
                 <div className={`task-modal__wt-check${useWorktree ? " task-modal__wt-check--checked" : ""}`}>
-                  {useWorktree && <CheckIcon size={10} color="#fff" />}
+                  {useWorktree ? (
+                    <Check aria-hidden="true" color="#fff" size={10} strokeWidth={2.4} />
+                  ) : null}
                 </div>
-                <GitBranchIcon />
+                <GitBranch
+                  aria-hidden="true"
+                  size={14}
+                  strokeWidth={2}
+                  style={secondaryIconStyle}
+                />
                 <span className="task-modal__wt-label">Launch in worktree</span>
               </div>
               <span className="task-modal__wt-desc">Run task in an isolated git worktree branch</span>
