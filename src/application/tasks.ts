@@ -63,7 +63,16 @@ type StartFollowUpFromTaskArgs = {
   configAliasOverride?: string;
 };
 
-type StartFollowUpAndReloadTaskListArgs = StartFollowUpFromTaskArgs;
+type StartFollowUpAndReloadTaskListArgs = StartFollowUpFromTaskArgs & {
+  existingTaskIds?: ReadonlySet<string>;
+  attempts?: number;
+  delayMs?: number;
+};
+
+export type StartFollowUpAndReloadTaskListResult = {
+  tasks: TaskViewDto[];
+  followUpTaskId?: string;
+};
 
 type RetryTaskNodeActionArgs = {
   workspaceId: string;
@@ -307,9 +316,42 @@ export async function startFollowUpFromTask(
 export async function startFollowUpAndReloadTaskList(
   runtime: DesktopRuntime,
   args: StartFollowUpAndReloadTaskListArgs,
-): Promise<TaskViewDto[]> {
+): Promise<StartFollowUpAndReloadTaskListResult> {
   await startFollowUpFromTask(runtime, args);
-  return loadTaskList(runtime, args.workspaceId);
+
+  const trimmedDescription = args.description.trim();
+  const configAlias = args.configAliasOverride ?? args.task.task.config_alias;
+  const existingTaskIds = args.existingTaskIds ?? new Set<string>();
+  const attempts = args.attempts ?? 20;
+  const delayMs = args.delayMs ?? 250;
+
+  let latestTasks: TaskViewDto[] = [];
+  for (let index = 0; index < attempts; index += 1) {
+    latestTasks = await loadTaskList(runtime, args.workspaceId);
+    const followUpTask = latestTasks
+      .filter(
+        (entry) =>
+          entry.task.parent_task_id === args.taskId &&
+          entry.task.description.trim() === trimmedDescription &&
+          entry.task.config_alias === configAlias &&
+          !existingTaskIds.has(entry.task.id),
+      )
+      .sort((left, right) => right.task.created_at.localeCompare(left.task.created_at))[0];
+
+    if (followUpTask) {
+      return {
+        tasks: latestTasks,
+        followUpTaskId: followUpTask.task.id,
+      };
+    }
+
+    if (index < attempts - 1) {
+      // Follow-up creation is async; wait briefly for the new task to appear in the list.
+      await delay(delayMs);
+    }
+  }
+
+  return { tasks: latestTasks };
 }
 
 export async function retryTaskNodeAction(

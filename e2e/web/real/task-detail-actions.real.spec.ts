@@ -95,12 +95,14 @@ test("starts a real follow-up task from a seeded completed task", async ({
     await expect(page).toHaveURL(new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`));
     await expect(page.getByTestId("complete-pane")).toBeVisible();
     await page.getByTestId("follow-up-description").fill(description);
+    const previousPath = new URL(page.url()).pathname;
     await page.getByTestId("start-follow-up").click();
 
-    await page.goBack();
-    await expect(page).toHaveURL(/\/$/);
-    await expect(page.getByTestId("entry-shell")).toBeVisible();
-    await expect(page.getByRole("link", { name: new RegExp(description) })).toBeVisible();
+    await expect
+      .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
+      .not.toBe(previousPath);
+    await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+    await expect(page.getByRole("heading", { name: description })).toBeVisible();
   });
 });
 

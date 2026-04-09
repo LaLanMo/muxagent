@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   continueBlockedUntilResumed,
   retryTaskNodeAction,
@@ -7,6 +8,7 @@ import {
   submitTaskClarification,
 } from "@/application/tasks";
 import { getRuntime } from "@/app/runtime";
+import { buildTaskDetailPath } from "@/domain/routes";
 import type { LoadTaskDetailFn } from "@/features/task-detail/model/use-task-detail-data";
 import type {
   InputRequestDto,
@@ -31,6 +33,10 @@ export function useTaskDetailActions({
   latestFailedRunId,
   loadDetail,
 }: UseTaskDetailActionsArgs) {
+  const navigate = useNavigate();
+  const tasks = useTaskSnapshotStore(
+    (state) => state.tasksByWorkspaceId[workspaceId] ?? [],
+  );
   const setTasks = useTaskSnapshotStore((state) => state.setTasks);
   const failTaskDetail = useTaskSnapshotStore(
     (state) => state.failTaskDetail,
@@ -156,17 +162,20 @@ export function useTaskDetailActions({
     setSubmittingFollowUp(true);
     try {
       await runTaskAction("Failed to start follow-up task", async () => {
-        setTasks(
-          workspaceId,
+        const { tasks: nextTasks, followUpTaskId } =
           await startFollowUpAndReloadTaskList(getRuntime(), {
             workspaceId,
             taskId,
             task,
             description: trimmed,
             configAliasOverride: followUpConfigAlias,
-          }),
-        );
+            existingTaskIds: new Set(tasks.map((entry) => entry.task.id)),
+          });
+        setTasks(workspaceId, nextTasks);
         setFollowUpDescription("");
+        if (followUpTaskId) {
+          navigate(buildTaskDetailPath(workspaceId, followUpTaskId));
+        }
       });
     } finally {
       setSubmittingFollowUp(false);
