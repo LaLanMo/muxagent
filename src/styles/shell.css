@@ -92,7 +92,7 @@
 }
 
 .shell-nav__row.is-active {
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
 }
 
@@ -188,7 +188,7 @@
 }
 
 .shell-workspace__row.is-active {
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--text);
 }
 
