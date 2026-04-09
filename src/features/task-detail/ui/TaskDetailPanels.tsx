@@ -489,33 +489,64 @@ function TranscriptToolRow({ tool }: { tool: ToolItem }) {
   );
 }
 
+function TranscriptThinkingBlock({
+  item,
+}: {
+  item: Extract<TranscriptTimelineItem, { kind: "message" }>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="transcript-thinking">
+      <button
+        className="transcript-thinking__summary"
+        onClick={() => setOpen(!open)}
+        type="button"
+      >
+        <ExpandChevron open={open} />
+        <span className="transcript-thinking__label">Thinking</span>
+      </button>
+      {open ? (
+        <div className="transcript-thinking__content">
+          <p className="transcript-thinking__text">{item.text}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TranscriptMessageBlock({
   item,
 }: {
   item: Extract<TranscriptTimelineItem, { kind: "message" }>;
 }) {
-  const label = item.partType === "reasoning" ? "thinking" : item.role;
+  const isUser = item.role === "user";
   const jsonContent =
     item.partType === "text" && isJsonLike(item.text)
       ? tryPrettyJson(item.text)
       : null;
 
+  const content = jsonContent ? (
+    <pre className="transcript-tool-row__code">
+      {highlightJson(jsonContent)}
+    </pre>
+  ) : item.partType === "text" ? (
+    <DocumentContent
+      className="transcript-message__markdown"
+      content={item.text}
+      format="markdown"
+      variant="compact"
+    />
+  ) : (
+    <p className="transcript-message__text">{item.text}</p>
+  );
+
   return (
-    <div className="transcript-message">
-      <span className="transcript-message__role">{label}</span>
-      {jsonContent ? (
-        <pre className="transcript-tool-row__code">
-          {highlightJson(jsonContent)}
-        </pre>
-      ) : item.partType === "text" ? (
-        <DocumentContent
-          className="transcript-message__markdown"
-          content={item.text}
-          format="markdown"
-          variant="compact"
-        />
+    <div className={`transcript-message${isUser ? " transcript-message--user" : ""}`}>
+      {isUser ? (
+        <div className="transcript-message__bubble">{content}</div>
       ) : (
-        <p className="transcript-message__text">{item.text}</p>
+        content
       )}
     </div>
   );
@@ -878,6 +909,9 @@ export function TaskRunPane({
                     return (
                       <TranscriptToolGroup key={item.id} tools={item.tools} />
                     );
+                  }
+                  if (item.kind === "message" && item.partType === "reasoning") {
+                    return <TranscriptThinkingBlock key={item.id} item={item} />;
                   }
                   if (item.kind === "message") {
                     return <TranscriptMessageBlock key={item.id} item={item} />;
