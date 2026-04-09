@@ -655,6 +655,184 @@ func TestRpcResyncEventsReturnsReplayContract(t *testing.T) {
 	}
 }
 
+func TestRunHandlesReplayHeadRPC(t *testing.T) {
+	clientConn, relayConn, cleanup := newWSPair(t)
+	defer cleanup()
+
+	var key [32]byte
+	key[0] = 1
+	session := newSession("machine-1", key, 1)
+	buf := NewEventBuffer(8)
+	buf.Push(makeEvent(appwire.EventMessageDelta))
+	buf.Push(makeEvent(appwire.EventToolCompleted))
+
+	client := &Client{
+		conn:          clientConn,
+		connEpoch:     1,
+		machineID:     "machine-1",
+		eventBuf:      buf,
+		session:       session,
+		activeSession: session,
+		sessionCWD:    map[string]string{},
+	}
+
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- client.Run(context.Background())
+	}()
+
+	require.NoError(
+		t,
+		relayConn.WriteJSON(
+			encryptRPC(t, session, "machine-1", "msg-head", "events.head", nil),
+		),
+	)
+
+	msg := readEncryptedMessage(t, relayConn)
+	require.Equal(t, MessageTypeResponse, msg.Type)
+	require.Equal(t, "msg-head", msg.MsgID)
+
+	body, err := session.decrypt(string(msg.Type), msg.MsgID, msg.Nonce, msg.Ciphertext)
+	require.NoError(t, err)
+
+	var response struct {
+		Result appwire.ReplayHeadResult `json:"result"`
+		Error  string                   `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(body, &response))
+	require.Equal(t, "", response.Error)
+
+	result := response.Result
+	require.Equal(t, buf.StreamEpoch(), result.StreamEpoch)
+	require.Equal(t, buf.Seq(), result.ReplayedThroughSeq)
+
+	require.NoError(t, clientConn.Close())
+	select {
+	case <-runErr:
+	case <-time.After(2 * time.Second):
+		t.Fatal("relay run loop did not stop")
+	}
+}
+
+func TestSendEventNormalizesLargeToolPayloadsForTransport(t *testing.T) {
+	client := &Client{eventBuf: NewEventBuffer(8)}
+
+	err := client.SendEvent(appwire.Event{
+		Type:      appwire.EventToolCompleted,
+		SessionID: "sid",
+		At:        time.Now(),
+		Tool: &appwire.ToolEvent{
+			ACP: &acpprotocol.ToolCallUpdate{
+				ToolCallID: "tool-1",
+			},
+			App: appwire.ToolEventApp{
+				PartID:    "part-1",
+				MessageID: "msg-1",
+				CallID:    "tool-1",
+				Name:      "Terminal",
+				Status:    appwire.ToolStatusCompleted,
+				Input: &appwire.ToolInput{
+					RawInputJSON: strings.Repeat("{\"value\":\"x\"}", 2048),
+				},
+				Output: strings.Repeat("output", 20000),
+				Diffs: []appwire.ToolDiff{{
+					Path:    "a.txt",
+					NewText: strings.Repeat("diff", 12000),
+				}},
+			},
+		},
+	})
+	require.ErrorIs(t, err, ErrRelayNotConnected)
+
+	snapshot := client.eventBuf.ReplaySince(client.eventBuf.StreamEpoch(), 0)
+	require.Len(t, snapshot.Events, 1)
+
+	tool := snapshot.Events[0].Tool
+	require.NotNil(t, tool)
+	require.Nil(t, tool.ACP)
+	require.NotNil(t, tool.App.Input)
+	require.True(t, tool.App.InputTruncated)
+	require.True(t, tool.App.OutputTruncated)
+	require.True(t, tool.App.DiffsTruncated)
+	require.Less(t, len(tool.App.Output), len(strings.Repeat("output", 20000)))
+}
+
+func TestRunResyncStaysUnderRelayReadLimitWithLargeBufferedReplay(t *testing.T) {
+	clientConn, relayConn, cleanup := newWSPair(t)
+	defer cleanup()
+
+	var key [32]byte
+	key[0] = 1
+	session := newSession("machine-1", key, 1)
+	client := &Client{
+		machineID:  "machine-1",
+		eventBuf:   NewEventBufferWithByteBudget(4096, defaultEventBufferByteBudget),
+		sessionCWD: map[string]string{},
+	}
+
+	for i := 0; i < 96; i++ {
+		err := client.SendEvent(appwire.Event{
+			Type:      appwire.EventToolCompleted,
+			SessionID: "sid",
+			At:        time.Now(),
+			Tool: &appwire.ToolEvent{
+				ACP: &acpprotocol.ToolCallUpdate{
+					ToolCallID: fmt.Sprintf("tool-%d", i),
+					RawOutput:  json.RawMessage(`"` + strings.Repeat("x", 128*1024) + `"`),
+				},
+				App: appwire.ToolEventApp{
+					PartID:    fmt.Sprintf("part-%d", i),
+					MessageID: "msg-1",
+					CallID:    fmt.Sprintf("tool-%d", i),
+					Name:      "Terminal",
+					Status:    appwire.ToolStatusCompleted,
+					Input: &appwire.ToolInput{
+						RawInputJSON: strings.Repeat("{\"cwd\":\"/tmp\"}", 1024),
+					},
+					Output: strings.Repeat("output", 24*1024),
+				},
+			},
+		})
+		require.ErrorIs(t, err, ErrRelayNotConnected)
+	}
+
+	client.conn = clientConn
+	client.connEpoch = 1
+	client.session = session
+	client.activeSession = session
+
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- client.Run(context.Background())
+	}()
+
+	relayConn.SetReadLimit(5 * 1024 * 1024)
+	require.NoError(t, relayConn.WriteJSON(encryptRPC(t, session, "machine-1", "msg-resync", "events.resync", map[string]any{
+		"streamEpoch": client.eventBuf.StreamEpoch(),
+		"lastSeq":     0,
+	})))
+
+	msg := readEncryptedMessage(t, relayConn)
+	require.Equal(t, MessageTypeResponse, msg.Type)
+	payload := decryptResponse(t, session, msg)
+	require.Equal(t, "", payload["error"])
+
+	resultJSON, err := json.Marshal(payload["result"])
+	require.NoError(t, err)
+	var result appwire.ResyncEventsResult
+	require.NoError(t, json.Unmarshal(resultJSON, &result))
+	require.NotEmpty(t, result.Events)
+	require.Less(t, len(result.Events), 96)
+
+	require.NoError(t, client.Close())
+	select {
+	case err := <-runErr:
+		require.ErrorContains(t, err, "read message")
+	case <-time.After(2 * time.Second):
+		t.Fatal("run loop did not stop after close")
+	}
+}
+
 func TestRpcResyncEventsReturnsAtomicSnapshot(t *testing.T) {
 	buf := NewEventBuffer(256)
 	for i := 0; i < 64; i++ {

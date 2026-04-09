@@ -432,6 +432,8 @@ func (c *Client) handleRPC(connEpoch uint64, enc EncryptedMessage) {
 			break
 		}
 		result, respErr = c.rpcResyncEvents(ctx, params)
+	case "events.head":
+		result, respErr = c.rpcReplayHead(ctx)
 	case "approvals.pending":
 		result, respErr = c.rpcPendingApprovals(ctx)
 	case "fs.list":
@@ -885,6 +887,16 @@ func (c *Client) rpcResyncEvents(ctx context.Context, params appwire.ResyncEvent
 	}, ""
 }
 
+func (c *Client) rpcReplayHead(ctx context.Context) (any, string) {
+	if c.eventBuf == nil {
+		return nil, "event buffer not available"
+	}
+	return appwire.ReplayHeadResult{
+		StreamEpoch:        c.eventBuf.StreamEpoch(),
+		ReplayedThroughSeq: c.eventBuf.Seq(),
+	}, ""
+}
+
 // --- Filesystem RPCs ---
 
 // safePath resolves relPath under cwd and rejects traversal / symlink escapes.
@@ -1029,6 +1041,7 @@ func (c *Client) rpcFsSearch(ctx context.Context, params appwire.FsSearchParams)
 // SendEvent encrypts an app transport event and sends it to the connected client via WS.
 func (c *Client) SendEvent(event appwire.Event) error {
 	c.applyEventStatus(event)
+	event = normalizeEventForTransport(event)
 	if c.eventBuf != nil {
 		event = c.eventBuf.Push(event)
 	}

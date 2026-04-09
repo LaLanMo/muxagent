@@ -14,9 +14,12 @@ import (
 type EventBuffer struct {
 	mu          sync.RWMutex
 	events      []appwire.Event
+	eventSizes  []int
 	size        int
 	head        int // next write position
 	count       int // number of events stored
+	bytesUsed   int
+	byteBudget  int
 	seq         uint64
 	streamEpoch uint64
 }
@@ -31,12 +34,18 @@ type ReplaySnapshot struct {
 var fallbackStreamEpoch uint64
 
 func NewEventBuffer(size int) *EventBuffer {
+	return NewEventBufferWithByteBudget(size, defaultEventBufferByteBudget)
+}
+
+func NewEventBufferWithByteBudget(size, byteBudget int) *EventBuffer {
 	if size <= 0 {
 		size = 1024
 	}
 	return &EventBuffer{
 		events:      make([]appwire.Event, size),
+		eventSizes:  make([]int, size),
 		size:        size,
+		byteBudget:  byteBudget,
 		streamEpoch: nextStreamEpoch(),
 	}
 }
@@ -49,11 +58,25 @@ func (b *EventBuffer) Push(event appwire.Event) appwire.Event {
 
 	b.seq++
 	event.Seq = b.seq
+	eventSize := 1
+	if encoded, err := marshalEvent(event); err == nil && len(encoded) > 0 {
+		eventSize = len(encoded)
+	}
+
+	if b.count == b.size {
+		b.bytesUsed -= b.eventSizes[b.head]
+	} else {
+		b.count++
+	}
 
 	b.events[b.head] = event
+	b.eventSizes[b.head] = eventSize
+	b.bytesUsed += eventSize
 	b.head = (b.head + 1) % b.size
-	if b.count < b.size {
-		b.count++
+	if b.byteBudget > 0 {
+		for b.count > 0 && b.bytesUsed > b.byteBudget {
+			b.dropOldestLocked()
+		}
 	}
 
 	return event
@@ -113,8 +136,10 @@ func (b *EventBuffer) Reset() uint64 {
 	defer b.mu.Unlock()
 
 	clear(b.events)
+	clear(b.eventSizes)
 	b.head = 0
 	b.count = 0
+	b.bytesUsed = 0
 	b.seq = 0
 	b.streamEpoch = nextStreamEpoch()
 
@@ -147,6 +172,20 @@ func (b *EventBuffer) snapshotAllLocked() []appwire.Event {
 		result = append(result, b.events[idx])
 	}
 	return result
+}
+
+func (b *EventBuffer) dropOldestLocked() {
+	if b.count == 0 {
+		return
+	}
+	oldestIdx := (b.head - b.count + b.size) % b.size
+	b.bytesUsed -= b.eventSizes[oldestIdx]
+	if b.bytesUsed < 0 {
+		b.bytesUsed = 0
+	}
+	b.events[oldestIdx] = appwire.Event{}
+	b.eventSizes[oldestIdx] = 0
+	b.count--
 }
 
 func nextStreamEpoch() uint64 {

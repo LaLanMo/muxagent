@@ -233,6 +233,11 @@ type ResyncEventsResult struct {
 	ReplayedThroughSeq uint64       `json:"replayedThroughSeq"`
 }
 
+type ReplayHeadResult struct {
+	StreamEpoch        uint64 `json:"streamEpoch"`
+	ReplayedThroughSeq uint64 `json:"replayedThroughSeq"`
+}
+
 type AcceptedResult struct {
 	Accepted bool `json:"accepted"`
 }

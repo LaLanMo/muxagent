@@ -24,6 +24,11 @@ import (
 	"github.com/LaLanMo/muxagent-cli/internal/worktree"
 )
 
+const (
+	relayReplayEventLimit = 4096
+	relayReplayByteBudget = 2 * 1024 * 1024
+)
+
 type Daemon struct {
 	control  *control.Server
 	addr     string
@@ -57,7 +62,10 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	d.rt = runtimemanager.New(cfg)
-	d.eventBuf = relayws.NewEventBuffer(4096)
+	d.eventBuf = relayws.NewEventBufferWithByteBudget(
+		relayReplayEventLimit,
+		relayReplayByteBudget,
+	)
 
 	mux := http.NewServeMux()
 

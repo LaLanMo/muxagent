@@ -56,19 +56,23 @@ type ToolLocation struct {
 }
 
 type ToolEventApp struct {
-	PartID     string          `json:"partId"`
-	MessageID  string          `json:"messageId"`
-	CallID     string          `json:"callId"`
-	Name       string          `json:"name"`
-	Kind       string          `json:"kind,omitempty"`
-	Title      string          `json:"title,omitempty"`
-	Status     ToolStatus      `json:"status"`
-	Input      *ToolInput      `json:"input,omitempty"`
-	Output     string          `json:"output,omitempty"`
-	Error      string          `json:"error,omitempty"`
-	Diffs      []ToolDiff      `json:"diffs,omitempty"`
-	ClaudeCode *ClaudeCodeTool `json:"claudeCode,omitempty"`
-	Locations  []ToolLocation  `json:"locations,omitempty"`
+	PartID          string          `json:"partId"`
+	MessageID       string          `json:"messageId"`
+	CallID          string          `json:"callId"`
+	Name            string          `json:"name"`
+	Kind            string          `json:"kind,omitempty"`
+	Title           string          `json:"title,omitempty"`
+	Status          ToolStatus      `json:"status"`
+	Input           *ToolInput      `json:"input,omitempty"`
+	InputTruncated  bool            `json:"inputTruncated,omitempty"`
+	Output          string          `json:"output,omitempty"`
+	OutputTruncated bool            `json:"outputTruncated,omitempty"`
+	Error           string          `json:"error,omitempty"`
+	ErrorTruncated  bool            `json:"errorTruncated,omitempty"`
+	Diffs           []ToolDiff      `json:"diffs,omitempty"`
+	DiffsTruncated  bool            `json:"diffsTruncated,omitempty"`
+	ClaudeCode      *ClaudeCodeTool `json:"claudeCode,omitempty"`
+	Locations       []ToolLocation  `json:"locations,omitempty"`
 }
 
 type ToolEvent struct {

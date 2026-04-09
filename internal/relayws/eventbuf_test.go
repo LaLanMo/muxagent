@@ -2,6 +2,7 @@ package relayws
 
 import (
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -139,6 +140,35 @@ func TestEventBuffer_ReplaySinceReturnsResetAfterBufferReset(t *testing.T) {
 	require.Equal(t, event.Seq, snapshot.ReplayedThroughSeq)
 	require.Len(t, snapshot.Events, 1)
 	assert.Equal(t, event.Seq, snapshot.Events[0].Seq)
+}
+
+func TestEventBuffer_DropsOldestWhenByteBudgetExceeded(t *testing.T) {
+	buf := NewEventBufferWithByteBudget(10, 1600)
+	epoch := buf.StreamEpoch()
+
+	for i := 0; i < 4; i++ {
+		buf.Push(appwire.Event{
+			Type: appwire.EventToolCompleted,
+			At:   time.Now(),
+			Tool: &appwire.ToolEvent{
+				App: appwire.ToolEventApp{
+					CallID:    "tool",
+					Name:      "Terminal",
+					Status:    appwire.ToolStatusCompleted,
+					Output:    strings.Repeat("x", 700),
+					PartID:    "part",
+					MessageID: "msg",
+				},
+			},
+		})
+	}
+
+	require.LessOrEqual(t, buf.bytesUsed, buf.byteBudget)
+
+	snapshot := buf.ReplaySince(epoch, 0)
+	require.Equal(t, appwire.ResyncStatusGap, snapshot.Status)
+	require.NotEmpty(t, snapshot.Events)
+	require.Greater(t, snapshot.Events[0].Seq, uint64(1))
 }
 
 func TestEventBuffer_ReplaySinceReturnsAtomicSnapshot(t *testing.T) {
