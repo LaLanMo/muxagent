@@ -103,10 +103,10 @@ type NewTaskModalProps = {
   onAliasChange: (value: string) => void;
   configDescription?: string;
   selectedRuntimeName?: string;
-  configExpanded: boolean;
-  onToggleConfigExpanded: () => void;
+  configMaxIterations?: number;
+  configEntryNode?: string;
   configPicking: boolean;
-  onOpenConfigPicker: () => void;
+  onToggleConfigPicker: () => void;
   onCloseConfigPicker: () => void;
   flowNodes: string[];
   worktreeAvailable: boolean;
@@ -131,10 +131,10 @@ export function NewTaskModal({
   onAliasChange,
   configDescription,
   selectedRuntimeName,
-  configExpanded,
-  onToggleConfigExpanded,
+  configMaxIterations,
+  configEntryNode,
   configPicking,
-  onOpenConfigPicker,
+  onToggleConfigPicker,
   onCloseConfigPicker,
   flowNodes,
   worktreeAvailable,
@@ -147,6 +147,7 @@ export function NewTaskModal({
   error,
 }: NewTaskModalProps) {
   const cfgCardRef = useRef<HTMLDivElement>(null);
+  const collapsedHeightRef = useRef<number | null>(null);
 
   // Click-outside + Escape handling for config picker
   useEffect(() => {
@@ -180,18 +181,10 @@ export function NewTaskModal({
   const selectedWorkspace = workspaceOptions.find((ws) => ws.id === selectedTargetWorkspaceId) ?? workspaceOptions[0];
 
   function handleHeaderClick() {
-    if (!configPicking) {
-      onToggleConfigExpanded();
+    if (!configPicking && cfgCardRef.current) {
+      collapsedHeightRef.current = cfgCardRef.current.offsetHeight;
     }
-  }
-
-  function handleChevronClick(event: React.MouseEvent) {
-    event.stopPropagation();
-    if (configPicking) {
-      onCloseConfigPicker();
-    } else {
-      onOpenConfigPicker();
-    }
+    onToggleConfigPicker();
   }
 
   function handleSelectConfig(alias: string) {
@@ -256,6 +249,7 @@ export function NewTaskModal({
             <div
               className={`task-modal__cfg-card${configPicking ? " task-modal__cfg-card--picking" : ""}`}
               ref={cfgCardRef}
+              style={configPicking && collapsedHeightRef.current ? { height: collapsedHeightRef.current } : undefined}
             >
               <input
                 data-testid="new-task-config"
@@ -269,13 +263,13 @@ export function NewTaskModal({
                   <SlidersIcon />
                   <span className="task-modal__cfg-name">{selectedAlias}</span>
                 </div>
-                <span onClick={handleChevronClick} style={{ display: "grid", placeItems: "center" }}>
-                  {configPicking || !configExpanded ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                <span style={{ display: "grid", placeItems: "center" }}>
+                  {configPicking ? <ChevronDownIcon /> : <ChevronUpIcon />}
                 </span>
               </div>
 
-              {/* Expanded body */}
-              {configExpanded && !configPicking && (
+              {/* Config details */}
+              {!configPicking && (
                 <div className="task-modal__cfg-body">
                   {configDescription ? (
                     <p className="task-modal__cfg-desc">{configDescription}</p>
@@ -283,12 +277,26 @@ export function NewTaskModal({
                   {configDescription && selectedRuntimeName ? (
                     <div className="task-modal__cfg-divider" />
                   ) : null}
-                  {selectedRuntimeName ? (
+                  {(selectedRuntimeName || configMaxIterations !== undefined || configEntryNode) ? (
                     <div className="task-modal__cfg-fields">
-                      <div className="task-modal__cfg-field">
-                        <span className="task-modal__cfg-field-label">Runtime</span>
-                        <span className="task-modal__cfg-field-value">{selectedRuntimeName}</span>
-                      </div>
+                      {selectedRuntimeName ? (
+                        <div className="task-modal__cfg-field">
+                          <span className="task-modal__cfg-field-label">Runtime</span>
+                          <span className="task-modal__cfg-field-value">{selectedRuntimeName}</span>
+                        </div>
+                      ) : null}
+                      {configMaxIterations !== undefined ? (
+                        <div className="task-modal__cfg-field">
+                          <span className="task-modal__cfg-field-label">Max iterations</span>
+                          <span className="task-modal__cfg-field-value">{String(configMaxIterations)}</span>
+                        </div>
+                      ) : null}
+                      {configEntryNode ? (
+                        <div className="task-modal__cfg-field">
+                          <span className="task-modal__cfg-field-label">Entry node</span>
+                          <span className="task-modal__cfg-field-value">{configEntryNode}</span>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

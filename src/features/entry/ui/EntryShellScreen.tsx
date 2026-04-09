@@ -29,10 +29,10 @@ type EntryShellScreenProps = {
     useWorktree: boolean;
     setUseWorktree: (value: boolean) => void;
     worktreeAvailable: boolean;
-    configExpanded: boolean;
-    toggleConfigExpanded: () => void;
+    configMaxIterations?: number;
+    configEntryNode?: string;
     configPicking: boolean;
-    openConfigPicker: () => void;
+    toggleConfigPicker: () => void;
     closeConfigPicker: () => void;
     submitting: boolean;
     canSubmit: boolean;
@@ -197,10 +197,10 @@ export function EntryShellScreen({
       <NewTaskModal
         configDescription={modal.selectedEntry?.description}
         selectedRuntimeName={modal.selectedEntry?.runtime_name}
-        configExpanded={modal.configExpanded}
-        onToggleConfigExpanded={modal.toggleConfigExpanded}
+        configMaxIterations={modal.configMaxIterations}
+        configEntryNode={modal.configEntryNode}
         configPicking={modal.configPicking}
-        onOpenConfigPicker={modal.openConfigPicker}
+        onToggleConfigPicker={modal.toggleConfigPicker}
         onCloseConfigPicker={modal.closeConfigPicker}
         description={modal.description}
         entries={launchableEntries}

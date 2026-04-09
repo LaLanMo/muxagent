@@ -165,6 +165,7 @@
   padding: 0;
   border-color: transparent;
   gap: 4px;
+  grid-template-rows: auto 1fr;
 }
 
 .task-modal__cfg-header {
@@ -236,7 +237,8 @@
 .task-modal__cfg-list {
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .task-modal__cfg-option {

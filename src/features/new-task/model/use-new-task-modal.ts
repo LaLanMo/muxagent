@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { loadConfigDetail } from "@/application/configs";
 import { startTask } from "@/application/tasks";
 import { getRuntime } from "@/app/runtime";
 import { flowNodesForConfig } from "@/domain/task-shell";
+import type { ConfigDraftDto } from "@/rpc/types";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
@@ -30,10 +32,11 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   const [useWorktree, setUseWorktree] = useState(
     catalog?.default_use_worktree ?? false,
   );
-  const [configExpanded, setConfigExpanded] = useState(true);
   const [configPicking, setConfigPicking] = useState(false);
+  const [configDetail, setConfigDetail] = useState<ConfigDraftDto | undefined>();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
+  const fetchAliasRef = useRef("");
 
   useEffect(() => {
     if (!open) {
@@ -47,8 +50,8 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     });
     setSelectedAlias((current) => current || defaultAlias);
     setUseWorktree(catalog?.default_use_worktree ?? false);
-    setConfigExpanded(true);
     setConfigPicking(false);
+    setConfigDetail(undefined);
     setError(undefined);
   }, [
     catalog?.default_use_worktree,
@@ -57,6 +60,25 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     selectedWorkspaceId,
     workspaces,
   ]);
+
+  // Fetch full config detail (topology) when selected alias changes
+  useEffect(() => {
+    if (!open || !selectedAlias) {
+      return;
+    }
+    const alias = selectedAlias;
+    fetchAliasRef.current = alias;
+    setConfigDetail(undefined);
+    loadConfigDetail(getRuntime(), alias)
+      .then((detail) => {
+        if (fetchAliasRef.current === alias) {
+          setConfigDetail(detail.config);
+        }
+      })
+      .catch(() => {
+        // Config detail is supplementary; catalog data still shows
+      });
+  }, [open, selectedAlias]);
 
   const entries = (catalog?.entries ?? []).filter((entry) => entry.launchable);
   const selectedEntry =
@@ -120,10 +142,10 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     useWorktree,
     setUseWorktree,
     worktreeAvailable: Boolean(selectedWorkspace?.worktree_available),
-    configExpanded,
-    toggleConfigExpanded: () => setConfigExpanded((v) => !v),
+    configMaxIterations: configDetail?.topology.max_iterations,
+    configEntryNode: configDetail?.topology.entry,
     configPicking,
-    openConfigPicker: () => setConfigPicking(true),
+    toggleConfigPicker: () => setConfigPicking((v) => !v),
     closeConfigPicker: () => setConfigPicking(false),
     submitting,
     canSubmit,
