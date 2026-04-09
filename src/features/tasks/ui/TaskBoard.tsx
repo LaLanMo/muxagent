@@ -1,4 +1,5 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useNativeContextMenu } from "@/features/shared/ui/use-native-context-menu";
 export type TaskBoardCardModel = {
   id: string;
   workspaceId?: string;
@@ -23,6 +24,43 @@ function hasAttentionAccent(tone: TaskBoardCardModel["tone"]) {
   return tone === "awaiting" || tone === "failed";
 }
 
+function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
+  const navigate = useNavigate();
+  const contextMenu = useNativeContextMenu<HTMLAnchorElement>({
+    actions: [
+      {
+        id: `open-task:${card.workspaceId ?? "global"}:${card.id}`,
+        label: "Open Task",
+        onSelect: () => navigate(card.href),
+      },
+    ],
+  });
+
+  return (
+    <Link
+      ref={contextMenu.ref}
+      className={`task-board-card${
+        hasAttentionAccent(card.tone) ? ` task-board-card--${card.tone}` : ""
+      }`}
+      data-testid={`board-card-${card.id}`}
+      onContextMenu={contextMenu.onContextMenu}
+      to={card.href}
+    >
+      <div className="task-board-card__body">
+        <div className="task-board-card__header">
+          <h3>{card.title}</h3>
+        </div>
+        <div className="task-board-card__footer">
+          <p className="task-board-card__meta">{card.meta}</p>
+          <span className={`task-board-card__stamp task-board-card__stamp--${card.tone}`}>
+            {card.time}
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
+}
+
 function TaskBoardColumn({ column }: { column: TaskBoardColumnModel }) {
   return (
     <section className="board-column">
@@ -38,28 +76,10 @@ function TaskBoardColumn({ column }: { column: TaskBoardColumnModel }) {
       </header>
       <div className="board-column__stack">
         {column.cards.map((card) => (
-          <Link
-            className={`task-board-card${
-              hasAttentionAccent(card.tone) ? ` task-board-card--${card.tone}` : ""
-            }`}
-            data-testid={`board-card-${card.id}`}
+          <TaskBoardCardLink
+            card={card}
             key={`${card.workspaceId ?? "global"}:${card.id}`}
-            to={card.href}
-          >
-            <div className="task-board-card__body">
-              <div className="task-board-card__header">
-                <h3>{card.title}</h3>
-              </div>
-              <div className="task-board-card__footer">
-                <p className="task-board-card__meta">{card.meta}</p>
-                <span
-                  className={`task-board-card__stamp task-board-card__stamp--${card.tone}`}
-                >
-                  {card.time}
-                </span>
-              </div>
-            </div>
-          </Link>
+          />
         ))}
       </div>
     </section>

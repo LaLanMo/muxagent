@@ -1,5 +1,6 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import type { BoardBucket, TaskListRow } from "@/domain/task-shell";
+import { useNativeContextMenu } from "@/features/shared/ui/use-native-context-menu";
 
 export type TaskListRowModel = TaskListRow & {
   href: string;
@@ -28,6 +29,32 @@ function needsAccent(tone: string): boolean {
   return tone === "awaiting" || tone === "failed";
 }
 
+function TaskListRowLink({ row }: { row: TaskListRowModel }) {
+  const navigate = useNavigate();
+  const contextMenu = useNativeContextMenu<HTMLAnchorElement>({
+    actions: [
+      {
+        id: `open-task:${row.workspaceId ?? "global"}:${row.id}`,
+        label: "Open Task",
+        onSelect: () => navigate(row.href),
+      },
+    ],
+  });
+
+  return (
+    <Link
+      ref={contextMenu.ref}
+      className={`task-list-row${needsAccent(row.tone) ? ` task-list-row--${row.tone}` : ""}`}
+      data-testid={`list-row-${row.id}`}
+      onContextMenu={contextMenu.onContextMenu}
+      to={row.href}
+    >
+      <p className="task-list-row__title">{row.title}</p>
+      <p className="task-list-row__path">{row.subtitle}</p>
+    </Link>
+  );
+}
+
 export function TaskList({ rows }: TaskListProps) {
   const groups = (["attention", "running", "completed"] as const)
     .map((key) => ({
@@ -51,15 +78,7 @@ export function TaskList({ rows }: TaskListProps) {
           </header>
           <div className="task-list-section__rows">
             {group.rows.map((row) => (
-              <Link
-                className={`task-list-row${needsAccent(row.tone) ? ` task-list-row--${row.tone}` : ""}`}
-                data-testid={`list-row-${row.id}`}
-                key={`${row.workspaceId ?? "global"}:${row.id}`}
-                to={row.href}
-              >
-                <p className="task-list-row__title">{row.title}</p>
-                <p className="task-list-row__path">{row.subtitle}</p>
-              </Link>
+              <TaskListRowLink row={row} key={`${row.workspaceId ?? "global"}:${row.id}`} />
             ))}
           </div>
         </section>

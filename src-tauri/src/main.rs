@@ -17,17 +17,29 @@ use std::{
     thread,
     time::Duration,
 };
-use tauri::{Emitter, Manager, State};
+use tauri::{
+    menu::{IsMenuItem, MenuItem, Submenu},
+    Emitter, Manager, State,
+};
 
 const JSON_RPC_VERSION: &str = "2.0";
 const PROTOCOL_VERSION: u64 = 1;
 const NOTIFICATION_EVENT: &str = "app-server-notification";
 const DISCONNECTED_EVENT: &str = "app-server-disconnected";
+const NATIVE_CONTEXT_MENU_ACTION_EVENT: &str = "native-context-menu-action";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Default)]
 struct AppState {
     manager: Arc<SessionManager>,
+    pending_context_menus: Mutex<Vec<PendingContextMenu>>,
+}
+
+struct PendingContextMenu {
+    window_label: String,
+    item_ids: Vec<String>,
+    _submenu: Submenu<tauri::Wry>,
+    _items: Vec<MenuItem<tauri::Wry>>,
 }
 
 #[derive(Default)]
@@ -41,6 +53,13 @@ struct AppServerEnsureResult {
     address: String,
     token: String,
     instance_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ContextMenuItemPayload {
+    id: String,
+    label: String,
 }
 
 struct Session {
@@ -275,6 +294,59 @@ fn pick_directory() -> Result<Option<String>, String> {
         .map(|path| path.to_string_lossy().to_string()))
 }
 
+#[tauri::command]
+fn show_context_menu(
+    window: tauri::WebviewWindow,
+    state: State<'_, AppState>,
+    x: f64,
+    y: f64,
+    items: Vec<ContextMenuItemPayload>,
+) -> Result<(), String> {
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let built_items = items
+        .iter()
+        .map(|item| {
+            MenuItem::with_id(&window, item.id.clone(), item.label.clone(), true, None::<&str>)
+                .map_err(|error| format!("create context menu item: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let item_refs = built_items
+        .iter()
+        .map(|item| item as &dyn IsMenuItem<tauri::Wry>)
+        .collect::<Vec<_>>();
+
+    let submenu = Submenu::with_id_and_items(
+        &window,
+        format!("context-menu-{}", items[0].id),
+        "Context",
+        true,
+        &item_refs,
+    )
+    .map_err(|error| format!("create context submenu: {error}"))?;
+
+    {
+        let mut pending = state
+            .pending_context_menus
+            .lock()
+            .map_err(|_| "failed to lock context menu state".to_string())?;
+        pending.retain(|entry| entry.window_label != window.label());
+        pending.push(PendingContextMenu {
+            window_label: window.label().to_string(),
+            item_ids: items.iter().map(|item| item.id.clone()).collect(),
+            _submenu: submenu.clone(),
+            _items: built_items.clone(),
+        });
+    }
+
+    window
+        .popup_menu_at(&submenu, tauri::LogicalPosition::new(x, y))
+        .map_err(|error| format!("popup native context menu: {error}"))
+}
+
 fn resolve_cli_binary() -> String {
     std::env::var("MUXAGENT_CLI_PATH")
         .ok()
@@ -500,15 +572,40 @@ fn main() {
             app_server_request,
             pick_directory,
             read_text_file,
-            open_path
+            open_path,
+            show_context_menu
         ])
         .build(tauri::generate_context!())
         .expect("failed to build tauri application");
 
     let manager = app.state::<AppState>().manager.clone();
-    app.run(move |_app_handle, event| {
-        if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
-            let _ = manager.disconnect_current();
+    app.run(move |app_handle, event| {
+        match event {
+            tauri::RunEvent::ExitRequested { .. } => {
+                let _ = manager.disconnect_current();
+            }
+            tauri::RunEvent::MenuEvent(menu_event) => {
+                let menu_id = menu_event.id().0.clone();
+                if let Ok(mut pending) = app_handle
+                    .state::<AppState>()
+                    .pending_context_menus
+                    .lock()
+                {
+                    if let Some(index) = pending
+                        .iter()
+                        .position(|entry| entry.item_ids.iter().any(|item_id| item_id == &menu_id))
+                    {
+                        let entry = pending.remove(index);
+                        if let Some(window) = app_handle.get_webview_window(&entry.window_label) {
+                            let _ = window.emit(
+                                NATIVE_CONTEXT_MENU_ACTION_EVENT,
+                                json!({ "itemId": menu_id }),
+                            );
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
     });
 }
