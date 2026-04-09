@@ -1,16 +1,113 @@
+import { useEffect, useRef } from "react";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
+
+/* ── Inline Lucide icons (24x24 viewBox, stroke 2) ── */
+
+const svgBase = {
+  "aria-hidden": true as const,
+  fill: "none",
+  stroke: "currentColor",
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+  strokeWidth: 2,
+  viewBox: "0 0 24 24",
+};
+
+function CloseIcon() {
+  return (
+    <svg {...svgBase} width={16} height={16}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+function FolderIcon() {
+  return (
+    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+      <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+    </svg>
+  );
+}
+
+function SlidersIcon() {
+  return (
+    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+      <line x1="4" x2="4" y1="21" y2="14" />
+      <line x1="4" x2="4" y1="10" y2="3" />
+      <line x1="12" x2="12" y1="21" y2="12" />
+      <line x1="12" x2="12" y1="8" y2="3" />
+      <line x1="20" x2="20" y1="21" y2="16" />
+      <line x1="20" x2="20" y1="12" y2="3" />
+      <line x1="2" x2="6" y1="14" y2="14" />
+      <line x1="10" x2="14" y1="8" y2="8" />
+      <line x1="18" x2="22" y1="16" y2="16" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronUpIcon() {
+  return (
+    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  );
+}
+
+function GitBranchIcon() {
+  return (
+    <svg {...svgBase} width={14} height={14} style={{ color: "var(--text-secondary)", flexShrink: 0 }}>
+      <line x1="6" x2="6" y1="3" y2="15" />
+      <circle cx="18" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M18 9a9 9 0 0 1-9 9" />
+    </svg>
+  );
+}
+
+function CheckIcon({ size = 14, color }: { size?: number; color?: string }) {
+  return (
+    <svg {...svgBase} width={size} height={size} style={{ color: color ?? "currentColor", flexShrink: 0 }}>
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+/* ── Helpers ── */
+
+function shortenPath(path: string): string {
+  if (!path) return "";
+  // Replace common home directory prefixes with ~
+  return path.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
+}
+
+/* ── Component ── */
 
 type NewTaskModalProps = {
   open: boolean;
   description: string;
   onDescriptionChange: (value: string) => void;
-  workspaceOptions: Array<{ id: string; label: string }>;
+  workspaceOptions: Array<{ id: string; label: string; path: string }>;
   selectedTargetWorkspaceId: string;
   onTargetWorkspaceChange: (value: string) => void;
   entries: ConfigCatalogEntryDto[];
   selectedAlias: string;
   onAliasChange: (value: string) => void;
   configDescription?: string;
+  selectedRuntimeName?: string;
+  configExpanded: boolean;
+  onToggleConfigExpanded: () => void;
+  configPicking: boolean;
+  onOpenConfigPicker: () => void;
+  onCloseConfigPicker: () => void;
   flowNodes: string[];
   worktreeAvailable: boolean;
   useWorktree: boolean;
@@ -33,6 +130,12 @@ export function NewTaskModal({
   selectedAlias,
   onAliasChange,
   configDescription,
+  selectedRuntimeName,
+  configExpanded,
+  onToggleConfigExpanded,
+  configPicking,
+  onOpenConfigPicker,
+  onCloseConfigPicker,
   flowNodes,
   worktreeAvailable,
   useWorktree,
@@ -43,8 +146,57 @@ export function NewTaskModal({
   canSubmit,
   error,
 }: NewTaskModalProps) {
+  const cfgCardRef = useRef<HTMLDivElement>(null);
+
+  // Click-outside + Escape handling for config picker
+  useEffect(() => {
+    if (!configPicking) return;
+
+    function handleMouseDown(event: MouseEvent) {
+      if (cfgCardRef.current && !cfgCardRef.current.contains(event.target as Node)) {
+        onCloseConfigPicker();
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onCloseConfigPicker();
+      }
+    }
+
+    document.addEventListener("mousedown", handleMouseDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleMouseDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [configPicking, onCloseConfigPicker]);
+
   if (!open) {
     return null;
+  }
+
+  const selectedWorkspace = workspaceOptions.find((ws) => ws.id === selectedTargetWorkspaceId) ?? workspaceOptions[0];
+
+  function handleHeaderClick() {
+    if (!configPicking) {
+      onToggleConfigExpanded();
+    }
+  }
+
+  function handleChevronClick(event: React.MouseEvent) {
+    event.stopPropagation();
+    if (configPicking) {
+      onCloseConfigPicker();
+    } else {
+      onOpenConfigPicker();
+    }
+  }
+
+  function handleSelectConfig(alias: string) {
+    onAliasChange(alias);
+    onCloseConfigPicker();
   }
 
   return (
@@ -53,12 +205,13 @@ export function NewTaskModal({
       <section className="task-modal">
         <header className="task-modal__header">
           <h2>New Task</h2>
-          <button className="icon-button" onClick={onClose} type="button">
-            ×
+          <button className="icon-button task-modal__close" onClick={onClose} type="button">
+            <CloseIcon />
           </button>
         </header>
 
         <div className="task-modal__body">
+          {/* Task description */}
           <label className="field-block">
             <span className="field-block__label">Task description</span>
             <textarea
@@ -71,47 +224,106 @@ export function NewTaskModal({
             />
           </label>
 
-          <label className="field-block">
+          {/* Workspace selector */}
+          <div className="field-block">
             <span className="field-block__label">Workspace</span>
-            <div className="task-modal__config-card">
+            <div className="task-modal__ws-card">
+              <div className="task-modal__ws-left">
+                <FolderIcon />
+                <span className="task-modal__ws-name">{selectedWorkspace?.label ?? ""}</span>
+              </div>
+              <span className="task-modal__ws-path">
+                {shortenPath(selectedWorkspace?.path ?? "")}
+              </span>
+              <ChevronDownIcon />
               <select
-                className="task-modal__select"
                 data-testid="new-task-workspace"
                 onChange={(event) => onTargetWorkspaceChange(event.target.value)}
                 value={selectedTargetWorkspaceId}
               >
-                {workspaceOptions.map((workspace) => (
-                  <option key={workspace.id} value={workspace.id}>
-                    {workspace.label}
+                {workspaceOptions.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.label}
                   </option>
                 ))}
               </select>
             </div>
-          </label>
+          </div>
 
-          <label className="field-block">
+          {/* Config selector */}
+          <div className="field-block">
             <span className="field-block__label">Config</span>
-            <div className="task-modal__config-card">
-              <select
-                className="task-modal__select"
+            <div
+              className={`task-modal__cfg-card${configPicking ? " task-modal__cfg-card--picking" : ""}`}
+              ref={cfgCardRef}
+            >
+              <input
                 data-testid="new-task-config"
-                onChange={(event) => onAliasChange(event.target.value)}
+                readOnly
+                tabIndex={-1}
+                type="hidden"
                 value={selectedAlias}
-              >
-                {entries.map((entry) => (
-                  <option key={entry.alias} value={entry.alias}>
-                    {entry.alias}
-                  </option>
-                ))}
-              </select>
-              {configDescription ? (
-                <p className="task-modal__config-description">
-                  {configDescription}
-                </p>
-              ) : null}
-            </div>
-          </label>
+              />
+              <div className="task-modal__cfg-header" onClick={handleHeaderClick}>
+                <div className="task-modal__cfg-left">
+                  <SlidersIcon />
+                  <span className="task-modal__cfg-name">{selectedAlias}</span>
+                </div>
+                <span onClick={handleChevronClick} style={{ display: "grid", placeItems: "center" }}>
+                  {configPicking || !configExpanded ? <ChevronDownIcon /> : <ChevronUpIcon />}
+                </span>
+              </div>
 
+              {/* Expanded body */}
+              {configExpanded && !configPicking && (
+                <div className="task-modal__cfg-body">
+                  {configDescription ? (
+                    <p className="task-modal__cfg-desc">{configDescription}</p>
+                  ) : null}
+                  {configDescription && selectedRuntimeName ? (
+                    <div className="task-modal__cfg-divider" />
+                  ) : null}
+                  {selectedRuntimeName ? (
+                    <div className="task-modal__cfg-fields">
+                      <div className="task-modal__cfg-field">
+                        <span className="task-modal__cfg-field-label">Runtime</span>
+                        <span className="task-modal__cfg-field-value">{selectedRuntimeName}</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+              {/* Picker list */}
+              {configPicking && (
+                <div className="task-modal__cfg-list">
+                  {entries.map((entry) => (
+                    <div
+                      key={entry.alias}
+                      className={`task-modal__cfg-option${entry.alias === selectedAlias ? " task-modal__cfg-option--selected" : ""}`}
+                      onClick={() => handleSelectConfig(entry.alias)}
+                    >
+                      <div className="task-modal__cfg-option-row">
+                        <span
+                          className={`task-modal__cfg-option-name${entry.alias === selectedAlias ? " task-modal__cfg-option-name--selected" : ""}`}
+                        >
+                          {entry.alias}
+                        </span>
+                        {entry.alias === selectedAlias && (
+                          <CheckIcon size={14} color="var(--accent)" />
+                        )}
+                      </div>
+                      {entry.description ? (
+                        <span className="task-modal__cfg-option-desc">{entry.description}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Flow nodes */}
           <div className="field-block">
             <span className="field-block__label">Flow nodes</span>
             <div className="flow-node-inline flow-node-inline--modal">
@@ -123,15 +335,18 @@ export function NewTaskModal({
             </div>
           </div>
 
+          {/* Worktree */}
           {worktreeAvailable ? (
-            <label className="task-modal__checkbox">
-              <input
-                checked={useWorktree}
-                onChange={(event) => onToggleWorktree(event.target.checked)}
-                type="checkbox"
-              />
-              <span>Launch in worktree</span>
-            </label>
+            <div className="task-modal__wt-card">
+              <div className="task-modal__wt-row" onClick={() => onToggleWorktree(!useWorktree)}>
+                <div className={`task-modal__wt-check${useWorktree ? " task-modal__wt-check--checked" : ""}`}>
+                  {useWorktree && <CheckIcon size={10} color="#fff" />}
+                </div>
+                <GitBranchIcon />
+                <span className="task-modal__wt-label">Launch in worktree</span>
+              </div>
+              <span className="task-modal__wt-desc">Run task in an isolated git worktree branch</span>
+            </div>
           ) : null}
 
           {error ? <p className="screen-error">{error}</p> : null}

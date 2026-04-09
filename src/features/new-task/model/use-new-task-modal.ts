@@ -30,6 +30,8 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   const [useWorktree, setUseWorktree] = useState(
     catalog?.default_use_worktree ?? false,
   );
+  const [configExpanded, setConfigExpanded] = useState(true);
+  const [configPicking, setConfigPicking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
@@ -45,6 +47,8 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     });
     setSelectedAlias((current) => current || defaultAlias);
     setUseWorktree(catalog?.default_use_worktree ?? false);
+    setConfigExpanded(true);
+    setConfigPicking(false);
     setError(undefined);
   }, [
     catalog?.default_use_worktree,
@@ -107,6 +111,7 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     workspaceOptions: workspaces.map((workspace) => ({
       id: workspace.workspace_id,
       label: workspace.display_name,
+      path: workspace.path,
     })),
     selectedAlias,
     setSelectedAlias,
@@ -115,6 +120,11 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     useWorktree,
     setUseWorktree,
     worktreeAvailable: Boolean(selectedWorkspace?.worktree_available),
+    configExpanded,
+    toggleConfigExpanded: () => setConfigExpanded((v) => !v),
+    configPicking,
+    openConfigPicker: () => setConfigPicking(true),
+    closeConfigPicker: () => setConfigPicking(false),
     submitting,
     canSubmit,
     error,

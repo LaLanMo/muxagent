@@ -5,3 +5,5 @@ src-tauri/target/
 .DS_Store
 .tmp-debug-*.mjs
 *.pen
+lessions.md
+tasks/

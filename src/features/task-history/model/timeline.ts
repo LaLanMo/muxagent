@@ -161,7 +161,7 @@ function messageItem(
   if (!part) {
     return undefined;
   }
-  const text = collapseWhitespace(part.text);
+  const text = part.text?.trim();
   if (!text) {
     return undefined;
   }
@@ -178,7 +178,7 @@ function messageItem(
 function summarizeMessage(
   event: SessionHistoryMessageEvent,
 ): TranscriptTimelineItem | undefined {
-  const text = collapseWhitespace(event.text);
+  const text = event.text?.trim();
   if (!text) {
     return undefined;
   }

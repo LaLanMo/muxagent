@@ -7,22 +7,20 @@
 .modal-scrim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.66);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .task-modal {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: min(540px, calc(100vw - 48px));
+  width: min(640px, calc(100vw - 48px));
   transform: translate(-50%, -50%);
   display: grid;
   gap: 0;
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--surface);
-  box-shadow:
-    0 28px 64px rgba(15, 23, 42, 0.22),
-    0 8px 24px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.125);
 }
 
 .confirm-modal {
@@ -40,14 +38,27 @@
     0 8px 24px rgba(15, 23, 42, 0.12);
 }
 
-.task-modal__header,
-.task-modal__footer,
 .confirm-modal__header,
 .confirm-modal__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 18px 24px;
+}
+
+.task-modal__header,
+.task-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.task-modal__header {
+  padding: 20px 24px;
+}
+
+.task-modal__footer {
+  padding: 16px 24px 20px 24px;
 }
 
 .task-modal__header,
@@ -64,8 +75,8 @@
 
 .task-modal__body {
   display: grid;
-  gap: 14px;
-  padding: 18px 20px;
+  gap: 24px;
+  padding: 24px;
 }
 
 .confirm-modal__body {
@@ -74,19 +85,18 @@
   line-height: 1.5;
 }
 
-.task-modal__textarea,
-.task-modal__select {
+.task-modal__textarea {
   width: 100%;
   border: 0;
   border-radius: 8px;
   background: var(--surface-1);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px transparent;
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .task-modal__textarea {
   min-height: 92px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   resize: vertical;
 }
 
@@ -96,19 +106,235 @@
   gap: 16px;
 }
 
-.task-modal__config-card {
-  display: grid;
+/* --- Workspace card --- */
+.task-modal__ws-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 0;
-  background: transparent;
-  box-shadow: inset 0 0 0 1px rgba(229, 231, 235, 0.95);
+  cursor: pointer;
+  position: relative;
 }
 
-.task-modal__select {
-  appearance: none;
-  min-height: 36px;
-  padding: 0 12px;
+.task-modal__ws-card select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+.task-modal__ws-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.task-modal__ws-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.task-modal__ws-path {
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* --- Config card --- */
+.task-modal__cfg-card {
+  display: grid;
+  gap: 12px;
+  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+}
+
+.task-modal__cfg-card--picking {
+  padding: 0;
+  border-color: transparent;
+  gap: 4px;
+}
+
+.task-modal__cfg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.task-modal__cfg-card--picking .task-modal__cfg-header {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.task-modal__cfg-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.task-modal__cfg-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.task-modal__cfg-body {
+  display: grid;
+  gap: 12px;
+}
+
+.task-modal__cfg-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+.task-modal__cfg-divider {
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.task-modal__cfg-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.task-modal__cfg-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-modal__cfg-field-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.task-modal__cfg-field-value {
+  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* --- Config picker list --- */
+.task-modal__cfg-list {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.task-modal__cfg-option {
+  padding: 10px 14px;
+  display: grid;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.task-modal__cfg-option:hover {
+  background: var(--surface-hover);
+}
+
+.task-modal__cfg-option--selected {
+  background: var(--accent-subtle);
+}
+
+.task-modal__cfg-option--selected:hover {
+  background: var(--accent-subtle);
+}
+
+.task-modal__cfg-option-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-modal__cfg-option-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.task-modal__cfg-option-name--selected {
+  font-weight: 600;
+}
+
+.task-modal__cfg-option-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+.task-modal__cfg-option + .task-modal__cfg-option {
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* --- Worktree card --- */
+.task-modal__wt-card {
+  background: var(--surface-1);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+
+.task-modal__wt-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.task-modal__wt-check {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1.5px solid var(--border-strong);
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+}
+
+.task-modal__wt-check--checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.task-modal__wt-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.task-modal__wt-desc {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+/* --- Section label override --- */
+.task-modal__body .field-block__label {
+  color: var(--text-tertiary);
+}
+
+/* --- Close button --- */
+.task-modal__close {
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
 }
 
 .flow-node-list {
@@ -136,21 +362,20 @@
 }
 
 .flow-node-inline--modal .flow-node-inline__item {
-  min-height: 18px;
-  padding: 0 8px;
-  font-size: 10px;
+  border-radius: 8px;
+  padding: 4px 12px;
+  font-size: 12px;
+  background: var(--surface-muted);
+  color: var(--text-tertiary);
 }
 
-.task-modal__checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text-secondary);
+/* --- Start button override --- */
+.task-modal__footer .primary-action {
+  border-radius: 8px;
   font-size: 13px;
-}
-
-.task-modal__checkbox input {
-  accent-color: var(--text);
+  font-weight: normal;
+  padding: 8px 20px;
+  letter-spacing: 0;
 }
 
 @media (max-width: 1240px) {

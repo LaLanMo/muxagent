@@ -21,7 +21,7 @@ type EntryShellScreenProps = {
     setDescription: (value: string) => void;
     selectedTargetWorkspaceId: string;
     setSelectedTargetWorkspaceId: (value: string) => void;
-    workspaceOptions: Array<{ id: string; label: string }>;
+    workspaceOptions: Array<{ id: string; label: string; path: string }>;
     selectedAlias: string;
     setSelectedAlias: (value: string) => void;
     selectedEntry?: ConfigCatalogEntryDto;
@@ -29,6 +29,11 @@ type EntryShellScreenProps = {
     useWorktree: boolean;
     setUseWorktree: (value: boolean) => void;
     worktreeAvailable: boolean;
+    configExpanded: boolean;
+    toggleConfigExpanded: () => void;
+    configPicking: boolean;
+    openConfigPicker: () => void;
+    closeConfigPicker: () => void;
     submitting: boolean;
     canSubmit: boolean;
     error?: string;
@@ -191,6 +196,12 @@ export function EntryShellScreen({
 
       <NewTaskModal
         configDescription={modal.selectedEntry?.description}
+        selectedRuntimeName={modal.selectedEntry?.runtime_name}
+        configExpanded={modal.configExpanded}
+        onToggleConfigExpanded={modal.toggleConfigExpanded}
+        configPicking={modal.configPicking}
+        onOpenConfigPicker={modal.openConfigPicker}
+        onCloseConfigPicker={modal.closeConfigPicker}
         description={modal.description}
         entries={launchableEntries}
         error={modal.error}

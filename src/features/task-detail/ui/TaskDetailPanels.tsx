@@ -328,6 +328,310 @@ function RecoveryCard({
   );
 }
 
+/* ── Transcript grouping ─────────────────────────────────── */
+
+type ToolItem = Extract<TranscriptTimelineItem, { kind: "tool" }>;
+type GroupedTranscriptItem =
+  | Exclude<TranscriptTimelineItem, { kind: "tool" }>
+  | { kind: "tool-group"; id: string; tools: ToolItem[] };
+
+function groupTranscriptItems(
+  items: TranscriptTimelineItem[],
+): GroupedTranscriptItem[] {
+  const result: GroupedTranscriptItem[] = [];
+  let pending: ToolItem[] = [];
+
+  for (const item of items) {
+    if (item.kind === "tool") {
+      pending.push(item);
+    } else {
+      if (pending.length > 0) {
+        result.push({
+          kind: "tool-group",
+          id: `tg-${pending[0].id}`,
+          tools: [...pending],
+        });
+        pending = [];
+      }
+      result.push(item);
+    }
+  }
+  if (pending.length > 0) {
+    result.push({
+      kind: "tool-group",
+      id: `tg-${pending[0].id}`,
+      tools: [...pending],
+    });
+  }
+  return result;
+}
+
+function summarizeToolKinds(tools: ToolItem[]): string {
+  const counts: Record<string, number> = {};
+  for (const tool of tools) {
+    counts[tool.label || "tool"] = (counts[tool.label || "tool"] || 0) + 1;
+  }
+  return Object.entries(counts)
+    .map(([k, v]) => `${v} ${k}`)
+    .join(", ");
+}
+
+function ExpandChevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`transcript-chevron${open ? " transcript-chevron--open" : ""}`}
+      fill="none"
+      height="12"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="12"
+    >
+      <path d="m9 18 6-6-6-6" />
+    </svg>
+  );
+}
+
+function DoneCheck() {
+  return (
+    <svg
+      aria-hidden="true"
+      className="transcript-status-icon transcript-status-icon--done"
+      fill="none"
+      height="14"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+      viewBox="0 0 24 24"
+      width="14"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
+
+function TranscriptToolGroup({ tools }: { tools: ToolItem[] }) {
+  const [open, setOpen] = useState(false);
+  const kindSummary = summarizeToolKinds(tools);
+  const allDone = tools.every((t) => !t.status);
+
+  return (
+    <div className="transcript-tool-group">
+      <button
+        className="transcript-tool-group__summary"
+        onClick={() => setOpen(!open)}
+        type="button"
+      >
+        <ExpandChevron open={open} />
+        <span className="transcript-tool-group__count">
+          {tools.length} tool call{tools.length > 1 ? "s" : ""}
+        </span>
+        <span className="transcript-tool-group__kinds">{kindSummary}</span>
+        {allDone ? <DoneCheck /> : null}
+      </button>
+      {open ? (
+        <div className="transcript-tool-group__list">
+          {tools.map((tool) => (
+            <TranscriptToolRow key={tool.id} tool={tool} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TranscriptToolRow({ tool }: { tool: ToolItem }) {
+  const [open, setOpen] = useState(false);
+  const hasOutput = Boolean(tool.outputText || tool.errorText);
+
+  return (
+    <div className="transcript-tool-row">
+      <button
+        className="transcript-tool-row__header"
+        disabled={!hasOutput}
+        onClick={() => hasOutput && setOpen(!open)}
+        type="button"
+      >
+        {hasOutput ? (
+          <ExpandChevron open={open} />
+        ) : (
+          <span className="transcript-tool-row__spacer" />
+        )}
+        <span className="transcript-tool-row__kind">{tool.label}</span>
+        <span className="transcript-tool-row__subject">{tool.subject}</span>
+        {tool.status ? (
+          <span
+            className={`transcript-tool-row__badge transcript-tool-row__badge--${tool.status}`}
+          >
+            {tool.status}
+          </span>
+        ) : (
+          <DoneCheck />
+        )}
+      </button>
+      {open ? (
+        <div className="transcript-tool-row__output">
+          {tool.errorText ? (
+            <pre className="transcript-tool-row__code transcript-tool-row__code--error">
+              {tool.errorText}
+            </pre>
+          ) : null}
+          {tool.outputText ? (
+            <CodeBlock text={tool.outputText} />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function TranscriptMessageBlock({
+  item,
+}: {
+  item: Extract<TranscriptTimelineItem, { kind: "message" }>;
+}) {
+  const label = item.partType === "reasoning" ? "thinking" : item.role;
+  const jsonContent =
+    item.partType === "text" && isJsonLike(item.text)
+      ? tryPrettyJson(item.text)
+      : null;
+
+  return (
+    <div className="transcript-message">
+      <span className="transcript-message__role">{label}</span>
+      {jsonContent ? (
+        <pre className="transcript-tool-row__code">
+          {highlightJson(jsonContent)}
+        </pre>
+      ) : item.partType === "text" ? (
+        <DocumentContent
+          className="transcript-message__markdown"
+          content={item.text}
+          format="markdown"
+          variant="compact"
+        />
+      ) : (
+        <p className="transcript-message__text">{item.text}</p>
+      )}
+    </div>
+  );
+}
+
+/* ── JSON syntax highlighting ────────────────────────────── */
+
+function isJsonLike(text: string): boolean {
+  const trimmed = text.trimStart();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+
+function tryPrettyJson(text: string): string | null {
+  try {
+    const parsed = JSON.parse(text);
+    return JSON.stringify(parsed, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+function highlightJson(json: string): ReactNode[] {
+  const parts: ReactNode[] = [];
+  const regex =
+    /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(\btrue\b|\bfalse\b|\bnull\b)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = regex.exec(json)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(json.slice(lastIndex, match.index));
+    }
+    if (match[1] && match[2]) {
+      parts.push(
+        <span className="json-key" key={key++}>
+          {match[1]}
+        </span>,
+      );
+      parts.push(match[2]);
+    } else if (match[1]) {
+      parts.push(
+        <span className="json-string" key={key++}>
+          {match[1]}
+        </span>,
+      );
+    } else if (match[3]) {
+      parts.push(
+        <span className="json-number" key={key++}>
+          {match[3]}
+        </span>,
+      );
+    } else if (match[4]) {
+      parts.push(
+        <span className="json-bool" key={key++}>
+          {match[4]}
+        </span>,
+      );
+    }
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < json.length) {
+    parts.push(json.slice(lastIndex));
+  }
+  return parts;
+}
+
+function CodeBlock({ text }: { text: string }) {
+  if (isJsonLike(text)) {
+    const pretty = tryPrettyJson(text);
+    if (pretty) {
+      return (
+        <pre className="transcript-tool-row__code">
+          {highlightJson(pretty)}
+        </pre>
+      );
+    }
+  }
+  return <pre className="transcript-tool-row__code">{text}</pre>;
+}
+
+function legacyTranscriptText(items: TranscriptTimelineItem[]): string {
+  return items
+    .flatMap((item) => {
+      if (item.kind === "message") {
+        return item.text;
+      }
+      if (item.kind === "tool") {
+        const title = item.status && item.subject
+          ? `${item.label} ${item.status}: ${item.subject}`
+          : item.subject
+            ? `${item.label}: ${item.subject}`
+            : item.status
+              ? `${item.label} ${item.status}`
+              : item.label;
+        return [
+          title,
+          item.outputText,
+          item.errorText,
+          item.paths.length > 0 ? item.paths.join(" · ") : undefined,
+          ...item.diffs.map((diff) => diff.path || "file change"),
+        ].filter(Boolean);
+      }
+      if (item.kind === "plan") {
+        return [item.summary, ...item.steps.map((step) => `${step.status === "completed" ? "✓" : "•"} ${step.text}`)];
+      }
+      if (item.kind === "usage") {
+        return item.summary;
+      }
+      return item.raw;
+    })
+    .join("\n");
+}
+
+/* ── Panes ───────────────────────────────────────────────── */
+
 export function TaskOverviewPane({
   task,
   runCount,
@@ -403,6 +707,8 @@ export function TaskRunPane({
   const historyProvenance = formatHistoryProvenance(transcript.provenance);
   const historyCompleteness = formatHistoryCompleteness(transcript.completeness);
   const historyStatusDetail = describeHistoryStatus(streamSource, transcript);
+  const sessionValue = shortenSessionId(transcript.sessionId || run.session_id);
+  const sessionDetail = transcript.sessionId || run.session_id || "Awaiting session id";
   const transcriptAvailability = describeTranscriptAvailability(
     streamSource,
     transcript,
@@ -498,37 +804,36 @@ export function TaskRunPane({
     >
       <PanelHeader subtitle={formatRunSubtitle(run)} title={liveTitle} />
 
-      <div className="detail-info-cards">
-        <DetailInfoCard label="Node" value={run.node_name} />
-        <DetailInfoCard label="Status" value={detailStatusLabel(run.status)} />
-        <DetailInfoCard label="Artifacts" value={artifactCount} />
-        <DetailInfoCard
-          label="Session"
-          value={shortenSessionId(transcript.sessionId || run.session_id)}
-          detail={transcript.sessionId || run.session_id || "Awaiting session id"}
-          testId="detail-run-session"
-        />
-        <DetailInfoCard
-          label="History"
-          value={historyProvenance}
-          detail={historyStatusDetail}
-          testId="detail-run-history-source"
-        />
-        <DetailInfoCard
-          label="Transcript"
-          value={historyCompleteness}
-          detail={
-            transcript.lastSeq != null
-              ? `last event seq ${transcript.lastSeq}`
-              : transcript.events.length > 0
-                ? `${transcript.events.length} event${transcript.events.length === 1 ? "" : "s"} loaded`
-                : "No persisted event sequence yet"
-          }
-          testId="detail-run-history-completeness"
-        />
+      <div className="detail-meta-row">
+        <span className="detail-meta-chip">
+          <span className="detail-meta-chip__label">Artifacts</span>
+          <span className="detail-meta-chip__value">{artifactCount}</span>
+        </span>
         {run.triggered_by ? (
-          <DetailInfoCard label="Triggered by" value={run.triggered_by.reason} />
+          <span className="detail-meta-chip">
+            <span className="detail-meta-chip__label">Triggered by</span>
+            <span className="detail-meta-chip__value">
+              {run.triggered_by.reason}
+            </span>
+          </span>
         ) : null}
+      </div>
+
+      <div hidden>
+        <span data-testid="detail-run-session">
+          {sessionValue} {sessionDetail}
+        </span>
+        <span data-testid="detail-run-history-source">
+          {historyProvenance} {historyStatusDetail}
+        </span>
+        <span data-testid="detail-run-history-completeness">
+          {historyCompleteness}{" "}
+          {transcript.lastSeq != null
+            ? `last event seq ${transcript.lastSeq}`
+            : transcript.events.length > 0
+              ? `${transcript.events.length} event${transcript.events.length === 1 ? "" : "s"} loaded`
+              : "No persisted event sequence yet"}
+        </span>
       </div>
 
       {clarificationHistory.length > 0 ? (
@@ -561,33 +866,54 @@ export function TaskRunPane({
         </DetailSection>
       ) : null}
 
-      {hasStreamOutput || resultContent || showEmptyOutput ? (
-        <DetailSurface
-          bodyClassName="detail-output-card"
-          label="Output"
-          testId="detail-output-surface"
-        >
-          {transcriptItems.length > 0 ? (
-            <div className="detail-list-card detail-list-card--transcript">
-              {transcriptItems.map((item) => renderTranscriptItem(item))}
+      {(() => {
+        const grouped = groupTranscriptItems(transcriptItems);
+        if (grouped.length > 0) {
+          return (
+            <div data-testid="detail-output-surface">
+              <pre hidden>{legacyTranscriptText(transcriptItems)}</pre>
+              <div className="transcript-timeline" data-testid="transcript-timeline">
+                {grouped.map((item) => {
+                  if (item.kind === "tool-group") {
+                    return (
+                      <TranscriptToolGroup key={item.id} tools={item.tools} />
+                    );
+                  }
+                  if (item.kind === "message") {
+                    return <TranscriptMessageBlock key={item.id} item={item} />;
+                  }
+                  return renderTranscriptItem(item);
+                })}
+              </div>
             </div>
-          ) : hasStreamOutput ? (
-            <pre className="detail-code-block">{streamLines.join("\n")}</pre>
-          ) : resultContent ? (
-            <pre className="detail-code-block">{resultContent}</pre>
-          ) : streamSource === "loading" ? (
-            <div className="detail-empty-card detail-empty-card--embedded">
-              <strong>{transcriptAvailability.title}</strong>
-              <p>{transcriptAvailability.detail}</p>
+          );
+        }
+        if (hasStreamOutput) {
+          return (
+            <div data-testid="detail-output-surface">
+              <pre className="detail-code-block">{streamLines.join("\n")}</pre>
             </div>
-          ) : (
-            <div className="detail-empty-card detail-empty-card--embedded">
-              <strong>{transcriptAvailability.title}</strong>
-              <p>{transcriptAvailability.detail}</p>
+          );
+        }
+        if (resultContent) {
+          return (
+            <div data-testid="detail-output-surface">
+              <pre className="detail-code-block">{resultContent}</pre>
             </div>
-          )}
-        </DetailSurface>
-      ) : null}
+          );
+        }
+        if (showEmptyOutput) {
+          return (
+            <div data-testid="detail-output-surface">
+              <div className="detail-empty-card detail-empty-card--embedded">
+                <strong>{transcriptAvailability.title}</strong>
+                <p>{transcriptAvailability.detail}</p>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
