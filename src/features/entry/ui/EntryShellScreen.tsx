@@ -101,26 +101,28 @@ export function EntryShellScreen({
                   </NavLink>
                 ))}
               </div>
-              <div className="task-layout-switch" data-testid="task-layout-switch">
-                {shell.taskLayoutNav.map((item) => (
-                  <NavLink
-                    className={({ isActive }) =>
-                      `task-layout-switch__item${
-                        (typeof item.active === "boolean" ? item.active : isActive)
-                          ? " is-active"
-                          : ""
-                      }`
-                    }
-                    aria-label={`Switch to ${item.label.toLowerCase()} layout`}
-                    data-testid={`task-layout-${item.label.toLowerCase()}`}
-                    end={item.to === "/" || item.to?.startsWith("/?")}
-                    key={item.label}
-                    to={item.to ?? "/"}
-                  >
-                    <ShellIcon name={layoutIcon(item.label)} />
-                  </NavLink>
-                ))}
-              </div>
+              {shell.taskLayoutNav.length > 0 ? (
+                <div className="task-layout-switch" data-testid="task-layout-switch">
+                  {shell.taskLayoutNav.map((item) => (
+                    <NavLink
+                      className={({ isActive }) =>
+                        `task-layout-switch__item${
+                          (typeof item.active === "boolean" ? item.active : isActive)
+                            ? " is-active"
+                            : ""
+                        }`
+                      }
+                      aria-label={`Switch to ${item.label.toLowerCase()} layout`}
+                      data-testid={`task-layout-${item.label.toLowerCase()}`}
+                      end={item.to === "/" || item.to?.startsWith("/?")}
+                      key={item.label}
+                      to={item.to ?? "/"}
+                    >
+                      <ShellIcon name={layoutIcon(item.label)} />
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
             </>
           ) : shell.phase === "connecting" || shell.bootstrapPending ? null : (
             <button

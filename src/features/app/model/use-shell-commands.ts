@@ -14,6 +14,7 @@ export type ShellCommands = {
 function buildCurrentTaskSurfacePath(pathname: string, search: string): string {
   const params = new URLSearchParams(search);
   params.delete("newTask");
+  params.delete("layout");
 
   if (pathname === "/") {
     const query = params.toString();
@@ -53,6 +54,7 @@ export function useShellCommands(): ShellCommands {
       const params = new URLSearchParams(
         location.pathname === "/" ? location.search : "",
       );
+      params.delete("layout");
       params.set("newTask", "1");
       navigate({
         pathname: "/",

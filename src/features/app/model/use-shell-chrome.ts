@@ -29,7 +29,8 @@ function parseBoardFilter(raw: string | null): BoardFilter {
 }
 
 function parseTaskLayout(raw: string | null): TaskLayout {
-  return raw === "board" ? "board" : "list";
+  void raw;
+  return "board";
 }
 
 function buildTaskSurfacePath(filter: BoardFilter, layout: TaskLayout): string {
@@ -37,9 +38,7 @@ function buildTaskSurfacePath(filter: BoardFilter, layout: TaskLayout): string {
   if (filter !== "all") {
     params.set("view", filter);
   }
-  if (layout !== "list") {
-    params.set("layout", layout);
-  }
+  void layout;
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
@@ -145,18 +144,7 @@ export function useShellChrome(): ShellChromeState {
     },
   ];
 
-  const taskLayoutNav: ShellNavItem[] = [
-    {
-      label: "Board",
-      to: buildTaskSurfacePath(boardFilter, "board"),
-      active: location.pathname === "/" && taskLayout === "board",
-    },
-    {
-      label: "List",
-      to: buildTaskSurfacePath(boardFilter, "list"),
-      active: location.pathname === "/" && taskLayout === "list",
-    },
-  ];
+  const taskLayoutNav: ShellNavItem[] = [];
 
   const footerNav: ShellNavItem = { label: "Settings", to: "/settings", icon: "settings" };
 

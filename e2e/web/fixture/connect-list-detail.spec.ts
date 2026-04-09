@@ -8,14 +8,15 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await page.getByTestId("workspace-picker-button").click();
 
   await expect(page.getByTestId("entry-shell")).toBeVisible();
-  await expect(page.getByTestId("list-row-task-live-fixture")).toContainText(
+  await expect(page.getByTestId("task-board")).toBeVisible();
+  await expect(page.getByTestId("board-card-task-live-fixture")).toContainText(
     "Refactor auth middleware",
   );
-  await expect(page.getByTestId("list-row-task-live-fixture")).toContainText(
+  await expect(page.getByTestId("board-card-task-live-fixture")).toContainText(
     "/tmp/muxagent-workspace",
   );
 
-  await page.getByTestId("list-row-task-live-fixture").click();
+  await page.getByTestId("board-card-task-live-fixture").click();
 
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-live-fixture$/);
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
@@ -32,7 +33,7 @@ test("merges replay history with live output for the selected running run", asyn
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await page.getByTestId("list-row-task-live-fixture").click();
+  await page.getByTestId("board-card-task-live-fixture").click();
 
   const outputSurface = page.getByTestId("detail-output-surface");
   await expect(outputSurface).toBeVisible();
@@ -54,8 +55,8 @@ test("task deep links restore the route workspace even after switching to anothe
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await expect(page.getByTestId("list-row-task-live-fixture")).toBeVisible();
-  await page.getByTestId("list-row-task-live-fixture").click();
+  await expect(page.getByTestId("board-card-task-live-fixture")).toBeVisible();
+  await page.getByTestId("board-card-task-live-fixture").click();
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-live-fixture$/);
   const firstWorkspaceDetailPath = new URL(page.url()).pathname;
   await expect(
@@ -115,8 +116,8 @@ test("treats Tasks as the all-workspaces view and workspace rows as task scope",
   await page.getByRole("link", { name: /^Tasks$/i }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
-  await expect(page.getByTestId("task-list")).toContainText("muxagent-workspace");
-  await expect(page.getByTestId("task-list")).toContainText("muxagent-alt-workspace");
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-workspace");
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
 
   await page.getByRole("link", { name: /^Configs$/i }).click();
   await expect(page.getByTestId("configs-screen")).toBeVisible();
@@ -128,6 +129,7 @@ test("treats Tasks as the all-workspaces view and workspace rows as task scope",
   await expect(
     page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
   ).toContainText("muxagent-alt-workspace");
+  await expect(page.getByTestId("task-board")).toBeVisible();
 });
 
 test("renders approval and artifact preview task surfaces", async ({ page }) => {
@@ -137,14 +139,14 @@ test("renders approval and artifact preview task surfaces", async ({ page }) => 
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await page.getByTestId("list-row-task-awaiting-pr").click();
+  await page.getByTestId("board-card-task-awaiting-pr").click();
   await expect(page.getByTestId("approval-pane")).toBeVisible();
   await expect(page.getByText("Review PR #42")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await page.getByTestId("list-row-task-live-fixture").click();
+  await page.getByTestId("board-card-task-live-fixture").click();
   await page.getByRole("button", { name: /plan\.md/i }).click();
   const artifactPane = page.getByTestId("artifact-pane");
   await expect(artifactPane).toBeVisible();
@@ -226,7 +228,7 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await page.getByTestId("list-row-task-failed-deploy").click();
+  await page.getByTestId("board-card-task-failed-deploy").click();
   await expect(page.getByTestId("failed-pane")).toBeVisible();
   await expect(
     page.getByTestId("failed-pane").getByText("Health check failed after deploy"),
@@ -234,7 +236,7 @@ test("renders failed and complete task surfaces", async ({ page }) => {
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await page.getByTestId("list-row-task-done-login").click();
+  await page.getByTestId("board-card-task-done-login").click();
   await expect(page.getByTestId("complete-pane")).toBeVisible();
   await expect(page.getByTestId("start-follow-up")).toBeVisible();
   await expect(page.getByTestId("detail-run-history-source")).toContainText(
@@ -255,28 +257,42 @@ test("renders the blocked task surface", async ({ page }) => {
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await page.getByTestId("list-row-task-blocked-db").click();
+  await page.getByTestId("board-card-task-blocked-db").click();
   await expect(page.getByTestId("blocked-pane")).toBeVisible();
   await expect(page.getByText("Waiting for migration window")).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
 });
 
-test("supports switching between board and list task surfaces", async ({ page }) => {
-  await page.goto("/");
+test("defaults to the board-only task surface and ignores legacy list routes", async ({
+  page,
+}) => {
+  await page.goto("/?layout=list");
 
   await expect(page.getByTestId("workspace-picker-button")).toBeEnabled();
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await expect(page.getByTestId("task-list")).toBeVisible();
-  await expect(page.getByTestId("list-row-task-done-long-copy")).toContainText(
+  await expect(page.getByTestId("task-board")).toBeVisible();
+  await expect(page.getByTestId("task-layout-switch")).toHaveCount(0);
+  await expect(page.getByTestId("task-list")).toHaveCount(0);
+  await expect(page.getByTestId("board-card-task-done-long-copy")).toContainText(
     "帮我想办法给这个网站搞 SEO",
   );
 
-  await page.getByTestId("task-layout-board").click();
+  await page
+    .locator(".shell-workspace__row")
+    .filter({ hasText: "muxagent-workspace" })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
   await expect(page.getByTestId("task-board")).toBeVisible();
-  await page.getByTestId("task-layout-list").click();
-  await expect(page.getByTestId("task-list")).toBeVisible();
+
+  await page.getByRole("link", { name: /^Tasks$/i }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("task-board")).toBeVisible();
+
+  await page.getByTestId("task-view-needs-attention").click();
+  await expect(page).toHaveURL(/\/\?view=attention$/);
+  await expect(page.getByTestId("task-board")).toBeVisible();
 });
 
 test("keeps long board cards readable and allows horizontal overflow on narrower widths", async ({
@@ -289,7 +305,6 @@ test("keeps long board cards readable and allows horizontal overflow on narrower
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await page.getByTestId("task-layout-board").click();
   const boardSurface = page.getByTestId("task-board");
   await expect(boardSurface).toBeVisible();
 
@@ -324,7 +339,6 @@ test("keeps dense completed-column cards at their natural height instead of shri
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-workspace"));
   await page.getByTestId("workspace-picker-button").click();
 
-  await page.getByTestId("task-layout-board").click();
   const completedCard = page.getByTestId("board-card-task-done-login");
   const meta = completedCard.locator(".task-board-card__meta");
   const stamp = completedCard.locator(".task-board-card__stamp");
