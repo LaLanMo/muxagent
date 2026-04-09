@@ -36,12 +36,17 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   final _events = StreamController<WsEvent>.broadcast();
   List<ApprovalRequest> nextApprovals = const [];
   List<ResolvedSessionSnapshot> nextResolvedSessions = const [];
+  ReplayHeadSnapshot nextReplayHead = const ReplayHeadSnapshot(
+    streamEpoch: 77,
+    replayedThroughSeq: 0,
+  );
   ResyncBatch nextResyncBatch = const ResyncBatch(
     events: [],
     status: ReplayResyncStatus.reset,
     streamEpoch: 77,
     replayedThroughSeq: 0,
   );
+  int replayHeadCalls = 0;
   int? lastResyncStreamEpoch;
   int? lastResyncSeq;
   Completer<void>? resyncBlocker;
@@ -56,6 +61,14 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   void emitEvent(WsEvent event) => _events.add(event);
 
   Future<void> disposeEvents() => _events.close();
+
+  @override
+  Future<ReplayHeadSnapshot> fetchReplayHead({
+    required String machineId,
+  }) async {
+    replayHeadCalls++;
+    return nextReplayHead;
+  }
 
   @override
   Future<ResyncBatch> resyncEvents({
@@ -155,15 +168,20 @@ void main() {
       }
     });
 
-    test('resync reports noCursor when no event sequence exists', () async {
-      final result = await repo.resync('machine-1');
+    test(
+      'resync without a cursor bootstraps replay head without requesting replay',
+      () async {
+        final result = await repo.resync('machine-1');
 
-      expect(result.outcome, ResyncOutcome.noCursor);
-      expect(result.lastSeqUsed, 0);
-      expect(result.streamEpoch, 77);
-      expect(wsRepo.lastResyncSeq, 0);
-      expect(wsRepo.lastResyncStreamEpoch, isNull);
-    });
+        expect(result.outcome, ResyncOutcome.noCursor);
+        expect(result.lastSeqUsed, 0);
+        expect(result.streamEpoch, 77);
+        expect(wsRepo.replayHeadCalls, 1);
+        expect(wsRepo.lastResyncSeq, isNull);
+        expect(wsRepo.lastResyncStreamEpoch, isNull);
+        expect(repo.lastSeqFor('machine-1'), 0);
+      },
+    );
 
     test('live events bootstrap cursor and mark chat cache stale', () async {
       wsRepo.emitEvent(
@@ -193,6 +211,8 @@ void main() {
       expect(repo.lastSeqFor('machine-1'), 6);
       expect(repo.transcriptWatermarkFor(sessionId), 6);
       expect(chatCacheRepo.staleMarked, [sessionId]);
+      expect(wsRepo.replayHeadCalls, 1);
+      expect(wsRepo.lastResyncSeq, isNull);
 
       repo.dispose();
 
@@ -212,6 +232,7 @@ void main() {
       final result = await repo.resync('machine-1');
 
       expect(result.outcome, ResyncOutcome.complete);
+      expect(wsRepo.replayHeadCalls, 1);
       expect(wsRepo.lastResyncSeq, 6);
       expect(wsRepo.lastResyncStreamEpoch, 77);
     });
@@ -272,6 +293,35 @@ void main() {
     });
 
     test('resync fence buffers live events and drops replay overlap', () async {
+      wsRepo.nextReplayHead = const ReplayHeadSnapshot(
+        streamEpoch: 77,
+        replayedThroughSeq: 7,
+      );
+      wsRepo.emitEvent(
+        WsEvent(
+          type: WsMessageType.event.value,
+          payload: {
+            'type': 'message.delta',
+            'machineId': 'machine-1',
+            'sessionId': sessionId,
+            'seq': 7,
+            'messagePart': {
+              'app': {
+                'partId': 'seed-part',
+                'messageId': 'msg-0',
+                'role': 'agent',
+                'delta': 'seed',
+                'partType': 'text',
+                'fullText': 'seed',
+              },
+            },
+          },
+        ),
+      );
+
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repo.lastSeqFor('machine-1'), 7);
+
       final seenSeqs = <int>[];
       final sub = repo.events.listen((event) {
         if (event.sessionId == sessionId) {
@@ -350,7 +400,7 @@ void main() {
 
       await Future<void>.delayed(const Duration(milliseconds: 20));
       expect(seenSeqs, isEmpty);
-      expect(repo.lastSeqFor('machine-1'), 0);
+      expect(repo.lastSeqFor('machine-1'), 7);
 
       wsRepo.resyncBlocker!.complete();
       final result = await resyncFuture;

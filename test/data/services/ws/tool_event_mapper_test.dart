@@ -125,6 +125,42 @@ void main() {
     expect(event.tool!.output, isNull);
   });
 
+  test('maps tool.completed payload when transport omits tool.acp', () {
+    final event = ToolEventMapper.mapEnvelope(
+      ToolEventEnvelopeDto.fromJson({
+        'type': 'tool.completed',
+        'sessionId': 'session-123',
+        'tool': {
+          'app': {
+            'partId': 'part-4',
+            'messageId': 'message-4',
+            'callId': 'toolu_999',
+            'name': 'Terminal',
+            'kind': 'execute',
+            'title': 'Terminal',
+            'status': 'completed',
+            'input': {
+              'description': 'List workspace files',
+              'command': {'display': 'ls -la'},
+              'rawInputJson': '{"command":"ls -la"}',
+            },
+            'output': 'file-a\nfile-b',
+          },
+        },
+      }),
+      'machine-1',
+    );
+
+    expect(event.type, EventType.toolCompleted);
+    expect(event.tool, isNotNull);
+    expect(event.tool!.callId, 'toolu_999');
+    expect(event.tool!.name, 'Terminal');
+    expect(event.tool!.kind, 'execute');
+    expect(event.tool!.title, 'Terminal');
+    expect(event.tool!.input?.command?.display, 'ls -la');
+    expect(event.tool!.output, 'file-a\nfile-b');
+  });
+
   test(
     'maps empty app.diffs to null so later tool updates do not clear diffs',
     () {

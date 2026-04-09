@@ -219,6 +219,17 @@ void main() {
       expect(resync.events.single.sessionId, 'sid-1');
 
       relay.nextPayload = {
+        'result': {'streamEpoch': 42, 'replayedThroughSeq': 12},
+      };
+
+      final head = await repo.fetchReplayHead(machineId: 'machine-1');
+
+      expect(relay.lastMethod, 'events.head');
+      expect(relay.lastParams, isEmpty);
+      expect(head.streamEpoch, 42);
+      expect(head.replayedThroughSeq, 12);
+
+      relay.nextPayload = {
         'result': {
           'sessions': [
             {

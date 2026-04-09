@@ -113,6 +113,23 @@ class RpcResyncResponseDto with _$RpcResyncResponseDto {
   }
 }
 
+class RpcReplayHeadResponseDto {
+  final int streamEpoch;
+  final int replayedThroughSeq;
+
+  const RpcReplayHeadResponseDto({
+    required this.streamEpoch,
+    required this.replayedThroughSeq,
+  });
+
+  factory RpcReplayHeadResponseDto.fromJson(Map<String, dynamic> json) {
+    return RpcReplayHeadResponseDto(
+      streamEpoch: _requiredPositiveInt(json['streamEpoch']),
+      replayedThroughSeq: _requiredInt(json['replayedThroughSeq']),
+    );
+  }
+}
+
 @freezed
 class RpcOkResponseDto with _$RpcOkResponseDto {
   const factory RpcOkResponseDto({

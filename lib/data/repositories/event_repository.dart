@@ -432,11 +432,8 @@ class EventRepository {
 
   Future<void> _bootstrapReplayCursor(String machineId) async {
     try {
-      final response = await _wsRepo.resyncEvents(
-        machineId: machineId,
-        lastSeq: 0,
-      );
-      final responseEpoch = response.streamEpoch;
+      final head = await _wsRepo.fetchReplayHead(machineId: machineId);
+      final responseEpoch = head.streamEpoch;
       if (responseEpoch <= 0) {
         debugPrint(
           '[ReplayCursor] bootstrap machine=$machineId skipped due to invalid replay epoch',
@@ -445,9 +442,9 @@ class EventRepository {
       }
 
       final observedSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
-      final targetSeq = observedSeq > response.replayedThroughSeq
+      final targetSeq = observedSeq > head.replayedThroughSeq
           ? observedSeq
-          : response.replayedThroughSeq;
+          : head.replayedThroughSeq;
       final existing = _replayCursorByMachine[machineId];
       if (existing != null) {
         if (existing.streamEpoch != responseEpoch ||
@@ -461,7 +458,7 @@ class EventRepository {
         ReplayCursor(streamEpoch: responseEpoch, lastSeq: targetSeq),
       );
       debugPrint(
-        '[ReplayCursor] bootstrap machine=$machineId status=${response.status} '
+        '[ReplayCursor] bootstrap machine=$machineId '
         'streamEpoch=$responseEpoch targetSeq=$targetSeq',
       );
     } catch (e) {
@@ -735,6 +732,28 @@ class EventRepository {
       debugPrint(
         '[Resync] machine=$machineId start lastSeq=$lastSeq streamEpoch=$streamEpoch',
       );
+      if (cursor == null) {
+        final head = await _wsRepo.fetchReplayHead(machineId: machineId);
+        final observedSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
+        final targetSeq = observedSeq > head.replayedThroughSeq
+            ? observedSeq
+            : head.replayedThroughSeq;
+        _setReplayCursor(
+          machineId,
+          ReplayCursor(streamEpoch: head.streamEpoch, lastSeq: targetSeq),
+        );
+        _drainResyncFence(machineId, fence, replayedThroughSeq: targetSeq);
+        debugPrint(
+          '[Resync] machine=$machineId outcome=noCursor '
+          'streamEpoch=${head.streamEpoch} replayedThroughSeq=${head.replayedThroughSeq}',
+        );
+        return ResyncResult(
+          outcome: ResyncOutcome.noCursor,
+          lastSeqUsed: 0,
+          highestSeqApplied: 0,
+          streamEpoch: head.streamEpoch,
+        );
+      }
       final response = await _wsRepo.resyncEvents(
         machineId: machineId,
         lastSeq: lastSeq,
@@ -756,13 +775,6 @@ class EventRepository {
         );
       }
 
-      if (cursor == null) {
-        _setReplayCursor(
-          machineId,
-          ReplayCursor(streamEpoch: responseEpoch, lastSeq: 0),
-        );
-      }
-
       debugPrint(
         '[Resync] machine=$machineId response events=${response.events.length} '
         'status=${response.status} streamEpoch=$responseEpoch '
@@ -781,13 +793,11 @@ class EventRepository {
             replayedThroughSeq: response.replayedThroughSeq,
           );
           debugPrint(
-            '[Resync] machine=$machineId outcome=${cursor == null ? 'noCursor' : 'reset'} '
+            '[Resync] machine=$machineId outcome=reset '
             'lastSeq=$lastSeq streamEpoch=$responseEpoch',
           );
           return ResyncResult(
-            outcome: cursor == null
-                ? ResyncOutcome.noCursor
-                : ResyncOutcome.reset,
+            outcome: ResyncOutcome.reset,
             lastSeqUsed: lastSeq,
             highestSeqApplied: lastSeq,
             streamEpoch: responseEpoch,

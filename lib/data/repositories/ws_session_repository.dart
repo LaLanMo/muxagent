@@ -32,6 +32,16 @@ class ResyncBatch {
   });
 }
 
+class ReplayHeadSnapshot {
+  final int streamEpoch;
+  final int replayedThroughSeq;
+
+  const ReplayHeadSnapshot({
+    required this.streamEpoch,
+    required this.replayedThroughSeq,
+  });
+}
+
 class WsSessionRepository {
   final RelayWsClient _relay;
   final SessionManager _sessions;
@@ -186,6 +196,21 @@ class WsSessionRepository {
         RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
         RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
       },
+      streamEpoch: response.streamEpoch,
+      replayedThroughSeq: response.replayedThroughSeq,
+    );
+  }
+
+  Future<ReplayHeadSnapshot> fetchReplayHead({
+    required String machineId,
+  }) async {
+    final response = await _relay.callRpcDecoded(
+      machineId: machineId,
+      method: 'events.head',
+      params: const {},
+      decode: RpcReplayHeadResponseDto.fromJson,
+    );
+    return ReplayHeadSnapshot(
       streamEpoch: response.streamEpoch,
       replayedThroughSeq: response.replayedThroughSeq,
     );
