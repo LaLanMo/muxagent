@@ -32,7 +32,7 @@
 
 .desktop-shell__brand {
   color: var(--text-ghost);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -47,7 +47,7 @@
   padding: 7px 12px;
   background: var(--accent);
   color: #fff;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   letter-spacing: 0.01em;
 }
@@ -104,14 +104,14 @@
 }
 
 .shell-nav__label {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
 }
 
 .shell-nav__count {
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .shell-section {
@@ -130,7 +130,7 @@
 
 .shell-section__title {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.03em;
 }
@@ -160,7 +160,7 @@
 .shell-section__empty {
   padding: 2px 4px;
   color: var(--text-ghost);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 .shell-workspace__list {
@@ -207,7 +207,7 @@
 .shell-workspace__label {
   overflow: hidden;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -223,8 +223,8 @@
   padding: 1px 6px;
   background: var(--surface-muted);
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 9px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   font-weight: 600;
 }
 
@@ -268,7 +268,7 @@
   gap: 24px;
   min-height: 0;
   padding: 16px;
-  background: var(--surface);
+  background: var(--bg);
 }
 
 .desktop-shell__topbar-left,
@@ -361,12 +361,12 @@
 .screen-heading__support,
 .screen-meta {
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-normal);
 }
 
 .screen-meta {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .task-view-switch {
@@ -403,8 +403,8 @@
 
 .task-view-switch__count {
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 9px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .task-layout-switch {

@@ -82,7 +82,7 @@
 .confirm-modal__body {
   padding: 20px 24px;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: var(--lh-relaxed);
 }
 
 .task-modal__textarea {
@@ -136,15 +136,15 @@
 }
 
 .task-modal__ws-name {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text);
   white-space: nowrap;
 }
 
 .task-modal__ws-path {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   color: var(--text-tertiary);
   white-space: nowrap;
   overflow: hidden;
@@ -188,7 +188,7 @@
 }
 
 .task-modal__cfg-name {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   color: var(--text);
 }
@@ -199,9 +199,9 @@
 }
 
 .task-modal__cfg-desc {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
-  line-height: 1.5;
+  line-height: var(--lh-relaxed);
 }
 
 .task-modal__cfg-divider {
@@ -221,15 +221,15 @@
 }
 
 .task-modal__cfg-field-label {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
 }
 
 .task-modal__cfg-field-value {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   color: var(--text);
 }
 
@@ -267,7 +267,7 @@
 }
 
 .task-modal__cfg-option-name {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   color: var(--text);
 }
@@ -277,7 +277,7 @@
 }
 
 .task-modal__cfg-option-desc {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
 }
 
@@ -317,14 +317,14 @@
 }
 
 .task-modal__wt-label {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-secondary);
 }
 
 .task-modal__wt-desc {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   color: var(--text-tertiary);
-  line-height: 1.5;
+  line-height: var(--lh-relaxed);
 }
 
 /* --- Section label override --- */
@@ -354,8 +354,8 @@
   border-radius: 999px;
   background: var(--surface-1);
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .flow-node-inline--modal {
@@ -366,7 +366,7 @@
 .flow-node-inline--modal .flow-node-inline__item {
   border-radius: 8px;
   padding: 4px 12px;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   background: var(--surface-muted);
   color: var(--text-tertiary);
 }
@@ -374,7 +374,7 @@
 /* --- Start button override --- */
 .task-modal__footer .primary-action {
   border-radius: 8px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: normal;
   padding: 8px 20px;
   letter-spacing: 0;

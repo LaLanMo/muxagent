@@ -22,9 +22,39 @@
   /* Text */
   --text: #1A1A1C;
   --text-secondary: #5C6068;
-  --text-tertiary: #8A8F97;
-  --text-ghost: #C0C3C9;
+  --text-tertiary: #70757E;
+  --text-ghost: #8A8F97;
+  --text-muted: #A0A4AB;
   --text-disabled: #B0B4BA;
+
+  /* Typography — 5-step scale + mono */
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 20px;
+  --font-size-xl: 24px;
+  --font-size-mono: 13px;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+
+  /* Line heights */
+  --lh-tight: 1.2;
+  --lh-normal: 1.4;
+  --lh-relaxed: 1.5;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
 
   /* Accent */
   --accent: #0D6E6E;
@@ -156,7 +186,7 @@ ul {
   padding: 8px 14px;
   background: var(--accent);
   color: #fff;
-  font-size: 11px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -173,7 +203,7 @@ ul {
 .text-action {
   color: var(--green);
   padding-inline: 0;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
 }
 
@@ -200,15 +230,15 @@ ul {
   align-items: center;
   gap: 6px;
   min-height: 24px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 4px 9px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
 }
 
 .status-badge--mono {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   font-weight: 400;
 }
 
@@ -233,20 +263,18 @@ ul {
 .status-badge--failed {
   color: var(--text);
   background: var(--status-failed-bg);
-  box-shadow: inset 0 0 0 1px var(--status-failed);
 }
 .status-badge--failed .status-badge__dot { background: var(--status-failed); }
 
 .status-badge--neutral {
   color: var(--text-secondary);
   background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .inline-banner {
   border-radius: 10px;
   padding: 12px 14px;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
 }
 
@@ -276,7 +304,7 @@ ul {
   border-radius: 8px;
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.08);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   pointer-events: auto;
   animation: toast-enter 200ms ease-out;
 }
@@ -335,16 +363,16 @@ ul {
 
 .field-block__label {
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   font-weight: 600;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .screen-error {
   color: var(--red);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 /* Focus rings */

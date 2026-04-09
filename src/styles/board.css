@@ -37,7 +37,7 @@
 }
 
 .board-empty-state h2 {
-  font-size: 22px;
+  font-size: var(--font-size-xl);
   font-weight: 650;
 }
 
@@ -116,7 +116,7 @@
 
 .board-column__count {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 400;
 }
 
@@ -135,7 +135,7 @@
   position: relative;
   overflow: hidden;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
   transition:
@@ -210,9 +210,9 @@
 
 .task-board-card h3 {
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--lh-normal);
   overflow: hidden;
   overflow-wrap: anywhere;
   display: -webkit-box;
@@ -231,9 +231,9 @@
 .task-board-card__meta {
   min-width: 0;
   flex: 1 1 auto;
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
-  line-height: 1.35;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-normal);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -246,8 +246,8 @@
   flex: none;
   align-self: center;
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 10px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
@@ -298,7 +298,7 @@
 
 .task-list-section__count {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 400;
 }
 
@@ -313,7 +313,7 @@
   overflow: hidden;
   gap: 4px;
   padding: 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
   transition:
@@ -344,16 +344,16 @@
 }
 
 .task-list-row__title {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 400;
-  line-height: 1.4;
+  line-height: var(--lh-normal);
   color: var(--text);
   overflow-wrap: anywhere;
 }
 
 .task-list-row__path {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   line-height: 1.35;
   color: var(--text-secondary);
   overflow-wrap: anywhere;
@@ -416,8 +416,8 @@
 
 .config-card__path {
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .flow-node-inline {
@@ -431,8 +431,8 @@
   padding: 6px 10px;
   background: var(--surface-1);
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 @media (max-width: 1240px) {

@@ -11,8 +11,8 @@
 .settings-section__eyebrow {
   margin-bottom: 2px;
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -35,19 +35,19 @@
 }
 
 .settings-row__copy strong {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
 .settings-row__hint {
   color: var(--text-tertiary);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 
 .settings-row__value {
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .workspace-settings-list {
@@ -77,7 +77,7 @@
 }
 
 .workspace-settings-row__heading strong {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 

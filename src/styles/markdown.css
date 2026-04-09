@@ -5,7 +5,7 @@
   background: transparent;
   color: var(--text);
   font-family: "Geist Variable", "Geist", -apple-system, sans-serif;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -18,7 +18,7 @@
   min-height: 200px;
   color: var(--text);
   font-family: "Geist Variable", "Geist", -apple-system, sans-serif;
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   line-height: 1.65;
 }
 
@@ -39,19 +39,19 @@
 }
 
 .markdown-document h1 {
-  font-size: 22px;
+  font-size: var(--font-size-xl);
   font-weight: 650;
 }
 
 .markdown-document h2 {
-  font-size: 16px;
+  font-size: var(--font-size-md);
   font-weight: 650;
 }
 
 .markdown-document h3,
 .markdown-document h4 {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -104,7 +104,7 @@
 
 .markdown-document code,
 .markdown-document pre {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
 }
 
 .markdown-document code {
@@ -121,7 +121,7 @@
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border-subtle);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   line-height: 1.6;
 }
 
@@ -142,7 +142,7 @@
   min-width: 320px;
   border-collapse: collapse;
   background: var(--surface);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
 }
 
 .markdown-document thead th {

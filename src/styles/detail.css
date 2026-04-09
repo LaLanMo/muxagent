@@ -57,9 +57,9 @@
 
 .detail-topbar__title {
   min-width: 0;
-  font-size: 16px;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--lh-normal);
   overflow-wrap: anywhere;
 }
 
@@ -83,8 +83,8 @@
   justify-content: flex-end;
   margin-left: auto;
   color: var(--text-tertiary);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-normal);
 }
 
 .detail-topbar__updated {
@@ -98,8 +98,8 @@
   border-radius: 999px;
   padding: 2px 8px;
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
@@ -114,8 +114,8 @@
 .detail-section__label,
 .detail-info-card__label {
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -151,7 +151,7 @@
   min-height: 24px;
   padding: 3px 10px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   white-space: nowrap;
 }
@@ -175,12 +175,12 @@
   display: inline-flex;
   width: 10px;
   justify-content: center;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   line-height: 1;
 }
 
 .stage-node__name {
-  line-height: 1.2;
+  line-height: var(--lh-tight);
 }
 
 .stage-node--done {
@@ -222,7 +222,7 @@
 
 .detail-navigator__count {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 .detail-navigator__divider {
@@ -317,7 +317,7 @@
 .detail-nav-row__title {
   min-width: 0;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
   overflow-wrap: anywhere;
 }
@@ -328,16 +328,16 @@
 
 .detail-nav-row__time {
   color: var(--text-ghost);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   flex: none;
 }
 
 .detail-nav-row__description {
   padding-left: 18px;
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-normal);
   overflow-wrap: anywhere;
 }
 
@@ -363,7 +363,7 @@
   padding: 4px 0 0 0;
   color: var(--text-tertiary);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   transition: color 140ms ease, background-color 140ms ease;
 }
 
@@ -393,8 +393,8 @@
 .detail-nav-artifact__name {
   min-width: 0;
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -511,9 +511,9 @@
 }
 
 .detail-pane__titles h3 {
-  font-size: 16px;
+  font-size: var(--font-size-md);
   font-weight: 600;
-  line-height: 1.35;
+  line-height: var(--lh-normal);
 }
 
 .detail-info-cards,
@@ -558,9 +558,9 @@
 
 .detail-info-card__value {
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--lh-normal);
   overflow-wrap: anywhere;
 }
 
@@ -571,8 +571,8 @@
 .detail-clarification__copy p,
 .detail-recovery-card__description {
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-relaxed);
 }
 
 .detail-note-card--warning {
@@ -605,8 +605,8 @@
 
 .detail-surface-card__label {
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -632,8 +632,8 @@
   overflow: auto;
   background: transparent;
   color: var(--text);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -649,7 +649,7 @@
 }
 
 .detail-empty-card strong {
-  font-size: 14px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
 }
 
@@ -702,7 +702,7 @@
   padding: 2px 8px;
   background: var(--surface-1);
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -710,23 +710,23 @@
 
 .detail-transcript-row__title {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 600;
-  line-height: 1.45;
+  line-height: var(--lh-normal);
   overflow-wrap: anywhere;
 }
 
 .detail-transcript-row__text {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   line-height: 1.6;
   white-space: pre-wrap;
 }
 
 .detail-transcript-row__meta {
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -744,12 +744,12 @@
   padding: 3px 8px;
   background: var(--surface-1);
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-normal);
 }
 
 .detail-code-block--inline {
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 /* ── Compact meta row ────────────────────────────────────── */
@@ -773,7 +773,7 @@
 .detail-meta-chip__label {
   color: var(--text-tertiary);
   font-family: "Geist Variable", "Geist", -apple-system, sans-serif;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -781,7 +781,7 @@
 
 .detail-meta-chip__value {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
 }
 
 /* ── Transcript timeline ─────────────────────────────────── */
@@ -828,7 +828,7 @@
 
 .transcript-tool-group__count {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   white-space: nowrap;
 }
 
@@ -836,8 +836,8 @@
   flex: 1;
   min-width: 0;
   color: var(--text-ghost);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -888,16 +888,16 @@
 .transcript-tool-row__kind {
   flex-shrink: 0;
   color: var(--text);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 12px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .transcript-tool-row__subject {
   flex: 1;
   min-width: 0;
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -907,7 +907,7 @@
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
 }
 
@@ -928,9 +928,9 @@
 .transcript-tool-row__code {
   margin: 0;
   color: var(--text-secondary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -959,7 +959,7 @@
 
 .transcript-thinking__label {
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-style: italic;
 }
 
@@ -970,9 +970,9 @@
 .transcript-thinking__text {
   margin: 0;
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-style: italic;
-  line-height: 1.54;
+  line-height: var(--lh-relaxed);
   white-space: pre-wrap;
 }
 
@@ -1001,15 +1001,15 @@
 
 .transcript-message__text {
   color: var(--text);
-  font-size: 13px;
-  line-height: 1.54;
+  font-size: var(--font-size-sm);
+  line-height: var(--lh-relaxed);
   white-space: pre-wrap;
 }
 
 .transcript-message .transcript-message__markdown {
   min-height: 0;
-  font-size: 13px;
-  line-height: 1.54;
+  font-size: var(--font-size-sm);
+  line-height: var(--lh-relaxed);
 }
 
 /* ── JSON syntax highlight ───────────────────────────────── */
@@ -1054,7 +1054,7 @@
   align-items: center;
   gap: 8px;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
 }
 
@@ -1118,7 +1118,7 @@
   background: var(--surface-1);
   color: var(--text-secondary);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: normal;
   cursor: pointer;
   transition: background-color 140ms ease, color 140ms ease;
@@ -1137,7 +1137,7 @@
 
 .follow-up-config__desc {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-xs);
 }
 
 .detail-choice-list {
@@ -1214,14 +1214,14 @@
 }
 
 .detail-choice__copy strong {
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   font-weight: 500;
 }
 
 .detail-choice__copy small {
   color: var(--text-tertiary);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--font-size-xs);
+  line-height: var(--lh-normal);
 }
 
 .detail-choice__copy--other {
@@ -1237,7 +1237,7 @@
   background: transparent;
   color: var(--text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--font-size-xs);
   outline: none;
 }
 
@@ -1254,16 +1254,16 @@
 }
 
 .detail-clarification__copy strong {
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  line-height: 1.45;
+  line-height: var(--lh-normal);
 }
 
 .detail-clarification__nav {
   gap: 6px;
   color: var(--text-tertiary);
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .detail-clarification__nav-button {
@@ -1308,14 +1308,14 @@
 
 .detail-recovery-card__title {
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--font-size-sm);
   font-weight: 500;
-  line-height: 1.4;
+  line-height: var(--lh-normal);
 }
 
 .detail-recovery-card__description {
-  font-family: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
-  font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
 }
 
 .detail-recovery-card__actions {
