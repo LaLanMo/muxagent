@@ -19,7 +19,7 @@
   justify-content: center;
   gap: 6px;
   min-height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 11px;
   background: var(--accent);
   color: #fff;
@@ -65,7 +65,7 @@
 .config-list-card {
   display: grid;
   gap: 10px;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 12px 14px;
   background: var(--surface);
   box-shadow: inset 0 0 0 1px rgba(226, 229, 234, 0.92);
@@ -93,13 +93,13 @@
 
 .config-list-card__title-group h2 {
   font-size: var(--font-size-sm);
-  font-weight: 650;
+  font-weight: 500;
   line-height: var(--lh-tight);
 }
 
 .config-list-card__title-group p {
   color: var(--text-secondary);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-sm);
   line-height: var(--lh-normal);
 }
 
@@ -146,7 +146,7 @@
   justify-content: center;
   gap: 6px;
   min-height: 26px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 10px;
   background: var(--surface-1);
   color: var(--text-secondary);
@@ -319,12 +319,12 @@
 .config-prompt-editor {
   min-height: 180px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.98);
   color: var(--text);
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-mono);
   line-height: 1.6;
   resize: vertical;
   box-shadow: inset 0 0 0 1px rgba(226, 229, 234, 0.96);
@@ -451,8 +451,8 @@
 }
 
 .config-editor-panel__section-header h2 {
-  font-size: var(--font-size-sm);
-  font-weight: 650;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
   line-height: var(--lh-tight);
 }
 
@@ -472,6 +472,7 @@
   color: var(--text-secondary);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -484,7 +485,7 @@
   min-width: 0;
   min-height: 34px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 0 11px;
   background: var(--surface-1);
   color: var(--text);
@@ -528,7 +529,7 @@
 .config-schema-editor {
   min-height: 168px;
   font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
+  font-size: var(--font-size-mono);
   line-height: var(--lh-relaxed);
 }
 

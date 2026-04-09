@@ -6,13 +6,10 @@ import { NewTaskModal } from "@/features/new-task/ui/NewTaskModal";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 import type { TaskBoardColumnModel } from "@/features/tasks/ui/TaskBoard";
 import { TaskBoard } from "@/features/tasks/ui/TaskBoard";
-import type { TaskListRowModel } from "@/features/tasks/ui/TaskList";
-import { TaskList } from "@/features/tasks/ui/TaskList";
 
 type EntryShellScreenProps = {
   shell: ShellChromeModel;
   columns: TaskBoardColumnModel[];
-  rows: TaskListRowModel[];
   hasTasks: boolean;
   launchableEntries: ConfigCatalogEntryDto[];
   onOpenModal: () => void;
@@ -47,14 +44,9 @@ function slugifyTaskView(label: string) {
   return label.toLowerCase().replace(/\s+/g, "-");
 }
 
-function layoutIcon(label: string) {
-  return label === "Board" ? "board" : "list";
-}
-
 export function EntryShellScreen({
   shell,
   columns,
-  rows,
   hasTasks,
   launchableEntries,
   onOpenModal,
@@ -101,28 +93,6 @@ export function EntryShellScreen({
                   </NavLink>
                 ))}
               </div>
-              {shell.taskLayoutNav.length > 0 ? (
-                <div className="task-layout-switch" data-testid="task-layout-switch">
-                  {shell.taskLayoutNav.map((item) => (
-                    <NavLink
-                      className={({ isActive }) =>
-                        `task-layout-switch__item${
-                          (typeof item.active === "boolean" ? item.active : isActive)
-                            ? " is-active"
-                            : ""
-                        }`
-                      }
-                      aria-label={`Switch to ${item.label.toLowerCase()} layout`}
-                      data-testid={`task-layout-${item.label.toLowerCase()}`}
-                      end={item.to === "/" || item.to?.startsWith("/?")}
-                      key={item.label}
-                      to={item.to ?? "/"}
-                    >
-                      <ShellIcon name={layoutIcon(item.label)} />
-                    </NavLink>
-                  ))}
-                </div>
-              ) : null}
             </>
           ) : shell.phase === "connecting" || shell.bootstrapPending ? null : (
             <button
@@ -137,7 +107,7 @@ export function EntryShellScreen({
         }
       >
         <section
-          className={`board-screen board-screen--${shell.taskLayout}`}
+          className="board-screen board-screen--board"
           data-testid="entry-shell"
         >
           {shell.error ? (
@@ -186,11 +156,7 @@ export function EntryShellScreen({
             </div>
           ) : (
             <>
-              {shell.taskLayout === "list" ? (
-                <TaskList rows={rows} />
-              ) : (
-                <TaskBoard columns={columns} />
-              )}
+              <TaskBoard columns={columns} />
             </>
           )}
         </section>

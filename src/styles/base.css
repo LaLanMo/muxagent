@@ -60,6 +60,7 @@
   --accent: #0D6E6E;
   --accent-hover: #0A5B5B;
   --accent-subtle: #E8F5F0;
+  --text-on-accent: #FFFFFF;
 
   /* Status */
   --green: #4CB782;
@@ -301,7 +302,7 @@ ul {
   align-items: center;
   gap: 10px;
   padding: 10px 14px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: inset 0 0 0 1px var(--border), 0 2px 8px rgba(0, 0, 0, 0.08);
   font-size: var(--font-size-sm);
