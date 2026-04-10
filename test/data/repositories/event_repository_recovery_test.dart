@@ -40,8 +40,8 @@ class _FakeWsSessionRepository extends WsSessionRepository {
     streamEpoch: 77,
     replayedThroughSeq: 0,
   );
-  ResyncBatch nextResyncBatch = const ResyncBatch(
-    events: [],
+  List<ReplayPage> nextReplayPages = const [];
+  ReplaySummary nextReplaySummary = const ReplaySummary(
     status: ReplayResyncStatus.reset,
     streamEpoch: 77,
     replayedThroughSeq: 0,
@@ -49,7 +49,8 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   int replayHeadCalls = 0;
   int? lastResyncStreamEpoch;
   int? lastResyncSeq;
-  Completer<void>? resyncBlocker;
+  Completer<void>? beforeReplaySummary;
+  Object? replayError;
   Completer<void>? resolveBlocker;
 
   _FakeWsSessionRepository()
@@ -71,18 +72,26 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   }
 
   @override
-  Future<ResyncBatch> resyncEvents({
+  Future<ReplaySummary> consumeResyncPages({
     required String machineId,
     required int lastSeq,
     int? streamEpoch,
+    required ResyncPageConsumer onPage,
   }) async {
     lastResyncSeq = lastSeq;
     lastResyncStreamEpoch = streamEpoch;
-    final blocker = resyncBlocker;
+    for (final page in nextReplayPages) {
+      await onPage(page);
+    }
+    final blocker = beforeReplaySummary;
     if (blocker != null) {
       await blocker.future;
     }
-    return nextResyncBatch;
+    final error = replayError;
+    if (error != null) {
+      throw error;
+    }
+    return nextReplaySummary;
   }
 
   @override
@@ -114,6 +123,35 @@ class _FakeSessionChatCacheRepository extends SessionChatCacheRepository {
     staleMarked.add(sessionId);
     return true;
   }
+}
+
+WsEvent _messageDeltaWsEvent({
+  required String machineId,
+  required String sessionId,
+  required int seq,
+  required String partId,
+  required String messageId,
+  required String text,
+}) {
+  return WsEvent(
+    type: WsMessageType.event.value,
+    payload: {
+      'type': 'message.delta',
+      'machineId': machineId,
+      'sessionId': sessionId,
+      'seq': seq,
+      'messagePart': {
+        'app': {
+          'partId': partId,
+          'messageId': messageId,
+          'role': 'agent',
+          'delta': text,
+          'partType': 'text',
+          'fullText': text,
+        },
+      },
+    },
+  );
 }
 
 void main() {
@@ -222,8 +260,7 @@ void main() {
         replayCursorPersistDebounce: Duration.zero,
       );
       await repo.init();
-      wsRepo.nextResyncBatch = const ResyncBatch(
-        events: [],
+      wsRepo.nextReplaySummary = const ReplaySummary(
         status: ReplayResyncStatus.ok,
         streamEpoch: 77,
         replayedThroughSeq: 6,
@@ -292,126 +329,187 @@ void main() {
       expect(chatCacheRepo.staleMarked, isEmpty);
     });
 
-    test('resync fence buffers live events and drops replay overlap', () async {
-      wsRepo.nextReplayHead = const ReplayHeadSnapshot(
-        streamEpoch: 77,
-        replayedThroughSeq: 7,
-      );
-      wsRepo.emitEvent(
-        WsEvent(
-          type: WsMessageType.event.value,
-          payload: {
-            'type': 'message.delta',
-            'machineId': 'machine-1',
-            'sessionId': sessionId,
-            'seq': 7,
-            'messagePart': {
-              'app': {
-                'partId': 'seed-part',
-                'messageId': 'msg-0',
-                'role': 'agent',
-                'delta': 'seed',
-                'partType': 'text',
-                'fullText': 'seed',
-              },
-            },
-          },
-        ),
-      );
-
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(repo.lastSeqFor('machine-1'), 7);
-
-      final seenSeqs = <int>[];
-      final sub = repo.events.listen((event) {
-        if (event.sessionId == sessionId) {
-          seenSeqs.add(event.seq);
-        }
-      });
-
-      wsRepo.nextResyncBatch = ResyncBatch(
-        events: [
-          AgentEvent(
-            type: EventType.messageDelta,
-            sessionId: sessionId,
+    test(
+      'resync applies replay pages incrementally and drops live overlap on drain',
+      () async {
+        wsRepo.nextReplayHead = const ReplayHeadSnapshot(
+          streamEpoch: 77,
+          replayedThroughSeq: 7,
+        );
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
             machineId: 'machine-1',
-            seq: 8,
-            at: DateTime.now(),
-            messagePart: MessagePartEvent(
-              partId: 'replay-part',
-              messageId: 'msg-1',
-              role: MessageRole.agent,
-              partType: 'text',
-              fullText: 'replay',
-            ),
+            sessionId: sessionId,
+            seq: 7,
+            partId: 'seed-part',
+            messageId: 'msg-0',
+            text: 'seed',
           ),
-        ],
-        status: ReplayResyncStatus.ok,
-        streamEpoch: 77,
-        replayedThroughSeq: 8,
-      );
-      wsRepo.resyncBlocker = Completer<void>();
+        );
 
-      final resyncFuture = repo.resync('machine-1');
-      await Future<void>.delayed(const Duration(milliseconds: 10));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.lastSeqFor('machine-1'), 7);
 
-      wsRepo.emitEvent(
-        WsEvent(
-          type: WsMessageType.event.value,
-          payload: {
-            'type': 'message.delta',
-            'machineId': 'machine-1',
-            'sessionId': sessionId,
-            'seq': 8,
-            'messagePart': {
-              'app': {
-                'partId': 'dup-part',
-                'messageId': 'msg-1',
-                'role': 'agent',
-                'delta': 'replay',
-                'partType': 'text',
-                'fullText': 'replay',
-              },
-            },
-          },
-        ),
-      );
-      wsRepo.emitEvent(
-        WsEvent(
-          type: WsMessageType.event.value,
-          payload: {
-            'type': 'message.delta',
-            'machineId': 'machine-1',
-            'sessionId': sessionId,
-            'seq': 9,
-            'messagePart': {
-              'app': {
-                'partId': 'live-part',
-                'messageId': 'msg-2',
-                'role': 'agent',
-                'delta': 'live',
-                'partType': 'text',
-                'fullText': 'live',
-              },
-            },
-          },
-        ),
-      );
+        final seenSeqs = <int>[];
+        final sub = repo.events.listen((event) {
+          if (event.sessionId == sessionId) {
+            seenSeqs.add(event.seq);
+          }
+        });
 
-      await Future<void>.delayed(const Duration(milliseconds: 20));
-      expect(seenSeqs, isEmpty);
-      expect(repo.lastSeqFor('machine-1'), 7);
+        wsRepo.nextReplayPages = [
+          ReplayPage(
+            streamEpoch: 77,
+            events: [
+              _messageDeltaWsEvent(
+                machineId: 'machine-1',
+                sessionId: sessionId,
+                seq: 8,
+                partId: 'replay-part',
+                messageId: 'msg-1',
+                text: 'replay',
+              ),
+            ],
+          ),
+        ];
+        wsRepo.nextReplaySummary = const ReplaySummary(
+          status: ReplayResyncStatus.ok,
+          streamEpoch: 77,
+          replayedThroughSeq: 8,
+        );
+        wsRepo.beforeReplaySummary = Completer<void>();
 
-      wsRepo.resyncBlocker!.complete();
-      final result = await resyncFuture;
-      await Future<void>.delayed(const Duration(milliseconds: 20));
+        final resyncFuture = repo.resync('machine-1');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
 
-      expect(result.outcome, ResyncOutcome.complete);
-      expect(seenSeqs, [8, 9]);
-      expect(repo.lastSeqFor('machine-1'), 9);
+        expect(seenSeqs, [8]);
+        expect(repo.lastSeqFor('machine-1'), 8);
 
-      await sub.cancel();
-    });
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 8,
+            partId: 'dup-part',
+            messageId: 'msg-1',
+            text: 'replay',
+          ),
+        );
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 9,
+            partId: 'live-part',
+            messageId: 'msg-2',
+            text: 'live',
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(seenSeqs, [8]);
+        expect(repo.lastSeqFor('machine-1'), 8);
+
+        wsRepo.beforeReplaySummary!.complete();
+        final result = await resyncFuture;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(result.outcome, ResyncOutcome.complete);
+        expect(seenSeqs, [8, 9]);
+        expect(repo.lastSeqFor('machine-1'), 9);
+
+        await sub.cancel();
+      },
+    );
+
+    test(
+      'resync failure after applied pages preserves partial replay progress',
+      () async {
+        wsRepo.nextReplayHead = const ReplayHeadSnapshot(
+          streamEpoch: 77,
+          replayedThroughSeq: 7,
+        );
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 7,
+            partId: 'seed-part',
+            messageId: 'msg-0',
+            text: 'seed',
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.lastSeqFor('machine-1'), 7);
+
+        final seenSeqs = <int>[];
+        final sub = repo.events.listen((event) {
+          if (event.sessionId == sessionId) {
+            seenSeqs.add(event.seq);
+          }
+        });
+
+        wsRepo.nextReplayPages = [
+          ReplayPage(
+            streamEpoch: 77,
+            events: [
+              _messageDeltaWsEvent(
+                machineId: 'machine-1',
+                sessionId: sessionId,
+                seq: 8,
+                partId: 'replay-part',
+                messageId: 'msg-1',
+                text: 'replay',
+              ),
+            ],
+          ),
+        ];
+        wsRepo.beforeReplaySummary = Completer<void>();
+        wsRepo.replayError = StateError('boom');
+
+        final resyncFuture = repo.resync('machine-1');
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(seenSeqs, [8]);
+        expect(repo.lastSeqFor('machine-1'), 8);
+
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 8,
+            partId: 'dup-part',
+            messageId: 'msg-1',
+            text: 'replay',
+          ),
+        );
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 9,
+            partId: 'live-part',
+            messageId: 'msg-2',
+            text: 'live',
+          ),
+        );
+
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+        expect(seenSeqs, [8]);
+
+        wsRepo.beforeReplaySummary!.complete();
+        final result = await resyncFuture;
+        await Future<void>.delayed(const Duration(milliseconds: 20));
+
+        expect(result.outcome, ResyncOutcome.failed);
+        expect(result.highestSeqApplied, 8);
+        expect(repo.lastSeqFor('machine-1'), 9);
+        expect(seenSeqs, [8, 9]);
+
+        await sub.cancel();
+      },
+    );
 
     test(
       'backfillMissingTitles does not overwrite an existing repair cwd',

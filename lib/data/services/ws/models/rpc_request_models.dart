@@ -78,6 +78,27 @@ class RpcResyncEventsParamsDto {
   };
 }
 
+class RpcResyncEventsPageParamsDto {
+  final int lastSeq;
+  final int? streamEpoch;
+  final int? maxBytes;
+  final int? maxEvents;
+
+  const RpcResyncEventsPageParamsDto({
+    required this.lastSeq,
+    this.streamEpoch,
+    this.maxBytes,
+    this.maxEvents,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'lastSeq': lastSeq,
+    if (streamEpoch != null && streamEpoch! > 0) 'streamEpoch': streamEpoch,
+    if (maxBytes != null && maxBytes! > 0) 'maxBytes': maxBytes,
+    if (maxEvents != null && maxEvents! > 0) 'maxEvents': maxEvents,
+  };
+}
+
 class RpcSessionResolveParamsDto {
   final List<String> sessionIds;
   final String? runtime;

@@ -594,7 +594,10 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (isClosed || !_hasSeenDisconnect || _foregroundRecoveryInFlight) return;
     _foregroundRecoveryInFlight = true;
     try {
-      await _recovery.recoverMachine(machineId);
+      await _recovery.recoverMachine(
+        machineId,
+        transcriptMode: TranscriptRecoveryMode.replayIfPossible,
+      );
     } finally {
       _foregroundRecoveryInFlight = false;
     }
@@ -618,6 +621,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     );
     _syncSessionSnapshotFromRepository();
     if (!_hasSeenDisconnect) return;
+
+    if (result.transcript == TranscriptRecoveryState.skipped) {
+      unawaited(_refreshSessionConfigInBackground());
+      return;
+    }
 
     if (result.transcript == TranscriptRecoveryState.complete) {
       unawaited(_refreshSessionConfigInBackground());

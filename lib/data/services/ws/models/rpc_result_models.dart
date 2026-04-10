@@ -130,6 +130,40 @@ class RpcReplayHeadResponseDto {
   }
 }
 
+class RpcResyncPageResponseDto {
+  final List<Map<String, dynamic>> events;
+  final RpcResyncStatusDto status;
+  final int streamEpoch;
+  final int replayedThroughSeq;
+  final bool hasMore;
+  final int nextAfterSeq;
+
+  const RpcResyncPageResponseDto({
+    required this.events,
+    required this.status,
+    required this.streamEpoch,
+    required this.replayedThroughSeq,
+    required this.hasMore,
+    required this.nextAfterSeq,
+  });
+
+  factory RpcResyncPageResponseDto.fromJson(Map<String, dynamic> json) {
+    if (!json.containsKey('events')) {
+      throw FormatException('Expected events field');
+    }
+    final normalized = Map<String, dynamic>.from(json);
+    normalized['events'] ??= const <Object>[];
+    return RpcResyncPageResponseDto(
+      events: _requiredObjectList(normalized['events']),
+      status: _requiredResyncStatus(normalized['status']),
+      streamEpoch: _requiredPositiveInt(normalized['streamEpoch']),
+      replayedThroughSeq: _requiredInt(normalized['replayedThroughSeq']),
+      hasMore: _requiredBool(normalized['hasMore']),
+      nextAfterSeq: _requiredInt(normalized['nextAfterSeq']),
+    );
+  }
+}
+
 @freezed
 class RpcOkResponseDto with _$RpcOkResponseDto {
   const factory RpcOkResponseDto({

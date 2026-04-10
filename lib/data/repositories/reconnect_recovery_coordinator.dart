@@ -7,7 +7,9 @@ import 'paired_machine_repository.dart';
 import 'session_chat_cache_repository.dart';
 import 'ws_session_repository.dart';
 
-enum TranscriptRecoveryState { complete, fallbackNeeded, failed }
+enum TranscriptRecoveryState { skipped, complete, fallbackNeeded, failed }
+
+enum TranscriptRecoveryMode { metadataOnly, replayIfPossible }
 
 enum MetadataRecoveryState { complete, degraded, skipped }
 
@@ -42,7 +44,7 @@ class ReconnectRecoveryCoordinator {
   final SessionChatCacheRepository _chatCacheRepo;
   final _notifications = StreamController<ReconnectRecoveryResult>.broadcast();
   // Join repeated recovery requests for the same machine onto one future.
-  final Map<String, Future<ReconnectRecoveryResult>> _inflightByMachine = {};
+  final Map<String, Future<ReconnectRecoveryResult>> _inflightByRequest = {};
   // Serialize transport/session recovery so concurrent machine reconnects do
   // not interleave websocket/session establishment on the shared relay client.
   Future<void> _transportQueue = Future.value();
@@ -59,25 +61,33 @@ class ReconnectRecoveryCoordinator {
 
   Stream<ReconnectRecoveryResult> get recoveries => _notifications.stream;
 
-  Future<ReconnectRecoveryResult> recoverMachine(String machineId) {
-    final pending = _inflightByMachine[machineId];
+  Future<ReconnectRecoveryResult> recoverMachine(
+    String machineId, {
+    TranscriptRecoveryMode transcriptMode =
+        TranscriptRecoveryMode.replayIfPossible,
+  }) {
+    final requestKey = _requestKey(machineId, transcriptMode);
+    final pending = _inflightByRequest[requestKey];
     if (pending != null) {
       return pending;
     }
 
     final completer = Completer<ReconnectRecoveryResult>();
     final future = completer.future;
-    _inflightByMachine[machineId] = future;
+    _inflightByRequest[requestKey] = future;
 
     _transportQueue = _transportQueue.catchError((_) {}).then((_) async {
       try {
-        final outcome = await _recoverMachine(machineId);
+        final outcome = await _recoverMachine(
+          machineId,
+          transcriptMode: transcriptMode,
+        );
         completer.complete(outcome);
       } catch (e, st) {
         completer.completeError(e, st);
       } finally {
-        if (identical(_inflightByMachine[machineId], future)) {
-          _inflightByMachine.remove(machineId);
+        if (identical(_inflightByRequest[requestKey], future)) {
+          _inflightByRequest.remove(requestKey);
         }
       }
     });
@@ -85,7 +95,14 @@ class ReconnectRecoveryCoordinator {
     return future;
   }
 
-  Future<ReconnectRecoveryResult> _recoverMachine(String machineId) async {
+  String _requestKey(String machineId, TranscriptRecoveryMode transcriptMode) {
+    return '$machineId:${transcriptMode.name}';
+  }
+
+  Future<ReconnectRecoveryResult> _recoverMachine(
+    String machineId, {
+    required TranscriptRecoveryMode transcriptMode,
+  }) async {
     final machine = await _machines.getMachine(machineId);
     if (machine == null) {
       debugPrint('[ReconnectRecovery] machine not found: $machineId');
@@ -110,6 +127,7 @@ class ReconnectRecoveryCoordinator {
           _wsRepo.hasSession(machineId);
       debugPrint(
         '[ReconnectRecovery] machine=$machineId start '
+        'transcriptMode=${transcriptMode.name} '
         'relayConnected=${_wsRepo.relayConnected.value} '
         'socketConnected=${_wsRepo.isConnected} '
         'hasSession=${_wsRepo.hasSession(machineId)} '
@@ -150,21 +168,26 @@ class ReconnectRecoveryCoordinator {
         );
       }
 
-      final resync = await _eventRepo.resync(machineId);
+      final resync = transcriptMode == TranscriptRecoveryMode.metadataOnly
+          ? null
+          : await _eventRepo.resync(machineId);
       final statuses = await _eventRepo.reconcileSessionStatus(machineId);
       final titles = await _eventRepo.backfillMissingTitles(machineId);
       final approvals = await _eventRepo.fetchPendingApprovals(machineId);
 
-      final transcript = switch (resync.outcome) {
-        ResyncOutcome.complete => TranscriptRecoveryState.complete,
-        ResyncOutcome.incomplete => TranscriptRecoveryState.fallbackNeeded,
-        ResyncOutcome.noCursor => TranscriptRecoveryState.fallbackNeeded,
-        ResyncOutcome.reset => TranscriptRecoveryState.fallbackNeeded,
-        ResyncOutcome.failed =>
-          sessionReady
-              ? TranscriptRecoveryState.fallbackNeeded
-              : TranscriptRecoveryState.failed,
-      };
+      final transcript = resync == null
+          ? TranscriptRecoveryState.skipped
+          : switch (resync.outcome) {
+              ResyncOutcome.complete => TranscriptRecoveryState.complete,
+              ResyncOutcome.incomplete =>
+                TranscriptRecoveryState.fallbackNeeded,
+              ResyncOutcome.noCursor => TranscriptRecoveryState.fallbackNeeded,
+              ResyncOutcome.reset => TranscriptRecoveryState.fallbackNeeded,
+              ResyncOutcome.failed =>
+                sessionReady
+                    ? TranscriptRecoveryState.fallbackNeeded
+                    : TranscriptRecoveryState.failed,
+            };
       final metadata = statuses.ok && titles.ok && approvals.ok
           ? MetadataRecoveryState.complete
           : MetadataRecoveryState.degraded;
@@ -172,12 +195,12 @@ class ReconnectRecoveryCoordinator {
         machineId: machineId,
         transcript: transcript,
         metadata: metadata,
-        resyncOutcome: resync.outcome,
+        resyncOutcome: resync?.outcome,
         sessionReady: sessionReady,
         statusesOk: statuses.ok,
         titlesOk: titles.ok,
         approvalsOk: approvals.ok,
-        transportError: transportError ?? resync.error,
+        transportError: transportError ?? resync?.error,
       );
       if (result.transcript == TranscriptRecoveryState.fallbackNeeded) {
         await _chatCacheRepo.markMachineCachesStale(machineId);
@@ -188,7 +211,7 @@ class ReconnectRecoveryCoordinator {
         'resyncOutcome=${result.resyncOutcome} sessionReady=${result.sessionReady} '
         'statusesOk=${result.statusesOk} titlesOk=${result.titlesOk} '
         'approvalsOk=${result.approvalsOk} '
-        'lastSeqUsed=${resync.lastSeqUsed} highestSeqApplied=${resync.highestSeqApplied}',
+        'lastSeqUsed=${resync?.lastSeqUsed} highestSeqApplied=${resync?.highestSeqApplied}',
       );
       return _emit(result);
     } catch (e) {
@@ -196,7 +219,9 @@ class ReconnectRecoveryCoordinator {
           _wsRepo.relayConnected.value &&
           _wsRepo.isConnected &&
           _wsRepo.hasSession(machineId);
-      final transcript = sessionReady
+      final transcript = transcriptMode == TranscriptRecoveryMode.metadataOnly
+          ? TranscriptRecoveryState.skipped
+          : sessionReady
           ? TranscriptRecoveryState.fallbackNeeded
           : TranscriptRecoveryState.failed;
       if (transcript == TranscriptRecoveryState.fallbackNeeded) {

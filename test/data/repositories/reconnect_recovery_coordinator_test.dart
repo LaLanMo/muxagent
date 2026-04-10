@@ -238,6 +238,22 @@ void main() {
       expect(result.titlesOk, isTrue);
     });
 
+    test(
+      'background recovery skips transcript replay but repairs metadata',
+      () async {
+        final result = await coordinator.recoverMachine(
+          'machine-1',
+          transcriptMode: TranscriptRecoveryMode.metadataOnly,
+        );
+
+        expect(result.transcript, TranscriptRecoveryState.skipped);
+        expect(result.metadata, MetadataRecoveryState.complete);
+        expect(result.resyncOutcome, isNull);
+        expect(chatCacheRepo.staleMarkedMachines, isEmpty);
+        expect(eventRepo.callOrder, ['reconcile', 'backfill', 'approvals']);
+      },
+    );
+
     test('reports failed transcript when transport setup fails', () async {
       wsRepo.ensureConnectedError = StateError('boom');
 
@@ -305,5 +321,34 @@ void main() {
         hasLength(1),
       );
     });
+
+    test(
+      'does not join in-flight recoveries with different transcript modes',
+      () async {
+        final background = coordinator.recoverMachine(
+          'machine-1',
+          transcriptMode: TranscriptRecoveryMode.metadataOnly,
+        );
+        final foreground = coordinator.recoverMachine(
+          'machine-1',
+          transcriptMode: TranscriptRecoveryMode.replayIfPossible,
+        );
+
+        expect(identical(background, foreground), isFalse);
+
+        final results = await Future.wait([background, foreground]);
+
+        expect(results.first.transcript, TranscriptRecoveryState.skipped);
+        expect(results.last.transcript, TranscriptRecoveryState.complete);
+        expect(
+          eventRepo.callOrder.where((step) => step == 'resync'),
+          hasLength(1),
+        );
+        expect(
+          eventRepo.callOrder.where((step) => step == 'reconcile'),
+          hasLength(2),
+        );
+      },
+    );
   });
 }

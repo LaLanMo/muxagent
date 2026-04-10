@@ -1,14 +1,14 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
-import '../../domain/event.dart';
 import '../../domain/fs_entry.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/prompt_content_block.dart';
 import '../services/ws/models/acp_session_models.dart';
-import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/rpc_request_models.dart';
 import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
@@ -18,14 +18,21 @@ import 'session_manager.dart';
 
 enum ReplayResyncStatus { ok, gap, reset }
 
-class ResyncBatch {
-  final List<AgentEvent> events;
+typedef ResyncPageConsumer = FutureOr<void> Function(ReplayPage page);
+
+class ReplayPage {
+  final int streamEpoch;
+  final List<WsEvent> events;
+
+  const ReplayPage({required this.streamEpoch, required this.events});
+}
+
+class ReplaySummary {
   final ReplayResyncStatus status;
   final int streamEpoch;
   final int replayedThroughSeq;
 
-  const ResyncBatch({
-    required this.events,
+  const ReplaySummary({
     required this.status,
     required this.streamEpoch,
     required this.replayedThroughSeq,
@@ -41,6 +48,10 @@ class ReplayHeadSnapshot {
     required this.replayedThroughSeq,
   });
 }
+
+const _pagedResyncMaxBytes = 256 * 1024;
+const _pagedResyncMaxEvents = 128;
+const _pagedResyncMaxPages = 64;
 
 class WsSessionRepository {
   final RelayWsClient _relay;
@@ -164,10 +175,38 @@ class WsSessionRepository {
     return RpcResultMapper.toFsEntries(response.results);
   }
 
-  Future<ResyncBatch> resyncEvents({
+  Future<ReplaySummary> consumeResyncPages({
     required String machineId,
     required int lastSeq,
     int? streamEpoch,
+    required ResyncPageConsumer onPage,
+  }) async {
+    try {
+      return await _consumeResyncPagesPaged(
+        machineId: machineId,
+        lastSeq: lastSeq,
+        streamEpoch: streamEpoch,
+        onPage: onPage,
+      );
+    } catch (e) {
+      if (!_isUnknownMethodError(e, 'events.resyncPage')) {
+        rethrow;
+      }
+    }
+
+    return _consumeResyncPagesLegacy(
+      machineId: machineId,
+      lastSeq: lastSeq,
+      streamEpoch: streamEpoch,
+      onPage: onPage,
+    );
+  }
+
+  Future<ReplaySummary> _consumeResyncPagesLegacy({
+    required String machineId,
+    required int lastSeq,
+    int? streamEpoch,
+    required ResyncPageConsumer onPage,
   }) async {
     final response = await _relay.callRpcDecoded(
       machineId: machineId,
@@ -178,27 +217,115 @@ class WsSessionRepository {
       ).toJson(),
       decode: RpcResyncResponseDto.fromJson,
     );
-    final events = <AgentEvent>[];
-    for (final payload in response.events) {
-      final enrichedPayload = Map<String, dynamic>.from(payload);
-      enrichedPayload.putIfAbsent('machineId', () => machineId);
-      final event = EventEnvelopeParser.parse(
-        WsEvent(type: WsMessageType.event.value, payload: enrichedPayload),
+    final status = switch (response.status) {
+      RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
+      RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
+      RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
+    };
+    if (status == ReplayResyncStatus.ok && response.events.isNotEmpty) {
+      await onPage(
+        ReplayPage(
+          streamEpoch: response.streamEpoch,
+          events: _mapReplayWsEvents(
+            machineId: machineId,
+            eventsPayload: response.events,
+          ),
+        ),
       );
-      if (event != null && event.type != null) {
-        events.add(event);
-      }
     }
-    return ResyncBatch(
-      events: events,
-      status: switch (response.status) {
-        RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
-        RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
-        RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
-      },
+    return ReplaySummary(
+      status: status,
       streamEpoch: response.streamEpoch,
       replayedThroughSeq: response.replayedThroughSeq,
     );
+  }
+
+  Future<ReplaySummary> _consumeResyncPagesPaged({
+    required String machineId,
+    required int lastSeq,
+    int? streamEpoch,
+    required ResyncPageConsumer onPage,
+  }) async {
+    var pageAfterSeq = lastSeq;
+    ReplayResyncStatus? status;
+    int? responseEpoch;
+    var replayedThroughSeq = lastSeq;
+    final payloads = <Map<String, dynamic>>[];
+    var truncatedByPageLimit = true;
+
+    for (var pageIndex = 0; pageIndex < _pagedResyncMaxPages; pageIndex++) {
+      final response = await _relay.callRpcDecoded(
+        machineId: machineId,
+        method: 'events.resyncPage',
+        params: RpcResyncEventsPageParamsDto(
+          lastSeq: pageAfterSeq,
+          streamEpoch: streamEpoch,
+          maxBytes: _pagedResyncMaxBytes,
+          maxEvents: _pagedResyncMaxEvents,
+        ).toJson(),
+        decode: RpcResyncPageResponseDto.fromJson,
+      );
+      final pageStatus = switch (response.status) {
+        RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
+        RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
+        RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
+      };
+      status ??= pageStatus;
+      responseEpoch ??= response.streamEpoch;
+      if (responseEpoch != response.streamEpoch) {
+        throw Exception('inconsistent resync pagination epoch');
+      }
+      replayedThroughSeq = response.replayedThroughSeq;
+      if (pageStatus == ReplayResyncStatus.ok && response.events.isNotEmpty) {
+        await onPage(
+          ReplayPage(
+            streamEpoch: response.streamEpoch,
+            events: _mapReplayWsEvents(
+              machineId: machineId,
+              eventsPayload: response.events,
+            ),
+          ),
+        );
+      }
+
+      if (status != ReplayResyncStatus.ok || !response.hasMore) {
+        truncatedByPageLimit = false;
+        break;
+      }
+      if (response.nextAfterSeq <= pageAfterSeq) {
+        throw Exception('invalid resync pagination cursor');
+      }
+      pageAfterSeq = response.nextAfterSeq;
+    }
+
+    if (truncatedByPageLimit) {
+      throw Exception('resync pagination exceeded page budget');
+    }
+
+    if (status == null || responseEpoch == null) {
+      throw Exception('missing resync pagination response');
+    }
+
+    return ReplaySummary(
+      status: status,
+      streamEpoch: responseEpoch,
+      replayedThroughSeq: replayedThroughSeq,
+    );
+  }
+
+  List<WsEvent> _mapReplayWsEvents({
+    required String machineId,
+    required List<Map<String, dynamic>> eventsPayload,
+  }) {
+    final events = <WsEvent>[];
+    for (final payload in eventsPayload) {
+      final enrichedPayload = Map<String, dynamic>.from(payload);
+      enrichedPayload.putIfAbsent('machineId', () => machineId);
+      events.add(
+        WsEvent(type: WsMessageType.event.value, payload: enrichedPayload),
+      );
+    }
+    return events;
   }
 
   Future<ReplayHeadSnapshot> fetchReplayHead({
@@ -214,6 +341,14 @@ class WsSessionRepository {
       streamEpoch: response.streamEpoch,
       replayedThroughSeq: response.replayedThroughSeq,
     );
+  }
+
+  bool _isUnknownMethodError(Object error, String method) {
+    final text = error.toString();
+    return text.contains('unknown method: $method') ||
+        text.contains('method "$method" not found') ||
+        text.contains("method '$method' not found") ||
+        text.contains('method not found');
   }
 
   Future<List<ResolvedSessionSnapshot>> resolveSessions({
