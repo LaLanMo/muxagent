@@ -726,7 +726,25 @@ class EventRepository {
     final lastSeq = cursor?.lastSeq ?? 0;
     final streamEpoch = cursor?.streamEpoch;
     final fence = _ResyncFenceState();
+    var highestSeqApplied = lastSeq;
+    var highestSeqAccountedFor = lastSeq;
+    var fenceDrained = false;
     _resyncFenceByMachine[machineId] = fence;
+
+    void drainFence(int replayedThroughSeq) {
+      if (replayedThroughSeq > highestSeqAccountedFor) {
+        highestSeqAccountedFor = replayedThroughSeq;
+      }
+      if (fenceDrained) {
+        return;
+      }
+      fenceDrained = true;
+      _drainResyncFence(
+        machineId,
+        fence,
+        replayedThroughSeq: highestSeqAccountedFor,
+      );
+    }
 
     try {
       debugPrint(
@@ -738,11 +756,12 @@ class EventRepository {
         final targetSeq = observedSeq > head.replayedThroughSeq
             ? observedSeq
             : head.replayedThroughSeq;
+        highestSeqAccountedFor = targetSeq;
         _setReplayCursor(
           machineId,
           ReplayCursor(streamEpoch: head.streamEpoch, lastSeq: targetSeq),
         );
-        _drainResyncFence(machineId, fence, replayedThroughSeq: targetSeq);
+        drainFence(targetSeq);
         debugPrint(
           '[Resync] machine=$machineId outcome=noCursor '
           'streamEpoch=${head.streamEpoch} replayedThroughSeq=${head.replayedThroughSeq}',
@@ -754,14 +773,35 @@ class EventRepository {
           streamEpoch: head.streamEpoch,
         );
       }
-      final response = await _wsRepo.resyncEvents(
+      int? responseEpoch;
+      final response = await _wsRepo.consumeResyncPages(
         machineId: machineId,
         lastSeq: lastSeq,
         streamEpoch: streamEpoch,
+        onPage: (page) {
+          if (page.streamEpoch <= 0) {
+            throw const FormatException('Invalid replay epoch');
+          }
+          if (responseEpoch != null && responseEpoch != page.streamEpoch) {
+            throw Exception('inconsistent replay epoch during resync');
+          }
+          responseEpoch = page.streamEpoch;
+          highestSeqApplied = _applyReplayPage(
+            machineId,
+            streamEpoch: page.streamEpoch,
+            events: page.events,
+            highestSeqApplied: highestSeqApplied,
+            onSeqAccounted: (seq) {
+              if (seq > highestSeqAccountedFor) {
+                highestSeqAccountedFor = seq;
+              }
+            },
+          );
+        },
       );
 
-      final responseEpoch = response.streamEpoch;
-      if (responseEpoch <= 0) {
+      final responseEpochValue = response.streamEpoch;
+      if (responseEpochValue <= 0) {
         debugPrint(
           '[Resync] machine=$machineId outcome=failed-invalid-epoch '
           'lastSeq=$lastSeq streamEpoch=$streamEpoch',
@@ -776,8 +816,8 @@ class EventRepository {
       }
 
       debugPrint(
-        '[Resync] machine=$machineId response events=${response.events.length} '
-        'status=${response.status} streamEpoch=$responseEpoch '
+        '[Resync] machine=$machineId response '
+        'status=${response.status} streamEpoch=$responseEpochValue '
         'replayedThroughSeq=${response.replayedThroughSeq}',
       );
 
@@ -785,85 +825,54 @@ class EventRepository {
         case ReplayResyncStatus.reset:
           _setReplayCursor(
             machineId,
-            ReplayCursor(streamEpoch: responseEpoch, lastSeq: 0),
+            ReplayCursor(streamEpoch: responseEpochValue, lastSeq: 0),
           );
-          _drainResyncFence(
-            machineId,
-            fence,
-            replayedThroughSeq: response.replayedThroughSeq,
-          );
+          drainFence(response.replayedThroughSeq);
           debugPrint(
             '[Resync] machine=$machineId outcome=reset '
-            'lastSeq=$lastSeq streamEpoch=$responseEpoch',
+            'lastSeq=$lastSeq streamEpoch=$responseEpochValue',
           );
           return ResyncResult(
             outcome: ResyncOutcome.reset,
             lastSeqUsed: lastSeq,
             highestSeqApplied: lastSeq,
-            streamEpoch: responseEpoch,
+            streamEpoch: responseEpochValue,
           );
         case ReplayResyncStatus.gap:
-          _drainResyncFence(
-            machineId,
-            fence,
-            replayedThroughSeq: response.replayedThroughSeq,
-          );
+          drainFence(response.replayedThroughSeq);
           debugPrint(
             '[Resync] machine=$machineId outcome=incomplete '
-            'lastSeq=$lastSeq streamEpoch=$responseEpoch '
+            'lastSeq=$lastSeq streamEpoch=$responseEpochValue '
             'replayedThroughSeq=${response.replayedThroughSeq}',
           );
           return ResyncResult(
             outcome: ResyncOutcome.incomplete,
             lastSeqUsed: lastSeq,
             highestSeqApplied: lastSeq,
-            streamEpoch: responseEpoch,
+            streamEpoch: responseEpochValue,
           );
         case ReplayResyncStatus.ok:
-          var highestSeqApplied = lastSeq;
-          if (streamEpoch != responseEpoch || cursor == null) {
-            _setReplayCursor(
-              machineId,
-              ReplayCursor(streamEpoch: responseEpoch, lastSeq: lastSeq),
-            );
-          }
-          for (final event in response.events) {
-            _processEvent(event);
-            if (event.seq > highestSeqApplied) {
-              highestSeqApplied = event.seq;
-            }
-            if (event.seq > 0) {
-              _setReplayCursor(
-                machineId,
-                ReplayCursor(streamEpoch: responseEpoch, lastSeq: event.seq),
-              );
-            }
-          }
           if (response.replayedThroughSeq > highestSeqApplied) {
             highestSeqApplied = response.replayedThroughSeq;
             _setReplayCursor(
               machineId,
               ReplayCursor(
-                streamEpoch: responseEpoch,
+                streamEpoch: responseEpochValue,
                 lastSeq: response.replayedThroughSeq,
               ),
             );
           }
-          _drainResyncFence(
-            machineId,
-            fence,
-            replayedThroughSeq: highestSeqApplied,
-          );
+          drainFence(highestSeqApplied);
           debugPrint(
             '[Resync] machine=$machineId outcome=complete '
-            'lastSeq=$lastSeq streamEpoch=$responseEpoch '
+            'lastSeq=$lastSeq streamEpoch=$responseEpochValue '
             'highestSeqApplied=$highestSeqApplied',
           );
           return ResyncResult(
             outcome: ResyncOutcome.complete,
             lastSeqUsed: lastSeq,
             highestSeqApplied: highestSeqApplied,
-            streamEpoch: responseEpoch,
+            streamEpoch: responseEpochValue,
           );
       }
     } catch (e) {
@@ -871,21 +880,17 @@ class EventRepository {
         '[Resync] machine=$machineId outcome=failed lastSeq=$lastSeq '
         'streamEpoch=$streamEpoch error=$e',
       );
+      drainFence(highestSeqAccountedFor);
       return ResyncResult(
         outcome: ResyncOutcome.failed,
         lastSeqUsed: lastSeq,
-        highestSeqApplied: lastSeq,
+        highestSeqApplied: highestSeqApplied,
         streamEpoch: streamEpoch,
         error: e,
       );
     } finally {
-      final currentFence = _resyncFenceByMachine[machineId];
-      if (identical(currentFence, fence)) {
-        _resyncFenceByMachine.remove(machineId);
-        for (final event in fence.bufferedEvents) {
-          _trackLiveReplayCursor(event);
-          _processEvent(event);
-        }
+      if (!fenceDrained) {
+        drainFence(highestSeqAccountedFor);
       }
     }
   }
@@ -907,6 +912,43 @@ class EventRepository {
       _processEvent(event);
     }
     fence.bufferedEvents.clear();
+  }
+
+  int _applyReplayPage(
+    String machineId, {
+    required int streamEpoch,
+    required Iterable<WsEvent> events,
+    required int highestSeqApplied,
+    required void Function(int seq) onSeqAccounted,
+  }) {
+    var nextHighest = highestSeqApplied;
+    final existing = _replayCursorByMachine[machineId];
+    if (existing == null || existing.streamEpoch != streamEpoch) {
+      _setReplayCursor(
+        machineId,
+        ReplayCursor(streamEpoch: streamEpoch, lastSeq: highestSeqApplied),
+      );
+    }
+
+    for (final wsEvent in events) {
+      final event = _parseWsEvent(wsEvent);
+      if (event == null || event.type == null) {
+        continue;
+      }
+      _processEvent(event);
+      if (event.seq > nextHighest) {
+        nextHighest = event.seq;
+        onSeqAccounted(nextHighest);
+      }
+      if (event.seq > 0) {
+        _setReplayCursor(
+          machineId,
+          ReplayCursor(streamEpoch: streamEpoch, lastSeq: event.seq),
+        );
+      }
+    }
+
+    return nextHighest;
   }
 
   AgentEvent? _parseWsEvent(WsEvent wsEvent) {

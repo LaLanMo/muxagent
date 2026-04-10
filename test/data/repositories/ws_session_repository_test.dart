@@ -212,10 +212,12 @@ void main() {
         sessions: SessionManager(),
       );
 
-      final resync = await repo.resyncEvents(
+      final deliveredPages = <ReplayPage>[];
+      final summary = await repo.consumeResyncPages(
         machineId: 'machine-1',
         lastSeq: 8,
         streamEpoch: 42,
+        onPage: deliveredPages.add,
       );
 
       expect(relay.methods.take(2).toList(), [
@@ -224,13 +226,14 @@ void main() {
       ]);
       expect(relay.lastMethod, 'events.resync');
       expect(relay.lastParams, {'lastSeq': 8, 'streamEpoch': 42});
-      expect(resync.status, ReplayResyncStatus.ok);
-      expect(resync.streamEpoch, 42);
-      expect(resync.replayedThroughSeq, 9);
-      expect(resync.events, hasLength(1));
-      expect(resync.events.single.type, EventType.messageDelta);
-      expect(resync.events.single.seq, 9);
-      expect(resync.events.single.sessionId, 'sid-1');
+      expect(summary.status, ReplayResyncStatus.ok);
+      expect(summary.streamEpoch, 42);
+      expect(summary.replayedThroughSeq, 9);
+      expect(deliveredPages, hasLength(1));
+      expect(deliveredPages.single.streamEpoch, 42);
+      expect(deliveredPages.single.events, hasLength(1));
+      expect(deliveredPages.single.events.single.payload['seq'], 9);
+      expect(deliveredPages.single.events.single.payload['sessionId'], 'sid-1');
 
       relay.nextPayload = {
         'result': {'streamEpoch': 42, 'replayedThroughSeq': 12},
@@ -342,86 +345,105 @@ void main() {
       expect(emptyApprovals, isEmpty);
     });
 
-    test('resyncEvents loops paged replay responses when supported', () async {
-      final relay = FakeRelayWsClient(nextPayload: const {'result': {}});
-      relay.queuedPayloads.addAll([
-        {
-          'result': {
-            'events': [
-              {
-                'type': 'message.delta',
-                'sessionId': 'sid-1',
-                'seq': 9,
-                'messagePart': {
-                  'app': {
-                    'partId': 'part-1',
-                    'messageId': 'msg-1',
-                    'role': 'agent',
-                    'delta': 'hi',
-                    'partType': 'text',
-                    'fullText': 'hi',
+    test(
+      'consumeResyncPages loops paged replay responses when supported',
+      () async {
+        final relay = FakeRelayWsClient(nextPayload: const {'result': {}});
+        relay.queuedPayloads.addAll([
+          {
+            'result': {
+              'events': [
+                {
+                  'type': 'message.delta',
+                  'sessionId': 'sid-1',
+                  'seq': 9,
+                  'messagePart': {
+                    'app': {
+                      'partId': 'part-1',
+                      'messageId': 'msg-1',
+                      'role': 'agent',
+                      'delta': 'hi',
+                      'partType': 'text',
+                      'fullText': 'hi',
+                    },
                   },
                 },
-              },
-            ],
-            'status': 'ok',
-            'streamEpoch': 42,
-            'replayedThroughSeq': 10,
-            'hasMore': true,
-            'nextAfterSeq': 9,
+              ],
+              'status': 'ok',
+              'streamEpoch': 42,
+              'replayedThroughSeq': 10,
+              'hasMore': true,
+              'nextAfterSeq': 9,
+            },
           },
-        },
-        {
-          'result': {
-            'events': [
-              {
-                'type': 'message.delta',
-                'sessionId': 'sid-1',
-                'seq': 10,
-                'messagePart': {
-                  'app': {
-                    'partId': 'part-2',
-                    'messageId': 'msg-2',
-                    'role': 'agent',
-                    'delta': 'there',
-                    'partType': 'text',
-                    'fullText': 'there',
+          {
+            'result': {
+              'events': [
+                {
+                  'type': 'message.delta',
+                  'sessionId': 'sid-1',
+                  'seq': 10,
+                  'messagePart': {
+                    'app': {
+                      'partId': 'part-2',
+                      'messageId': 'msg-2',
+                      'role': 'agent',
+                      'delta': 'there',
+                      'partType': 'text',
+                      'fullText': 'there',
+                    },
                   },
                 },
-              },
-            ],
-            'status': 'ok',
-            'streamEpoch': 42,
-            'replayedThroughSeq': 10,
-            'hasMore': false,
-            'nextAfterSeq': 10,
+              ],
+              'status': 'ok',
+              'streamEpoch': 42,
+              'replayedThroughSeq': 10,
+              'hasMore': false,
+              'nextAfterSeq': 10,
+            },
           },
-        },
-      ]);
-      final repo = WsSessionRepository(
-        relay: relay,
-        sessions: SessionManager(),
-      );
+        ]);
+        final repo = WsSessionRepository(
+          relay: relay,
+          sessions: SessionManager(),
+        );
 
-      final batch = await repo.resyncEvents(
-        machineId: 'machine-1',
-        lastSeq: 8,
-        streamEpoch: 42,
-      );
+        final deliveredSeqs = <int>[];
+        final summary = await repo.consumeResyncPages(
+          machineId: 'machine-1',
+          lastSeq: 8,
+          streamEpoch: 42,
+          onPage: (page) {
+            for (final event in page.events) {
+              deliveredSeqs.add(event.payload['seq'] as int);
+            }
+          },
+        );
 
-      expect(relay.methods, ['events.resyncPage', 'events.resyncPage']);
-      expect(relay.paramsHistory, [
-        {'lastSeq': 8, 'streamEpoch': 42, 'maxBytes': 262144, 'maxEvents': 128},
-        {'lastSeq': 9, 'streamEpoch': 42, 'maxBytes': 262144, 'maxEvents': 128},
-      ]);
-      expect(batch.status, ReplayResyncStatus.ok);
-      expect(batch.streamEpoch, 42);
-      expect(batch.replayedThroughSeq, 10);
-      expect(batch.events.map((event) => event.seq).toList(), [9, 10]);
-    });
+        expect(relay.methods, ['events.resyncPage', 'events.resyncPage']);
+        expect(relay.paramsHistory, [
+          {
+            'lastSeq': 8,
+            'streamEpoch': 42,
+            'maxBytes': 262144,
+            'maxEvents': 128,
+          },
+          {
+            'lastSeq': 9,
+            'streamEpoch': 42,
+            'maxBytes': 262144,
+            'maxEvents': 128,
+          },
+        ]);
+        expect(summary.status, ReplayResyncStatus.ok);
+        expect(summary.streamEpoch, 42);
+        expect(summary.replayedThroughSeq, 10);
+        expect(deliveredSeqs, [9, 10]);
+      },
+    );
 
     test(
-      'resyncEvents falls back to legacy replay for older daemons',
+      'consumeResyncPages falls back to legacy replay for older daemons',
       () async {
         final relay = FakeRelayWsClient(nextPayload: const {'result': {}});
         relay.queuedPayloads.addAll([
@@ -456,16 +478,22 @@ void main() {
           sessions: SessionManager(),
         );
 
-        final batch = await repo.resyncEvents(
+        final deliveredSeqs = <int>[];
+        final summary = await repo.consumeResyncPages(
           machineId: 'machine-1',
           lastSeq: 10,
           streamEpoch: 42,
+          onPage: (page) {
+            for (final event in page.events) {
+              deliveredSeqs.add(event.payload['seq'] as int);
+            }
+          },
         );
 
         expect(relay.methods, ['events.resyncPage', 'events.resync']);
         expect(relay.paramsHistory.last, {'lastSeq': 10, 'streamEpoch': 42});
-        expect(batch.events.single.seq, 11);
-        expect(batch.replayedThroughSeq, 11);
+        expect(deliveredSeqs, [11]);
+        expect(summary.replayedThroughSeq, 11);
       },
     );
 

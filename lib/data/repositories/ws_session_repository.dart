@@ -1,14 +1,14 @@
+import 'dart:async';
+
 import 'package:get/get.dart';
 import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
-import '../../domain/event.dart';
 import '../../domain/fs_entry.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/prompt_content_block.dart';
 import '../services/ws/models/acp_session_models.dart';
-import '../services/ws/event_envelope_parser.dart';
 import '../services/ws/models/rpc_request_models.dart';
 import '../services/ws/models/rpc_result_models.dart';
 import '../services/ws/rpc_result_mapper.dart';
@@ -18,14 +18,21 @@ import 'session_manager.dart';
 
 enum ReplayResyncStatus { ok, gap, reset }
 
-class ResyncBatch {
-  final List<AgentEvent> events;
+typedef ResyncPageConsumer = FutureOr<void> Function(ReplayPage page);
+
+class ReplayPage {
+  final int streamEpoch;
+  final List<WsEvent> events;
+
+  const ReplayPage({required this.streamEpoch, required this.events});
+}
+
+class ReplaySummary {
   final ReplayResyncStatus status;
   final int streamEpoch;
   final int replayedThroughSeq;
 
-  const ResyncBatch({
-    required this.events,
+  const ReplaySummary({
     required this.status,
     required this.streamEpoch,
     required this.replayedThroughSeq,
@@ -168,16 +175,18 @@ class WsSessionRepository {
     return RpcResultMapper.toFsEntries(response.results);
   }
 
-  Future<ResyncBatch> resyncEvents({
+  Future<ReplaySummary> consumeResyncPages({
     required String machineId,
     required int lastSeq,
     int? streamEpoch,
+    required ResyncPageConsumer onPage,
   }) async {
     try {
-      return await _resyncEventsPaged(
+      return await _consumeResyncPagesPaged(
         machineId: machineId,
         lastSeq: lastSeq,
         streamEpoch: streamEpoch,
+        onPage: onPage,
       );
     } catch (e) {
       if (!_isUnknownMethodError(e, 'events.resyncPage')) {
@@ -185,17 +194,19 @@ class WsSessionRepository {
       }
     }
 
-    return _resyncEventsLegacy(
+    return _consumeResyncPagesLegacy(
       machineId: machineId,
       lastSeq: lastSeq,
       streamEpoch: streamEpoch,
+      onPage: onPage,
     );
   }
 
-  Future<ResyncBatch> _resyncEventsLegacy({
+  Future<ReplaySummary> _consumeResyncPagesLegacy({
     required String machineId,
     required int lastSeq,
     int? streamEpoch,
+    required ResyncPageConsumer onPage,
   }) async {
     final response = await _relay.callRpcDecoded(
       machineId: machineId,
@@ -206,23 +217,34 @@ class WsSessionRepository {
       ).toJson(),
       decode: RpcResyncResponseDto.fromJson,
     );
-    return _mapResyncBatch(
-      machineId: machineId,
-      eventsPayload: response.events,
-      status: switch (response.status) {
-        RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
-        RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
-        RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
-      },
+    final status = switch (response.status) {
+      RpcResyncStatusDto.ok => ReplayResyncStatus.ok,
+      RpcResyncStatusDto.gap => ReplayResyncStatus.gap,
+      RpcResyncStatusDto.reset => ReplayResyncStatus.reset,
+    };
+    if (status == ReplayResyncStatus.ok && response.events.isNotEmpty) {
+      await onPage(
+        ReplayPage(
+          streamEpoch: response.streamEpoch,
+          events: _mapReplayWsEvents(
+            machineId: machineId,
+            eventsPayload: response.events,
+          ),
+        ),
+      );
+    }
+    return ReplaySummary(
+      status: status,
       streamEpoch: response.streamEpoch,
       replayedThroughSeq: response.replayedThroughSeq,
     );
   }
 
-  Future<ResyncBatch> _resyncEventsPaged({
+  Future<ReplaySummary> _consumeResyncPagesPaged({
     required String machineId,
     required int lastSeq,
     int? streamEpoch,
+    required ResyncPageConsumer onPage,
   }) async {
     var pageAfterSeq = lastSeq;
     ReplayResyncStatus? status;
@@ -250,8 +272,21 @@ class WsSessionRepository {
       };
       status ??= pageStatus;
       responseEpoch ??= response.streamEpoch;
+      if (responseEpoch != response.streamEpoch) {
+        throw Exception('inconsistent resync pagination epoch');
+      }
       replayedThroughSeq = response.replayedThroughSeq;
-      payloads.addAll(response.events);
+      if (pageStatus == ReplayResyncStatus.ok && response.events.isNotEmpty) {
+        await onPage(
+          ReplayPage(
+            streamEpoch: response.streamEpoch,
+            events: _mapReplayWsEvents(
+              machineId: machineId,
+              eventsPayload: response.events,
+            ),
+          ),
+        );
+      }
 
       if (status != ReplayResyncStatus.ok || !response.hasMore) {
         truncatedByPageLimit = false;
@@ -271,39 +306,26 @@ class WsSessionRepository {
       throw Exception('missing resync pagination response');
     }
 
-    return _mapResyncBatch(
-      machineId: machineId,
-      eventsPayload: payloads,
+    return ReplaySummary(
       status: status,
       streamEpoch: responseEpoch,
       replayedThroughSeq: replayedThroughSeq,
     );
   }
 
-  ResyncBatch _mapResyncBatch({
+  List<WsEvent> _mapReplayWsEvents({
     required String machineId,
     required List<Map<String, dynamic>> eventsPayload,
-    required ReplayResyncStatus status,
-    required int streamEpoch,
-    required int replayedThroughSeq,
   }) {
-    final events = <AgentEvent>[];
+    final events = <WsEvent>[];
     for (final payload in eventsPayload) {
       final enrichedPayload = Map<String, dynamic>.from(payload);
       enrichedPayload.putIfAbsent('machineId', () => machineId);
-      final event = EventEnvelopeParser.parse(
+      events.add(
         WsEvent(type: WsMessageType.event.value, payload: enrichedPayload),
       );
-      if (event != null && event.type != null) {
-        events.add(event);
-      }
     }
-    return ResyncBatch(
-      events: events,
-      status: status,
-      streamEpoch: streamEpoch,
-      replayedThroughSeq: replayedThroughSeq,
-    );
+    return events;
   }
 
   Future<ReplayHeadSnapshot> fetchReplayHead({
