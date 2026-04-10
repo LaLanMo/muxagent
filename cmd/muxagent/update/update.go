@@ -360,6 +360,8 @@ func ensureRuntimeFor(cfg config.Config, runtimeID config.RuntimeID, u *updater,
 		return nil
 	case config.RuntimeOpenCode:
 		return nil
+	case config.RuntimeCopilot:
+		return nil
 	default:
 		return fmt.Errorf("runtime %q is not supported", runtimeID)
 	}

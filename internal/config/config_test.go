@@ -39,6 +39,14 @@ func TestDefault_ContainsBuiltInRuntimes(t *testing.T) {
 		t.Errorf("codex command = %q, want empty", codex.Command)
 	}
 
+	copilot, ok := cfg.Runtimes[RuntimeCopilot]
+	if !ok {
+		t.Fatal("default config missing copilot runtime")
+	}
+	if copilot.Command != "" {
+		t.Errorf("copilot command = %q, want empty", copilot.Command)
+	}
+
 	opencode, ok := cfg.Runtimes[RuntimeOpenCode]
 	if !ok {
 		t.Fatal("default config missing opencode runtime")
@@ -136,16 +144,20 @@ func TestConfiguredRuntimeIDs_Sorted(t *testing.T) {
 		Runtimes: map[RuntimeID]RuntimeSettings{
 			RuntimeCodex:      {},
 			RuntimeClaudeCode: {},
+			RuntimeCopilot:    {},
 			RuntimeOpenCode:   {},
 		},
 	}
 
 	ids := cfg.ConfiguredRuntimeIDs()
-	if len(ids) != 3 {
-		t.Fatalf("len(ids) = %d, want 3", len(ids))
+	if len(ids) != 4 {
+		t.Fatalf("len(ids) = %d, want 4", len(ids))
 	}
-	if ids[0] != RuntimeClaudeCode || ids[1] != RuntimeCodex || ids[2] != RuntimeOpenCode {
-		t.Fatalf("ids = %v, want [claude-code codex opencode]", ids)
+	if ids[0] != RuntimeClaudeCode ||
+		ids[1] != RuntimeCodex ||
+		ids[2] != RuntimeCopilot ||
+		ids[3] != RuntimeOpenCode {
+		t.Fatalf("ids = %v, want [claude-code codex copilot opencode]", ids)
 	}
 }
 
@@ -165,6 +177,9 @@ func TestMergeConfig_NilOverlayRuntimesPreservesBase(t *testing.T) {
 	}
 	if _, ok := merged.Runtimes[RuntimeCodex]; !ok {
 		t.Fatal("codex runtime missing after nil overlay")
+	}
+	if _, ok := merged.Runtimes[RuntimeCopilot]; !ok {
+		t.Fatal("copilot runtime missing after nil overlay")
 	}
 	if _, ok := merged.Runtimes[RuntimeOpenCode]; !ok {
 		t.Fatal("opencode runtime missing after nil overlay")
@@ -290,7 +305,7 @@ func TestApplyEnvOverrides_OnlyExistingRuntimes(t *testing.T) {
 	}
 }
 
-func TestLoadEffective_UserRuntimesReplaceDefaults(t *testing.T) {
+func TestLoadEffective_UserRuntimesKeepBuiltInDefaults(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -308,11 +323,14 @@ func TestLoadEffective_UserRuntimesReplaceDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEffective: %v", err)
 	}
-	if len(cfg.Runtimes) != 1 {
-		t.Fatalf("runtime count = %d, want 1", len(cfg.Runtimes))
+	if len(cfg.Runtimes) != 4 {
+		t.Fatalf("runtime count = %d, want 4", len(cfg.Runtimes))
 	}
-	if _, ok := cfg.Runtimes[RuntimeClaudeCode]; ok {
-		t.Fatal("claude-code runtime should not survive explicit user runtimes")
+	if _, ok := cfg.Runtimes[RuntimeClaudeCode]; !ok {
+		t.Fatal("expected claude-code runtime to be restored from built-ins")
+	}
+	if _, ok := cfg.Runtimes[RuntimeCopilot]; !ok {
+		t.Fatal("expected copilot runtime to be restored from built-ins")
 	}
 	codex := cfg.Runtimes[RuntimeCodex]
 	if codex.Command != "" {
@@ -323,7 +341,7 @@ func TestLoadEffective_UserRuntimesReplaceDefaults(t *testing.T) {
 	}
 }
 
-func TestLoadEffective_ProjectRuntimesReplaceUser(t *testing.T) {
+func TestLoadEffective_ProjectRuntimesKeepBuiltInDefaults(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -361,11 +379,14 @@ func TestLoadEffective_ProjectRuntimesReplaceUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEffective: %v", err)
 	}
-	if len(cfg.Runtimes) != 1 {
-		t.Fatalf("runtime count = %d, want 1", len(cfg.Runtimes))
+	if len(cfg.Runtimes) != 4 {
+		t.Fatalf("runtime count = %d, want 4", len(cfg.Runtimes))
 	}
-	if _, ok := cfg.Runtimes[RuntimeCodex]; ok {
-		t.Fatal("codex runtime should not survive explicit project runtimes")
+	if _, ok := cfg.Runtimes[RuntimeCodex]; !ok {
+		t.Fatal("expected codex runtime to be restored from built-ins")
+	}
+	if _, ok := cfg.Runtimes[RuntimeCopilot]; !ok {
+		t.Fatal("expected copilot runtime to be restored from built-ins")
 	}
 	cc := cfg.Runtimes[RuntimeClaudeCode]
 	if cc.Command != "/tmp/claude-agent-acp" {

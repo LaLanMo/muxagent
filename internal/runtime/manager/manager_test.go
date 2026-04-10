@@ -128,6 +128,25 @@ func TestResolveSettings_OpenCodeDefaultsToACPCommand(t *testing.T) {
 	}
 }
 
+func TestResolveSettings_CopilotDefaultsToACPCommand(t *testing.T) {
+	cfg := config.Default()
+	m := New(cfg)
+
+	got, err := m.resolveSettings(config.RuntimeCopilot, cfg.Runtimes[config.RuntimeCopilot], "/tmp/project")
+	if err != nil {
+		t.Fatalf("resolveSettings: %v", err)
+	}
+	if got.Command != "copilot" {
+		t.Fatalf("command = %q, want copilot", got.Command)
+	}
+	if len(got.Args) != 2 || got.Args[0] != "--acp" || got.Args[1] != "--stdio" {
+		t.Fatalf("args = %#v, want [\"--acp\" \"--stdio\"]", got.Args)
+	}
+	if got.CWD != "/tmp/project" {
+		t.Fatalf("cwd = %q, want /tmp/project", got.CWD)
+	}
+}
+
 func TestSelectRuntimeStartupCWD_FallsBackToHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -810,8 +829,8 @@ func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
 	m := New(config.Default())
 
 	list := m.RuntimeList()
-	if len(list) != 3 {
-		t.Fatalf("len(list) = %d, want 3", len(list))
+	if len(list) != 4 {
+		t.Fatalf("len(list) = %d, want 4", len(list))
 	}
 
 	var openCode *RuntimeInfo
@@ -839,6 +858,100 @@ func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
 	}
 	if got := len(modeOption.Options.Flatten()); got != 2 {
 		t.Fatalf("len(mode options) = %d, want 2", got)
+	}
+}
+
+func TestRuntimeListIncludesCopilotCatalog(t *testing.T) {
+	binDir := t.TempDir()
+	copilotBin := filepath.Join(binDir, "copilot")
+	if err := os.WriteFile(copilotBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var copilot *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeCopilot) {
+			copilot = &list[i]
+			break
+		}
+	}
+	if copilot == nil {
+		t.Fatal("expected Copilot runtime in list")
+	}
+	if !copilot.Ready {
+		t.Fatal("expected Copilot runtime to be ready")
+	}
+	if copilot.Label != "GitHub Copilot" {
+		t.Fatalf("label = %q, want GitHub Copilot", copilot.Label)
+	}
+	modeOption := findConfigOption(copilot.ConfigOptions, "mode")
+	if modeOption == nil {
+		t.Fatal("expected Copilot mode config option")
+	}
+	if modeOption.Name != "Mode" {
+		t.Fatalf("mode option name = %q, want Mode", modeOption.Name)
+	}
+	if got := modeOption.CurrentValue; got != copilotModeAgent {
+		t.Fatalf("currentValue = %q, want %q", got, copilotModeAgent)
+	}
+	if got := len(modeOption.Options.Flatten()); got != 3 {
+		t.Fatalf("len(mode options) = %d, want 3", got)
+	}
+}
+
+func TestRuntimeListMarksCopilotNotReadyWhenUnavailable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var copilot *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeCopilot) {
+			copilot = &list[i]
+			break
+		}
+	}
+	if copilot == nil {
+		t.Fatal("expected Copilot runtime in list")
+	}
+	if copilot.Ready {
+		t.Fatal("expected Copilot runtime to be marked not ready")
+	}
+}
+
+func TestRuntimeListMarksConfiguredCopilotCommandReady(t *testing.T) {
+	binDir := t.TempDir()
+	custom := filepath.Join(binDir, "custom-copilot")
+	if err := os.WriteFile(custom, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	cfg := config.Default()
+	cfg.Runtimes[config.RuntimeCopilot] = config.RuntimeSettings{
+		Command: custom,
+		Args:    []string{"--acp", "--stdio"},
+	}
+	m := New(cfg)
+
+	list := m.RuntimeList()
+	var copilot *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeCopilot) {
+			copilot = &list[i]
+			break
+		}
+	}
+	if copilot == nil {
+		t.Fatal("expected Copilot runtime in list")
+	}
+	if !copilot.Ready {
+		t.Fatal("expected configured Copilot runtime to be ready")
 	}
 }
 

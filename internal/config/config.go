@@ -20,6 +20,7 @@ type RuntimeID string
 const (
 	RuntimeClaudeCode RuntimeID = "claude-code"
 	RuntimeCodex      RuntimeID = "codex"
+	RuntimeCopilot    RuntimeID = "copilot"
 	RuntimeOpenCode   RuntimeID = "opencode"
 
 	defaultRelayURL              = "wss://relay.muxagent.com/ws"
@@ -50,6 +51,7 @@ func Default() Config {
 				Env: map[string]string{"CLAUDECODE": ""},
 			},
 			RuntimeCodex:    {},
+			RuntimeCopilot:  {},
 			RuntimeOpenCode: {},
 		},
 	}
@@ -117,13 +119,16 @@ func load() (Config, error) {
 }
 
 // LoadEffective loads config using layered priority:
-// 1. Start with built-in defaults
-// 2. Merge user config (~/.muxagent/config.json)
-// 3. Merge project config (./.muxagent/config.json)
-// 4. Apply environment variable overrides (MUXAGENT_*)
+//  1. Start with built-in defaults
+//  2. Merge user config (~/.muxagent/config.json)
+//  3. Merge project config (./.muxagent/config.json)
+//  4. Re-add any missing built-in runtimes so old configs inherit newly
+//     supported runtimes by default
+//  5. Apply environment variable overrides (MUXAGENT_*)
 //
 // Each layer overrides the previous. Scalar fields use non-empty overwrite
-// semantics; an explicit runtimes map replaces the previous runtime set.
+// semantics; file-based runtime maps replace the previous runtime set, then the
+// effective config restores any missing built-in runtimes.
 // Missing files are silently skipped; parse errors are returned.
 func LoadEffective() (Config, error) {
 	cfg := Default()
@@ -147,7 +152,11 @@ func LoadEffective() (Config, error) {
 		return Config{}, err
 	}
 
-	// Layer 4: Environment overrides
+	// Layer 4: Ensure older config files inherit any newly added built-in
+	// runtimes, then apply environment overrides.
+	cfg = ensureDefaultRuntimes(cfg)
+
+	// Layer 5: Environment overrides
 	cfg = applyEnvOverrides(cfg)
 
 	if err := validateConfig(cfg); err != nil {
@@ -276,6 +285,19 @@ func mergeConfig(base, overlay Config) Config {
 	}
 
 	return result
+}
+
+func ensureDefaultRuntimes(cfg Config) Config {
+	if cfg.Runtimes == nil {
+		cfg.Runtimes = make(map[RuntimeID]RuntimeSettings)
+	}
+	for id, settings := range Default().Runtimes {
+		if _, ok := cfg.Runtimes[id]; ok {
+			continue
+		}
+		cfg.Runtimes[id] = settings
+	}
+	return cfg
 }
 
 func defaultRuntimeSettings(id RuntimeID) RuntimeSettings {
@@ -439,7 +461,7 @@ func decodeRelaySigningPublicKey(relaySigningPublicKey string) (ed25519.PublicKe
 
 func IsSupportedRuntime(id RuntimeID) bool {
 	switch id {
-	case RuntimeClaudeCode, RuntimeCodex, RuntimeOpenCode:
+	case RuntimeClaudeCode, RuntimeCodex, RuntimeCopilot, RuntimeOpenCode:
 		return true
 	default:
 		return false

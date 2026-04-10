@@ -21,6 +21,12 @@ import (
 	"github.com/LaLanMo/muxagent-cli/internal/runtime/acp"
 )
 
+const (
+	copilotModeAgent     = "https://agentclientprotocol.com/protocol/session-modes#agent"
+	copilotModePlan      = "https://agentclientprotocol.com/protocol/session-modes#plan"
+	copilotModeAutopilot = "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+)
+
 type RuntimeInfo struct {
 	ID            string                            `json:"id"`
 	Label         string                            `json:"label"`
@@ -450,6 +456,8 @@ func (m *Manager) resolveSettings(id config.RuntimeID, settings config.RuntimeSe
 		}
 		settings.Command = resolved
 		log.Printf("[runtime] resolved %s: %s", id, resolved)
+	} else if id == config.RuntimeCopilot {
+		settings = resolveCopilotSettings(settings)
 	} else if id == config.RuntimeOpenCode {
 		settings = resolveOpenCodeSettings(settings)
 	}
@@ -954,6 +962,8 @@ func (m *Manager) configuredRuntimeIDs() []config.RuntimeID {
 
 func runtimeLabel(id config.RuntimeID) string {
 	switch id {
+	case config.RuntimeCopilot:
+		return "GitHub Copilot"
 	case config.RuntimeClaudeCode:
 		return "Claude Code"
 	case config.RuntimeCodex:
@@ -1035,6 +1045,35 @@ func runtimeConfigOptions(id config.RuntimeID) []acpprotocol.SessionConfigOption
 				},
 			},
 		}
+	case config.RuntimeCopilot:
+		return []acpprotocol.SessionConfigOption{
+			{
+				ID:           "mode",
+				Name:         "Mode",
+				Type:         "select",
+				Category:     stringPtr("mode"),
+				CurrentValue: copilotModeAgent,
+				Options: acpprotocol.SessionConfigSelectOptions{
+					Ungrouped: []acpprotocol.SessionConfigSelectOption{
+						{
+							Value:       copilotModeAgent,
+							Name:        "Agent",
+							Description: stringPtr("Default conversational agent mode."),
+						},
+						{
+							Value:       copilotModePlan,
+							Name:        "Plan",
+							Description: stringPtr("Planning mode for multi-step tasks."),
+						},
+						{
+							Value:       copilotModeAutopilot,
+							Name:        "Autopilot",
+							Description: stringPtr("Experimental autonomous mode that runs to completion."),
+						},
+					},
+				},
+			},
+		}
 	case config.RuntimeOpenCode:
 		return []acpprotocol.SessionConfigOption{
 			{
@@ -1066,11 +1105,23 @@ func runtimeConfigOptions(id config.RuntimeID) []acpprotocol.SessionConfigOption
 
 func runtimeReady(id config.RuntimeID, settings config.RuntimeSettings) bool {
 	switch id {
+	case config.RuntimeCopilot:
+		return copilotRuntimeReady(settings)
 	case config.RuntimeOpenCode:
 		return openCodeRuntimeReady(settings)
 	default:
 		return true
 	}
+}
+
+func copilotRuntimeReady(settings config.RuntimeSettings) bool {
+	settings = resolveCopilotSettings(settings)
+	command := strings.TrimSpace(settings.Command)
+	if command == "" {
+		return false
+	}
+	_, err := exec.LookPath(command)
+	return err == nil
 }
 
 func openCodeRuntimeReady(settings config.RuntimeSettings) bool {
@@ -1085,11 +1136,35 @@ func openCodeRuntimeReady(settings config.RuntimeSettings) bool {
 
 func supportsManagedRuntime(id config.RuntimeID) bool {
 	switch id {
-	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeOpenCode:
+	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeCopilot, config.RuntimeOpenCode:
 		return true
 	default:
 		return false
 	}
+}
+
+func resolveCopilotSettings(settings config.RuntimeSettings) config.RuntimeSettings {
+	if strings.TrimSpace(settings.Command) == "" {
+		settings.Command = "copilot"
+		settings.Args = defaultCopilotArgs(settings.Args)
+		return settings
+	}
+	if len(settings.Args) == 0 && looksLikeCopilotBinary(settings.Command) {
+		settings.Args = defaultCopilotArgs(nil)
+	}
+	return settings
+}
+
+func defaultCopilotArgs(args []string) []string {
+	if len(args) > 0 {
+		return args
+	}
+	return []string{"--acp", "--stdio"}
+}
+
+func looksLikeCopilotBinary(command string) bool {
+	base := filepath.Base(strings.TrimSpace(command))
+	return base == "copilot" || base == "copilot.exe"
 }
 
 func resolveOpenCodeSettings(settings config.RuntimeSettings) config.RuntimeSettings {

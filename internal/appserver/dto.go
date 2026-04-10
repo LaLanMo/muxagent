@@ -563,6 +563,8 @@ func runtimeDisplayName(id appconfig.RuntimeID) string {
 		return "Claude Code"
 	case appconfig.RuntimeCodex:
 		return "Codex"
+	case appconfig.RuntimeCopilot:
+		return "GitHub Copilot"
 	case appconfig.RuntimeOpenCode:
 		return "OpenCode"
 	default:
