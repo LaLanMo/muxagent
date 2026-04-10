@@ -109,6 +109,25 @@ func TestResolveSettings_PrefersConfiguredRuntimeCWDOverSessionStartupCWD(t *tes
 	}
 }
 
+func TestResolveSettings_OpenCodeDefaultsToACPCommand(t *testing.T) {
+	cfg := config.Default()
+	m := New(cfg)
+
+	got, err := m.resolveSettings(config.RuntimeOpenCode, cfg.Runtimes[config.RuntimeOpenCode], "/tmp/project")
+	if err != nil {
+		t.Fatalf("resolveSettings: %v", err)
+	}
+	if got.Command != "opencode" {
+		t.Fatalf("command = %q, want opencode", got.Command)
+	}
+	if len(got.Args) != 1 || got.Args[0] != "acp" {
+		t.Fatalf("args = %#v, want [\"acp\"]", got.Args)
+	}
+	if got.CWD != "/tmp/project" {
+		t.Fatalf("cwd = %q, want /tmp/project", got.CWD)
+	}
+}
+
 func TestSelectRuntimeStartupCWD_FallsBackToHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -473,6 +492,63 @@ func TestNewSessionEnrichesModeConfigFromRuntimeCatalog(t *testing.T) {
 	}
 }
 
+func TestNewSessionEnrichesOpenCodeModeConfigFromRuntimeCatalog(t *testing.T) {
+	cfg := config.Default()
+	modelCategory := "model"
+	m := New(cfg)
+	client := &fakeRuntimeClient{
+		alive: true,
+		newSessionResp: acpprotocol.NewSessionResponse{
+			SessionID: "session-open-123",
+			ConfigOptions: []acpprotocol.SessionConfigOption{{
+				ID:           "model",
+				Name:         "Model",
+				Type:         "select",
+				Category:     &modelCategory,
+				CurrentValue: "gpt-5",
+			}},
+		},
+	}
+	m.runtimes[config.RuntimeOpenCode].client = client
+
+	sessionID, runtimeID, resp, err := m.NewSession(
+		context.Background(),
+		string(config.RuntimeOpenCode),
+		"/tmp/project",
+		"plan",
+	)
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	if sessionID != "session-open-123" {
+		t.Fatalf("sessionID = %q, want session-open-123", sessionID)
+	}
+	if runtimeID != string(config.RuntimeOpenCode) {
+		t.Fatalf("runtimeID = %q, want %q", runtimeID, config.RuntimeOpenCode)
+	}
+	if got := findConfigOptionValue(resp.ConfigOptions, "mode"); got != "plan" {
+		t.Fatalf("mode = %q, want plan", got)
+	}
+	modeOption := findConfigOption(resp.ConfigOptions, "mode")
+	if modeOption == nil {
+		t.Fatal("expected mode config option in new-session response")
+	}
+	if got := len(modeOption.Options.Flatten()); got != 2 {
+		t.Fatalf("len(mode options) = %d, want 2", got)
+	}
+
+	snapshot, ok := m.sessionSnapshot(config.RuntimeOpenCode, "session-open-123")
+	if !ok {
+		t.Fatal("expected persisted session snapshot")
+	}
+	if got := findConfigOptionValue(snapshot.ConfigOptions, "mode"); got != "plan" {
+		t.Fatalf("stored mode = %q, want plan", got)
+	}
+	if modeOption := findConfigOption(snapshot.ConfigOptions, "mode"); modeOption == nil || len(modeOption.Options.Flatten()) != 2 {
+		t.Fatalf("stored mode option = %#v, want OpenCode catalog choices", modeOption)
+	}
+}
+
 func TestLoadSessionEnrichesModeConfigFromStoredSnapshotAndRuntimeCatalog(t *testing.T) {
 	cfg := config.Default()
 	modelCategory := "model"
@@ -720,6 +796,101 @@ func TestResolveSessionsScopesStoredSnapshotsByRuntime(t *testing.T) {
 	}
 	if len(sessions[0].ConfigOptions) != 0 {
 		t.Fatalf("configOptions = %#v, want empty for different runtime", sessions[0].ConfigOptions)
+	}
+}
+
+func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
+	binDir := t.TempDir()
+	opencodeBin := filepath.Join(binDir, "opencode")
+	if err := os.WriteFile(opencodeBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	if len(list) != 3 {
+		t.Fatalf("len(list) = %d, want 3", len(list))
+	}
+
+	var openCode *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeOpenCode) {
+			openCode = &list[i]
+			break
+		}
+	}
+	if openCode == nil {
+		t.Fatal("expected OpenCode runtime in list")
+	}
+	if !openCode.Ready {
+		t.Fatal("expected OpenCode runtime to be ready")
+	}
+	modeOption := findConfigOption(openCode.ConfigOptions, "mode")
+	if modeOption == nil {
+		t.Fatal("expected OpenCode mode config option")
+	}
+	if modeOption.Name != "Mode" {
+		t.Fatalf("mode option name = %q, want Mode", modeOption.Name)
+	}
+	if got := modeOption.CurrentValue; got != "build" {
+		t.Fatalf("currentValue = %q, want build", got)
+	}
+	if got := len(modeOption.Options.Flatten()); got != 2 {
+		t.Fatalf("len(mode options) = %d, want 2", got)
+	}
+}
+
+func TestRuntimeListMarksOpenCodeNotReadyWhenUnavailable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var openCode *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeOpenCode) {
+			openCode = &list[i]
+			break
+		}
+	}
+	if openCode == nil {
+		t.Fatal("expected OpenCode runtime in list")
+	}
+	if openCode.Ready {
+		t.Fatal("expected OpenCode runtime to be marked not ready")
+	}
+}
+
+func TestRuntimeListMarksConfiguredOpenCodeCommandReady(t *testing.T) {
+	binDir := t.TempDir()
+	custom := filepath.Join(binDir, "custom-opencode")
+	if err := os.WriteFile(custom, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	cfg := config.Default()
+	cfg.Runtimes[config.RuntimeOpenCode] = config.RuntimeSettings{
+		Command: custom,
+		Args:    []string{"acp"},
+	}
+	m := New(cfg)
+
+	list := m.RuntimeList()
+	var openCode *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeOpenCode) {
+			openCode = &list[i]
+			break
+		}
+	}
+	if openCode == nil {
+		t.Fatal("expected OpenCode runtime in list")
+	}
+	if !openCode.Ready {
+		t.Fatal("expected configured OpenCode runtime to be ready")
 	}
 }
 

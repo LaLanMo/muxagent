@@ -513,6 +513,10 @@ func main() {
 				Value    string `json:"value"`
 			}
 			json.Unmarshal(msg.Params, &params)
+			if os.Getenv("MOCKAGENT_FAIL_SET_CONFIG_OPTION") == "1" {
+				respondError(id, -32601, "Method not found")
+				continue
+			}
 			if params.ConfigID == "model" && params.Value != "" {
 				setCurrentModelValue(params.Value)
 			}

@@ -664,6 +664,27 @@ func TestClient_LoadSessionReturnsRequestedModeWhenSetModeSucceeds(t *testing.T)
 	assert.Equal(t, domain.ModeAcceptEdits, eventCurrentModeID(modeEvent))
 }
 
+func TestClient_LoadSessionKeepsRuntimeModelWhenSetConfigOptionFails(t *testing.T) {
+	bin := buildMockAgent(t)
+	client := newTestClientWithEnv(t, bin, map[string]string{
+		"MOCKAGENT_FAIL_SET_CONFIG_OPTION": "1",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "opus")
+	require.NoError(t, err)
+	assert.Equal(t, "default", findCurrentValue(resp.ConfigOptions, "model"))
+
+	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
+		return countEvents(events, appwire.EventHistoryComplete) >= 1
+	})
+	modelEvent := findEvent(events, appwire.EventModelChanged)
+	require.NotNil(t, modelEvent)
+	assert.Equal(t, "default", modelEvent.ConfigChanged.App.CurrentValue)
+}
+
 func TestClient_SetModeEmitsWrappedModeChangedEvent(t *testing.T) {
 	bin := buildMockAgent(t)
 	client := newTestClient(t, bin)

@@ -286,6 +286,7 @@ func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode
 	}
 
 	// Re-apply model if non-default.
+	modelApplied := false
 	if model != "" && model != "default" {
 		_, err := c.transport.Call(ctx, "session/set_config_option", map[string]any{
 			"sessionId": sessionID,
@@ -294,11 +295,13 @@ func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode
 		})
 		if err != nil {
 			log.Printf("[acp] failed to restore model %q on load: %v", model, err)
+		} else {
+			modelApplied = true
 		}
 	}
 
-	// If model was re-applied, override the currentValue in configOptions.
-	if model != "" && model != "default" {
+	// Only override the current model when the runtime accepted the request.
+	if modelApplied {
 		setConfigOptionCurrentValue(loadResp.ConfigOptions, "model", model)
 	}
 	loadResp.ConfigOptions = normalizeSessionConfigOptions(

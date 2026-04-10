@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -134,12 +136,13 @@ func (m *Manager) RuntimeList() []RuntimeInfo {
 	}
 	items := make([]pair, 0, len(m.runtimes))
 	for id := range m.runtimes {
+		settings := m.runtimes[id].settings
 		items = append(items, pair{
 			id: id,
 			info: RuntimeInfo{
 				ID:            string(id),
 				Label:         runtimeLabel(id),
-				Ready:         true,
+				Ready:         runtimeReady(id, settings),
 				ConfigOptions: runtimeConfigOptions(id),
 			},
 		})
@@ -447,6 +450,8 @@ func (m *Manager) resolveSettings(id config.RuntimeID, settings config.RuntimeSe
 		}
 		settings.Command = resolved
 		log.Printf("[runtime] resolved %s: %s", id, resolved)
+	} else if id == config.RuntimeOpenCode {
+		settings = resolveOpenCodeSettings(settings)
 	}
 
 	if strings.TrimSpace(settings.Command) == "" {
@@ -1030,18 +1035,85 @@ func runtimeConfigOptions(id config.RuntimeID) []acpprotocol.SessionConfigOption
 				},
 			},
 		}
+	case config.RuntimeOpenCode:
+		return []acpprotocol.SessionConfigOption{
+			{
+				ID:           "mode",
+				Name:         "Mode",
+				Type:         "select",
+				Category:     stringPtr("mode"),
+				CurrentValue: "build",
+				Options: acpprotocol.SessionConfigSelectOptions{
+					Ungrouped: []acpprotocol.SessionConfigSelectOption{
+						{
+							Value:       "build",
+							Name:        "Build",
+							Description: stringPtr("Default OpenCode agent mode with full tool execution."),
+						},
+						{
+							Value:       "plan",
+							Name:        "Plan",
+							Description: stringPtr("Planning mode that disallows edit tools."),
+						},
+					},
+				},
+			},
+		}
 	default:
 		return nil
 	}
 }
 
+func runtimeReady(id config.RuntimeID, settings config.RuntimeSettings) bool {
+	switch id {
+	case config.RuntimeOpenCode:
+		return openCodeRuntimeReady(settings)
+	default:
+		return true
+	}
+}
+
+func openCodeRuntimeReady(settings config.RuntimeSettings) bool {
+	settings = resolveOpenCodeSettings(settings)
+	command := strings.TrimSpace(settings.Command)
+	if command == "" {
+		return false
+	}
+	_, err := exec.LookPath(command)
+	return err == nil
+}
+
 func supportsManagedRuntime(id config.RuntimeID) bool {
 	switch id {
-	case config.RuntimeClaudeCode, config.RuntimeCodex:
+	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeOpenCode:
 		return true
 	default:
 		return false
 	}
+}
+
+func resolveOpenCodeSettings(settings config.RuntimeSettings) config.RuntimeSettings {
+	if strings.TrimSpace(settings.Command) == "" {
+		settings.Command = "opencode"
+		settings.Args = defaultOpenCodeArgs(settings.Args)
+		return settings
+	}
+	if len(settings.Args) == 0 && looksLikeOpenCodeBinary(settings.Command) {
+		settings.Args = []string{"acp"}
+	}
+	return settings
+}
+
+func defaultOpenCodeArgs(args []string) []string {
+	if len(args) > 0 {
+		return args
+	}
+	return []string{"acp"}
+}
+
+func looksLikeOpenCodeBinary(command string) bool {
+	base := filepath.Base(strings.TrimSpace(command))
+	return base == "opencode" || base == "opencode.exe"
 }
 
 func stringPtr(value string) *string {
