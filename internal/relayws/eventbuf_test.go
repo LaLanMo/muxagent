@@ -171,6 +171,89 @@ func TestEventBuffer_DropsOldestWhenByteBudgetExceeded(t *testing.T) {
 	require.Greater(t, snapshot.Events[0].Seq, uint64(1))
 }
 
+func TestEventBuffer_ReplaySincePageRespectsMaxEvents(t *testing.T) {
+	buf := NewEventBuffer(10)
+	buf.Push(makeEvent(appwire.EventMessageDelta))
+	second := buf.Push(makeEvent(appwire.EventReasoning))
+	third := buf.Push(makeEvent(appwire.EventToolStarted))
+
+	page := buf.ReplaySincePage(buf.StreamEpoch(), 0, 0, 2)
+	require.Equal(t, appwire.ResyncStatusOK, page.Status)
+	require.Len(t, page.Events, 2)
+	require.True(t, page.HasMore)
+	require.Equal(t, second.Seq, page.NextAfterSeq)
+	require.Equal(t, third.Seq, page.ReplayedThroughSeq)
+}
+
+func TestEventBuffer_ReplaySincePageRespectsMaxBytes(t *testing.T) {
+	buf := NewEventBuffer(10)
+	first := buf.Push(appwire.Event{
+		Type: appwire.EventToolCompleted,
+		At:   time.Now(),
+		Tool: &appwire.ToolEvent{
+			App: appwire.ToolEventApp{
+				CallID:    "tool-1",
+				Name:      "Terminal",
+				Status:    appwire.ToolStatusCompleted,
+				Output:    strings.Repeat("x", 512),
+				PartID:    "part",
+				MessageID: "msg",
+			},
+		},
+	})
+	second := buf.Push(appwire.Event{
+		Type: appwire.EventToolCompleted,
+		At:   time.Now(),
+		Tool: &appwire.ToolEvent{
+			App: appwire.ToolEventApp{
+				CallID:    "tool-2",
+				Name:      "Terminal",
+				Status:    appwire.ToolStatusCompleted,
+				Output:    strings.Repeat("y", 512),
+				PartID:    "part",
+				MessageID: "msg",
+			},
+		},
+	})
+
+	firstSize, err := marshalEvent(first)
+	require.NoError(t, err)
+
+	page := buf.ReplaySincePage(buf.StreamEpoch(), 0, len(firstSize)+32, 10)
+	require.Equal(t, appwire.ResyncStatusOK, page.Status)
+	require.Len(t, page.Events, 1)
+	require.True(t, page.HasMore)
+	require.Equal(t, first.Seq, page.NextAfterSeq)
+	require.Equal(t, second.Seq, page.ReplayedThroughSeq)
+}
+
+func TestEventBuffer_ReplaySincePageAlwaysIncludesOversizedFirstEvent(t *testing.T) {
+	buf := NewEventBuffer(10)
+	first := buf.Push(appwire.Event{
+		Type: appwire.EventToolCompleted,
+		At:   time.Now(),
+		Tool: &appwire.ToolEvent{
+			App: appwire.ToolEventApp{
+				CallID:    "tool-1",
+				Name:      "Terminal",
+				Status:    appwire.ToolStatusCompleted,
+				Output:    strings.Repeat("x", 4096),
+				PartID:    "part",
+				MessageID: "msg",
+			},
+		},
+	})
+	second := buf.Push(makeEvent(appwire.EventReasoning))
+
+	page := buf.ReplaySincePage(buf.StreamEpoch(), 0, 64, 10)
+	require.Equal(t, appwire.ResyncStatusOK, page.Status)
+	require.Len(t, page.Events, 1)
+	require.True(t, page.HasMore)
+	require.Equal(t, first.Seq, page.Events[0].Seq)
+	require.Equal(t, first.Seq, page.NextAfterSeq)
+	require.Equal(t, second.Seq, page.ReplayedThroughSeq)
+}
+
 func TestEventBuffer_ReplaySinceReturnsAtomicSnapshot(t *testing.T) {
 	buf := NewEventBuffer(256)
 	for i := 0; i < 64; i++ {

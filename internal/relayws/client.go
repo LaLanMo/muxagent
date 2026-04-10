@@ -33,9 +33,13 @@ import (
 )
 
 const (
-	pingInterval = 15 * time.Second
-	pongTimeout  = 10 * time.Second
-	writeWait    = 5 * time.Second
+	pingInterval            = 15 * time.Second
+	pongTimeout             = 10 * time.Second
+	writeWait               = 5 * time.Second
+	defaultResyncPageBytes  = 256 * 1024
+	defaultResyncPageEvents = 128
+	maxResyncPageBytes      = 512 * 1024
+	maxResyncPageEvents     = 256
 )
 
 var (
@@ -432,6 +436,13 @@ func (c *Client) handleRPC(connEpoch uint64, enc EncryptedMessage) {
 			break
 		}
 		result, respErr = c.rpcResyncEvents(ctx, params)
+	case "events.resyncPage":
+		params, err := appwire.DecodeResyncEventsPageParams(payload.Params)
+		if err != nil {
+			respErr = "invalid resync page params: " + err.Error()
+			break
+		}
+		result, respErr = c.rpcResyncEventsPage(ctx, params)
 	case "events.head":
 		result, respErr = c.rpcReplayHead(ctx)
 	case "approvals.pending":
@@ -887,6 +898,27 @@ func (c *Client) rpcResyncEvents(ctx context.Context, params appwire.ResyncEvent
 	}, ""
 }
 
+func (c *Client) rpcResyncEventsPage(ctx context.Context, params appwire.ResyncEventsPageParams) (any, string) {
+	if c.eventBuf == nil {
+		return nil, "event buffer not available"
+	}
+
+	page := c.eventBuf.ReplaySincePage(
+		params.StreamEpoch,
+		params.LastSeq,
+		clampResyncPageBytes(params.MaxBytes),
+		clampResyncPageEvents(params.MaxEvents),
+	)
+	return appwire.ResyncEventsPageResult{
+		Events:             page.Events,
+		Status:             page.Status,
+		StreamEpoch:        page.StreamEpoch,
+		ReplayedThroughSeq: page.ReplayedThroughSeq,
+		HasMore:            page.HasMore,
+		NextAfterSeq:       page.NextAfterSeq,
+	}, ""
+}
+
 func (c *Client) rpcReplayHead(ctx context.Context) (any, string) {
 	if c.eventBuf == nil {
 		return nil, "event buffer not available"
@@ -895,6 +927,26 @@ func (c *Client) rpcReplayHead(ctx context.Context) (any, string) {
 		StreamEpoch:        c.eventBuf.StreamEpoch(),
 		ReplayedThroughSeq: c.eventBuf.Seq(),
 	}, ""
+}
+
+func clampResyncPageBytes(requested int) int {
+	if requested <= 0 {
+		return defaultResyncPageBytes
+	}
+	if requested > maxResyncPageBytes {
+		return maxResyncPageBytes
+	}
+	return requested
+}
+
+func clampResyncPageEvents(requested int) int {
+	if requested <= 0 {
+		return defaultResyncPageEvents
+	}
+	if requested > maxResyncPageEvents {
+		return maxResyncPageEvents
+	}
+	return requested
 }
 
 // --- Filesystem RPCs ---

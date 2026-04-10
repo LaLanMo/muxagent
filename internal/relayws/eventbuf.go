@@ -31,6 +31,15 @@ type ReplaySnapshot struct {
 	ReplayedThroughSeq uint64
 }
 
+type ReplayPageSnapshot struct {
+	Events             []appwire.Event
+	Status             appwire.ResyncStatus
+	StreamEpoch        uint64
+	ReplayedThroughSeq uint64
+	HasMore            bool
+	NextAfterSeq       uint64
+}
+
 var fallbackStreamEpoch uint64
 
 func NewEventBuffer(size int) *EventBuffer {
@@ -87,47 +96,58 @@ func (b *EventBuffer) ReplaySince(streamEpoch, afterSeq uint64) ReplaySnapshot {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 
-	snapshot := ReplaySnapshot{
+	return b.replaySinceLocked(streamEpoch, afterSeq)
+}
+
+// ReplaySincePage returns an atomic replay snapshot page for the requested cursor.
+func (b *EventBuffer) ReplaySincePage(streamEpoch, afterSeq uint64, maxBytes, maxEvents int) ReplayPageSnapshot {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	snapshot := b.replaySinceLocked(streamEpoch, afterSeq)
+	page := ReplayPageSnapshot{
 		Events:             make([]appwire.Event, 0),
-		Status:             appwire.ResyncStatusOK,
-		StreamEpoch:        b.streamEpoch,
-		ReplayedThroughSeq: b.seq,
+		Status:             snapshot.Status,
+		StreamEpoch:        snapshot.StreamEpoch,
+		ReplayedThroughSeq: snapshot.ReplayedThroughSeq,
+		NextAfterSeq:       afterSeq,
 	}
 
-	if streamEpoch == 0 || streamEpoch != b.streamEpoch {
-		snapshot.Status = appwire.ResyncStatusReset
-		snapshot.Events = b.snapshotAllLocked()
-		return snapshot
+	if len(snapshot.Events) == 0 {
+		return page
 	}
 
-	if afterSeq > b.seq {
-		snapshot.Status = appwire.ResyncStatusReset
-		snapshot.Events = b.snapshotAllLocked()
-		return snapshot
+	if maxEvents <= 0 {
+		maxEvents = len(snapshot.Events)
 	}
 
-	if b.count == 0 || afterSeq == b.seq {
-		return snapshot
-	}
-
-	oldestIdx := (b.head - b.count + b.size) % b.size
-	oldestSeq := b.events[oldestIdx].Seq
-
-	if afterSeq < oldestSeq-1 {
-		snapshot.Status = appwire.ResyncStatusGap
-		snapshot.Events = b.snapshotAllLocked()
-		return snapshot
-	}
-
-	result := make([]appwire.Event, 0, b.count)
-	for i := 0; i < b.count; i++ {
-		idx := (oldestIdx + i) % b.size
-		if b.events[idx].Seq > afterSeq {
-			result = append(result, b.events[idx])
+	bytesUsed := 0
+	for _, event := range snapshot.Events {
+		if len(page.Events) >= maxEvents {
+			page.HasMore = true
+			break
 		}
+
+		eventSize := 1
+		if encoded, err := marshalEvent(event); err == nil && len(encoded) > 0 {
+			eventSize = len(encoded)
+		}
+
+		if len(page.Events) > 0 && maxBytes > 0 && bytesUsed+eventSize > maxBytes {
+			page.HasMore = true
+			break
+		}
+
+		page.Events = append(page.Events, event)
+		page.NextAfterSeq = event.Seq
+		bytesUsed += eventSize
 	}
-	snapshot.Events = result
-	return snapshot
+
+	if !page.HasMore && len(page.Events) < len(snapshot.Events) {
+		page.HasMore = true
+	}
+
+	return page
 }
 
 // Reset clears buffered history and advances the replay stream epoch.
@@ -172,6 +192,50 @@ func (b *EventBuffer) snapshotAllLocked() []appwire.Event {
 		result = append(result, b.events[idx])
 	}
 	return result
+}
+
+func (b *EventBuffer) replaySinceLocked(streamEpoch, afterSeq uint64) ReplaySnapshot {
+	snapshot := ReplaySnapshot{
+		Events:             make([]appwire.Event, 0),
+		Status:             appwire.ResyncStatusOK,
+		StreamEpoch:        b.streamEpoch,
+		ReplayedThroughSeq: b.seq,
+	}
+
+	if streamEpoch == 0 || streamEpoch != b.streamEpoch {
+		snapshot.Status = appwire.ResyncStatusReset
+		snapshot.Events = b.snapshotAllLocked()
+		return snapshot
+	}
+
+	if afterSeq > b.seq {
+		snapshot.Status = appwire.ResyncStatusReset
+		snapshot.Events = b.snapshotAllLocked()
+		return snapshot
+	}
+
+	if b.count == 0 || afterSeq == b.seq {
+		return snapshot
+	}
+
+	oldestIdx := (b.head - b.count + b.size) % b.size
+	oldestSeq := b.events[oldestIdx].Seq
+
+	if afterSeq < oldestSeq-1 {
+		snapshot.Status = appwire.ResyncStatusGap
+		snapshot.Events = b.snapshotAllLocked()
+		return snapshot
+	}
+
+	result := make([]appwire.Event, 0, b.count)
+	for i := 0; i < b.count; i++ {
+		idx := (oldestIdx + i) % b.size
+		if b.events[idx].Seq > afterSeq {
+			result = append(result, b.events[idx])
+		}
+	}
+	snapshot.Events = result
+	return snapshot
 }
 
 func (b *EventBuffer) dropOldestLocked() {

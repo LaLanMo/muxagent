@@ -714,6 +714,67 @@ func TestRunHandlesReplayHeadRPC(t *testing.T) {
 	}
 }
 
+func TestRunHandlesResyncPageRPC(t *testing.T) {
+	clientConn, relayConn, cleanup := newWSPair(t)
+	defer cleanup()
+
+	var key [32]byte
+	key[0] = 1
+	session := newSession("machine-1", key, 1)
+	buf := NewEventBuffer(8)
+	first := buf.Push(makeEvent(appwire.EventMessageDelta))
+	second := buf.Push(makeEvent(appwire.EventToolCompleted))
+
+	client := &Client{
+		conn:          clientConn,
+		connEpoch:     1,
+		machineID:     "machine-1",
+		eventBuf:      buf,
+		session:       session,
+		activeSession: session,
+		sessionCWD:    map[string]string{},
+	}
+
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- client.Run(context.Background())
+	}()
+
+	require.NoError(t, relayConn.WriteJSON(encryptRPC(t, session, "machine-1", "msg-page", "events.resyncPage", map[string]any{
+		"streamEpoch": buf.StreamEpoch(),
+		"lastSeq":     0,
+		"maxEvents":   1,
+		"maxBytes":    4096,
+	})))
+
+	msg := readEncryptedMessage(t, relayConn)
+	require.Equal(t, MessageTypeResponse, msg.Type)
+	require.Equal(t, "msg-page", msg.MsgID)
+
+	body, err := session.decrypt(string(msg.Type), msg.MsgID, msg.Nonce, msg.Ciphertext)
+	require.NoError(t, err)
+
+	var response struct {
+		Result appwire.ResyncEventsPageResult `json:"result"`
+		Error  string                         `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(body, &response))
+	require.Equal(t, "", response.Error)
+	require.Equal(t, appwire.ResyncStatusOK, response.Result.Status)
+	require.Len(t, response.Result.Events, 1)
+	require.Equal(t, first.Seq, response.Result.Events[0].Seq)
+	require.True(t, response.Result.HasMore)
+	require.Equal(t, first.Seq, response.Result.NextAfterSeq)
+	require.Equal(t, second.Seq, response.Result.ReplayedThroughSeq)
+
+	require.NoError(t, clientConn.Close())
+	select {
+	case <-runErr:
+	case <-time.After(2 * time.Second):
+		t.Fatal("relay run loop did not stop")
+	}
+}
+
 func TestSendEventNormalizesLargeToolPayloadsForTransport(t *testing.T) {
 	client := &Client{eventBuf: NewEventBuffer(8)}
 
@@ -865,6 +926,30 @@ func TestRpcResyncEventsReturnsAtomicSnapshot(t *testing.T) {
 	}
 
 	<-done
+}
+
+func TestRpcResyncEventsPageReturnsContinuation(t *testing.T) {
+	buf := NewEventBuffer(8)
+	first := buf.Push(makeEvent(appwire.EventMessageDelta))
+	second := buf.Push(makeEvent(appwire.EventReasoning))
+	third := buf.Push(makeEvent(appwire.EventToolStarted))
+
+	client := &Client{eventBuf: buf}
+	result, errStr := client.rpcResyncEventsPage(context.Background(), appwire.ResyncEventsPageParams{
+		StreamEpoch: buf.StreamEpoch(),
+		LastSeq:     0,
+		MaxEvents:   2,
+	})
+	require.Empty(t, errStr)
+
+	page := resyncPageResultFromRPCResult(t, result)
+	require.Equal(t, appwire.ResyncStatusOK, page.Status)
+	require.Len(t, page.Events, 2)
+	require.Equal(t, first.Seq, page.Events[0].Seq)
+	require.Equal(t, second.Seq, page.Events[1].Seq)
+	require.True(t, page.HasMore)
+	require.Equal(t, second.Seq, page.NextAfterSeq)
+	require.Equal(t, third.Seq, page.ReplayedThroughSeq)
 }
 
 func TestRpcPromptUpdatesResolvedStatus(t *testing.T) {
@@ -2654,6 +2739,17 @@ func resyncResultFromRPCResult(t *testing.T, result any) appwire.ResyncEventsRes
 	require.NoError(t, err)
 
 	var payload appwire.ResyncEventsResult
+	require.NoError(t, json.Unmarshal(body, &payload))
+	return payload
+}
+
+func resyncPageResultFromRPCResult(t *testing.T, result any) appwire.ResyncEventsPageResult {
+	t.Helper()
+
+	body, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	var payload appwire.ResyncEventsPageResult
 	require.NoError(t, json.Unmarshal(body, &payload))
 	return payload
 }

@@ -101,6 +101,13 @@ type ResyncEventsParams struct {
 	LastSeq     uint64 `json:"lastSeq,omitempty"`
 }
 
+type ResyncEventsPageParams struct {
+	StreamEpoch uint64 `json:"streamEpoch,omitempty"`
+	LastSeq     uint64 `json:"lastSeq,omitempty"`
+	MaxBytes    int    `json:"maxBytes,omitempty"`
+	MaxEvents   int    `json:"maxEvents,omitempty"`
+}
+
 type FsListParams struct {
 	SessionID string `json:"sessionId"`
 	Path      string `json:"path,omitempty"`
@@ -145,6 +152,10 @@ func DecodeReplyPermissionParams(raw json.RawMessage) (ReplyPermissionParams, er
 
 func DecodeResyncEventsParams(raw json.RawMessage) (ResyncEventsParams, error) {
 	return decodeRPCParams[ResyncEventsParams](raw)
+}
+
+func DecodeResyncEventsPageParams(raw json.RawMessage) (ResyncEventsPageParams, error) {
+	return decodeRPCParams[ResyncEventsPageParams](raw)
 }
 
 func DecodeFsListParams(raw json.RawMessage) (FsListParams, error) {
@@ -231,6 +242,15 @@ type ResyncEventsResult struct {
 	Status             ResyncStatus `json:"status"`
 	StreamEpoch        uint64       `json:"streamEpoch"`
 	ReplayedThroughSeq uint64       `json:"replayedThroughSeq"`
+}
+
+type ResyncEventsPageResult struct {
+	Events             []Event      `json:"events"`
+	Status             ResyncStatus `json:"status"`
+	StreamEpoch        uint64       `json:"streamEpoch"`
+	ReplayedThroughSeq uint64       `json:"replayedThroughSeq"`
+	HasMore            bool         `json:"hasMore"`
+	NextAfterSeq       uint64       `json:"nextAfterSeq"`
 }
 
 type ReplayHeadResult struct {
