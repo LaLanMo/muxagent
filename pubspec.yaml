@@ -118,6 +118,7 @@ flutter:
   assets:
     - assets/images/app_icon.png
     - assets/anthropic-icon.png
+    - assets/github-copilot-icon.png
     - assets/openai-icon.png
     - assets/opencode-icon.png
 

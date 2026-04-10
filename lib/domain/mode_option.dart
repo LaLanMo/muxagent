@@ -1,3 +1,10 @@
+const _copilotModeAgentId =
+    'https://agentclientprotocol.com/protocol/session-modes#agent';
+const _copilotModePlanId =
+    'https://agentclientprotocol.com/protocol/session-modes#plan';
+const _copilotModeAutopilotId =
+    'https://agentclientprotocol.com/protocol/session-modes#autopilot';
+
 class ModeOption {
   final String id;
   final String label;
@@ -39,6 +46,11 @@ class ModeOption {
         'plan': 3,
       },
       'codex' => const {'full-access': 0, 'auto': 1, 'read-only': 2},
+      'copilot' => const {
+        _copilotModeAgentId: 0,
+        _copilotModePlanId: 1,
+        _copilotModeAutopilotId: 2,
+      },
       'opencode' => const {'build': 0, 'plan': 1},
       _ => const <String, int>{},
     };
@@ -80,6 +92,12 @@ class ModeOption {
         return 'Read Only';
       case 'full-access':
         return 'Full Access';
+      case _copilotModeAgentId:
+        return 'Agent';
+      case _copilotModePlanId:
+        return 'Plan';
+      case _copilotModeAutopilotId:
+        return 'Autopilot';
       default:
         return upstreamLabel ?? _fallbackLabel(id);
     }

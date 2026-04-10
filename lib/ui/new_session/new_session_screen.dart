@@ -428,6 +428,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         return _buildRuntimeAssetIcon('assets/anthropic-icon.png');
       case 'codex':
         return _buildRuntimeAssetIcon('assets/openai-icon.png');
+      case 'copilot':
+        return _buildRuntimeAssetIcon('assets/github-copilot-icon.png');
       case 'opencode':
         return _buildRuntimeAssetIcon('assets/opencode-icon.png');
       default:
@@ -459,12 +461,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   String _modeSectionLabel(String? runtimeId) {
-    switch (runtimeId) {
-      case 'opencode':
-        return 'Agent Mode';
-      default:
-        return 'Permission Mode';
-    }
+    return 'Mode';
   }
 
   Widget _buildRuntimeRadio({required bool isSelected, required bool enabled}) {
@@ -560,7 +557,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         return const Color(0xFFF87171);
       case 'acceptEdits':
         return const Color(0xFF2563EB);
+      case 'https://agentclientprotocol.com/protocol/session-modes#agent':
+        return const Color(0xFF2563EB);
+      case 'https://agentclientprotocol.com/protocol/session-modes#autopilot':
+        return const Color(0xFFFB923C);
       case 'plan':
+      case 'https://agentclientprotocol.com/protocol/session-modes#plan':
         return const Color(0xFF7C3AED);
       case 'default':
       case 'auto':

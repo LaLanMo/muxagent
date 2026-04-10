@@ -4,6 +4,13 @@ import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/domain/runtime_option.dart';
 import 'package:muxagent/ui/new_session/new_session_viewmodel.dart';
 
+const _copilotModeAgentId =
+    'https://agentclientprotocol.com/protocol/session-modes#agent';
+const _copilotModePlanId =
+    'https://agentclientprotocol.com/protocol/session-modes#plan';
+const _copilotModeAutopilotId =
+    'https://agentclientprotocol.com/protocol/session-modes#autopilot';
+
 ModeOption buildMode(String id) {
   return ModeOption(id: id, label: id);
 }
@@ -127,6 +134,20 @@ void main() {
       );
 
       expect(identical(result, build), isTrue);
+    });
+
+    test('falls back to Agent for Copilot when there is no memory', () {
+      final agent = buildMode(_copilotModeAgentId);
+      final result = NewSessionViewModel.resolveSelectedMode(
+        runtimeId: 'copilot',
+        options: [
+          buildMode(_copilotModeAutopilotId),
+          buildMode(_copilotModePlanId),
+          agent,
+        ],
+      );
+
+      expect(identical(result, agent), isTrue);
     });
 
     test(

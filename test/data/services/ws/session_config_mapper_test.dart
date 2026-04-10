@@ -2,6 +2,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:muxagent/data/services/ws/models/acp_session_models.dart';
 import 'package:muxagent/data/services/ws/session_config_mapper.dart';
 
+const _copilotModeAgentId =
+    'https://agentclientprotocol.com/protocol/session-modes#agent';
+const _copilotModePlanId =
+    'https://agentclientprotocol.com/protocol/session-modes#plan';
+const _copilotModeAutopilotId =
+    'https://agentclientprotocol.com/protocol/session-modes#autopilot';
+
 void main() {
   test('falls back to ACP modes when no mode config option is present', () {
     final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
@@ -94,5 +101,43 @@ void main() {
 
     expect(snapshot.currentMode?.id, 'build');
     expect(snapshot.availableModes.map((mode) => mode.id), ['build', 'plan']);
+  });
+
+  test('orders Copilot modes as agent then plan then autopilot', () {
+    final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
+      runtimeId: 'copilot',
+      configOptions: const [
+        AcpSessionConfigOptionDto(
+          id: 'mode',
+          name: 'Mode',
+          type: 'select',
+          currentValue: _copilotModeAgentId,
+          category: 'mode',
+          options: AcpSessionConfigSelectOptionsDto(
+            ungrouped: [
+              AcpSessionConfigSelectOptionDto(
+                value: _copilotModeAutopilotId,
+                name: 'Autopilot',
+              ),
+              AcpSessionConfigSelectOptionDto(
+                value: _copilotModePlanId,
+                name: 'Plan',
+              ),
+              AcpSessionConfigSelectOptionDto(
+                value: _copilotModeAgentId,
+                name: 'Agent',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    expect(snapshot.currentMode?.id, _copilotModeAgentId);
+    expect(snapshot.availableModes.map((mode) => mode.id), [
+      _copilotModeAgentId,
+      _copilotModePlanId,
+      _copilotModeAutopilotId,
+    ]);
   });
 }

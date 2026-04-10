@@ -24,6 +24,9 @@ import '../../domain/session.dart';
 import '../../domain/ui_effect.dart';
 import '../../routing/routes.dart';
 
+const _copilotModeAgentId =
+    'https://agentclientprotocol.com/protocol/session-modes#agent';
+
 class NewSessionViewModel extends GetxController {
   static const _createSessionTimeout = Duration(seconds: 15);
   static const _runtimeListTimeout = Duration(seconds: 12);
@@ -772,6 +775,8 @@ class NewSessionViewModel extends GetxController {
         return 'bypassPermissions';
       case 'codex':
         return 'full-access';
+      case 'copilot':
+        return _copilotModeAgentId;
       case 'opencode':
         return 'build';
       default:
