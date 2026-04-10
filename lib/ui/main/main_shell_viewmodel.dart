@@ -159,7 +159,10 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
 
   Future<ReconnectRecoveryResult> connectMachine(PairedMachine machine) async {
     try {
-      return await _recovery.recoverMachine(machine.machineId);
+      return await _recovery.recoverMachine(
+        machine.machineId,
+        transcriptMode: TranscriptRecoveryMode.metadataOnly,
+      );
     } catch (e) {
       return ReconnectRecoveryResult(
         machineId: machine.machineId,

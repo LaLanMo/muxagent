@@ -61,6 +61,20 @@ void main() {
       expect(shouldFallback, isFalse);
     });
 
+    test('does not fallback for background transcript skips', () {
+      final shouldFallback = ChatViewModel.shouldTriggerReconnectFallback(
+        result: buildResult(
+          transcript: TranscriptRecoveryState.skipped,
+          metadata: MetadataRecoveryState.complete,
+        ),
+        hasSeenDisconnect: true,
+        connState: ConnState.connected,
+        hasSession: true,
+      );
+
+      expect(shouldFallback, isFalse);
+    });
+
     test('does not fallback when transcript recovery failed', () {
       final shouldFallback = ChatViewModel.shouldTriggerReconnectFallback(
         result: buildResult(

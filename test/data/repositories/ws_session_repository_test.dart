@@ -10,9 +10,12 @@ import 'package:muxagent/domain/prompt_content_block.dart';
 
 class FakeRelayWsClient extends RelayWsClient {
   Map<String, dynamic> nextPayload;
+  final List<Map<String, dynamic>> queuedPayloads = [];
   String? lastMachineId;
   String? lastMethod;
   Map<String, dynamic>? lastParams;
+  final methods = <String>[];
+  final paramsHistory = <Map<String, dynamic>?>[];
 
   FakeRelayWsClient({required this.nextPayload})
     : super(
@@ -30,7 +33,12 @@ class FakeRelayWsClient extends RelayWsClient {
     lastMachineId = machineId;
     lastMethod = method;
     lastParams = params == null ? null : Map<String, dynamic>.from(params);
-    return RpcResponseEnvelopeDto.fromJson(nextPayload);
+    methods.add(method);
+    paramsHistory.add(lastParams);
+    final payload = queuedPayloads.isNotEmpty
+        ? queuedPayloads.removeAt(0)
+        : nextPayload;
+    return RpcResponseEnvelopeDto.fromJson(payload);
   }
 }
 
@@ -171,8 +179,10 @@ void main() {
     });
 
     test('event maintenance helpers own rpc methods and mapping', () async {
-      final relay = FakeRelayWsClient(
-        nextPayload: {
+      final relay = FakeRelayWsClient(nextPayload: const {'result': {}});
+      relay.queuedPayloads.addAll([
+        {'error': 'unknown method: events.resyncPage'},
+        {
           'result': {
             'events': [
               {
@@ -196,7 +206,7 @@ void main() {
             'replayedThroughSeq': 9,
           },
         },
-      );
+      ]);
       final repo = WsSessionRepository(
         relay: relay,
         sessions: SessionManager(),
@@ -208,6 +218,10 @@ void main() {
         streamEpoch: 42,
       );
 
+      expect(relay.methods.take(2).toList(), [
+        'events.resyncPage',
+        'events.resync',
+      ]);
       expect(relay.lastMethod, 'events.resync');
       expect(relay.lastParams, {'lastSeq': 8, 'streamEpoch': 42});
       expect(resync.status, ReplayResyncStatus.ok);
@@ -327,6 +341,133 @@ void main() {
 
       expect(emptyApprovals, isEmpty);
     });
+
+    test('resyncEvents loops paged replay responses when supported', () async {
+      final relay = FakeRelayWsClient(nextPayload: const {'result': {}});
+      relay.queuedPayloads.addAll([
+        {
+          'result': {
+            'events': [
+              {
+                'type': 'message.delta',
+                'sessionId': 'sid-1',
+                'seq': 9,
+                'messagePart': {
+                  'app': {
+                    'partId': 'part-1',
+                    'messageId': 'msg-1',
+                    'role': 'agent',
+                    'delta': 'hi',
+                    'partType': 'text',
+                    'fullText': 'hi',
+                  },
+                },
+              },
+            ],
+            'status': 'ok',
+            'streamEpoch': 42,
+            'replayedThroughSeq': 10,
+            'hasMore': true,
+            'nextAfterSeq': 9,
+          },
+        },
+        {
+          'result': {
+            'events': [
+              {
+                'type': 'message.delta',
+                'sessionId': 'sid-1',
+                'seq': 10,
+                'messagePart': {
+                  'app': {
+                    'partId': 'part-2',
+                    'messageId': 'msg-2',
+                    'role': 'agent',
+                    'delta': 'there',
+                    'partType': 'text',
+                    'fullText': 'there',
+                  },
+                },
+              },
+            ],
+            'status': 'ok',
+            'streamEpoch': 42,
+            'replayedThroughSeq': 10,
+            'hasMore': false,
+            'nextAfterSeq': 10,
+          },
+        },
+      ]);
+      final repo = WsSessionRepository(
+        relay: relay,
+        sessions: SessionManager(),
+      );
+
+      final batch = await repo.resyncEvents(
+        machineId: 'machine-1',
+        lastSeq: 8,
+        streamEpoch: 42,
+      );
+
+      expect(relay.methods, ['events.resyncPage', 'events.resyncPage']);
+      expect(relay.paramsHistory, [
+        {'lastSeq': 8, 'streamEpoch': 42, 'maxBytes': 262144, 'maxEvents': 128},
+        {'lastSeq': 9, 'streamEpoch': 42, 'maxBytes': 262144, 'maxEvents': 128},
+      ]);
+      expect(batch.status, ReplayResyncStatus.ok);
+      expect(batch.streamEpoch, 42);
+      expect(batch.replayedThroughSeq, 10);
+      expect(batch.events.map((event) => event.seq).toList(), [9, 10]);
+    });
+
+    test(
+      'resyncEvents falls back to legacy replay for older daemons',
+      () async {
+        final relay = FakeRelayWsClient(nextPayload: const {'result': {}});
+        relay.queuedPayloads.addAll([
+          {'error': 'unknown method: events.resyncPage'},
+          {
+            'result': {
+              'events': [
+                {
+                  'type': 'message.delta',
+                  'sessionId': 'sid-1',
+                  'seq': 11,
+                  'messagePart': {
+                    'app': {
+                      'partId': 'part-1',
+                      'messageId': 'msg-1',
+                      'role': 'agent',
+                      'delta': 'legacy',
+                      'partType': 'text',
+                      'fullText': 'legacy',
+                    },
+                  },
+                },
+              ],
+              'status': 'ok',
+              'streamEpoch': 42,
+              'replayedThroughSeq': 11,
+            },
+          },
+        ]);
+        final repo = WsSessionRepository(
+          relay: relay,
+          sessions: SessionManager(),
+        );
+
+        final batch = await repo.resyncEvents(
+          machineId: 'machine-1',
+          lastSeq: 10,
+          streamEpoch: 42,
+        );
+
+        expect(relay.methods, ['events.resyncPage', 'events.resync']);
+        expect(relay.paramsHistory.last, {'lastSeq': 10, 'streamEpoch': 42});
+        expect(batch.events.single.seq, 11);
+        expect(batch.replayedThroughSeq, 11);
+      },
+    );
 
     test('action helpers own rpc methods and ack semantics', () async {
       final relay = FakeRelayWsClient(

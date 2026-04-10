@@ -137,6 +137,26 @@ void main() {
     );
   });
 
+  test('parses events.resyncPage envelope', () {
+    final dto = RpcResyncPageResponseDto.fromJson({
+      'events': [
+        {'type': 'message.delta', 'sessionId': 'sid-1', 'seq': 9},
+      ],
+      'status': 'ok',
+      'streamEpoch': 99,
+      'replayedThroughSeq': 12,
+      'hasMore': true,
+      'nextAfterSeq': 9,
+    });
+
+    expect(dto.status, RpcResyncStatusDto.ok);
+    expect(dto.streamEpoch, 99);
+    expect(dto.replayedThroughSeq, 12);
+    expect(dto.hasMore, isTrue);
+    expect(dto.nextAfterSeq, 9);
+    expect(dto.events, hasLength(1));
+  });
+
   test('rejects missing required list fields', () {
     expect(
       () => RpcFsListResponseDto.fromJson({}),
