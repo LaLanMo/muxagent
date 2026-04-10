@@ -772,6 +772,8 @@ class NewSessionViewModel extends GetxController {
         return 'bypassPermissions';
       case 'codex':
         return 'full-access';
+      case 'opencode':
+        return 'build';
       default:
         return runtimeDefaultModeId ?? '';
     }

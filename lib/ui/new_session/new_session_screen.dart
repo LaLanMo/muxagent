@@ -25,115 +25,122 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           effects: controller.uiEffect,
           child: SafeArea(
             child: Column(
-            children: [
-              // Header: height 56, padding [0, 16], gap 12, alignItems center,
-              // bottom border #E5E7EB
-              Container(
-                height: 56,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: const BoxDecoration(
-                  border: Border(bottom: BorderSide(color: AppTheme.border)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    // X icon 24x24 #6B6F76
-                    GestureDetector(
-                      onTap: () {
-                        controller.dismissTransientInputs();
-                        Get.back();
-                      },
-                      child: const Icon(
-                        LucideIcons.x,
-                        size: 24,
-                        color: AppTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    // Title: system sans 17 w600 #1D1D1F
-                    Text(
-                      'New Session',
-                      style: AppTypography.sans(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Obx(
-                () => _buildRelayConnectionBanner(
-                  connected: controller.relayConnected.value,
-                  state: controller.relayConnectionState.value,
-                ),
-              ),
-              // Body: padding [24, 16], gap 24, vertical, fill_container
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                  child: Column(
+              children: [
+                // Header: height 56, padding [0, 16], gap 12, alignItems center,
+                // bottom border #E5E7EB
+                Container(
+                  height: 56,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: const BoxDecoration(
+                    border: Border(bottom: BorderSide(color: AppTheme.border)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.only(top: 24),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Runtime Section
-                              _buildFieldLabel('Runtime'),
-                              const SizedBox(height: 8),
-                              Obx(() => _buildRuntimeSelector()),
-                              const SizedBox(height: 24),
-
-                              // Machine Section: gap 8, vertical
-                              _buildFieldLabel('Machine'),
-                              const SizedBox(height: 8),
-                              Obx(() => _buildMachineSelector()),
-                              const SizedBox(height: 24),
-
-                              // Directory Section: gap 8, vertical
-                              _buildFieldLabel('Working Directory'),
-                              const SizedBox(height: 8),
-                              _buildDirectorySection(),
-                              const SizedBox(height: 24),
-
-                              // Prompt Section: gap 8, vertical
-                              _buildFieldLabel('Initial Prompt'),
-                              const SizedBox(height: 8),
-                              _buildPromptInput(),
-                              const SizedBox(height: 24),
-
-                              // Mode Section
-                              _buildFieldLabel('Permission Mode'),
-                              const SizedBox(height: 8),
-                              Obx(() => _buildModeSelector()),
-                              const SizedBox(height: 24),
-
-                              // Git Worktree Section
-                              _buildFieldLabel('Git Worktree'),
-                              const SizedBox(height: 8),
-                              Obx(() => _buildWorktreeToggle()),
-                            ],
-                          ),
+                      // X icon 24x24 #6B6F76
+                      GestureDetector(
+                        onTap: () {
+                          controller.dismissTransientInputs();
+                          Get.back();
+                        },
+                        child: const Icon(
+                          LucideIcons.x,
+                          size: 24,
+                          color: AppTheme.textSecondary,
                         ),
                       ),
-
-                      // Create Button: pinned at bottom
-                      Padding(
-                        padding: EdgeInsets.only(
-                          top: 16,
-                          bottom: MediaQuery.of(Get.context!).padding.bottom > 0
-                              ? 16
-                              : 24,
+                      const SizedBox(width: 12),
+                      // Title: system sans 17 w600 #1D1D1F
+                      Text(
+                        'New Session',
+                        style: AppTypography.sans(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
                         ),
-                        child: _buildCreateButton(),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ],
+                Obx(
+                  () => _buildRelayConnectionBanner(
+                    connected: controller.relayConnected.value,
+                    state: controller.relayConnectionState.value,
+                  ),
+                ),
+                // Body: padding [24, 16], gap 24, vertical, fill_container
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.only(top: 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Runtime Section
+                                _buildFieldLabel('Runtime'),
+                                const SizedBox(height: 8),
+                                Obx(() => _buildRuntimeSelector()),
+                                const SizedBox(height: 24),
+
+                                // Machine Section: gap 8, vertical
+                                _buildFieldLabel('Machine'),
+                                const SizedBox(height: 8),
+                                Obx(() => _buildMachineSelector()),
+                                const SizedBox(height: 24),
+
+                                // Directory Section: gap 8, vertical
+                                _buildFieldLabel('Working Directory'),
+                                const SizedBox(height: 8),
+                                _buildDirectorySection(),
+                                const SizedBox(height: 24),
+
+                                // Prompt Section: gap 8, vertical
+                                _buildFieldLabel('Initial Prompt'),
+                                const SizedBox(height: 8),
+                                _buildPromptInput(),
+                                const SizedBox(height: 24),
+
+                                // Mode Section
+                                Obx(
+                                  () => _buildFieldLabel(
+                                    _modeSectionLabel(
+                                      controller.selectedRuntime.value?.id,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Obx(() => _buildModeSelector()),
+                                const SizedBox(height: 24),
+
+                                // Git Worktree Section
+                                _buildFieldLabel('Git Worktree'),
+                                const SizedBox(height: 8),
+                                Obx(() => _buildWorktreeToggle()),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        // Create Button: pinned at bottom
+                        Padding(
+                          padding: EdgeInsets.only(
+                            top: 16,
+                            bottom:
+                                MediaQuery.of(Get.context!).padding.bottom > 0
+                                ? 16
+                                : 24,
+                          ),
+                          child: _buildCreateButton(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -293,7 +300,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         ),
         child: Text(
           'No runtimes available',
-          style: AppTypography.sans(fontSize: 14, color: AppTheme.textSecondary),
+          style: AppTypography.sans(
+            fontSize: 14,
+            color: AppTheme.textSecondary,
+          ),
         ),
       );
     }
@@ -332,7 +342,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         ),
         child: Text(
           'Use runtime default mode',
-          style: AppTypography.sans(fontSize: 14, color: AppTheme.textSecondary),
+          style: AppTypography.sans(
+            fontSize: 14,
+            color: AppTheme.textSecondary,
+          ),
         ),
       );
     }
@@ -410,32 +423,48 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   Widget _buildRuntimeIcon(String runtimeId) {
-    final assetPath = switch (runtimeId) {
-      'claude-code' => 'assets/anthropic-icon.png',
-      'codex' => 'assets/openai-icon.png',
-      _ => '',
-    };
-
-    if (assetPath.isEmpty) {
-      return Container(
-        width: 20,
-        height: 20,
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: const Icon(
-          LucideIcons.cpu,
-          size: 14,
-          color: AppTheme.textSecondary,
-        ),
-      );
+    switch (runtimeId) {
+      case 'claude-code':
+        return _buildRuntimeAssetIcon('assets/anthropic-icon.png');
+      case 'codex':
+        return _buildRuntimeAssetIcon('assets/openai-icon.png');
+      case 'opencode':
+        return _buildRuntimeAssetIcon('assets/opencode-icon.png');
+      default:
+        return _buildDefaultRuntimeIcon();
     }
+  }
 
+  Widget _buildRuntimeAssetIcon(String assetPath) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(5),
       child: Image.asset(assetPath, width: 20, height: 20, fit: BoxFit.cover),
     );
+  }
+
+  Widget _buildDefaultRuntimeIcon() {
+    return Container(
+      width: 20,
+      height: 20,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: const Icon(
+        LucideIcons.cpu,
+        size: 14,
+        color: AppTheme.textSecondary,
+      ),
+    );
+  }
+
+  String _modeSectionLabel(String? runtimeId) {
+    switch (runtimeId) {
+      case 'opencode':
+        return 'Agent Mode';
+      default:
+        return 'Permission Mode';
+    }
   }
 
   Widget _buildRuntimeRadio({required bool isSelected, required bool enabled}) {
@@ -620,177 +649,175 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       final isOpen = controller.isCwdDropdownOpen.value;
 
       return Container(
-          decoration: BoxDecoration(
-            color: AppTheme.inputFill,
-            borderRadius: BorderRadius.circular(8),
-            border: isOpen
-                ? Border.all(color: AppTheme.primary, width: 2)
-                : null,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+        decoration: BoxDecoration(
+          color: AppTheme.inputFill,
+          borderRadius: BorderRadius.circular(8),
+          border: isOpen ? Border.all(color: AppTheme.primary, width: 2) : null,
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             // Input row — always at index 0 to preserve focus
-              GestureDetector(
-                behavior: HitTestBehavior.translucent,
-                onTap: controller.openCwdDropdown,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        LucideIcons.folder,
-                        size: 16,
-                        color: AppTheme.textTertiary,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Semantics(
-                          textField: true,
-                          label: 'Working directory',
+            GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: controller.openCwdDropdown,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      LucideIcons.folder,
+                      size: 16,
+                      color: AppTheme.textTertiary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Semantics(
+                        textField: true,
+                        label: 'Working directory',
+                        onTap: controller.openCwdDropdown,
+                        child: TextField(
+                          controller: controller.cwdController,
+                          focusNode: controller.cwdFocusNode,
+                          textInputAction: TextInputAction.next,
                           onTap: controller.openCwdDropdown,
-                          child: TextField(
-                            controller: controller.cwdController,
-                            focusNode: controller.cwdFocusNode,
-                            textInputAction: TextInputAction.next,
-                            onTap: controller.openCwdDropdown,
-                            onSubmitted: (_) =>
-                                controller.commitCwdAndFocusPrompt(),
-                            autocorrect: false,
-                            enableSuggestions: false,
-                            smartDashesType: SmartDashesType.disabled,
-                            smartQuotesType: SmartQuotesType.disabled,
-                            style: AppFonts.code(
+                          onSubmitted: (_) =>
+                              controller.commitCwdAndFocusPrompt(),
+                          autocorrect: false,
+                          enableSuggestions: false,
+                          smartDashesType: SmartDashesType.disabled,
+                          smartQuotesType: SmartQuotesType.disabled,
+                          style: AppFonts.code(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.zero,
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            hintText: '~/project',
+                            hintStyle: AppFonts.code(
                               fontSize: 13,
                               fontWeight: FontWeight.w500,
-                              color: AppTheme.textPrimary,
-                            ),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              contentPadding: EdgeInsets.zero,
-                              border: InputBorder.none,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              hintText: '~/project',
-                              hintStyle: AppFonts.code(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: AppTheme.textMuted,
-                              ),
+                              color: AppTheme.textMuted,
                             ),
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              // Dropdown — conditionally shown below the input
-              if (isOpen) ...[
-                const Divider(height: 1, thickness: 1, color: AppTheme.border),
-                // Nested Obx: only this rebuilds when filteredCwds changes,
-                // keeping the TextField above stable.
-                Obx(() {
-                  final filtered = controller.filteredCwds;
-                  if (filtered.isEmpty) {
-                    return Container(
-                      width: double.infinity,
-                      color: Colors.white,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
-                      child: Text(
-                        'No recent directories',
-                        style: AppTypography.sans(
-                          fontSize: 12,
-                          color: const Color(0xFF9CA0A8),
-                        ),
-                      ),
-                    );
-                  }
+            ),
+            // Dropdown — conditionally shown below the input
+            if (isOpen) ...[
+              const Divider(height: 1, thickness: 1, color: AppTheme.border),
+              // Nested Obx: only this rebuilds when filteredCwds changes,
+              // keeping the TextField above stable.
+              Obx(() {
+                final filtered = controller.filteredCwds;
+                if (filtered.isEmpty) {
                   return Container(
+                    width: double.infinity,
                     color: Colors.white,
-                    constraints: const BoxConstraints(maxHeight: 220),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: filtered.length + 1, // +1 for header
-                      itemBuilder: (context, index) {
-                        if (index == 0) {
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
-                            child: Text(
-                              'RECENT',
-                              style: AppTypography.sans(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF9CA0A8),
-                                letterSpacing: 0.5,
-                              ),
-                            ),
-                          );
-                        }
-                        final cwd = filtered[index - 1];
-                        final isFirst = index == 1;
-                        return GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () => controller.selectCwd(cwd),
-                          child: Container(
-                            color: isFirst
-                                ? AppTheme.hoverBg
-                                : Colors.transparent,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 8,
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(
-                                  LucideIcons.folder,
-                                  size: 14,
-                                  color: Color(0xFF9CA0A8),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        cwd.path,
-                                        style: AppFonts.code(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: AppTheme.textPrimary,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        _relativeTime(cwd.lastUsed),
-                                        style: AppTypography.sans(
-                                          fontSize: 11,
-                                          color: const Color(0xFF9CA0A8),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
+                    child: Text(
+                      'No recent directories',
+                      style: AppTypography.sans(
+                        fontSize: 12,
+                        color: const Color(0xFF9CA0A8),
+                      ),
+                    ),
+                  );
+                }
+                return Container(
+                  color: Colors.white,
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    itemCount: filtered.length + 1, // +1 for header
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
+                          child: Text(
+                            'RECENT',
+                            style: AppTypography.sans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF9CA0A8),
+                              letterSpacing: 0.5,
                             ),
                           ),
                         );
-                      },
-                    ),
-                  );
-                }),
-              ],
+                      }
+                      final cwd = filtered[index - 1];
+                      final isFirst = index == 1;
+                      return GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: () => controller.selectCwd(cwd),
+                        child: Container(
+                          color: isFirst
+                              ? AppTheme.hoverBg
+                              : Colors.transparent,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                LucideIcons.folder,
+                                size: 14,
+                                color: Color(0xFF9CA0A8),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      cwd.path,
+                                      style: AppFonts.code(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w500,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      _relativeTime(cwd.lastUsed),
+                                      style: AppTypography.sans(
+                                        fontSize: 11,
+                                        color: const Color(0xFF9CA0A8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              }),
             ],
-          ),
-        );
+          ],
+        ),
+      );
     });
   }
 

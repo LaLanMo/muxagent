@@ -71,4 +71,28 @@ void main() {
       'read-only',
     ]);
   });
+
+  test('orders OpenCode modes as build then plan from config options', () {
+    final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
+      runtimeId: 'opencode',
+      configOptions: const [
+        AcpSessionConfigOptionDto(
+          id: 'mode',
+          name: 'Mode',
+          type: 'select',
+          currentValue: 'build',
+          category: 'mode',
+          options: AcpSessionConfigSelectOptionsDto(
+            ungrouped: [
+              AcpSessionConfigSelectOptionDto(value: 'plan', name: 'Plan'),
+              AcpSessionConfigSelectOptionDto(value: 'build', name: 'Build'),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    expect(snapshot.currentMode?.id, 'build');
+    expect(snapshot.availableModes.map((mode) => mode.id), ['build', 'plan']);
+  });
 }

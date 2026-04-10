@@ -119,6 +119,7 @@ flutter:
     - assets/images/app_icon.png
     - assets/anthropic-icon.png
     - assets/openai-icon.png
+    - assets/opencode-icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

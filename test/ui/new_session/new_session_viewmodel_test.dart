@@ -119,6 +119,16 @@ void main() {
       expect(identical(result, fullAccess), isTrue);
     });
 
+    test('falls back to Build for OpenCode when there is no memory', () {
+      final build = buildMode('build');
+      final result = NewSessionViewModel.resolveSelectedMode(
+        runtimeId: 'opencode',
+        options: [buildMode('plan'), build],
+      );
+
+      expect(identical(result, build), isTrue);
+    });
+
     test(
       'does not carry the previous runtime current mode across runtimes',
       () {

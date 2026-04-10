@@ -39,6 +39,7 @@ class ModeOption {
         'plan': 3,
       },
       'codex' => const {'full-access': 0, 'auto': 1, 'read-only': 2},
+      'opencode' => const {'build': 0, 'plan': 1},
       _ => const <String, int>{},
     };
 
