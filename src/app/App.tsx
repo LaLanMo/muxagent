@@ -43,7 +43,6 @@ function EntryRoute() {
       modalOpen={model.modalOpen}
       onCloseModal={model.closeModal}
       onOpenModal={model.openModal}
-      rows={model.rows}
       shell={model.shell}
     />
   );

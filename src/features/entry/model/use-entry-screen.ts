@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router-dom";
 import { buildTaskDetailPath } from "@/domain/routes";
 import {
+  buildBoardMetaSummary,
   collectScopedTasks,
   filterTasks,
   formatRelativeTime,
@@ -10,9 +11,9 @@ import {
 } from "@/domain/task-shell";
 import { useShellModel } from "@/features/app/model/use-shell-model";
 import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
+import type { TaskViewDto } from "@/rpc/types";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
-import type { TaskViewDto } from "@/rpc/types";
 
 const emptyTasks: never[] = [];
 
@@ -51,7 +52,7 @@ function compactTaskPath(workDir?: string, fallbackLabel?: string): string {
 }
 
 function buildBoardMeta(task: TaskViewDto, fallbackLabel?: string): string {
-  return compactTaskPath(task.task.work_dir, fallbackLabel);
+  return buildBoardMetaSummary(task, fallbackLabel);
 }
 
 function buildListSubtitle(task: TaskViewDto, fallbackLabel?: string): string {
@@ -131,7 +132,6 @@ export function useEntryScreen() {
       href: scope ? buildTaskDetailPath(scope.workspaceId, task.task.id) : "/",
     };
   });
-
   const modal = useNewTaskModal({
     open: modalOpen,
     onClose: () => setModalOpen(false),

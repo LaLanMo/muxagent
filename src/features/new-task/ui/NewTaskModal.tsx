@@ -11,12 +11,12 @@ import {
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 
 const secondaryIconStyle = {
-  color: "var(--text-secondary)",
+  color: "var(--color-text-secondary)",
   flexShrink: 0,
 } as const;
 
 const tertiaryIconStyle = {
-  color: "var(--text-tertiary)",
+  color: "var(--color-text-tertiary)",
   flexShrink: 0,
 } as const;
 
@@ -37,6 +37,9 @@ type NewTaskModalProps = {
   workspaceOptions: Array<{ id: string; label: string; path: string }>;
   selectedTargetWorkspaceId: string;
   onTargetWorkspaceChange: (value: string) => void;
+  workspacePicking: boolean;
+  onToggleWorkspacePicker: () => void;
+  onCloseWorkspacePicker: () => void;
   entries: ConfigCatalogEntryDto[];
   selectedAlias: string;
   onAliasChange: (value: string) => void;
@@ -65,6 +68,9 @@ export function NewTaskModal({
   workspaceOptions,
   selectedTargetWorkspaceId,
   onTargetWorkspaceChange,
+  workspacePicking,
+  onToggleWorkspacePicker,
+  onCloseWorkspacePicker,
   entries,
   selectedAlias,
   onAliasChange,
@@ -85,15 +91,20 @@ export function NewTaskModal({
   canSubmit,
   error,
 }: NewTaskModalProps) {
+  const wsCardRef = useRef<HTMLDivElement>(null);
   const cfgCardRef = useRef<HTMLDivElement>(null);
   const collapsedHeightRef = useRef<number | null>(null);
 
-  // Click-outside + Escape handling for config picker
+  // Click-outside + Escape handling for the expanded pickers
   useEffect(() => {
-    if (!configPicking) return;
+    if (!configPicking && !workspacePicking) return;
 
     function handleMouseDown(event: MouseEvent) {
-      if (cfgCardRef.current && !cfgCardRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (workspacePicking && wsCardRef.current && !wsCardRef.current.contains(target)) {
+        onCloseWorkspacePicker();
+      }
+      if (configPicking && cfgCardRef.current && !cfgCardRef.current.contains(target)) {
         onCloseConfigPicker();
       }
     }
@@ -101,6 +112,7 @@ export function NewTaskModal({
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.stopPropagation();
+        onCloseWorkspacePicker();
         onCloseConfigPicker();
       }
     }
@@ -111,7 +123,12 @@ export function NewTaskModal({
       document.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [configPicking, onCloseConfigPicker]);
+  }, [
+    configPicking,
+    onCloseConfigPicker,
+    onCloseWorkspacePicker,
+    workspacePicking,
+  ]);
 
   if (!open) {
     return null;
@@ -119,7 +136,22 @@ export function NewTaskModal({
 
   const selectedWorkspace = workspaceOptions.find((ws) => ws.id === selectedTargetWorkspaceId) ?? workspaceOptions[0];
 
+  function handleWorkspaceHeaderClick() {
+    if (configPicking) {
+      onCloseConfigPicker();
+    }
+    onToggleWorkspacePicker();
+  }
+
+  function handleSelectWorkspace(workspaceId: string) {
+    onTargetWorkspaceChange(workspaceId);
+    onCloseWorkspacePicker();
+  }
+
   function handleHeaderClick() {
+    if (workspacePicking) {
+      onCloseWorkspacePicker();
+    }
     if (!configPicking && cfgCardRef.current) {
       collapsedHeightRef.current = cfgCardRef.current.offsetHeight;
     }
@@ -159,36 +191,87 @@ export function NewTaskModal({
           {/* Workspace selector */}
           <div className="field-block">
             <span className="field-block__label">Workspace</span>
-            <div className="task-modal__ws-card">
-              <div className="task-modal__ws-left">
-                <Folder
-                  aria-hidden="true"
-                  size={14}
-                  strokeWidth={2}
-                  style={secondaryIconStyle}
-                />
-                <span className="task-modal__ws-name">{selectedWorkspace?.label ?? ""}</span>
-              </div>
-              <span className="task-modal__ws-path">
-                {shortenPath(selectedWorkspace?.path ?? "")}
-              </span>
-              <ChevronDown
-                aria-hidden="true"
-                size={14}
-                strokeWidth={2}
-                style={tertiaryIconStyle}
-              />
-              <select
+            <div
+              className={`task-modal__ws-card${workspacePicking ? " task-modal__ws-card--picking" : ""}`}
+              ref={wsCardRef}
+            >
+              <input type="hidden" value={selectedTargetWorkspaceId} />
+              <button
+                aria-expanded={workspacePicking}
+                className="task-modal__ws-header"
                 data-testid="new-task-workspace"
-                onChange={(event) => onTargetWorkspaceChange(event.target.value)}
-                value={selectedTargetWorkspaceId}
+                onClick={handleWorkspaceHeaderClick}
+                type="button"
               >
-                {workspaceOptions.map((ws) => (
-                  <option key={ws.id} value={ws.id}>
-                    {ws.label}
-                  </option>
-                ))}
-              </select>
+                <div className="task-modal__ws-stack">
+                  <div className="task-modal__ws-left">
+                    <Folder
+                      aria-hidden="true"
+                      size={14}
+                      strokeWidth={2}
+                      style={secondaryIconStyle}
+                    />
+                    <span className="task-modal__ws-name">{selectedWorkspace?.label ?? "No workspace"}</span>
+                  </div>
+                  <span className="task-modal__ws-path">
+                    {shortenPath(selectedWorkspace?.path ?? "")}
+                  </span>
+                </div>
+                {workspacePicking ? (
+                  <ChevronUp
+                    aria-hidden="true"
+                    size={14}
+                    strokeWidth={2}
+                    style={tertiaryIconStyle}
+                  />
+                ) : (
+                  <ChevronDown
+                    aria-hidden="true"
+                    size={14}
+                    strokeWidth={2}
+                    style={tertiaryIconStyle}
+                  />
+                )}
+              </button>
+              {workspacePicking ? (
+                <div className="task-modal__ws-list" role="listbox" aria-label="Workspace">
+                  {workspaceOptions.map((workspace) => {
+                    const selected = workspace.id === selectedTargetWorkspaceId;
+                    return (
+                      <button
+                        aria-selected={selected}
+                        className={`task-modal__ws-option${selected ? " task-modal__ws-option--selected" : ""}`}
+                        key={workspace.id}
+                        onClick={() => handleSelectWorkspace(workspace.id)}
+                        type="button"
+                      >
+                        <div className="task-modal__ws-option-row">
+                          <div className="task-modal__ws-left">
+                            <Folder
+                              aria-hidden="true"
+                              size={14}
+                              strokeWidth={2}
+                              style={secondaryIconStyle}
+                            />
+                            <span className="task-modal__ws-name">{workspace.label}</span>
+                          </div>
+                          {selected ? (
+                            <Check
+                              aria-hidden="true"
+                              color="var(--color-accent)"
+                              size={14}
+                              strokeWidth={2.2}
+                            />
+                          ) : null}
+                        </div>
+                        <span className="task-modal__ws-path">
+                          {shortenPath(workspace.path)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -207,7 +290,7 @@ export function NewTaskModal({
                 type="hidden"
                 value={selectedAlias}
               />
-              <div className="task-modal__cfg-header" onClick={handleHeaderClick}>
+              <button className="task-modal__cfg-header" onClick={handleHeaderClick} type="button">
                 <div className="task-modal__cfg-left">
                   <SlidersHorizontal
                     aria-hidden="true"
@@ -219,14 +302,14 @@ export function NewTaskModal({
                 </div>
                 <span style={{ display: "grid", placeItems: "center" }}>
                   {configPicking ? (
-                    <ChevronDown
+                    <ChevronUp
                       aria-hidden="true"
                       size={14}
                       strokeWidth={2}
                       style={tertiaryIconStyle}
                     />
                   ) : (
-                    <ChevronUp
+                    <ChevronDown
                       aria-hidden="true"
                       size={14}
                       strokeWidth={2}
@@ -234,7 +317,7 @@ export function NewTaskModal({
                     />
                   )}
                 </span>
-              </div>
+              </button>
 
               {/* Config details */}
               {!configPicking && (
@@ -274,7 +357,8 @@ export function NewTaskModal({
               {configPicking && (
                 <div className="task-modal__cfg-list">
                   {entries.map((entry) => (
-                    <div
+                    <button
+                      type="button"
                       key={entry.alias}
                       className={`task-modal__cfg-option${entry.alias === selectedAlias ? " task-modal__cfg-option--selected" : ""}`}
                       onClick={() => handleSelectConfig(entry.alias)}
@@ -288,7 +372,7 @@ export function NewTaskModal({
                         {entry.alias === selectedAlias && (
                           <Check
                             aria-hidden="true"
-                            color="var(--accent)"
+                            color="var(--color-accent)"
                             size={14}
                             strokeWidth={2.2}
                           />
@@ -297,7 +381,7 @@ export function NewTaskModal({
                       {entry.description ? (
                         <span className="task-modal__cfg-option-desc">{entry.description}</span>
                       ) : null}
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -307,13 +391,7 @@ export function NewTaskModal({
           {/* Flow nodes */}
           <div className="field-block">
             <span className="field-block__label">Flow nodes</span>
-            <div className="flow-node-inline flow-node-inline--modal">
-              {flowNodes.map((node) => (
-                <span className="flow-node-inline__item" key={node}>
-                  {node}
-                </span>
-              ))}
-            </div>
+            <div className="task-modal__flow-line">{flowNodes.join(" · ")}</div>
           </div>
 
           {/* Worktree */}
@@ -322,7 +400,12 @@ export function NewTaskModal({
               <div className="task-modal__wt-row" onClick={() => onToggleWorktree(!useWorktree)}>
                 <div className={`task-modal__wt-check${useWorktree ? " task-modal__wt-check--checked" : ""}`}>
                   {useWorktree ? (
-                    <Check aria-hidden="true" color="#fff" size={10} strokeWidth={2.4} />
+                    <Check
+                      aria-hidden="true"
+                      color="var(--color-text-on-accent)"
+                      size={10}
+                      strokeWidth={2.4}
+                    />
                   ) : null}
                 </div>
                 <GitBranch

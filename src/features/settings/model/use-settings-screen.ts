@@ -18,6 +18,7 @@ export type SettingsWorkspaceRowModel = {
   reachable: boolean;
   actorState: string;
   taskSummary: string;
+  statusSummary: string;
   editing: boolean;
   pendingRename: boolean;
   pendingRemove: boolean;
@@ -47,6 +48,11 @@ function actorStateLabel(state: string, reachable: boolean): string {
     default:
       return "Idle";
   }
+}
+
+function workspaceStatusSummary(reachable: boolean, actorState: string): string {
+  const reachability = reachable ? "Available" : "Not found";
+  return `${reachability} · ${actorState}`;
 }
 
 export function useSettingsScreen() {
@@ -131,6 +137,10 @@ export function useSettingsScreen() {
     reachable: workspace.reachable,
     actorState: actorStateLabel(workspace.actor.state, workspace.reachable),
     taskSummary: summarizeTasks(workspace.task_counts),
+    statusSummary: workspaceStatusSummary(
+      workspace.reachable,
+      actorStateLabel(workspace.actor.state, workspace.reachable),
+    ),
     editing: editingWorkspaceId === workspace.workspace_id,
     pendingRename: pendingRenameId === workspace.workspace_id,
     pendingRemove: pendingRemoveId === workspace.workspace_id,

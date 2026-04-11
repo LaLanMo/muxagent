@@ -122,9 +122,11 @@ function ArtifactNavigatorRow({
 
 function OverviewRow({
   selected,
+  currentNodeName,
   onSelectOverview,
 }: {
   selected: boolean;
+  currentNodeName?: string;
   onSelectOverview: () => void;
 }) {
   return (
@@ -137,7 +139,9 @@ function OverviewRow({
     >
       <span className="detail-nav-row__title">Overview</span>
       <span className="detail-nav-row__description detail-nav-row__description--flush">
-        Task summary and task-level actions
+        {currentNodeName
+          ? `Task summary · current node ${currentNodeName}`
+          : "Task summary and task-level actions"}
       </span>
     </button>
   );
@@ -220,6 +224,7 @@ function RunNavigatorRow({
 export function TaskDetailSidebar({
   loading,
   hasTask,
+  currentNodeName,
   timelineRuns,
   artifacts,
   selection,
@@ -243,7 +248,12 @@ export function TaskDetailSidebar({
   return (
     <aside className="detail-navigator">
       <div className="detail-navigator__header">
-        <span className="detail-navigator__eyebrow">Navigator</span>
+        <div className="detail-navigator__header-copy">
+          <span className="detail-navigator__eyebrow">Navigator</span>
+          {currentNodeName ? (
+            <strong className="detail-navigator__current">Current · {currentNodeName}</strong>
+          ) : null}
+        </div>
         <span className="detail-navigator__count">{timelineRuns.length}</span>
       </div>
       <div className="detail-navigator__divider" />
@@ -252,6 +262,7 @@ export function TaskDetailSidebar({
         {hasTask ? (
           <>
             <OverviewRow
+              currentNodeName={currentNodeName}
               onSelectOverview={onSelectOverview}
               selected={selection.kind === "overview"}
             />

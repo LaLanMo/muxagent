@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "identifier": "com.lalanmo.muxagentdesktop",
   "build": {
-    "beforeDevCommand": "pnpm dev",
+    "beforeDevCommand": "tsx scripts/tauri-dev-web.ts",
     "beforeBuildCommand": "pnpm build",
     "devUrl": "http://127.0.0.1:4173",
     "frontendDist": "../dist"
@@ -18,7 +18,13 @@
         "height": 960,
         "minWidth": 960,
         "minHeight": 720,
-        "resizable": true
+        "resizable": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 16
+        }
       }
     ],
     "security": {

@@ -1,9 +1,8 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
 import { withSpawnedDesktopServer } from "../support/spawned-backend";
 
-test("edits and resets a built-in config through the real backend using an isolated taskconfig root", async ({
+test("shows a built-in config as a read-only file inspector through the real backend", async ({
   page,
 }) => {
   test.slow();
@@ -28,108 +27,25 @@ test("edits and resets a built-in config through the real backend using an isola
     await expect(page.getByTestId("config-editor-screen")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByTestId("config-alias-input")).toHaveValue(
-      "default",
-      {
-        timeout: 30_000,
-      },
-    );
-    const initialDescription = await page
-      .getByTestId("config-description-input")
-      .inputValue();
-    const initialRuntime = await page
-      .getByTestId("config-runtime-select")
-      .inputValue();
-
-    await page
-      .getByTestId("config-description-input")
-      .fill("Real backend builtin config save coverage.");
-    await page
-      .getByTestId("config-runtime-select")
-      .selectOption("claude-code");
-    const builtinPromptPath = path.join(
-      taskConfigRootDir,
-      "taskconfigs",
-      "default",
-      "prompts",
-      "draft_plan.md",
-    );
-    const builtinPrompt = await readFile(builtinPromptPath, "utf8");
-    await expect(page.getByTestId("config-prompt-editor")).toHaveValue(
-      builtinPrompt,
-    );
-    await page
-      .getByTestId("config-prompt-editor")
-      .fill("Draft the plan with a strong checklist for launch blockers.");
-    await page.getByTestId("config-prompt-save-button").click();
-    await expect(page.getByTestId("config-prompt-save-button")).toBeDisabled({
-      timeout: 10_000,
+    await expect(page.getByLabel("Config graph")).toBeVisible({
+      timeout: 30_000,
     });
-
-    await expect(page.getByTestId("config-save-button")).toBeEnabled({
-      timeout: 10_000,
-    });
-    await page.getByTestId("config-save-button").click();
-    await expect(page.getByTestId("config-save-button")).toBeDisabled({
-      timeout: 10_000,
-    });
-
-    await page.getByRole("link", { name: /^Configs$/i }).click();
-    const builtinCard = page.getByTestId("config-card-default");
-    await expect(builtinCard).toBeVisible();
-    await expect(builtinCard).toContainText("Claude Code");
-    await builtinCard.locator(".config-list-card__surface").click();
-
-    await expect(page).toHaveURL(/\/configs\/default$/);
-    await expect(page.getByTestId("config-editor-screen")).toBeVisible();
-    await expect(page.getByTestId("config-alias-input")).toHaveValue(
-      "default",
+    await expect(page.getByTestId("config-editor-graph-header")).toHaveCount(0);
+    await expect(page.getByTestId("config-editor-config-header")).toContainText(
+      "Config File",
     );
-    await expect(page.getByTestId("config-description-input")).toHaveValue(
-      "Real backend builtin config save coverage.",
+    await expect(page.getByTestId("config-open-in-editor-button")).toBeVisible();
+    await expect(page.getByTestId("config-reveal-in-finder-button")).toBeVisible();
+    await expect(page.getByTestId("config-editor-toggle")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Edit workflow$/i })).toHaveCount(0);
+    await expect(page.getByText(/^Name$/)).toBeVisible();
+    await expect(page.getByText(/^Description$/)).toBeVisible();
+    await expect(page.getByText(/^Location$/)).toBeVisible();
+    await expect(page.getByText(/^Stats$/)).toBeVisible();
+    await expect(page.getByTestId("config-editor-name")).toHaveText("default");
+    await expect(page.getByTestId("config-editor-location")).toHaveText(
+      path.join(taskConfigRootDir, "taskconfigs", "default", "config.yaml"),
     );
-    await expect(page.getByTestId("config-runtime-select")).toHaveValue(
-      "claude-code",
-    );
-    await expect(page.getByTestId("config-prompt-editor")).toHaveValue(
-      "Draft the plan with a strong checklist for launch blockers.",
-    );
-
-    const configPath = path.join(
-      taskConfigRootDir,
-      "taskconfigs",
-      "default",
-      "config.yaml",
-    );
-    const promptPath = path.join(
-      taskConfigRootDir,
-      "taskconfigs",
-      "default",
-      "prompts",
-      "draft_plan.md",
-    );
-
-    const configYaml = await readFile(configPath, "utf8");
-    expect(configYaml).toContain("Real backend builtin config save coverage.");
-    expect(configYaml).toContain("runtime: claude-code");
-    expect(await readFile(promptPath, "utf8")).toContain(
-      "Draft the plan with a strong checklist for launch blockers.",
-    );
-
-    await page.getByTestId("config-reset-button").click();
-    await page.getByTestId("confirm-dialog-submit").click();
-    await expect(page.getByTestId("config-description-input")).toHaveValue(
-      initialDescription,
-    );
-    await expect(page.getByTestId("config-runtime-select")).toHaveValue(
-      initialRuntime,
-    );
-    await expect(page.getByTestId("config-prompt-editor")).toHaveValue(
-      builtinPrompt,
-    );
-    expect(await readFile(configPath, "utf8")).not.toContain(
-      "Real backend builtin config save coverage.",
-    );
-    expect(await readFile(promptPath, "utf8")).toBe(builtinPrompt);
+    await expect(page.getByTestId("config-editor-stats")).toContainText("nodes ·");
   });
 });

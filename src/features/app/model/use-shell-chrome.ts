@@ -3,7 +3,6 @@ import {
   buildInboxItems,
   collectScopedTasks,
   type BoardFilter,
-  type TaskLayout,
 } from "@/domain/task-shell";
 import type { ShellCommands } from "@/features/app/model/use-shell-commands";
 import { parseTaskDetailPath } from "@/domain/routes";
@@ -28,17 +27,11 @@ function parseBoardFilter(raw: string | null): BoardFilter {
   }
 }
 
-function parseTaskLayout(raw: string | null): TaskLayout {
-  void raw;
-  return "board";
-}
-
-function buildTaskSurfacePath(filter: BoardFilter, layout: TaskLayout): string {
+function buildTaskSurfacePath(filter: BoardFilter): string {
   const params = new URLSearchParams();
   if (filter !== "all") {
     params.set("view", filter);
   }
-  void layout;
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
@@ -51,7 +44,6 @@ export type ShellChromeState = {
   bootstrapPending: boolean;
   error?: string;
   boardFilter: BoardFilter;
-  taskLayout: TaskLayout;
   workspaceItems: Array<{
     id: string;
     label: string;
@@ -61,7 +53,6 @@ export type ShellChromeState = {
   }>;
   primaryNav: ShellNavItem[];
   taskViewNav: ShellNavItem[];
-  taskLayoutNav: ShellNavItem[];
   footerNav: ShellNavItem;
 };
 
@@ -96,14 +87,13 @@ export function useShellChrome(): ShellChromeState {
 
   const inboxItems = buildInboxItems(scopedTasks);
   const boardFilter = parseBoardFilter(searchParams.get("view"));
-  const taskLayout = parseTaskLayout(searchParams.get("layout"));
   const taskRoute = parseTaskDetailPath(location.pathname);
   const taskSurfaceActive =
     location.pathname === "/" ||
     location.pathname === "/inbox" ||
     Boolean(taskRoute);
   const tasksRootActive =
-    taskSurfaceActive && !selectedWorkspaceId && !taskRoute;
+    location.pathname === "/" && !taskRoute && !selectedWorkspaceId;
 
   const primaryNav: ShellNavItem[] = [
     {
@@ -123,28 +113,26 @@ export function useShellChrome(): ShellChromeState {
   const taskViewNav: ShellNavItem[] = [
     {
       label: "All",
-      to: buildTaskSurfacePath("all", taskLayout),
+      to: buildTaskSurfacePath("all"),
       active: location.pathname === "/" && boardFilter === "all",
     },
     {
       label: "Needs Attention",
-      to: buildTaskSurfacePath("attention", taskLayout),
+      to: buildTaskSurfacePath("attention"),
       active: location.pathname === "/" && boardFilter === "attention",
       count: inboxItems.length || undefined,
     },
     {
       label: "Running",
-      to: buildTaskSurfacePath("active", taskLayout),
+      to: buildTaskSurfacePath("active"),
       active: location.pathname === "/" && boardFilter === "active",
     },
     {
       label: "Completed",
-      to: buildTaskSurfacePath("history", taskLayout),
+      to: buildTaskSurfacePath("history"),
       active: location.pathname === "/" && boardFilter === "history",
     },
   ];
-
-  const taskLayoutNav: ShellNavItem[] = [];
 
   const footerNav: ShellNavItem = { label: "Settings", to: "/settings", icon: "settings" };
 
@@ -184,11 +172,9 @@ export function useShellChrome(): ShellChromeState {
     bootstrapPending,
     error,
     boardFilter,
-    taskLayout,
     workspaceItems,
     primaryNav,
     taskViewNav,
-    taskLayoutNav,
     footerNav,
   };
 }

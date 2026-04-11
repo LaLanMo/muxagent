@@ -9,7 +9,6 @@ import type {
 import { buildTaskDetailPath } from "@/domain/routes";
 
 export type BoardFilter = "all" | "mine" | "active" | "history" | "attention";
-export type TaskLayout = "board" | "list";
 export type BoardBucket = "running" | "awaiting" | "done" | "failed";
 export type BoardColumnBucket = "attention" | "running" | "completed";
 export type DetailMode =
@@ -39,15 +38,6 @@ export type ScopedTaskView = {
   workspaceId: string;
   workspaceLabel: string;
   task: TaskViewDto;
-};
-
-export type TaskListRow = {
-  id: string;
-  title: string;
-  subtitle: string;
-  time: string;
-  tone: "running" | "awaiting" | "done" | "failed" | "neutral";
-  bucket: BoardBucket;
 };
 
 const boardColumnLabels: Record<BoardColumnBucket, string> = {
@@ -137,26 +127,6 @@ export function filterTasks(tasks: TaskViewDto[], filter: BoardFilter): TaskView
       default:
         return true;
     }
-  });
-}
-
-export function buildTaskListRows(
-  tasks: TaskViewDto[],
-  filter: BoardFilter,
-): TaskListRow[] {
-  return filterTasks(tasks, filter).map((task) => {
-    const bucket = taskBucket(task);
-    return {
-      id: task.task.id,
-      title: task.task.description || task.task.id,
-      subtitle:
-        bucket === "failed"
-          ? task.current_issue?.reason || task.current_node_name || "failed"
-          : `node: ${task.current_node_name || "n/a"}`,
-      time: formatRelativeTime(task.task.updated_at),
-      tone: statusTone(task.status),
-      bucket,
-    };
   });
 }
 
@@ -251,6 +221,39 @@ export function formatRelativeTime(iso: string | undefined): string {
   }
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+export function formatBoardRelativeTime(iso: string | undefined): string {
+  return formatRelativeTime(iso).replace(" ago", "");
+}
+
+function normalizeBoardSummaryLabel(value: string): string {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function boardStageLabel(task: TaskViewDto): string {
+  const currentNode = normalizeBoardSummaryLabel(task.current_node_name ?? "");
+  if (currentNode) {
+    return currentNode.toLowerCase();
+  }
+  return normalizeBoardSummaryLabel(detailStatusTitle(task.status)).toLowerCase();
+}
+
+export function buildBoardMetaSummary(
+  task: TaskViewDto,
+  workspaceLabel?: string,
+): string {
+  const workspace = workspaceLabel?.trim() || displayWorkspaceName(task.task.work_dir);
+  return [
+    boardStageLabel(task),
+    formatBoardRelativeTime(task.task.updated_at),
+    workspace,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function buildStageNodes(task: TaskViewDto): string[] {

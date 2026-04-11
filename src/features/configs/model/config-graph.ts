@@ -38,10 +38,14 @@ export type ConfigGraphLayout = {
 };
 
 const elk = new ELK();
-const graphNodeWidth = 164;
-const graphNodeHeight = 60;
-const graphPadding = 48;
-const labelOffset = 18;
+const graphNodeMinWidth = 140;
+const graphEntryNodeMinWidth = 160;
+const graphNodeHeight = 42;
+const graphEntryChipHeight = 22;
+const graphEntryChipGap = 10;
+const graphEntryNodeExtraHeight = graphEntryChipHeight + graphEntryChipGap;
+const graphPadding = 36;
+const labelOffset = 16;
 
 export async function buildConfigGraphLayout(
   config: ConfigDraftDto,
@@ -60,21 +64,23 @@ export async function buildConfigGraphLayout(
       "elk.direction": "DOWN",
       "elk.edgeRouting": "POLYLINE",
       "elk.padding": `[top=${graphPadding},left=${graphPadding},bottom=${graphPadding},right=${graphPadding}]`,
-      "elk.spacing.nodeNode": "96",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "120",
-      "elk.layered.spacing.edgeNodeBetweenLayers": "52",
+      "elk.spacing.nodeNode": "76",
+      "elk.layered.spacing.nodeNodeBetweenLayers": "92",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "36",
       "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
       "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
       "elk.layered.cycleBreaking.strategy": "GREEDY_MODEL_ORDER",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
-      "elk.layered.edgeRouting.polyline.slopedEdgeZoneWidth": "12",
+      "elk.layered.edgeRouting.polyline.slopedEdgeZoneWidth": "8",
       "elk.edgeLabels.inline": "false",
       "elk.edgeLabels.placement": "CENTER",
     },
     children: config.topology.nodes.map((node) => ({
       id: node.name,
-      width: graphNodeWidth,
-      height: graphNodeHeight,
+      width: estimateNodeWidth(node.name, node.name === config.topology.entry),
+      height:
+        graphNodeHeight +
+        (node.name === config.topology.entry ? graphEntryNodeExtraHeight : 0),
       layoutOptions: {
         "elk.layered.layering.layerConstraint":
           node.name === config.topology.entry
@@ -105,7 +111,7 @@ export async function buildConfigGraphLayout(
       x: node.x ?? 0,
       y: node.y ?? 0,
     },
-    width: node.width ?? graphNodeWidth,
+    width: node.width ?? graphNodeMinWidth,
     height: node.height ?? graphNodeHeight,
     typeLabel: config.node_definitions[node.id]?.type ?? "agent",
     isEntry: node.id === config.topology.entry,
@@ -153,20 +159,47 @@ export async function buildConfigGraphLayout(
     nodes,
     edges,
     width: Math.max(420, Math.ceil(Math.max(nodeMaxX, labelMaxX) + graphPadding)),
-    height: Math.max(260, Math.ceil(Math.max(nodeMaxY, labelMaxY) + graphPadding)),
+    height: Math.max(240, Math.ceil(Math.max(nodeMaxY, labelMaxY) + graphPadding)),
   };
+}
+
+function estimateNodeWidth(name: string, isEntry: boolean): number {
+  const minWidth = isEntry ? graphEntryNodeMinWidth : graphNodeMinWidth;
+  const textWidth = estimateNodeNameWidth(name);
+  const width = Math.ceil(16 + 14 + 12 + textWidth + 16);
+  return Math.min(260, Math.max(minWidth, width));
+}
+
+function estimateNodeNameWidth(name: string): number {
+  return Array.from(name).reduce((width, character) => width + estimateGlyphWidth(character), 0);
+}
+
+function estimateGlyphWidth(character: string): number {
+  if (character === "_" || character === "-" || character === ".") {
+    return 6;
+  }
+  if (character === " ") {
+    return 4;
+  }
+  if (/[0-9]/.test(character)) {
+    return 8;
+  }
+  if (/[A-Z]/.test(character)) {
+    return 9;
+  }
+  return 8;
 }
 
 function createEdgeLabel(text: string): ElkLabel {
   return {
     text,
     width: estimateLabelWidth(text),
-    height: 22,
+    height: 18,
   };
 }
 
 function estimateLabelWidth(text: string): number {
-  return Math.min(168, Math.max(44, text.length * 7 + 18));
+  return Math.min(136, Math.max(34, text.length * 6 + 16));
 }
 
 function buildSectionPath(section: NonNullable<ElkExtendedEdge["sections"]>[number]): string {

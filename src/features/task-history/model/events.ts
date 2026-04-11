@@ -37,6 +37,7 @@ export type SessionHistoryToolEvent = SessionHistoryEventBase & {
   toolKind?: string;
   title?: string;
   status?: string;
+  durationMs?: number;
   inputSummary?: string;
   outputText?: string;
   errorText?: string;
@@ -206,6 +207,7 @@ export function normalizeStreamEvent(
       toolKind: dto.tool_kind,
       title: dto.title,
       status: dto.status,
+      durationMs: dto.duration_ms,
       inputSummary: dto.input_summary,
       outputText: dto.output_text,
       errorText: dto.error_text,

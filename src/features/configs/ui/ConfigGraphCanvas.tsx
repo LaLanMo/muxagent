@@ -25,7 +25,6 @@ type ConfigGraphNodeData = {
   name: string;
   typeLabel: string;
   isEntry: boolean;
-  outgoingCount: number;
   selected: boolean;
 };
 
@@ -44,11 +43,41 @@ const edgeTypes: EdgeTypes = {
   configEdge: ConfigEdgeView,
 };
 
+type ConfigGraphPalette = {
+  edgeStroke: string;
+  edgeText: string;
+  edgeBgFill: string;
+  edgeBgStroke: string;
+};
+
+const defaultGraphPalette: ConfigGraphPalette = {
+  edgeStroke: "#b9afa8",
+  edgeText: "#7a6f68",
+  edgeBgFill: "#fffdfb",
+  edgeBgStroke: "#d1c8c2",
+};
+
+function resolveGraphPalette(): ConfigGraphPalette {
+  if (typeof window === "undefined") {
+    return defaultGraphPalette;
+  }
+  const styles = getComputedStyle(document.documentElement);
+  const read = (name: string, fallback: string) =>
+    styles.getPropertyValue(name).trim() || fallback;
+  return {
+    edgeStroke: read("--color-border-strong", defaultGraphPalette.edgeStroke),
+    edgeText: read("--color-text-tertiary", defaultGraphPalette.edgeText),
+    edgeBgFill: read("--color-surface-0", defaultGraphPalette.edgeBgFill),
+    edgeBgStroke: read("--color-border", defaultGraphPalette.edgeBgStroke),
+  };
+}
+
 export function ConfigGraphCanvas({
   graph,
   selectedNodeName,
   onSelectNode,
 }: ConfigGraphCanvasProps) {
+  const palette = useMemo(resolveGraphPalette, []);
   const nodes = useMemo<Node<ConfigGraphNodeData>[]>(
     () =>
       graph.nodes.map((node) => ({
@@ -61,7 +90,6 @@ export function ConfigGraphCanvas({
           name: node.name,
           typeLabel: node.typeLabel,
           isEntry: node.isEntry,
-          outgoingCount: node.outgoingCount,
           selected: node.name === selectedNodeName,
         },
         style: {
@@ -88,27 +116,34 @@ export function ConfigGraphCanvas({
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
-          color: "#CDCED3", /* --border-strong */
+          color: palette.edgeStroke,
           width: 20,
           height: 20,
         },
       })),
-    [graph.edges],
+    [graph.edges, palette.edgeStroke],
   );
 
   return (
-    <div className="config-graph-flow" style={{ width: graph.width, height: graph.height }}>
+    <div
+      className="config-graph-flow"
+      style={{
+        width: `${graph.width}px`,
+        height: `${graph.height}px`,
+        minWidth: "100%",
+        minHeight: "100%",
+      }}
+    >
       <ReactFlow
         edges={edges}
         edgeTypes={edgeTypes}
         elementsSelectable={false}
-        fitView
-        fitViewOptions={{ duration: 0, maxZoom: 1, minZoom: 0.55, padding: 0.2 }}
         nodeTypes={nodeTypes}
         nodes={nodes}
         nodesConnectable={false}
         nodesDraggable={false}
         onlyRenderVisibleElements={false}
+        defaultViewport={{ x: 0, y: 0, zoom: 1 }}
         onNodeClick={(_, node) => onSelectNode(node.id)}
         panOnDrag={false}
         preventScrolling={false}
@@ -125,7 +160,13 @@ function ConfigNodeView({
   data,
 }: NodeProps<Node<ConfigGraphNodeData, "configNode">>) {
   return (
-    <div className={`config-flow-node${data.selected ? " is-selected" : ""}`}>
+    <div
+      className={`config-flow-node${data.selected ? " is-selected" : ""}${
+        data.isEntry ? " is-entry" : ""
+      }`}
+      data-node-type={data.typeLabel}
+      data-testid={`config-graph-node-${data.name}`}
+    >
       <Handle
         className="config-flow-node__handle"
         isConnectable={false}
@@ -138,16 +179,25 @@ function ConfigNodeView({
         position={Position.Bottom}
         type="source"
       />
-      <div className="config-flow-node__topline">
-        <span className="config-flow-node__name">{data.name}</span>
-        {data.isEntry ? <span className="config-flow-node__badge">entry</span> : null}
+      {data.isEntry ? (
+        <span
+          className="config-flow-node__entry-chip"
+          data-testid={`config-graph-node-entry-${data.name}`}
+        >
+          ENTRY
+        </span>
+      ) : null}
+      <div className="config-flow-node__card">
+        <div className="config-flow-node__body">
+          <span className="config-flow-node__type-dot" aria-hidden="true" />
+          <span
+            className="config-flow-node__name"
+            data-testid={`config-graph-node-name-${data.name}`}
+          >
+            {data.name}
+          </span>
+        </div>
       </div>
-      <span className="config-flow-node__meta">
-        {data.typeLabel}
-        {data.outgoingCount > 0
-          ? ` · ${data.outgoingCount} edge${data.outgoingCount === 1 ? "" : "s"}`
-          : ""}
-      </span>
     </div>
   );
 }
@@ -160,34 +210,35 @@ function ConfigEdgeView({
   if (!data?.path) {
     return null;
   }
+  const palette = resolveGraphPalette();
   return (
     <BaseEdge
       className="config-flow-edge"
       id={id}
       label={data.label}
-      labelBgBorderRadius={999}
-      labelBgPadding={[4, 8]}
+      labelBgBorderRadius={6}
+      labelBgPadding={[3, 6]}
       labelBgStyle={{
-        fill: "rgba(255, 255, 255, 0.98)",
-        stroke: "rgba(220, 225, 231, 0.98)",
+        fill: palette.edgeBgFill,
+        stroke: palette.edgeBgStroke,
         strokeWidth: 1,
       }}
       labelShowBg={Boolean(data.label)}
       labelStyle={{
-        fill: "#8A8F97", /* --text-tertiary */
-        fontFamily: '"Geist Mono Variable", "Geist Mono", ui-monospace, monospace',
-        fontSize: 10,
-        fontWeight: 650,
+        fill: palette.edgeText,
+        fontFamily: "var(--font-ui)",
+        fontSize: "11px",
+        fontWeight: 500,
       }}
       labelX={data.labelX}
       labelY={data.labelY}
       markerEnd={markerEnd}
       path={data.path}
       style={{
-        stroke: "#CDCED3", /* --border-strong */
-        strokeLinecap: "round",
-        strokeLinejoin: "round",
-        strokeWidth: 2.25,
+        stroke: palette.edgeStroke,
+        strokeLinecap: "square",
+        strokeLinejoin: "miter",
+        strokeWidth: 1.2,
       }}
     />
   );

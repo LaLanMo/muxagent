@@ -1,15 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import {
-  ArrowLeft,
-  Check,
-  CircleDashed,
-  CircleX,
-  Loader,
-  type LucideIcon,
-} from "lucide-react";
-import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
+import { Bot, Check, CircleDashed, CircleX, FileText, Loader, User, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
-import { formatRelativeTime } from "@/domain/task-shell";
+import {
+  detailStatusLabel,
+  formatRelativeTime,
+} from "@/domain/task-shell";
 import {
   buildTranscriptSnapshot,
   type SessionHistoryEvent,
@@ -18,23 +12,20 @@ import {
   deriveTranscriptTimelineItems,
   timelineItemsToLines,
 } from "@/features/task-history/model/timeline";
+import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
-import { Toast } from "@/features/shared/ui/Toast";
-import { DesktopWorkbenchFrame } from "@/features/layout/ui/DesktopWorkbenchFrame";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
+import { Toast } from "@/features/shared/ui/Toast";
 import type { TaskDetailActionSurface } from "@/features/task-detail/model/use-task-detail-screen";
-import type { TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
-import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
-import { TaskDetailSidebar } from "@/features/task-detail/ui/TaskDetailSidebar";
+import type { TaskDetailModal, TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
 import {
   TaskApprovalDock,
-  TaskArtifactPane,
+  TaskArtifactModal,
   TaskBlockedDock,
   TaskClarificationDock,
   TaskFollowUpDock,
-  TaskOverviewPane,
   TaskRetryDock,
-  TaskRunPane,
+  TaskTranscriptModal,
 } from "@/features/task-detail/ui/TaskDetailPanels";
 import type {
   ArtifactRefDto,
@@ -44,6 +35,7 @@ import type {
   NodeRunViewDto,
   TaskViewDto,
 } from "@/rpc/types";
+import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
 
 type StageNode = {
   name: string;
@@ -59,23 +51,185 @@ const stageStatusIcons: Record<StageNode["status"], LucideIcon> = {
 
 function StageNodeIcon({ status }: { status: StageNode["status"] }) {
   const Icon = stageStatusIcons[status];
-
   return <Icon size={10} strokeWidth={2.2} />;
 }
 
-function formatUpdatedStamp(iso: string | undefined) {
-  if (!iso) {
-    return "";
+function ActivityRunIcon({
+  actionKind,
+}: {
+  actionKind: TaskDetailActionSurface["kind"] | "none";
+}) {
+  const Icon = actionKind === "approval" ? User : Bot;
+  return <Icon size={14} strokeWidth={1.9} />;
+}
+
+function flowBullet(status: StageNode["status"]) {
+  return status === "pending" ? "○" : "●";
+}
+
+function formatRunTiming(run: NodeRunViewDto) {
+  const relative = formatRelativeTime(run.completed_at ?? run.started_at);
+  const start = Date.parse(run.started_at);
+  const end = Date.parse(run.completed_at ?? "");
+  if (
+    Number.isFinite(start) &&
+    Number.isFinite(end) &&
+    end > start &&
+    Date.now() - end < 24 * 60 * 60 * 1000
+  ) {
+    return {
+      duration: formatDuration(Math.max(1, Math.floor((end - start) / 1000))),
+      relative,
+    };
   }
-  const value = formatRelativeTime(iso);
-  if (!value || value === "now") {
-    return "updated now";
-  }
-  return value.includes("ago") ? `updated ${value}` : `updated ${value} ago`;
+  return { relative };
 }
 
 function formatCount(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatAbsoluteStamp(iso: string | undefined) {
+  if (!iso) {
+    return "—";
+  }
+  const value = new Date(iso);
+  if (Number.isNaN(value.getTime())) {
+    return "—";
+  }
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(value);
+}
+
+function formatDuration(totalSeconds: number) {
+  if (totalSeconds < 60) {
+    return `${Math.max(1, totalSeconds)}s`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  return `${minutes}m ${seconds}s`;
+}
+
+function summarizeTaskDuration(task: TaskViewDto | undefined, runs: NodeRunViewDto[]) {
+  const starts = runs
+    .map((run) => Date.parse(run.started_at))
+    .filter((value) => Number.isFinite(value));
+  if (starts.length === 0) {
+    return "Not started";
+  }
+  const start = Math.min(...starts);
+  const hasOpenRun = runs.some((run) => {
+    const label = detailStatusLabel(run.status);
+    return label === "running" || label === "awaiting";
+  });
+  const ends = runs
+    .map((run) => Date.parse(run.completed_at ?? ""))
+    .filter((value) => Number.isFinite(value));
+  const end = hasOpenRun ? Date.now() : ends.length > 0 ? Math.max(...ends) : Date.now();
+  const duration = formatDuration(Math.max(1, Math.floor((end - start) / 1000)));
+  const taskStatus = task ? detailStatusLabel(task.status) : "pending";
+  return taskStatus === "running" || taskStatus === "awaiting"
+    ? `${duration} (${taskStatus})`
+    : duration;
+}
+
+function summarizeRuns(runs: NodeRunViewDto[]) {
+  let done = 0;
+  let running = 0;
+  let pending = 0;
+  let failed = 0;
+
+  for (const run of runs) {
+    switch (detailStatusLabel(run.status)) {
+      case "done":
+        done += 1;
+        break;
+      case "running":
+        running += 1;
+        break;
+      case "awaiting":
+      case "pending":
+        pending += 1;
+        break;
+      case "failed":
+        failed += 1;
+        break;
+    }
+  }
+
+  return [
+    `${runs.length} total`,
+    done > 0 ? `${done} done` : undefined,
+    running > 0 ? `${running} running` : undefined,
+    pending > 0 ? `${pending} pending` : undefined,
+    failed > 0 ? `${failed} failed` : undefined,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function artifactsForRun(run: NodeRunViewDto, artifacts: ArtifactRefDto[]) {
+  return artifacts.filter((artifact) => {
+    if (artifact.node_run_id && artifact.node_run_id === run.id) {
+      return true;
+    }
+    return (
+      run.artifact_paths?.includes(artifact.raw_path) ||
+      run.artifact_paths?.includes(artifact.preview_name)
+    );
+  });
+}
+
+function activityCardTone(args: {
+  run: NodeRunViewDto;
+  actionRunId?: string;
+  actionKind: TaskDetailActionSurface["kind"];
+}) {
+  const { run, actionRunId, actionKind } = args;
+  if (actionRunId === run.id) {
+    if (actionKind === "retry") {
+      return "failed";
+    }
+    if (actionKind !== "none" && actionKind !== "follow_up") {
+      return "awaiting";
+    }
+  }
+
+  switch (detailStatusLabel(run.status)) {
+    case "awaiting":
+      return "awaiting";
+    case "failed":
+      return "failed";
+    case "running":
+      return "running";
+    case "done":
+      return "done";
+    default:
+      return "default";
+  }
+}
+
+function activityMeta(run: NodeRunViewDto, artifactCount: number) {
+  const status = detailStatusLabel(run.status);
+  if (status === "failed" && run.failure_reason) {
+    return run.failure_reason;
+  }
+  if (status === "awaiting") {
+    return "waiting for input";
+  }
+  if (artifactCount > 0) {
+    return formatCount(artifactCount, "artifact", "artifacts");
+  }
+  return undefined;
 }
 
 type TaskDetailScreenProps = {
@@ -92,6 +246,7 @@ type TaskDetailScreenProps = {
   timelineRuns: NodeRunViewDto[];
   artifacts: ArtifactRefDto[];
   selection: TaskDetailSelection;
+  modal: TaskDetailModal;
   currentRun?: NodeRunViewDto;
   selectedRun?: NodeRunViewDto;
   selectedArtifact?: ArtifactRefDto;
@@ -120,7 +275,8 @@ type TaskDetailScreenProps = {
   failureReason?: string;
   selectOverview: () => void;
   selectRun: (runId: string) => void;
-  selectArtifact: (artifact: ArtifactRefDto) => void;
+  openTranscript: (runId: string) => void;
+  openArtifact: (artifact: ArtifactRefDto) => void;
   submitApprove: () => Promise<void>;
   submitReject: () => Promise<void>;
   submitClarification: () => Promise<void>;
@@ -128,27 +284,6 @@ type TaskDetailScreenProps = {
   retryTask: (force?: boolean) => Promise<void>;
   continueBlockedTask: () => Promise<void>;
 };
-
-function StageStrip({ nodes }: { nodes: StageNode[] }) {
-  if (nodes.length === 0) {
-    return null;
-  }
-
-  return (
-    <div className="stage-strip">
-      <div className="stage-strip__list">
-        {nodes.map((node) => (
-          <div className={`stage-node stage-node--${node.status}`} key={node.name}>
-            <span className="stage-node__icon" aria-hidden="true">
-              <StageNodeIcon status={node.status} />
-            </span>
-            <span className="stage-node__name">{node.name}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function TaskDetailScreen({
   shell,
@@ -159,11 +294,11 @@ export function TaskDetailScreen({
   statusLabel,
   statusTone,
   configLabel,
-  elapsedLabel,
   stageNodes,
   timelineRuns,
   artifacts,
   selection,
+  modal,
   currentRun,
   selectedRun,
   selectedArtifact,
@@ -192,7 +327,8 @@ export function TaskDetailScreen({
   failureReason,
   selectOverview,
   selectRun,
-  selectArtifact,
+  openTranscript,
+  openArtifact,
   submitApprove,
   submitReject,
   submitClarification,
@@ -200,31 +336,11 @@ export function TaskDetailScreen({
   retryTask,
   continueBlockedTask,
 }: TaskDetailScreenProps) {
-  const paneScrollRef = useRef<HTMLDivElement | null>(null);
-  const [dockCollapsed, setDockCollapsed] = useState(false);
-  const prevActionKind = useRef(actionSurface.kind);
-  useEffect(() => {
-    if (actionSurface.kind !== prevActionKind.current) {
-      setDockCollapsed(false);
-      prevActionKind.current = actionSurface.kind;
-    }
-  }, [actionSurface.kind]);
-  const updatedStamp = formatUpdatedStamp(task?.task.updated_at ?? elapsedLabel);
-  const runSummary = formatCount(timelineRuns.length, "run", "runs");
-  const artifactSummary = formatCount(artifacts.length, "artifact", "artifacts");
   const actionRunId =
     actionSurface.kind !== "none" && "run" in actionSurface
       ? actionSurface.run?.id
       : undefined;
   const currentRunId = currentRun?.id;
-  const selectedRunArtifactCount = selectedRun
-    ? artifacts.filter(
-        (artifact) =>
-          artifact.node_run_id === selectedRun.id ||
-          selectedRun.artifact_paths?.includes(artifact.raw_path) ||
-          selectedRun.artifact_paths?.includes(artifact.preview_name),
-      ).length
-    : 0;
   const liveSelectedRunEvents =
     selectedRun?.id && liveEventsRunId === selectedRun.id ? liveEvents : [];
   const transcript = buildTranscriptSnapshot({
@@ -241,32 +357,46 @@ export function TaskDetailScreen({
         : selectedRunHistory?.loading
           ? "loading"
           : "none";
-  const selectionKey =
-    selection.kind === "run"
-      ? `run:${selection.runId}`
-      : selection.kind === "artifact"
-        ? `artifact:${selection.artifactPath}`
-        : "overview";
+  const createdLabel = formatAbsoluteStamp(task?.task.created_at);
+  const durationLabel = summarizeTaskDuration(task, timelineRuns);
+  const runsLabel = summarizeRuns(timelineRuns);
+  const promptLead = task?.task.description ?? title;
+  const groupedArtifactPaths = new Set(
+    timelineRuns.flatMap((run) =>
+      artifactsForRun(run, artifacts).map((artifact) => artifact.resolved_path),
+    ),
+  );
+  const ungroupedArtifacts = artifacts.filter(
+    (artifact) => !groupedArtifactPaths.has(artifact.resolved_path),
+  );
 
-  useEffect(() => {
-    const container = paneScrollRef.current;
-    if (!container) {
-      return;
-    }
-    container.scrollTop = 0;
-  }, [selectionKey]);
-
-  const mainPane =
-    selection.kind === "artifact" ? (
-      <TaskArtifactPane
+  const artifactModal =
+    modal.kind === "artifact" ? (
+      <TaskArtifactModal
         artifact={selectedArtifact}
         content={artifactContent}
         error={artifactError}
+        onClose={() => {
+          if (selectedArtifact?.node_run_id) {
+            selectRun(selectedArtifact.node_run_id);
+            return;
+          }
+          selectOverview();
+        }}
       />
-    ) : selection.kind === "run" ? (
-      <TaskRunPane
-        artifactCount={selectedRunArtifactCount}
+    ) : null;
+
+  const transcriptModal =
+    modal.kind === "transcript" ? (
+      <TaskTranscriptModal
         isCurrentRun={selectedRun?.id === currentRunId}
+        onClose={() => {
+          if (selectedRun?.id) {
+            selectRun(selectedRun.id);
+            return;
+          }
+          selectOverview();
+        }}
         streamLines={selectedRunStreamLines}
         streamSource={selectedRunStreamSource}
         transcript={transcript}
@@ -274,20 +404,13 @@ export function TaskDetailScreen({
         run={selectedRun}
         showEmptyOutput={Boolean(selectedRun)}
       />
-    ) : (
-      <TaskOverviewPane
-        artifactCount={artifacts.length}
-        runCount={timelineRuns.length}
-        task={task}
-      />
-    );
+    ) : null;
 
   let actionPanel = null;
   if (actionSurface.kind === "approval") {
     actionPanel = (
       <TaskApprovalDock
         feedback={feedback}
-        nodeName={actionSurface.run?.node_name ?? inputRequest?.node_name}
         setFeedback={setFeedback}
         submitApprove={submitApprove}
         submitReject={submitReject}
@@ -295,17 +418,16 @@ export function TaskDetailScreen({
       />
     );
   } else if (actionSurface.kind === "clarification") {
-      actionPanel = (
-        <TaskClarificationDock
-          answers={clarificationAnswers}
-          nodeName={actionSurface.run?.node_name ?? inputRequest?.node_name}
-          questions={inputRequest?.questions ?? []}
-          requestKey={`${inputRequest?.task_id ?? "task"}:${inputRequest?.node_run_id ?? "run"}`}
-          setAnswer={setClarificationAnswer}
-          submitClarification={submitClarification}
-          submittingClarification={submittingClarification}
-        />
-      );
+    actionPanel = (
+      <TaskClarificationDock
+        answers={clarificationAnswers}
+        questions={inputRequest?.questions ?? []}
+        requestKey={`${inputRequest?.task_id ?? "task"}:${inputRequest?.node_run_id ?? "run"}`}
+        setAnswer={setClarificationAnswer}
+        submitClarification={submitClarification}
+        submittingClarification={submittingClarification}
+      />
+    );
   } else if (actionSurface.kind === "blocked") {
     actionPanel = (
       <TaskBlockedDock
@@ -345,44 +467,9 @@ export function TaskDetailScreen({
       primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
       primaryNav={shell.primaryNav}
       topBarClassName="desktop-shell__topbar--detail"
+      topBarLeft={<span />}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
-      topBarLeft={
-        <div className="detail-topbar">
-          <div className="detail-topbar__title-row">
-            <Link
-              aria-label="Back to tasks"
-              className="detail-topbar__back"
-              data-testid="task-detail-back"
-              to="/"
-            >
-              <ArrowLeft aria-hidden="true" size={16} strokeWidth={1.8} />
-            </Link>
-            <h1 className="detail-topbar__title">{title}</h1>
-          </div>
-
-          <div className="detail-topbar__info-row">
-            <div className="detail-topbar__chips">
-              <StatusBadge label={statusLabel} tone={statusTone} />
-              <span className="detail-topbar__config">{configLabel}</span>
-            </div>
-            <div className="detail-topbar__meta">
-              <span className="detail-topbar__stat">{runSummary}</span>
-              <span className="detail-topbar__stat">{artifactSummary}</span>
-              {updatedStamp ? (
-                <span className="detail-topbar__updated">{updatedStamp}</span>
-              ) : null}
-            </div>
-          </div>
-
-          {stageNodes.length > 0 ? (
-            <div className="detail-topbar__flow-row">
-              <span className="detail-topbar__eyebrow">Flow</span>
-              <StageStrip nodes={stageNodes} />
-            </div>
-          ) : null}
-        </div>
-      }
     >
       <section className="detail-screen" data-testid="task-detail-screen">
         {detailError ? (
@@ -391,46 +478,273 @@ export function TaskDetailScreen({
           </div>
         ) : null}
 
-        <DesktopWorkbenchFrame
-          className="desktop-workbench--detail"
-          center={
-            <TaskDetailSidebar
-              actionKind={actionSurface.kind}
-              actionRunId={actionRunId}
-              artifacts={artifacts}
-              currentNodeName={task?.current_node_name}
-              hasTask={Boolean(task)}
-              loading={loading}
-              onSelectOverview={selectOverview}
-              onSelectArtifact={selectArtifact}
-              onSelectRun={selectRun}
-              selection={selection}
-              timelineRuns={timelineRuns}
-            />
-          }
-          right={
-            <div className="detail-pane-host">
-              <div className="detail-pane-scroll" ref={paneScrollRef}>
-                <div className="detail-pane-stack">
-                  {mainPane}
-                </div>
+        <div className="detail-layout">
+          <div className="detail-main-column">
+            <header className="detail-main-header">
+              <Link
+                aria-label="Back to tasks"
+                className="detail-main-header__back"
+                data-testid="task-detail-back"
+                to="/"
+              >
+                <span>‹  Tasks</span>
+              </Link>
+              <div className="detail-main-header__prompt">
+                <p className="detail-main-header__prompt-text">{promptLead}</p>
               </div>
-              {actionPanel ? (
-                <div
-                  className={`detail-action-dock${dockCollapsed ? " is-collapsed" : ""}`}
-                  onClick={(e) => {
-                    const target = e.target as HTMLElement;
-                    if (target.closest(".detail-surface-panel__header")) {
-                      setDockCollapsed((c) => !c);
-                    }
-                  }}
-                >
-                  {actionPanel}
-                </div>
-              ) : null}
+            </header>
+            <div className="detail-main-divider" />
+
+            <section className="detail-activity">
+              <div className="detail-activity__header">
+                <span className="detail-activity__eyebrow">Activity</span>
+                {loading ? (
+                  <span className="detail-activity__summary">Loading…</span>
+                ) : null}
+              </div>
+
+              <div className="detail-activity__list">
+                {timelineRuns.map((run) => {
+                  const runArtifacts = artifactsForRun(run, artifacts);
+                  const actionKindForRun =
+                    actionRunId === run.id && actionSurface.kind !== "none"
+                      ? actionSurface.kind
+                      : "none";
+                  const tone = activityCardTone({
+                    run,
+                    actionRunId,
+                    actionKind: actionSurface.kind,
+                  });
+                  const runStatus = detailStatusLabel(run.status);
+                  const runSelected =
+                    selection.kind === "run"
+                      ? selection.runId === run.id
+                      : selectedArtifact?.node_run_id === run.id;
+                  const showActionPanel = actionRunId === run.id && actionPanel;
+                  const showInlineArtifactRow =
+                    runArtifacts.length === 1 && selectedArtifact?.node_run_id !== run.id;
+                  const timing = formatRunTiming(run);
+                  const runMeta =
+                    actionKindForRun === "approval" ||
+                    actionKindForRun === "clarification" ||
+                    actionKindForRun === "retry"
+                      ? undefined
+                      : showInlineArtifactRow
+                      ? undefined
+                      : activityMeta(run, runArtifacts.length);
+                  return (
+                    <article
+                      className={`detail-activity-card detail-activity-card--${tone}${
+                        runSelected ? " is-selected" : ""
+                      }`}
+                      key={run.id}
+                    >
+                      <div
+                        aria-pressed={runSelected}
+                        className="detail-activity-card__summary"
+                        data-testid={`detail-run-${run.id}`}
+                        onClick={() => {
+                          if (actionKindForRun !== "none") {
+                            selectRun(run.id);
+                            return;
+                          }
+                          openTranscript(run.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            if (actionKindForRun !== "none") {
+                              selectRun(run.id);
+                              return;
+                            }
+                            openTranscript(run.id);
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={`detail-activity-card__icon detail-activity-card__icon--${tone}`}
+                        >
+                          <ActivityRunIcon actionKind={actionKindForRun} />
+                        </span>
+                        <span className="detail-activity-card__copy">
+                          <span className="detail-activity-card__title-row">
+                            <span className="detail-activity-card__title">{run.node_name}</span>
+                            <span
+                              className={`detail-activity-card__state detail-activity-card__state--${tone}`}
+                            >
+                              {runStatus}
+                            </span>
+                            <span className="detail-activity-card__title-spacer" />
+                            {timing.duration ? (
+                              <span className="detail-activity-card__duration">
+                                {timing.duration}
+                              </span>
+                            ) : null}
+                            <span className="detail-activity-card__time">{timing.relative}</span>
+                          </span>
+                          {showInlineArtifactRow ? (
+                            <button
+                              className="detail-activity-card__file-row"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openArtifact(runArtifacts[0]);
+                              }}
+                              type="button"
+                            >
+                              <FileText aria-hidden="true" size={11} strokeWidth={1.9} />
+                              <span>{runArtifacts[0].preview_name}</span>
+                            </button>
+                          ) : runMeta ? (
+                            <span className="detail-activity-card__meta">{runMeta}</span>
+                          ) : null}
+                        </span>
+                      </div>
+
+                      {!showInlineArtifactRow && runArtifacts.length > 0 ? (
+                        <div className="detail-activity-card__artifacts">
+                          {runArtifacts.map((artifact) => (
+                            <button
+                              className={`detail-activity-card__artifact${
+                                selectedArtifact?.resolved_path === artifact.resolved_path
+                                  ? " is-selected"
+                                  : ""
+                              }`}
+                              key={artifact.resolved_path}
+                              onClick={() => openArtifact(artifact)}
+                              type="button"
+                            >
+                              {artifact.preview_name}
+                            </button>
+                          ))}
+                        </div>
+                      ) : runArtifacts.length > 0 ? (
+                        null
+                      ) : null}
+
+                      {showActionPanel ? (
+                        <div className="detail-activity-card__body">
+                          {showActionPanel ? actionPanel : null}
+                        </div>
+                      ) : null}
+                    </article>
+                  );
+                })}
+
+                {actionSurface.kind === "follow_up" && actionPanel ? (
+                  <article className="detail-activity-card detail-activity-card--done is-selected">
+                    <div className="detail-activity-card__body">{actionPanel}</div>
+                  </article>
+                ) : null}
+
+                {ungroupedArtifacts.length > 0 ? (
+                  <article className="detail-activity-card detail-activity-card--default">
+                    <div className="detail-activity-card__summary">
+                      <span
+                        aria-hidden="true"
+                        className="detail-activity-card__icon detail-activity-card__icon--default"
+                      >
+                        <StageNodeIcon status="pending" />
+                      </span>
+                      <span className="detail-activity-card__copy">
+                        <span className="detail-activity-card__title-row">
+                          <span className="detail-activity-card__title">artifacts</span>
+                        </span>
+                        <span className="detail-activity-card__meta">
+                          {formatCount(ungroupedArtifacts.length, "artifact", "artifacts")}
+                        </span>
+                      </span>
+                    </div>
+                    <div className="detail-activity-card__artifacts">
+                      {ungroupedArtifacts.map((artifact) => (
+                        <button
+                          className={`detail-activity-card__artifact${
+                            selectedArtifact?.resolved_path === artifact.resolved_path
+                              ? " is-selected"
+                              : ""
+                          }`}
+                          key={artifact.resolved_path}
+                          onClick={() => openArtifact(artifact)}
+                          type="button"
+                        >
+                          {artifact.preview_name}
+                        </button>
+                      ))}
+                    </div>
+                  </article>
+                ) : null}
+
+              </div>
+            </section>
+          </div>
+
+          <aside className="detail-properties">
+            <div className="detail-properties__header">
+              <span className="detail-properties__eyebrow">Properties</span>
             </div>
-          }
-        />
+            <div className="detail-properties__divider" />
+            <div className="detail-properties__content">
+              <div className="detail-properties__block">
+                <span className="detail-properties__label">Status</span>
+                <StatusBadge label={statusLabel} tone={statusTone} />
+              </div>
+
+              <div className="detail-properties__block">
+                <span className="detail-properties__label">Config</span>
+                <span className="detail-properties__value detail-properties__mono">
+                  {configLabel}
+                </span>
+              </div>
+
+              <div className="detail-properties__block">
+                <span className="detail-properties__label">Flow</span>
+                {stageNodes.length > 0 ? (
+                  <div className="detail-properties__flow">
+                    {stageNodes.map((node) => (
+                      <span className="detail-properties__flow-row" key={node.name}>
+                        <span
+                          aria-hidden="true"
+                          className={`detail-properties__flow-bullet detail-properties__flow-bullet--${node.status}`}
+                        >
+                          {flowBullet(node.status)}
+                        </span>
+                        <span className="detail-properties__value detail-properties__mono">
+                          {node.name}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="detail-properties__value detail-properties__muted">
+                    No workflow nodes yet
+                  </span>
+                )}
+              </div>
+
+              <div className="detail-properties__block">
+                <span className="detail-properties__label">Created</span>
+                <span className="detail-properties__value">{createdLabel}</span>
+              </div>
+
+              <div className="detail-properties__block">
+                <span className="detail-properties__label">Duration</span>
+                <span className="detail-properties__value">{durationLabel}</span>
+              </div>
+
+              <div className="detail-properties__block">
+                <span className="detail-properties__label">Runs</span>
+                <span className="detail-properties__value detail-properties__muted">
+                  {runsLabel}
+                </span>
+              </div>
+
+            </div>
+          </aside>
+        </div>
+        {artifactModal}
+        {transcriptModal}
       </section>
     </DesktopShellFrame>
   );

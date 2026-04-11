@@ -3,8 +3,6 @@ import type {
   ConfigCatalogResult,
   ConfigDetailDto,
   ConfigDraftDto,
-  ConfigPromptDto,
-  RuntimeEntryDto,
 } from "@/rpc/types";
 
 export async function refreshConfigCatalog(
@@ -37,31 +35,11 @@ export async function cloneConfig(
   return result.entry;
 }
 
-export async function renameConfig(
-  runtime: DesktopRuntime,
-  alias: string,
-  newAlias: string,
-): Promise<ConfigDetailDto> {
-  const result = await runtime.backend.configRename({
-    alias: alias.trim(),
-    new_alias: newAlias.trim(),
-  });
-  return result.entry;
-}
-
 export async function deleteConfig(
   runtime: DesktopRuntime,
   alias: string,
 ): Promise<void> {
   await runtime.backend.configDelete({ alias: alias.trim() });
-}
-
-export async function resetConfig(
-  runtime: DesktopRuntime,
-  alias: string,
-): Promise<ConfigDetailDto> {
-  const result = await runtime.backend.configReset({ alias: alias.trim() });
-  return result.entry;
 }
 
 export async function setDefaultConfig(
@@ -77,52 +55,6 @@ export async function validateConfigDraft(
   config: ConfigDraftDto,
 ) {
   return runtime.backend.configValidate({ config });
-}
-
-export async function saveConfigDraft(
-  runtime: DesktopRuntime,
-  alias: string,
-  expectedRevision: string,
-  config: ConfigDraftDto,
-): Promise<ConfigDetailDto> {
-  const result = await runtime.backend.configSave({
-    alias: alias.trim(),
-    expected_revision: expectedRevision.trim(),
-    config,
-  });
-  return result.entry;
-}
-
-export async function loadConfigPrompt(
-  runtime: DesktopRuntime,
-  alias: string,
-  nodeName: string,
-): Promise<ConfigPromptDto> {
-  const result = await runtime.backend.configPromptGet(alias.trim(), nodeName.trim());
-  return result.prompt;
-}
-
-export async function saveConfigPrompt(
-  runtime: DesktopRuntime,
-  alias: string,
-  nodeName: string,
-  expectedRevision: string,
-  content: string,
-): Promise<ConfigPromptDto> {
-  const result = await runtime.backend.configPromptSave({
-    alias: alias.trim(),
-    node_name: nodeName.trim(),
-    expected_revision: expectedRevision.trim(),
-    content,
-  });
-  return result.prompt;
-}
-
-export async function loadRuntimeList(
-  runtime: DesktopRuntime,
-): Promise<RuntimeEntryDto[]> {
-  const result = await runtime.backend.runtimeList();
-  return result.runtimes;
 }
 
 export function createEditableDraft(entry: ConfigDetailDto): ConfigDraftDto | undefined {

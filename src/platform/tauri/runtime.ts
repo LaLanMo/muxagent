@@ -9,15 +9,6 @@ import type {
   ConfigDeleteParams,
   ConfigDeleteResult,
   ConfigGetResult,
-  ConfigResetParams,
-  ConfigResetResult,
-  ConfigPromptGetResult,
-  ConfigPromptSaveParams,
-  ConfigPromptSaveResult,
-  ConfigRenameParams,
-  ConfigRenameResult,
-  ConfigSaveParams,
-  ConfigSaveResult,
   ConfigSetDefaultParams,
   ConfigSetDefaultResult,
   ConfigValidateParams,
@@ -25,7 +16,6 @@ import type {
   InitializeResult,
   JsonRpcNotification,
   NotificationEnvelopeParams,
-  RuntimeListResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
   TaskRunHistoryResult,
@@ -110,16 +100,8 @@ class TauriTaskBackendClient implements TaskBackendClient {
     return this.request("config.clone", params);
   }
 
-  configRename(params: ConfigRenameParams): Promise<ConfigRenameResult> {
-    return this.request("config.rename", params);
-  }
-
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
     return this.request("config.delete", params);
-  }
-
-  configReset(params: ConfigResetParams): Promise<ConfigResetResult> {
-    return this.request("config.reset", params);
   }
 
   configSetDefault(
@@ -130,27 +112,6 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {
     return this.request("config.validate", params);
-  }
-
-  configSave(params: ConfigSaveParams): Promise<ConfigSaveResult> {
-    return this.request("config.save", params);
-  }
-
-  configPromptGet(alias: string, nodeName: string): Promise<ConfigPromptGetResult> {
-    return this.request("config.prompt.get", {
-      alias,
-      node_name: nodeName,
-    });
-  }
-
-  configPromptSave(
-    params: ConfigPromptSaveParams,
-  ): Promise<ConfigPromptSaveResult> {
-    return this.request("config.prompt.save", params);
-  }
-
-  runtimeList(): Promise<RuntimeListResult> {
-    return this.request("runtime.list");
   }
 
   taskList(workspaceId: string): Promise<TaskListResult> {

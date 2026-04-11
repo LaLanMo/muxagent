@@ -1,12 +1,11 @@
-import { Plus } from "lucide-react";
-import { StatusBadge } from "@/features/shared/ui/StatusBadge";
+import { Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
+import type { KeyboardEvent } from "react";
 
 type ConfigCardModel = ConfigCatalogEntryDto & {
-  editLabel: string;
   open: () => void;
   edit: () => Promise<void>;
   setDefault: () => Promise<void>;
@@ -36,6 +35,32 @@ export function ConfigsScreen({
   cancelRemove,
   createConfig,
 }: ConfigsScreenProps) {
+  function runtimeLabel(entry: ConfigCardModel) {
+    return entry.runtime_name || entry.runtime_id || "automatic";
+  }
+
+  function nodeCountLabel(entry: ConfigCardModel) {
+    const nodeCount = entry.node_names?.length ?? 0;
+    return `${nodeCount} node${nodeCount === 1 ? "" : "s"}`;
+  }
+
+  function locationLabel(entry: ConfigCardModel) {
+    const source = entry.bundle_path || entry.config_path;
+    const parts = source.split(/[\\/]/).filter(Boolean);
+    return parts.at(-1) || source;
+  }
+
+  function handleSurfaceKeyDown(
+    event: KeyboardEvent<HTMLElement>,
+    open: () => void,
+  ) {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+    event.preventDefault();
+    open();
+  }
+
   return (
     <>
       <DesktopShellFrame
@@ -47,109 +72,158 @@ export function ConfigsScreen({
         workspaceItems={shell.workspaceItems}
         onAddWorkspace={() => void shell.addWorkspace()}
         topBarLeft={
-          <div className="screen-heading">
-            <h1 className="screen-title">Configs</h1>
-            <span className="screen-heading__support">
-              Edit built-ins, create copies, switch runtimes, and validate the task graph before saving.
-            </span>
-          </div>
+          <h1 className="screen-title">Configs</h1>
         }
         topBarRight={
           <div className="configs-topbar">
-            <span className="screen-meta">{count} configs</span>
-            <button className="topbar-action" onClick={() => void createConfig()} type="button">
+            <button
+              aria-label="+ New Config"
+              className="topbar-action"
+              onClick={() => void createConfig()}
+              type="button"
+            >
               <Plus aria-hidden="true" size={14} strokeWidth={2.2} />
               <span>New Config</span>
             </button>
           </div>
         }
       >
-        <section className="configs-screen" data-testid="configs-screen">
+        <section
+          aria-label={`Configs (${count})`}
+          className="configs-screen"
+          data-testid="configs-screen"
+        >
           {actionError ? <div className="config-banner config-banner--error">{actionError}</div> : null}
 
           {entries.length === 0 ? (
-            <div className="board-empty-state">
-              <h2>No configs loaded</h2>
-              <p>Create a config from the default starter and customize its runtime and graph.</p>
+            <div className="configs-empty-state">
+              <div className="configs-empty-state__icon" aria-hidden="true">
+                <Plus size={24} strokeWidth={1.8} />
+              </div>
+              <h2>No configs yet</h2>
+              <p>Configs define how tasks flow between agents. Start with the built-in default, or create your own.</p>
+              <div className="configs-empty-state__actions">
+                <button className="primary-action" onClick={() => void createConfig()} type="button">
+                  New Config
+                </button>
+              </div>
             </div>
           ) : (
             <div className="configs-grid">
               {entries.map((entry) => (
                 <article
-                  className="config-list-card"
+                  className={`config-list-card${entry.is_default ? " config-list-card--active" : ""}`}
                   data-testid={`config-card-${entry.alias}`}
                   key={entry.alias}
                 >
-                  <button
+                  <div
+                    aria-label={`Open config ${entry.alias}`}
                     className="config-list-card__surface"
                     onClick={entry.open}
-                    type="button"
+                    onKeyDown={(event) => handleSurfaceKeyDown(event, entry.open)}
+                    role="button"
+                    tabIndex={0}
                   >
                     <div className="config-list-card__head">
                       <div className="config-list-card__title-group">
-                        <h2>{entry.alias}</h2>
-                        <p>{entry.description || entry.config_path}</p>
+                        <div className="config-list-card__headline">
+                          <h2>{entry.alias}</h2>
+                          <div className="config-list-card__badges">
+                            {entry.is_default ? (
+                              <span className="config-list-card__state config-list-card__state--default">
+                                default
+                              </span>
+                            ) : null}
+                            <span
+                              className={`config-list-card__state${
+                                entry.builtin
+                                  ? " config-list-card__state--builtin"
+                                  : " config-list-card__state--custom"
+                              }`}
+                            >
+                              {entry.builtin ? "builtin" : "custom"}
+                            </span>
+                          </div>
+                        </div>
+                        <p>{entry.description || "No description provided."}</p>
                       </div>
-                      <div className="config-list-card__badges">
-                        {entry.is_default ? <StatusBadge label="default" mono tone="done" /> : null}
-                        <StatusBadge
-                          label={entry.runtime_name || entry.runtime_id || "Automatic"}
-                          mono
-                          tone={entry.runtime_configured ? "neutral" : "failed"}
-                        />
-                        {entry.builtin ? (
-                          <StatusBadge label="builtin" mono tone="neutral" />
-                        ) : (
-                          <StatusBadge label="custom" mono tone="running" />
-                        )}
+                      <div className="config-list-card__actions">
+                        <button
+                          aria-label="Edit"
+                          className="config-list-card__icon-action"
+                          disabled={busyAlias === entry.alias}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void entry.edit();
+                          }}
+                          type="button"
+                        >
+                          <Pencil aria-hidden="true" size={14} strokeWidth={1.9} />
+                        </button>
+                        {!entry.builtin ? (
+                          <button
+                            aria-label="Delete"
+                            className="config-list-card__icon-action"
+                            disabled={busyAlias === entry.alias}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void entry.remove();
+                            }}
+                            type="button"
+                          >
+                            <Trash2 aria-hidden="true" size={14} strokeWidth={1.9} />
+                          </button>
+                        ) : null}
                       </div>
                     </div>
 
-                    <div className="config-list-card__flow">
-                      {entry.node_names?.map((node) => (
-                        <span className="config-list-card__flow-node" key={node}>
-                          {node}
-                        </span>
-                      ))}
-                    </div>
+                    {entry.node_names?.length ? (
+                      <p className="config-list-card__flow-line">
+                        {entry.node_names.join(" · ")}
+                      </p>
+                    ) : null}
 
                     {entry.load_error ? (
                       <div className="config-list-card__error">{entry.load_error}</div>
                     ) : null}
-                  </button>
 
-                  <div className="config-list-card__actions">
-                    <button
-                      className="config-inline-button"
-                      disabled={busyAlias === entry.alias}
-                      onClick={() => void entry.edit()}
-                      type="button"
-                    >
-                      {busyAlias === entry.alias ? "Working..." : entry.editLabel}
-                    </button>
-
-                    {!entry.is_default ? (
-                      <button
-                        className="config-inline-button"
-                        disabled={busyAlias === entry.alias}
-                        onClick={() => void entry.setDefault()}
-                        type="button"
-                      >
-                        Make default
-                      </button>
-                    ) : null}
-
-                    {!entry.builtin ? (
-                      <button
-                        className="config-inline-button config-inline-button--danger"
-                        disabled={busyAlias === entry.alias}
-                        onClick={() => void entry.remove()}
-                        type="button"
-                      >
-                        Delete
-                      </button>
-                    ) : null}
+                    <div className="config-list-card__meta-row">
+                      <p className="config-list-card__meta-line">
+                        <span className="config-list-card__meta-label">runtime</span>
+                        <span className="config-list-card__meta-value">{runtimeLabel(entry)}</span>
+                        <span className="config-list-card__meta-divider" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="config-list-card__meta-label">nodes</span>
+                        <span className="config-list-card__meta-value">{nodeCountLabel(entry)}</span>
+                        <span className="config-list-card__meta-divider" aria-hidden="true">
+                          ·
+                        </span>
+                        <span className="config-list-card__meta-label">file</span>
+                        <span className="config-list-card__meta-value">{locationLabel(entry)}</span>
+                      </p>
+                      {!entry.is_default ? (
+                        <button
+                          className="config-list-card__default-action"
+                          disabled={busyAlias === entry.alias}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void entry.setDefault();
+                          }}
+                          type="button"
+                        >
+                          <Star aria-hidden="true" size={12} strokeWidth={1.9} />
+                          <span>Make default</span>
+                        </button>
+                      ) : (
+                        <span className="config-list-card__default-note">Default for new tasks</span>
+                      )}
+                    </div>
                   </div>
+
+                  {busyAlias === entry.alias ? (
+                    <div className="config-list-card__busy">Working…</div>
+                  ) : null}
                 </article>
               ))}
             </div>

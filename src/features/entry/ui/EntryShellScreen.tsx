@@ -1,7 +1,6 @@
 import { NavLink } from "react-router-dom";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
-import { ShellIcon } from "@/features/layout/ui/ShellIcon";
 import { NewTaskModal } from "@/features/new-task/ui/NewTaskModal";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 import type { TaskBoardColumnModel } from "@/features/tasks/ui/TaskBoard";
@@ -19,6 +18,9 @@ type EntryShellScreenProps = {
     selectedTargetWorkspaceId: string;
     setSelectedTargetWorkspaceId: (value: string) => void;
     workspaceOptions: Array<{ id: string; label: string; path: string }>;
+    workspacePicking: boolean;
+    toggleWorkspacePicker: () => void;
+    closeWorkspacePicker: () => void;
     selectedAlias: string;
     setSelectedAlias: (value: string) => void;
     selectedEntry?: ConfigCatalogEntryDto;
@@ -73,27 +75,25 @@ export function EntryShellScreen({
         }
         topBarRight={
           shell.phase === "connected" ? (
-            <>
-              <div className="task-view-switch" data-testid="task-view-switch">
-                {shell.taskViewNav.map((item) => (
-                  <NavLink
-                    className={({ isActive }) =>
-                      `task-view-switch__item${
-                        (typeof item.active === "boolean" ? item.active : isActive)
-                          ? " is-active"
-                          : ""
-                      }`
-                    }
-                    data-testid={`task-view-${slugifyTaskView(item.label)}`}
-                    end={item.to === "/" || item.to?.startsWith("/?")}
-                    key={item.label}
-                    to={item.to ?? "/"}
-                  >
-                    <span>{item.label}</span>
-                  </NavLink>
-                ))}
-              </div>
-            </>
+            <div className="task-view-switch" data-testid="task-view-switch">
+              {shell.taskViewNav.map((item) => (
+                <NavLink
+                  className={({ isActive }) =>
+                    `task-view-switch__item${
+                      (typeof item.active === "boolean" ? item.active : isActive)
+                        ? " is-active"
+                        : ""
+                    }`
+                  }
+                  data-testid={`task-view-${slugifyTaskView(item.label)}`}
+                  end={item.to === "/" || item.to?.startsWith("/?")}
+                  key={item.label}
+                  to={item.to ?? "/"}
+                >
+                  <span>{item.label}</span>
+                </NavLink>
+              ))}
+            </div>
           ) : shell.phase === "connecting" || shell.bootstrapPending ? null : (
             <button
               className="secondary-action"
@@ -106,10 +106,7 @@ export function EntryShellScreen({
           )
         }
       >
-        <section
-          className="board-screen board-screen--board"
-          data-testid="entry-shell"
-        >
+        <section className="board-screen board-screen--board" data-testid="entry-shell">
           {shell.error ? (
             <div className="inline-banner inline-banner--failed" data-testid="shell-error">
               {shell.error}
@@ -155,9 +152,7 @@ export function EntryShellScreen({
               </button>
             </div>
           ) : (
-            <>
-              <TaskBoard columns={columns} />
-            </>
+            <TaskBoard columns={columns} />
           )}
         </section>
       </DesktopShellFrame>
@@ -174,6 +169,9 @@ export function EntryShellScreen({
         entries={launchableEntries}
         error={modal.error}
         flowNodes={modal.flowNodes}
+        workspacePicking={modal.workspacePicking}
+        onToggleWorkspacePicker={modal.toggleWorkspacePicker}
+        onCloseWorkspacePicker={modal.closeWorkspacePicker}
         onTargetWorkspaceChange={modal.setSelectedTargetWorkspaceId}
         onAliasChange={modal.setSelectedAlias}
         onClose={onCloseModal}

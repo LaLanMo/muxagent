@@ -213,29 +213,12 @@ export interface ConfigCloneResult {
   entry: ConfigDetailDto;
 }
 
-export interface ConfigRenameParams {
-  alias: string;
-  new_alias: string;
-}
-
-export interface ConfigRenameResult {
-  entry: ConfigDetailDto;
-}
-
 export interface ConfigDeleteParams {
   alias: string;
 }
 
 export interface ConfigDeleteResult {
   removed: boolean;
-}
-
-export interface ConfigResetParams {
-  alias: string;
-}
-
-export interface ConfigResetResult {
-  entry: ConfigDetailDto;
 }
 
 export interface ConfigSetDefaultParams {
@@ -257,61 +240,6 @@ export interface ConfigValidateResult {
   runtime_name?: string;
   runtime_configured: boolean;
   error?: string;
-}
-
-export interface ConfigSaveParams {
-  alias: string;
-  expected_revision: string;
-  config: ConfigDraftDto;
-}
-
-export interface ConfigSaveResult {
-  entry: ConfigDetailDto;
-}
-
-export interface ConfigPromptDto {
-  alias: string;
-  node_name: string;
-  node_type: string;
-  path: string;
-  resolved_path: string;
-  content: string;
-  revision?: string;
-  readonly: boolean;
-  builtin: boolean;
-}
-
-export interface ConfigPromptGetParams {
-  alias: string;
-  node_name: string;
-}
-
-export interface ConfigPromptGetResult {
-  prompt: ConfigPromptDto;
-}
-
-export interface ConfigPromptSaveParams {
-  alias: string;
-  node_name: string;
-  expected_revision?: string;
-  content: string;
-}
-
-export interface ConfigPromptSaveResult {
-  prompt: ConfigPromptDto;
-}
-
-export interface RuntimeEntryDto {
-  runtime_id: string;
-  runtime_name: string;
-  command?: string;
-  args?: string[];
-  cwd?: string;
-  env_keys?: string[];
-}
-
-export interface RuntimeListResult {
-  runtimes: RuntimeEntryDto[];
 }
 
 export interface TaskDto {
@@ -529,6 +457,7 @@ export interface SessionHistoryToolEventDto extends SessionHistoryEventBaseDto {
   tool_kind?: string;
   title?: string;
   status?: string;
+  duration_ms?: number;
   input_summary?: string;
   output_text?: string;
   error_text?: string;

@@ -11,7 +11,7 @@ async function connectFixtureWorkspace(
   await expect(page.getByTestId("entry-shell")).toBeVisible();
 }
 
-test("edits a built-in config, validates runtime selection, saves, and resets it", async ({
+test("shows a built-in config as a read-only file inspector", async ({
   page,
 }) => {
   await connectFixtureWorkspace(page);
@@ -26,67 +26,45 @@ test("edits a built-in config, validates runtime selection, saves, and resets it
     .click();
 
   await expect(page.getByTestId("config-editor-screen")).toBeVisible();
-  await expect(page.getByTestId("config-alias-input")).toHaveValue("default");
-  const initialDescription = await page
-    .getByTestId("config-description-input")
-    .inputValue();
-  const initialRuntime = await page
-    .getByTestId("config-runtime-select")
-    .inputValue();
-  await expect(page.getByTestId("config-prompt-path-input")).toHaveValue(
-    "./prompts/draft_plan.md",
+  await expect(page.getByLabel("Config graph")).toBeVisible();
+  await expect(page.getByTestId("config-editor-graph-header")).toHaveCount(0);
+  await expect(page.getByTestId("config-editor-config-header")).toContainText(
+    "Config File",
   );
-  const initialPrompt = await page
-    .getByTestId("config-prompt-editor")
-    .inputValue();
-  await expect(page.getByTestId("config-prompt-editor")).toHaveValue(
-    initialPrompt,
-  );
+  await expect(page.getByText(/^Name$/)).toBeVisible();
+  await expect(page.getByText(/^Description$/)).toBeVisible();
+  await expect(page.getByText(/^Location$/)).toBeVisible();
+  await expect(page.getByText(/^Stats$/)).toBeVisible();
+  await expect(page.getByTestId("config-open-in-editor-button")).toBeVisible();
+  await expect(page.getByTestId("config-reveal-in-finder-button")).toBeVisible();
+  await expect(page.getByTestId("config-editor-toggle")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Edit workflow$/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Save$/i })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Reset to builtin$/i })).toHaveCount(0);
+  await expect(page.getByTestId("config-editor-name")).toHaveText("default");
+  await expect(page.getByTestId("config-editor-location")).toContainText("default.yaml");
+  await expect(page.getByTestId("config-editor-stats")).toContainText("nodes ·");
 
-  await page
-    .getByTestId("config-prompt-editor")
-    .fill("Draft the initial plan with a stronger launch checklist.");
-  await page.getByTestId("config-prompt-save-button").click();
-  await expect(page.getByTestId("config-prompt-save-button")).toBeDisabled();
+  const entryChip = page.getByTestId("config-graph-node-entry-draft_plan");
+  const entryName = page.getByTestId("config-graph-node-name-draft_plan");
+  const reviewNode = page.getByTestId("config-graph-node-review_plan");
+  const doneNode = page.getByTestId("config-graph-node-done");
+  const [entryChipBox, entryNameBox, reviewNodeBox, doneNodeBox] = await Promise.all([
+    entryChip.boundingBox(),
+    entryName.boundingBox(),
+    reviewNode.boundingBox(),
+    doneNode.boundingBox(),
+  ]);
 
-  await page
-    .getByTestId("config-runtime-select")
-    .selectOption("missing-runtime");
-  await expect(page.getByText("Selected runtime is not configured")).toBeVisible();
-  await expect(page.getByTestId("config-save-button")).toBeDisabled();
-
-  await page.getByTestId("config-runtime-select").selectOption("claude");
-  await expect(page.getByTestId("config-save-button")).toBeEnabled();
-
-  await page
-    .getByTestId("config-description-input")
-    .fill("Builtin review loop for web launch tasks.");
-  await page.getByTestId("config-save-button").click();
-  await expect(page.getByTestId("config-save-button")).toBeDisabled();
-
-  await page.getByRole("link", { name: /^Configs$/i }).click();
-  await expect(page.getByTestId("config-card-default")).toBeVisible();
-  await expect(page.getByTestId("config-card-default")).toContainText(
-    "claude",
-  );
-
-  await page.getByTestId("config-card-default").locator(".config-list-card__surface").click();
-  await expect(page.getByTestId("config-description-input")).toHaveValue(
-    "Builtin review loop for web launch tasks.",
-  );
-  await expect(page.getByTestId("config-prompt-editor")).toHaveValue(
-    "Draft the initial plan with a stronger launch checklist.",
-  );
-
-  await page.getByTestId("config-reset-button").click();
-  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
-  await page.getByTestId("confirm-dialog-submit").click();
-  await expect(page.getByTestId("config-description-input")).toHaveValue(initialDescription);
-  await expect(page.getByTestId("config-runtime-select")).toHaveValue(initialRuntime);
-  await expect(page.getByTestId("config-prompt-editor")).toHaveValue(initialPrompt);
+  expect(entryChipBox).not.toBeNull();
+  expect(entryNameBox).not.toBeNull();
+  expect(reviewNodeBox).not.toBeNull();
+  expect(doneNodeBox).not.toBeNull();
+  expect(entryChipBox!.y + entryChipBox!.height).toBeLessThanOrEqual(entryNameBox!.y - 2);
+  expect(reviewNodeBox!.width).toBeGreaterThan(doneNodeBox!.width);
 });
 
-test("deletes a customized config from the editor", async ({ page }) => {
+test("creates a customized config and deletes it from the config list", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
   await page.getByRole("link", { name: /^Configs$/i }).click();
@@ -97,9 +75,16 @@ test("deletes a customized config from the editor", async ({ page }) => {
     .click();
 
   await expect(page.getByTestId("config-editor-screen")).toBeVisible();
-  await expect(page.getByTestId("config-alias-input")).toHaveValue("default-copy");
+  await expect(page.getByTestId("config-open-in-editor-button")).toBeVisible();
+  await expect(page.getByTestId("config-editor-toggle")).toHaveCount(0);
 
-  await page.getByTestId("config-delete-button").click();
+  await page.getByRole("link", { name: /^Configs$/i }).click();
+  await expect(page.getByTestId("config-card-default-copy")).toBeVisible();
+
+  await page
+    .getByTestId("config-card-default-copy")
+    .getByRole("button", { name: /^Delete$/i })
+    .click();
   await expect(page.getByTestId("confirm-dialog")).toBeVisible();
   await page.getByTestId("confirm-dialog-submit").click();
 

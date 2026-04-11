@@ -87,18 +87,16 @@ function ShellWorkspaceRow(item: ShellWorkspaceItem) {
       title={item.label}
       type="button"
     >
-      <span className="shell-workspace__icon">
-        <ShellIcon name="workspace" />
+      <span className="shell-workspace__leading">
+        <span aria-hidden="true" className="shell-workspace__glyph">
+          {item.active ? "⌂" : "◌"}
+        </span>
+        <span className="shell-workspace__copy">
+          <span className="shell-workspace__label">{item.label}</span>
+        </span>
       </span>
-      <span className="shell-workspace__copy">
-        <span className="shell-workspace__label">{item.label}</span>
-      </span>
-      {item.badgeCount ? (
-        <span
-          className={`shell-workspace__badge${
-            item.badgeTone ? ` shell-workspace__badge--${item.badgeTone}` : ""
-          }`}
-        >
+      {item.active && item.badgeCount ? (
+        <span className="shell-workspace__count">
           {item.badgeCount}
         </span>
       ) : null}
@@ -121,12 +119,8 @@ export function DesktopShellFrame({
 }: DesktopShellFrameProps) {
   return (
     <main className="desktop-shell">
-      <aside className="desktop-shell__sidebar">
+      <aside className="desktop-shell__sidebar" data-tauri-drag-region="">
         <div className="desktop-shell__sidebar-top">
-          <div className="desktop-shell__brand-lockup">
-            <span className="desktop-shell__brand">muxagent</span>
-          </div>
-
           {onPrimaryAction ? (
             <button
               className="shell-primary-action"
@@ -135,13 +129,8 @@ export function DesktopShellFrame({
               onClick={onPrimaryAction}
               type="button"
             >
-              <Plus
-                aria-hidden="true"
-                className="shell-primary-action__plus"
-                size={14}
-                strokeWidth={2.2}
-              />
-              <span>New Task</span>
+              <Plus aria-hidden="true" className="shell-primary-action__plus" size={14} strokeWidth={2.2} />
+              <span className="shell-primary-action__label">New Task</span>
             </button>
           ) : null}
 
@@ -196,6 +185,7 @@ export function DesktopShellFrame({
               ? `desktop-shell__topbar ${topBarClassName}`
               : "desktop-shell__topbar"
           }
+          data-tauri-drag-region=""
         >
           <div className="desktop-shell__topbar-left">{topBarLeft}</div>
           {topBarRight ? (

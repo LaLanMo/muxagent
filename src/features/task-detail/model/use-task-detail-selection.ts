@@ -13,6 +13,11 @@ export type TaskDetailSelection =
   | { kind: "run"; runId: string }
   | { kind: "artifact"; artifactPath: string };
 
+export type TaskDetailModal =
+  | { kind: "none" }
+  | { kind: "transcript"; runId: string }
+  | { kind: "artifact"; artifactPath: string };
+
 function readSelectionFromSearchParams(
   searchParams: URLSearchParams,
 ): TaskDetailSelection | undefined {
@@ -57,6 +62,27 @@ function writeSelectionToSearchParams(
   return next;
 }
 
+function readModalFromSearchParams(
+  searchParams: URLSearchParams,
+): TaskDetailModal | undefined {
+  const modal = searchParams.get("modal");
+  if (modal === "transcript") {
+    const runId = searchParams.get("run");
+    if (runId) {
+      return { kind: "transcript", runId };
+    }
+  }
+
+  if (modal === "artifact") {
+    const artifactPath = searchParams.get("artifact");
+    if (artifactPath) {
+      return { kind: "artifact", artifactPath };
+    }
+  }
+
+  return undefined;
+}
+
 function selectionsMatch(
   left: TaskDetailSelection | undefined,
   right: TaskDetailSelection,
@@ -68,6 +94,25 @@ function selectionsMatch(
     return true;
   }
   if (left.kind === "run" && right.kind === "run") {
+    return left.runId === right.runId;
+  }
+  if (left.kind === "artifact" && right.kind === "artifact") {
+    return left.artifactPath === right.artifactPath;
+  }
+  return false;
+}
+
+function modalsMatch(
+  left: TaskDetailModal | undefined,
+  right: TaskDetailModal,
+) {
+  if (!left || left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === "none") {
+    return true;
+  }
+  if (left.kind === "transcript" && right.kind === "transcript") {
     return left.runId === right.runId;
   }
   if (left.kind === "artifact" && right.kind === "artifact") {
@@ -163,6 +208,10 @@ export function useTaskDetailSelection({
     () => readSelectionFromSearchParams(searchParams),
     [searchParams],
   );
+  const requestedModal = useMemo(
+    () => readModalFromSearchParams(searchParams),
+    [searchParams],
+  );
   const selection = useMemo(() => {
     if (!taskId) {
       return { kind: "overview" } satisfies TaskDetailSelection;
@@ -195,23 +244,58 @@ export function useTaskDetailSelection({
     });
   }, [artifacts, blockedStep, inputRequest, navigatorRuns, requestedSelection, taskId]);
 
+  const modal = useMemo(() => {
+    if (
+      requestedModal?.kind === "artifact" &&
+      artifacts.some(
+        (artifact) => artifact.resolved_path === requestedModal.artifactPath,
+      )
+    ) {
+      return requestedModal;
+    }
+
+    if (
+      requestedModal?.kind === "transcript" &&
+      navigatorRuns.some((run) => run.id === requestedModal.runId)
+    ) {
+      return requestedModal;
+    }
+
+    return { kind: "none" } satisfies TaskDetailModal;
+  }, [artifacts, navigatorRuns, requestedModal]);
+
   useEffect(() => {
     if (!requestedSelection || selectionsMatch(requestedSelection, selection)) {
       return;
     }
-    setSearchParams(writeSelectionToSearchParams(searchParams), { replace: true });
+    const next = writeSelectionToSearchParams(searchParams, selection);
+    next.delete("modal");
+    setSearchParams(next, { replace: true });
   }, [requestedSelection, searchParams, selection, setSearchParams]);
 
-  const selectedArtifact =
+  useEffect(() => {
+    if (!requestedModal || modalsMatch(requestedModal, modal)) {
+      return;
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete("modal");
+    setSearchParams(next, { replace: true });
+  }, [modal, requestedModal, searchParams, setSearchParams]);
+
+  const activeArtifactPath =
     selection.kind === "artifact"
-      ? artifacts.find(
-          (artifact) => artifact.resolved_path === selection.artifactPath,
-        )
-      : undefined;
+      ? selection.artifactPath
+      : modal.kind === "artifact"
+        ? modal.artifactPath
+        : undefined;
+  const selectedArtifact = activeArtifactPath
+    ? artifacts.find((artifact) => artifact.resolved_path === activeArtifactPath)
+    : undefined;
   const selectedRunId =
     selection.kind === "run"
       ? selection.runId
-      : selectedArtifact?.node_run_id;
+      : selectedArtifact?.node_run_id ??
+        (modal.kind === "transcript" ? modal.runId : undefined);
   const selectedRun = selectedRunId
     ? navigatorRuns.find((run) => run.id === selectedRunId)
     : undefined;
@@ -219,32 +303,66 @@ export function useTaskDetailSelection({
   return {
     navigatorRuns,
     selection,
+    modal,
     selectedRun,
     selectedArtifact,
     selectOverview: () =>
       setSearchParams(
-        (current) =>
-          writeSelectionToSearchParams(current, {
+        (current) => {
+          const next = writeSelectionToSearchParams(current, {
             kind: "overview",
-          }),
+          });
+          next.delete("modal");
+          return next;
+        },
         { replace: false },
       ),
     selectRun: (runId: string) =>
       setSearchParams(
-        (current) =>
-          writeSelectionToSearchParams(current, {
+        (current) => {
+          const next = writeSelectionToSearchParams(current, {
             kind: "run",
             runId,
-          }),
+          });
+          next.delete("modal");
+          return next;
+        },
         { replace: false },
       ),
     selectArtifact: (artifact: ArtifactRefDto) =>
       setSearchParams(
-        (current) =>
-          writeSelectionToSearchParams(current, {
+        (current) => {
+          const next = writeSelectionToSearchParams(current, {
             kind: "artifact",
             artifactPath: artifact.resolved_path,
-          }),
+          });
+          next.delete("modal");
+          return next;
+        },
+        { replace: false },
+      ),
+    openTranscript: (runId: string) =>
+      setSearchParams(
+        (current) => {
+          const next = writeSelectionToSearchParams(current, {
+            kind: "run",
+            runId,
+          });
+          next.set("modal", "transcript");
+          return next;
+        },
+        { replace: false },
+      ),
+    openArtifact: (artifact: ArtifactRefDto) =>
+      setSearchParams(
+        (current) => {
+          const next = writeSelectionToSearchParams(current, {
+            kind: "artifact",
+            artifactPath: artifact.resolved_path,
+          });
+          next.set("modal", "artifact");
+          return next;
+        },
         { replace: false },
       ),
   };

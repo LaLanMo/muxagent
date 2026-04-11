@@ -4,6 +4,9 @@ import { App } from "@/app/App";
 import "@/styles/index.css";
 
 if (typeof window !== "undefined" && window.__TAURI_INTERNALS__) {
+  if (/Mac/i.test(window.navigator.userAgent)) {
+    document.body.classList.add("platform-tauri-macos");
+  }
   window.addEventListener(
     "contextmenu",
     (event) => {

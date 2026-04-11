@@ -32,6 +32,7 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   const [useWorktree, setUseWorktree] = useState(
     catalog?.default_use_worktree ?? false,
   );
+  const [workspacePicking, setWorkspacePicking] = useState(false);
   const [configPicking, setConfigPicking] = useState(false);
   const [configDetail, setConfigDetail] = useState<ConfigDraftDto | undefined>();
   const [submitting, setSubmitting] = useState(false);
@@ -50,6 +51,7 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     });
     setSelectedAlias((current) => current || defaultAlias);
     setUseWorktree(catalog?.default_use_worktree ?? false);
+    setWorkspacePicking(false);
     setConfigPicking(false);
     setConfigDetail(undefined);
     setError(undefined);
@@ -135,6 +137,9 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
       label: workspace.display_name,
       path: workspace.path,
     })),
+    workspacePicking,
+    toggleWorkspacePicker: () => setWorkspacePicking((value) => !value),
+    closeWorkspacePicker: () => setWorkspacePicking(false),
     selectedAlias,
     setSelectedAlias,
     selectedEntry,

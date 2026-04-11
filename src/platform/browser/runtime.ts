@@ -10,15 +10,6 @@ import {
   type ConfigDeleteParams,
   type ConfigDeleteResult,
   type ConfigGetResult,
-  type ConfigResetParams,
-  type ConfigResetResult,
-  type ConfigPromptGetResult,
-  type ConfigPromptSaveParams,
-  type ConfigPromptSaveResult,
-  type ConfigRenameParams,
-  type ConfigRenameResult,
-  type ConfigSaveParams,
-  type ConfigSaveResult,
   type ConfigSetDefaultParams,
   type ConfigSetDefaultResult,
   type ConfigValidateParams,
@@ -26,7 +17,6 @@ import {
   type InitializeResult,
   type JsonRpcNotification,
   type NotificationEnvelopeParams,
-  type RuntimeListResult,
   type ServiceStatusResult,
   type TaskContinueBlockedParams,
   type TaskRunHistoryResult,
@@ -163,16 +153,8 @@ class BrowserTaskBackendClient implements TaskBackendClient {
     return this.request("config.clone", params);
   }
 
-  configRename(params: ConfigRenameParams): Promise<ConfigRenameResult> {
-    return this.request("config.rename", params);
-  }
-
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
     return this.request("config.delete", params);
-  }
-
-  configReset(params: ConfigResetParams): Promise<ConfigResetResult> {
-    return this.request("config.reset", params);
   }
 
   configSetDefault(
@@ -183,27 +165,6 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {
     return this.request("config.validate", params);
-  }
-
-  configSave(params: ConfigSaveParams): Promise<ConfigSaveResult> {
-    return this.request("config.save", params);
-  }
-
-  configPromptGet(alias: string, nodeName: string): Promise<ConfigPromptGetResult> {
-    return this.request("config.prompt.get", {
-      alias,
-      node_name: nodeName,
-    });
-  }
-
-  configPromptSave(
-    params: ConfigPromptSaveParams,
-  ): Promise<ConfigPromptSaveResult> {
-    return this.request("config.prompt.save", params);
-  }
-
-  runtimeList(): Promise<RuntimeListResult> {
-    return this.request("runtime.list");
   }
 
   taskList(workspaceId: string): Promise<TaskListResult> {

@@ -26,7 +26,6 @@ export function useConfigsScreen() {
     () =>
       entries.map((entry) => ({
         ...entry,
-        editLabel: "Edit",
         open: () => {
           navigate(`/configs/${encodeURIComponent(entry.alias)}`);
         },

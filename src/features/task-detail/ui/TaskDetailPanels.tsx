@@ -1,13 +1,18 @@
 import { useEffect, useState, type ReactNode } from "react";
 import {
+  ArrowRight,
+  Bot,
   Check,
-  ChevronLeft,
   ChevronRight,
-  MessageCircle,
+  FileText,
+  RotateCcw,
+  User,
+  X,
 } from "lucide-react";
+import ReactMarkdown, { type Components } from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { TranscriptSnapshot } from "@/domain/session-history";
 import { detailStatusLabel } from "@/domain/task-shell";
-import { DocumentContent } from "@/features/shared/ui/DocumentContent";
 import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
 import type {
   ArtifactRefDto,
@@ -33,14 +38,15 @@ type RunPaneProps = {
   historyEntry?: RunHistoryCacheEntry;
   streamSource: "live" | "replay" | "loading" | "none";
   isCurrentRun: boolean;
-  artifactCount: number;
   showEmptyOutput: boolean;
+  onClose?: () => void;
 };
 
 type ArtifactPaneProps = {
   artifact?: ArtifactRefDto;
   content?: string;
   error?: string;
+  onClose?: () => void;
 };
 
 type ApprovalDockProps = {
@@ -49,11 +55,9 @@ type ApprovalDockProps = {
   submittingDecision: boolean;
   submitApprove: () => Promise<void>;
   submitReject: () => Promise<void>;
-  nodeName?: string;
 };
 
 type ClarificationDockProps = {
-  nodeName?: string;
   requestKey?: string;
   questions: InputQuestionDto[];
   answers: Array<string | string[]>;
@@ -85,23 +89,6 @@ type BlockedDockProps = {
   onContinue: () => Promise<void>;
 };
 
-function PanelHeader({
-  title,
-  subtitle,
-}: {
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="detail-pane__header">
-      <div className="detail-pane__titles">
-        <h3>{title}</h3>
-        <p>{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
 function DetailInfoCard({
   label,
   value,
@@ -122,67 +109,180 @@ function DetailInfoCard({
   );
 }
 
-function DetailSection({
+function toneClassForStatus(status: string) {
+  switch (status) {
+    case "running":
+      return "running";
+    case "awaiting":
+      return "awaiting";
+    case "done":
+      return "done";
+    case "failed":
+      return "failed";
+    default:
+      return "neutral";
+  }
+}
+
+function formatPanelDuration(startIso?: string, endIso?: string) {
+  if (!startIso) {
+    return "Not started";
+  }
+  const start = Date.parse(startIso);
+  const end = endIso ? Date.parse(endIso) : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+    return "In progress";
+  }
+  const totalSeconds = Math.max(1, Math.floor((end - start) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  const hours = Math.floor(minutes / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+function summarizeUsageTokens(items: TranscriptTimelineItem[]) {
+  return items.reduce((total, item) => {
+    if (item.kind !== "usage") {
+      return total;
+    }
+    return total + (item.usage.totalTokens ?? 0);
+  }, 0);
+}
+
+function DetailToneBadge({
   label,
+  tone,
+}: {
+  label: string;
+  tone: string;
+}) {
+  return (
+    <span className={`detail-tone-badge detail-tone-badge--${toneClassForStatus(tone)}`}>
+      {label}
+    </span>
+  );
+}
+
+function DetailMetaItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <span className="detail-modal-frame__meta-item">
+      <span className="detail-modal-frame__meta-label">{label}</span>
+      <span className="detail-modal-frame__meta-value">{value}</span>
+    </span>
+  );
+}
+
+function DetailModalFrame({
+  eyebrow,
+  title,
+  subtitle,
+  badge,
+  leading,
+  meta,
+  metaClassName,
+  caption,
+  onClose,
   children,
   className = "",
 }: {
-  label: string;
+  eyebrow?: string;
+  title: string;
+  subtitle?: string;
+  badge?: ReactNode;
+  leading?: ReactNode;
+  meta?: ReactNode;
+  metaClassName?: string;
+  caption?: string;
+  onClose?: () => void;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section className={`detail-section${className ? ` ${className}` : ""}`}>
-      <span className="detail-section__label">{label}</span>
-      {children}
+    <section className={`detail-modal-frame${className ? ` ${className}` : ""}`}>
+      <div className="detail-modal-frame__header">
+        <div className="detail-modal-frame__header-main">
+          {leading ? <span className="detail-modal-frame__leading">{leading}</span> : null}
+          <div className="detail-modal-frame__copy">
+            {eyebrow ? <span className="detail-modal-frame__eyebrow">{eyebrow}</span> : null}
+            <div className="detail-modal-frame__title-row">
+              <h3 className="detail-modal-frame__title">{title}</h3>
+              {badge}
+            </div>
+            {subtitle ? <p className="detail-modal-frame__subtitle">{subtitle}</p> : null}
+          </div>
+        </div>
+        {onClose ? (
+          <button
+            aria-label="Close detail"
+            className="detail-modal-frame__dismiss"
+            onClick={onClose}
+            type="button"
+          >
+            <X aria-hidden="true" size={14} strokeWidth={1.9} />
+          </button>
+        ) : null}
+      </div>
+      {meta ? (
+        <div className={`detail-modal-frame__meta${metaClassName ? ` ${metaClassName}` : ""}`}>
+          {meta}
+        </div>
+      ) : null}
+      {caption ? <p className="detail-modal-frame__caption">{caption}</p> : null}
+      <div className="detail-modal-frame__body">{children}</div>
     </section>
   );
 }
 
-function DetailSurface({
-  label,
+function DetailOverlayModal({
   children,
-  className = "",
-  bodyClassName = "",
+  onClose,
   testId,
 }: {
-  label: string;
   children: ReactNode;
-  className?: string;
-  bodyClassName?: string;
-  testId?: string;
+  onClose: () => void;
+  testId: string;
 }) {
-  return (
-    <section
-      className={`detail-surface-card${className ? ` ${className}` : ""}`}
-      data-testid={testId}
-    >
-      <div className="detail-surface-card__header">
-        <span className="detail-surface-card__label">{label}</span>
-      </div>
-      <div
-        className={`detail-surface-card__body${
-          bodyClassName ? ` ${bodyClassName}` : ""
-        }`}
-      >
-        {children}
-      </div>
-    </section>
-  );
-}
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
 
-function formatRunSubtitle(run: NodeRunViewDto) {
-  const started = run.started_at ? run.started_at.slice(11, 16) : undefined;
-  const completed = run.completed_at ? run.completed_at.slice(11, 16) : undefined;
-  const status = detailStatusLabel(run.status);
-  const pieces: string[] = [status];
-  if (started) {
-    pieces.push(`started ${started}`);
-  }
-  if (completed) {
-    pieces.push(`${status.includes("await") ? "paused" : "ended"} ${completed}`);
-  }
-  return pieces.join(" · ");
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
+
+  return (
+    <div className="modal-layer" data-testid={testId}>
+      <div className="modal-scrim" onClick={onClose} />
+      <div className="detail-overlay">
+        <div
+          aria-modal="true"
+          className="detail-overlay__dialog"
+          onClick={(event) => event.stopPropagation()}
+          role="dialog"
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function prettyResult(result: Record<string, unknown> | undefined) {
@@ -192,11 +292,124 @@ function prettyResult(result: Record<string, unknown> | undefined) {
   return JSON.stringify(result, null, 2);
 }
 
-function formatClarificationAnswer(selected: unknown): string {
-  if (Array.isArray(selected)) {
-    return selected.join(", ");
+const artifactModalMarkdownComponents: Components = {
+  table({ children }) {
+    return <table>{children}</table>;
+  },
+};
+
+const transcriptMarkdownComponents: Components = {
+  p({ children }) {
+    return <p className="transcript-message__text">{children}</p>;
+  },
+  ul({ children }) {
+    return <ul className="transcript-message__list">{children}</ul>;
+  },
+  ol({ children }) {
+    return <ol className="transcript-message__list transcript-message__list--ordered">{children}</ol>;
+  },
+  li({ children }) {
+    return <li className="transcript-message__list-item">{children}</li>;
+  },
+  pre({ children }) {
+    return <pre className="transcript-message__pre">{children}</pre>;
+  },
+  code({ children, className, ...props }) {
+    const content = String(children).replace(/\n$/, "");
+    const isBlock = Boolean(className) || content.includes("\n");
+    if (isBlock) {
+      return (
+        <code className={`transcript-message__code${className ? ` ${className}` : ""}`} {...props}>
+          {content}
+        </code>
+      );
+    }
+    return (
+      <code className="transcript-message__inline-code" {...props}>
+        {children}
+      </code>
+    );
+  },
+  blockquote({ children }) {
+    return <blockquote className="transcript-message__quote">{children}</blockquote>;
+  },
+  a({ children, href }) {
+    return (
+      <a className="transcript-message__link" href={href} rel="noreferrer" target="_blank">
+        {children}
+      </a>
+    );
+  },
+};
+
+function normalizeArtifactModalContent(content: string | undefined) {
+  if (!content) {
+    return content;
   }
-  return typeof selected === "string" ? selected : "";
+
+  const lines = content.replace(/\r\n/g, "\n").split("\n");
+  let contentStart = 0;
+
+  if (lines[0]?.startsWith("#")) {
+    contentStart = 1;
+    while (lines[contentStart] === "") {
+      contentStart += 1;
+    }
+  }
+
+  const metadataPrefixes = ["Task:", "Node:", "Artifact:"];
+  const hasMetadataBlock = metadataPrefixes.every((prefix, index) =>
+    lines[contentStart + index]?.startsWith(prefix),
+  );
+
+  if (!hasMetadataBlock) {
+    return content;
+  }
+
+  let metadataEnd = contentStart + metadataPrefixes.length;
+  while (lines[metadataEnd] === "") {
+    metadataEnd += 1;
+  }
+
+  const preservedHead = lines.slice(0, contentStart);
+  const remaining = lines.slice(metadataEnd);
+  const normalized = [...preservedHead];
+
+  if (preservedHead.length > 0 && remaining.length > 0) {
+    normalized.push("");
+  }
+  normalized.push(...remaining);
+
+  return normalized.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function ArtifactModalContent({
+  content,
+  format,
+}: {
+  content?: string;
+  format: "markdown" | "text";
+}) {
+  const normalized = normalizeArtifactModalContent(content) ?? "Loading artifact...";
+
+  if (format === "markdown") {
+    return (
+      <article className="document-content markdown-document detail-artifact-modal__document">
+        <ReactMarkdown
+          components={artifactModalMarkdownComponents}
+          remarkPlugins={[remarkGfm]}
+        >
+          {normalized}
+        </ReactMarkdown>
+      </article>
+    );
+  }
+
+  return (
+    <pre className="document-content detail-artifact-modal__document detail-artifact-modal__text">
+      {normalized}
+    </pre>
+  );
 }
 
 function formatHistoryProvenance(value: string | undefined): string {
@@ -307,33 +520,6 @@ function describeTranscriptAvailability(
   };
 }
 
-function RecoveryCard({
-  tone,
-  title,
-  description,
-  actions,
-  testId,
-}: {
-  tone: "failed" | "blocked";
-  title: string;
-  description: string;
-  actions: ReactNode;
-  testId: string;
-}) {
-  return (
-    <section
-      className={`detail-recovery-card detail-recovery-card--${tone}`}
-      data-testid={testId}
-    >
-      <div className="detail-recovery-card__copy">
-        <strong className="detail-recovery-card__title">{title}</strong>
-        <p className="detail-recovery-card__description">{description}</p>
-      </div>
-      <div className="detail-recovery-card__actions">{actions}</div>
-    </section>
-  );
-}
-
 /* ── Transcript grouping ─────────────────────────────────── */
 
 type ToolItem = Extract<TranscriptTimelineItem, { kind: "tool" }>;
@@ -372,17 +558,20 @@ function groupTranscriptItems(
   return result;
 }
 
-function summarizeToolKinds(tools: ToolItem[]): string {
-  const counts: Record<string, number> = {};
-  for (const tool of tools) {
-    counts[tool.label || "tool"] = (counts[tool.label || "tool"] || 0) + 1;
+function formatInlineDuration(durationMs: number | undefined): string | undefined {
+  if (!durationMs || durationMs <= 0) {
+    return undefined;
   }
-  return Object.entries(counts)
-    .map(([k, v]) => `${v} ${k}`)
-    .join(", ");
+  const totalSeconds = Math.max(1, Math.round(durationMs / 100) / 10);
+  if (totalSeconds >= 60) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.round((totalSeconds % 60) * 10) / 10;
+    return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+  }
+  return `${totalSeconds}s`;
 }
 
-function ExpandChevron({ open }: { open: boolean }) {
+function ExpandChevron({ open = false }: { open?: boolean }) {
   return (
     <ChevronRight
       aria-hidden="true"
@@ -404,75 +593,304 @@ function DoneCheck() {
   );
 }
 
-function TranscriptToolGroup({ tools }: { tools: ToolItem[] }) {
-  const [open, setOpen] = useState(false);
-  const kindSummary = summarizeToolKinds(tools);
-  const allDone = tools.every((t) => !t.status);
+function TranscriptFactoryMarker({
+  kind,
+}: {
+  kind: "assistant" | "user" | "neutral";
+}) {
+  if (kind === "neutral") {
+    return <span className="transcript-factory-marker transcript-factory-marker--neutral" />;
+  }
 
+  const Icon = kind === "user" ? User : Bot;
   return (
-    <div className="transcript-tool-group">
-      <button
-        className="transcript-tool-group__summary"
-        onClick={() => setOpen(!open)}
-        type="button"
-      >
-        <ExpandChevron open={open} />
-        <span className="transcript-tool-group__count">
-          {tools.length} tool call{tools.length > 1 ? "s" : ""}
-        </span>
-        <span className="transcript-tool-group__kinds">{kindSummary}</span>
-        {allDone ? <DoneCheck /> : null}
-      </button>
-      {open ? (
-        <div className="transcript-tool-group__list">
-          {tools.map((tool) => (
-            <TranscriptToolRow key={tool.id} tool={tool} />
-          ))}
-        </div>
-      ) : null}
+    <span className={`transcript-factory-marker transcript-factory-marker--${kind}`}>
+      <Icon aria-hidden="true" size={12} strokeWidth={1.9} />
+    </span>
+  );
+}
+
+function TranscriptFactoryRow({
+  marker,
+  children,
+  className = "",
+}: {
+  marker: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`transcript-factory-row${className ? ` ${className}` : ""}`}>
+      <span className="transcript-factory-row__marker">{marker}</span>
+      <div className="transcript-factory-row__body">{children}</div>
     </div>
   );
 }
 
-function TranscriptToolRow({ tool }: { tool: ToolItem }) {
+function formatTranscriptTestId(value: string) {
+  return value.replace(/[^a-zA-Z0-9_-]+/g, "-");
+}
+
+function prettyToolLabel(label: string | undefined) {
+  const trimmed = label?.trim();
+  if (!trimmed) {
+    return "Tool";
+  }
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function summarizeToolKinds(tools: ToolItem[]): string {
+  const counts = new Map<string, number>();
+  for (const tool of tools) {
+    const label = prettyToolLabel(tool.label);
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .map(([label, count]) => (count > 1 ? `${label} ×${count}` : label))
+    .join(", ");
+}
+
+function formatToolRowLabel(tool: ToolItem): string {
+  const label = prettyToolLabel(tool.label);
+  const subject = tool.subject?.trim() || tool.title?.trim();
+  return subject ? `${label} · ${subject}` : label;
+}
+
+function tryPrettyToolJson(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  try {
+    return JSON.stringify(JSON.parse(trimmed), null, 2);
+  } catch {
+    return trimmed;
+  }
+}
+
+type ToolDetailSection = {
+  label: string;
+  content: string;
+  tone?: "error";
+};
+
+function buildToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot): ToolDetailSection[] {
+  const aggregatedTool = transcript.tools[tool.toolId];
+  const eventIdSet = new Set(aggregatedTool?.eventIds || tool.eventIds);
+  const toolEvents = transcript.events.filter(
+    (event): event is Extract<(typeof transcript.events)[number], { kind: "tool" }> =>
+      event.kind === "tool" && eventIdSet.has(event.id),
+  );
+  const inputSummary = [
+    aggregatedTool?.inputSummary,
+    tool.subject,
+    ...toolEvents.map((event) => event.inputSummary),
+  ]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join("\n");
+  const rawInputJson = aggregatedTool?.rawInputJson || tool.rawInputJson || toolEvents.find((event) => event.rawInputJson)?.rawInputJson;
+  const outputText = [
+    aggregatedTool?.outputText,
+    tool.outputText,
+    ...toolEvents.map((event) => event.outputText),
+  ]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join("\n\n");
+  const rawOutputJson =
+    aggregatedTool?.rawOutputJson ||
+    tool.rawOutputJson ||
+    toolEvents.find((event) => event.rawOutputJson)?.rawOutputJson;
+  const errorText = [
+    aggregatedTool?.errorText,
+    tool.errorText,
+    ...toolEvents.map((event) => event.errorText),
+  ]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .join("\n\n");
+  const paths = [...(aggregatedTool?.paths || []), ...tool.paths, ...toolEvents.flatMap((event) => event.paths)]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index);
+  const diffs = [...(aggregatedTool?.diffs || []), ...tool.diffs, ...toolEvents.flatMap((event) => event.diffs)]
+    .filter(
+      (diff, index, values) =>
+        values.findIndex(
+          (value) =>
+            value.path === diff.path &&
+            value.oldText === diff.oldText &&
+            value.newText === diff.newText,
+        ) === index,
+    );
+  const sections: ToolDetailSection[] = [];
+
+  if (inputSummary?.trim()) {
+    sections.push({ label: "Input", content: inputSummary.trim() });
+  }
+
+  const prettyInput = tryPrettyToolJson(rawInputJson);
+  if (prettyInput) {
+    sections.push({ label: "Raw input", content: prettyInput });
+  }
+
+  if (paths.length > 0) {
+    sections.push({
+      label: paths.length === 1 ? "Path" : "Paths",
+      content: paths.join("\n"),
+    });
+  }
+
+  if (outputText?.trim()) {
+    sections.push({ label: "Output", content: outputText.trim() });
+  }
+
+  const prettyOutput = tryPrettyToolJson(rawOutputJson);
+  if (prettyOutput) {
+    sections.push({ label: "Raw output", content: prettyOutput });
+  }
+
+  if (diffs.length > 0) {
+    sections.push({
+      label: diffs.length === 1 ? "Diff" : "Diffs",
+      content: diffs
+        .map((diff, index) =>
+          [
+            diff.path ? `${diff.path}` : `change ${index + 1}`,
+            diff.oldText ? `old:\n${diff.oldText}` : undefined,
+            diff.newText ? `new:\n${diff.newText}` : undefined,
+          ]
+            .filter(Boolean)
+            .join("\n\n"),
+        )
+        .join("\n\n"),
+    });
+  }
+
+  if (errorText?.trim()) {
+    sections.push({ label: "Error", content: errorText.trim(), tone: "error" });
+  }
+
+  return sections;
+}
+
+function TranscriptToolGroup({
+  tools,
+  transcript,
+}: {
+  tools: ToolItem[];
+  transcript: TranscriptSnapshot;
+}) {
+  const kindSummary = summarizeToolKinds(tools);
+  const durationMs = tools.reduce((total, tool) => total + (tool.durationMs ?? 0), 0);
+  const summaryText = [
+    `${tools.length} tool call${tools.length > 1 ? "s" : ""}`,
+    kindSummary,
+    formatInlineDuration(durationMs || undefined),
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const [open, setOpen] = useState(false);
-  const hasOutput = Boolean(tool.outputText || tool.errorText);
+  const [activeToolId, setActiveToolId] = useState<string | undefined>(undefined);
+  const summaryTestId = `transcript-tool-group-${formatTranscriptTestId(tools[0]?.toolId || tools[0]?.id || "group")}`;
 
   return (
-    <div className="transcript-tool-row">
+    <div className="transcript-tool-group">
       <button
-        className="transcript-tool-row__header"
-        disabled={!hasOutput}
-        onClick={() => hasOutput && setOpen(!open)}
+        className={`transcript-tool-group__summary${open ? " is-open" : ""}`}
+        data-testid={summaryTestId}
+        onClick={() => {
+          setOpen((current) => {
+            const next = !current;
+            if (!next) {
+              setActiveToolId(undefined);
+            }
+            return next;
+          });
+        }}
         type="button"
       >
-        {hasOutput ? (
-          <ExpandChevron open={open} />
-        ) : (
-          <span className="transcript-tool-row__spacer" />
-        )}
-        <span className="transcript-tool-row__kind">{tool.label}</span>
-        <span className="transcript-tool-row__subject">{tool.subject}</span>
-        {tool.status ? (
-          <span
-            className={`transcript-tool-row__badge transcript-tool-row__badge--${tool.status}`}
-          >
-            {tool.status}
-          </span>
-        ) : (
-          <DoneCheck />
-        )}
+        <ExpandChevron open={open} />
+        <span className="transcript-tool-group__summary-text">{summaryText}</span>
       </button>
       {open ? (
-        <div className="transcript-tool-row__output">
-          {tool.errorText ? (
-            <pre className="transcript-tool-row__code transcript-tool-row__code--error">
-              {tool.errorText}
-            </pre>
-          ) : null}
-          {tool.outputText ? (
-            <CodeBlock text={tool.outputText} />
-          ) : null}
+        <div className="transcript-tool-group__list">
+          {tools.map((tool) => {
+            const toolKey = formatTranscriptTestId(tool.toolId || tool.id);
+            const sections = buildToolDetailSections(tool, transcript);
+            const hasDetails = sections.length > 0;
+            const isActive = activeToolId === tool.toolId;
+            const detailDuration = formatInlineDuration(tool.durationMs);
+
+            return (
+              <div className="transcript-tool-group__item" key={tool.id}>
+                {hasDetails ? (
+                  <button
+                    className={`transcript-tool-group__detail-row transcript-tool-group__detail-row--interactive${isActive ? " is-open" : ""}`}
+                    data-testid={`transcript-tool-${toolKey}`}
+                    onClick={() =>
+                      setActiveToolId((current) => (current === tool.toolId ? undefined : tool.toolId))
+                    }
+                    type="button"
+                  >
+                    <span className="transcript-tool-group__detail-arrow">↘</span>
+                    <span className="transcript-tool-group__detail-body">
+                      {formatToolRowLabel(tool)}
+                    </span>
+                    {detailDuration ? (
+                      <span className="transcript-tool-group__detail-duration">{detailDuration}</span>
+                    ) : null}
+                    {tool.status ? (
+                      <span
+                        className={`transcript-tool-group__detail-state transcript-tool-group__detail-state--${tool.status}`}
+                      >
+                        {tool.status}
+                      </span>
+                    ) : (
+                      <DoneCheck />
+                    )}
+                  </button>
+                ) : (
+                  <div className="transcript-tool-group__detail-row" data-testid={`transcript-tool-${toolKey}`}>
+                    <span className="transcript-tool-group__detail-arrow">↘</span>
+                    <span className="transcript-tool-group__detail-body">
+                      {formatToolRowLabel(tool)}
+                    </span>
+                    {detailDuration ? (
+                      <span className="transcript-tool-group__detail-duration">{detailDuration}</span>
+                    ) : null}
+                    {tool.status ? (
+                      <span
+                        className={`transcript-tool-group__detail-state transcript-tool-group__detail-state--${tool.status}`}
+                      >
+                        {tool.status}
+                      </span>
+                    ) : (
+                      <DoneCheck />
+                    )}
+                  </div>
+                )}
+                {isActive ? (
+                  <div
+                    className="transcript-tool-group__detail-panel"
+                    data-testid={`transcript-tool-detail-${toolKey}`}
+                  >
+                    {sections.map((section) => (
+                      <section
+                        className={`transcript-tool-group__detail-block${
+                          section.tone ? ` transcript-tool-group__detail-block--${section.tone}` : ""
+                        }`}
+                        key={`${tool.id}-${section.label}`}
+                      >
+                        <span className="transcript-tool-group__detail-label">{section.label}</span>
+                        <pre className="transcript-tool-group__detail-content">{section.content}</pre>
+                      </section>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </div>
@@ -484,24 +902,11 @@ function TranscriptThinkingBlock({
 }: {
   item: Extract<TranscriptTimelineItem, { kind: "message" }>;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <div className="transcript-thinking">
-      <button
-        className="transcript-thinking__summary"
-        onClick={() => setOpen(!open)}
-        type="button"
-      >
-        <ExpandChevron open={open} />
-        <span className="transcript-thinking__label">Thinking</span>
-      </button>
-      {open ? (
-        <div className="transcript-thinking__content">
-          <p className="transcript-thinking__text">{item.text}</p>
-        </div>
-      ) : null}
-    </div>
+    <TranscriptFactoryRow className="transcript-thinking" marker={<TranscriptFactoryMarker kind="neutral" />}>
+      <p className="transcript-thinking__label">Thinking</p>
+      <p className="transcript-thinking__text">{item.text}</p>
+    </TranscriptFactoryRow>
   );
 }
 
@@ -511,111 +916,19 @@ function TranscriptMessageBlock({
   item: Extract<TranscriptTimelineItem, { kind: "message" }>;
 }) {
   const isUser = item.role === "user";
-  const jsonContent =
-    item.partType === "text" && isJsonLike(item.text)
-      ? tryPrettyJson(item.text)
-      : null;
-
-  const content = jsonContent ? (
-    <pre className="transcript-tool-row__code">
-      {highlightJson(jsonContent)}
-    </pre>
-  ) : item.partType === "text" ? (
-    <DocumentContent
-      className="transcript-message__markdown"
-      content={item.text}
-      format="markdown"
-      variant="compact"
-    />
-  ) : (
-    <p className="transcript-message__text">{item.text}</p>
-  );
 
   return (
-    <div className={`transcript-message${isUser ? " transcript-message--user" : ""}`}>
-      {isUser ? (
-        <div className="transcript-message__bubble">{content}</div>
-      ) : (
-        content
-      )}
-    </div>
+    <TranscriptFactoryRow
+      className={`transcript-message${isUser ? " transcript-message--user" : ""}`}
+      marker={<TranscriptFactoryMarker kind={isUser ? "user" : "assistant"} />}
+    >
+      <div className="transcript-message__markdown">
+        <ReactMarkdown components={transcriptMarkdownComponents} remarkPlugins={[remarkGfm]}>
+          {item.text}
+        </ReactMarkdown>
+      </div>
+    </TranscriptFactoryRow>
   );
-}
-
-/* ── JSON syntax highlighting ────────────────────────────── */
-
-function isJsonLike(text: string): boolean {
-  const trimmed = text.trimStart();
-  return trimmed.startsWith("{") || trimmed.startsWith("[");
-}
-
-function tryPrettyJson(text: string): string | null {
-  try {
-    const parsed = JSON.parse(text);
-    return JSON.stringify(parsed, null, 2);
-  } catch {
-    return null;
-  }
-}
-
-function highlightJson(json: string): ReactNode[] {
-  const parts: ReactNode[] = [];
-  const regex =
-    /("(?:[^"\\]|\\.)*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|(\btrue\b|\bfalse\b|\bnull\b)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-
-  while ((match = regex.exec(json)) !== null) {
-    if (match.index > lastIndex) {
-      parts.push(json.slice(lastIndex, match.index));
-    }
-    if (match[1] && match[2]) {
-      parts.push(
-        <span className="json-key" key={key++}>
-          {match[1]}
-        </span>,
-      );
-      parts.push(match[2]);
-    } else if (match[1]) {
-      parts.push(
-        <span className="json-string" key={key++}>
-          {match[1]}
-        </span>,
-      );
-    } else if (match[3]) {
-      parts.push(
-        <span className="json-number" key={key++}>
-          {match[3]}
-        </span>,
-      );
-    } else if (match[4]) {
-      parts.push(
-        <span className="json-bool" key={key++}>
-          {match[4]}
-        </span>,
-      );
-    }
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < json.length) {
-    parts.push(json.slice(lastIndex));
-  }
-  return parts;
-}
-
-function CodeBlock({ text }: { text: string }) {
-  if (isJsonLike(text)) {
-    const pretty = tryPrettyJson(text);
-    if (pretty) {
-      return (
-        <pre className="transcript-tool-row__code">
-          {highlightJson(pretty)}
-        </pre>
-      );
-    }
-  }
-  return <pre className="transcript-tool-row__code">{text}</pre>;
 }
 
 function legacyTranscriptText(items: TranscriptTimelineItem[]): string {
@@ -659,77 +972,86 @@ export function TaskOverviewPane({
   artifactCount,
 }: OverviewPaneProps) {
   return (
-    <div className="detail-pane" data-testid="overview-pane">
-      <PanelHeader
+    <div className="detail-pane detail-pane--overview" data-testid="overview-pane">
+      <DetailModalFrame
+        badge={
+          task ? (
+            <DetailToneBadge
+              label={detailStatusLabel(task.status)}
+              tone={detailStatusLabel(task.status)}
+            />
+          ) : undefined
+        }
+        eyebrow="Overview"
+        meta={
+          <>
+            <DetailMetaItem label="Runs" value={runCount} />
+            <DetailMetaItem label="Artifacts" value={artifactCount} />
+            <DetailMetaItem
+              label="Current node"
+              value={task?.current_node_name || "No active node"}
+            />
+          </>
+        }
         subtitle="Task summary and task-level actions"
         title={task?.task.description || "Task"}
-      />
+      >
+        <div className="detail-info-cards">
+          <DetailInfoCard
+            detail={task?.current_node_name || "No active node"}
+            label="Status"
+            value={task ? detailStatusLabel(task.status) : "Unknown"}
+          />
+          <DetailInfoCard
+            detail="Across task history"
+            label="Runs"
+            value={runCount}
+          />
+          <DetailInfoCard
+            detail="Files and previews attached to the task"
+            label="Artifacts"
+            value={artifactCount}
+          />
+        </div>
 
-      <div className="detail-info-cards">
-        <DetailInfoCard
-          detail={task?.current_node_name || "No active node"}
-          label="Status"
-          value={task ? detailStatusLabel(task.status) : "Unknown"}
-        />
-        <DetailInfoCard
-          detail="Across task history"
-          label="Runs"
-          value={runCount}
-        />
-        <DetailInfoCard
-          detail="Files and previews attached to the task"
-          label="Artifacts"
-          value={artifactCount}
-        />
-      </div>
-
-      {task?.current_issue ? (
-        <section className="detail-note-card detail-note-card--warning">
-          <span className="detail-section__label">Current issue</span>
-          <strong>{task.current_issue.reason}</strong>
-          <p>
-            {task.current_issue.node_name} · iteration {task.current_issue.iteration}
-          </p>
-        </section>
-      ) : null}
+        {task?.current_issue ? (
+          <section className="detail-note-card detail-note-card--warning">
+            <span className="detail-section__label">Current issue</span>
+            <strong>{task.current_issue.reason}</strong>
+            <p>
+              {task.current_issue.node_name} · iteration {task.current_issue.iteration}
+            </p>
+          </section>
+        ) : null}
+      </DetailModalFrame>
     </div>
   );
 }
 
-export function TaskRunPane({
+export function TaskTranscriptModal({
   run,
   streamLines,
   transcript,
   transcriptItems,
   streamSource,
   isCurrentRun,
-  artifactCount,
   showEmptyOutput,
+  onClose,
 }: RunPaneProps) {
   if (!run) {
-    return (
-      <div className="detail-pane" data-testid="run-pane">
-        <PanelHeader
-          subtitle="Select a run from the navigator to inspect its detail."
-          title="Run detail"
-        />
-        <div className="detail-empty-card">
-          <strong>No run selected</strong>
-          <p>Choose a run from the navigator to inspect its history, outputs, and artifacts.</p>
-        </div>
-      </div>
-    );
+    return null;
   }
 
-  const liveTitle = `Run · ${run.node_name}`;
   const resultContent = prettyResult(run.result);
-  const clarificationHistory = run.clarifications ?? [];
   const hasStreamOutput = streamLines.length > 0;
   const historyProvenance = formatHistoryProvenance(transcript.provenance);
   const historyCompleteness = formatHistoryCompleteness(transcript.completeness);
   const historyStatusDetail = describeHistoryStatus(streamSource, transcript);
   const sessionValue = shortenSessionId(transcript.sessionId || run.session_id);
   const sessionDetail = transcript.sessionId || run.session_id || "Awaiting session id";
+  const totalTokens = summarizeUsageTokens(transcriptItems);
+  const eventCount = transcript.events.length || streamLines.length;
+  const runStatus = detailStatusLabel(run.status);
   const transcriptAvailability = describeTranscriptAvailability(
     streamSource,
     transcript,
@@ -740,234 +1062,224 @@ export function TaskRunPane({
   function renderTranscriptItem(item: TranscriptTimelineItem) {
     if (item.kind === "message") {
       return (
-        <div className="detail-transcript-row detail-transcript-row--message" key={item.id}>
-          <span className="detail-transcript-row__eyebrow">
-            {item.partType === "reasoning" ? "thinking" : item.role}
-          </span>
-          <p className="detail-transcript-row__text">{item.text}</p>
-        </div>
+        <TranscriptMessageBlock key={item.id} item={item} />
       );
     }
     if (item.kind === "tool") {
+      const detailParts = [
+        item.paths[0],
+        formatInlineDuration(item.durationMs),
+        item.status ? item.status : undefined,
+      ].filter(Boolean);
       return (
-        <div className="detail-transcript-row" key={item.id}>
-          <strong className="detail-transcript-row__title">
-            {item.status && item.subject
-              ? `${item.label} ${item.status}: ${item.subject}`
-              : item.subject
-                ? `${item.label}: ${item.subject}`
-                : item.status
-                  ? `${item.label} ${item.status}`
-                  : item.label}
-          </strong>
-          {item.outputText ? (
-            <pre className="detail-code-block detail-code-block--inline">
-              {item.outputText}
-            </pre>
-          ) : null}
-          {item.errorText ? (
-            <p className="detail-transcript-row__text">{item.errorText}</p>
-          ) : null}
-          {item.paths.length > 0 ? (
-            <p className="detail-transcript-row__meta">
-              {item.paths.join(" · ")}
-            </p>
-          ) : null}
-          {item.diffs.length > 0 ? (
-            <div className="detail-transcript-row__list">
-              {item.diffs.map((diff, index) => (
-                <span key={`${item.id}-diff-${index}`}>{diff.path || "file change"}</span>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <TranscriptFactoryRow key={item.id} marker={<TranscriptFactoryMarker kind="neutral" />}>
+          <div className="transcript-factory-inline">
+            <strong className="transcript-factory-inline__title">
+              {item.status && item.subject
+                ? `${item.label} ${item.status}: ${item.subject}`
+                : item.subject
+                  ? `${item.label}: ${item.subject}`
+                  : item.status
+                    ? `${item.label} ${item.status}`
+                    : item.label}
+            </strong>
+            {detailParts.length > 0 ? (
+              <p className="transcript-factory-inline__meta">{detailParts.join(" · ")}</p>
+            ) : null}
+            {item.errorText ? (
+              <p className="transcript-factory-inline__meta transcript-tool-row__code--error">
+                {item.errorText}
+              </p>
+            ) : null}
+          </div>
+        </TranscriptFactoryRow>
       );
     }
     if (item.kind === "plan") {
       return (
-        <div className="detail-transcript-row detail-transcript-row--plan" key={item.id}>
-          <strong className="detail-transcript-row__title">{item.summary}</strong>
-          {item.steps.length > 0 ? (
-            <div className="detail-transcript-row__list">
-              {item.steps.map((step, index) => (
-                <span key={`${item.id}-step-${index}`}>
-                  {step.status === "completed" ? "✓" : "•"} {step.text}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        <TranscriptFactoryRow key={item.id} marker={<TranscriptFactoryMarker kind="assistant" />}>
+          <div className="transcript-factory-inline">
+            <p className="transcript-message__text">{item.summary}</p>
+            {item.steps.length > 0 ? (
+              <p className="transcript-factory-inline__meta">
+                {item.steps
+                  .map((step) => `${step.status === "completed" ? "✓" : "•"} ${step.text}`)
+                  .join("  ")}
+              </p>
+            ) : null}
+          </div>
+        </TranscriptFactoryRow>
       );
     }
     if (item.kind === "usage") {
       return (
-        <div className="detail-transcript-row detail-transcript-row--usage" key={item.id}>
-          <strong className="detail-transcript-row__title">{item.summary}</strong>
-          <p className="detail-transcript-row__meta">
-            total {item.usage.totalTokens ?? 0}
-            {item.usage.durationMs ? ` · ${item.usage.durationMs} ms` : ""}
-          </p>
-        </div>
+        <TranscriptFactoryRow key={item.id} marker={<TranscriptFactoryMarker kind="neutral" />}>
+          <div className="transcript-factory-inline">
+            <p className="transcript-message__text">{item.summary}</p>
+            <p className="transcript-factory-inline__meta">
+              total {item.usage.totalTokens ?? 0}
+              {item.usage.durationMs ? ` · ${item.usage.durationMs} ms` : ""}
+            </p>
+          </div>
+        </TranscriptFactoryRow>
       );
     }
     return (
-      <div className="detail-transcript-row detail-transcript-row--raw" key={item.id}>
-        <span className="detail-transcript-row__eyebrow">raw</span>
-        <pre className="detail-code-block detail-code-block--inline">{item.raw}</pre>
-      </div>
+      <TranscriptFactoryRow key={item.id} marker={<TranscriptFactoryMarker kind="neutral" />}>
+        <div className="transcript-factory-inline">
+          <p className="transcript-factory-inline__meta">{item.text || item.raw}</p>
+        </div>
+      </TranscriptFactoryRow>
     );
   }
 
   return (
-    <div
-      className="detail-pane detail-pane--run"
-      data-testid={streamSource === "live" ? "live-pane" : "run-pane"}
+    <DetailOverlayModal
+      onClose={onClose ?? (() => {})}
+      testId={streamSource === "live" ? "live-modal" : "transcript-modal"}
     >
-      <PanelHeader subtitle={formatRunSubtitle(run)} title={liveTitle} />
-
-      <div className="detail-meta-row">
-        <span className="detail-meta-chip">
-          <span className="detail-meta-chip__label">Artifacts</span>
-          <span className="detail-meta-chip__value">{artifactCount}</span>
-        </span>
-        {run.triggered_by ? (
-          <span className="detail-meta-chip">
-            <span className="detail-meta-chip__label">Triggered by</span>
-            <span className="detail-meta-chip__value">
-              {run.triggered_by.reason}
-            </span>
+      <DetailModalFrame
+        badge={<DetailToneBadge label={runStatus} tone={runStatus} />}
+        className="detail-modal-frame--transcript"
+        leading={
+          <span className={`detail-transcript-modal__leading detail-transcript-modal__leading--${toneClassForStatus(runStatus)}`}>
+            <Bot aria-hidden="true" size={12} strokeWidth={1.9} />
           </span>
-        ) : null}
-      </div>
-
-      <div hidden>
-        <span data-testid="detail-run-session">
-          {sessionValue} {sessionDetail}
-        </span>
-        <span data-testid="detail-run-history-source">
-          {historyProvenance} {historyStatusDetail}
-        </span>
-        <span data-testid="detail-run-history-completeness">
-          {historyCompleteness}{" "}
-          {transcript.lastSeq != null
-            ? `last event seq ${transcript.lastSeq}`
-            : transcript.events.length > 0
-              ? `${transcript.events.length} event${transcript.events.length === 1 ? "" : "s"} loaded`
-              : "No persisted event sequence yet"}
-        </span>
-      </div>
-
-      {clarificationHistory.length > 0 ? (
-        <DetailSection label="Clarifications">
-          <div className="detail-list-card">
-            {clarificationHistory.map((exchange, index) => {
-              const request = (exchange.request ?? {}) as {
-                questions?: Array<{ question?: string }>;
-              };
-              const response = (exchange.response ?? {}) as {
-                answers?: Array<{ selected?: unknown }>;
-              };
-              return (
-                <div className="detail-list-card__row" key={`${run.id}-clarification-${index}`}>
-                  <strong>
-                    {request.questions?.[0]?.question ?? `Clarification ${index + 1}`}
-                  </strong>
-                  <p>
-                    {response.answers?.length
-                      ? response.answers
-                          .map((answer) => formatClarificationAnswer(answer.selected))
-                          .filter(Boolean)
-                          .join(" · ")
-                      : "Awaiting response"}
-                  </p>
-                </div>
-              );
-            })}
+        }
+        metaClassName="detail-modal-frame__meta--transcript-inline"
+        meta={
+          <div className="detail-transcript-modal__meta-inline">
+            <span className="detail-transcript-modal__meta-value">
+              {formatPanelDuration(run.started_at, run.completed_at)}
+            </span>
+            <span className="detail-transcript-modal__meta-separator">·</span>
+            <span className="detail-transcript-modal__meta-value">
+              {totalTokens.toLocaleString()} tokens
+            </span>
+            <span className="detail-transcript-modal__meta-separator">·</span>
+            <span className="detail-transcript-modal__meta-value">
+              {eventCount} events
+            </span>
           </div>
-        </DetailSection>
-      ) : null}
+        }
+        onClose={onClose}
+        title={run.node_name}
+      >
+        <div hidden>
+          <span data-testid="detail-run-session">
+            {sessionValue} {sessionDetail}
+          </span>
+          <span data-testid="detail-run-history-source">
+            {historyProvenance} {historyStatusDetail}
+          </span>
+          <span data-testid="detail-run-history-completeness">
+            {historyCompleteness}{" "}
+            {transcript.lastSeq != null
+              ? `last event seq ${transcript.lastSeq}`
+              : transcript.events.length > 0
+                ? `${transcript.events.length} event${transcript.events.length === 1 ? "" : "s"} loaded`
+                : "No persisted event sequence yet"}
+          </span>
+        </div>
 
-      {(() => {
-        const grouped = groupTranscriptItems(transcriptItems);
-        if (grouped.length > 0) {
-          return (
-            <div data-testid="detail-output-surface">
-              <pre hidden>{legacyTranscriptText(transcriptItems)}</pre>
-              <div className="transcript-timeline" data-testid="transcript-timeline">
-                {grouped.map((item) => {
-                  if (item.kind === "tool-group") {
-                    return (
-                      <TranscriptToolGroup key={item.id} tools={item.tools} />
-                    );
-                  }
-                  if (item.kind === "message" && item.partType === "reasoning") {
-                    return <TranscriptThinkingBlock key={item.id} item={item} />;
-                  }
-                  if (item.kind === "message") {
-                    return <TranscriptMessageBlock key={item.id} item={item} />;
-                  }
-                  return renderTranscriptItem(item);
-                })}
+        {(() => {
+          const grouped = groupTranscriptItems(transcriptItems);
+          if (grouped.length > 0) {
+            return (
+              <div
+                className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
+                data-testid="detail-output-surface"
+              >
+                <pre hidden>{legacyTranscriptText(transcriptItems)}</pre>
+                <div className="transcript-timeline" data-testid="transcript-timeline">
+                  {grouped.map((item) => {
+                    if (item.kind === "tool-group") {
+                      return <TranscriptToolGroup key={item.id} tools={item.tools} transcript={transcript} />;
+                    }
+                    if (item.kind === "message" && item.partType === "reasoning") {
+                      return <TranscriptThinkingBlock key={item.id} item={item} />;
+                    }
+                    if (item.kind === "message") {
+                      return <TranscriptMessageBlock key={item.id} item={item} />;
+                    }
+                    return renderTranscriptItem(item);
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        }
-        if (hasStreamOutput) {
-          return (
-            <div data-testid="detail-output-surface">
-              <pre className="detail-code-block">{streamLines.join("\n")}</pre>
-            </div>
-          );
-        }
-        if (resultContent) {
-          return (
-            <div data-testid="detail-output-surface">
-              <pre className="detail-code-block">{resultContent}</pre>
-            </div>
-          );
-        }
-        if (showEmptyOutput) {
-          return (
-            <div data-testid="detail-output-surface">
-              <div className="detail-empty-card detail-empty-card--embedded">
-                <strong>{transcriptAvailability.title}</strong>
-                <p>{transcriptAvailability.detail}</p>
+            );
+          }
+          if (hasStreamOutput) {
+            return (
+              <div
+                className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
+                data-testid="detail-output-surface"
+              >
+                <pre className="detail-code-block">{streamLines.join("\n")}</pre>
               </div>
-            </div>
-          );
-        }
-        return null;
-      })()}
-    </div>
+            );
+          }
+          if (resultContent) {
+            return (
+              <div
+                className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
+                data-testid="detail-output-surface"
+              >
+                <pre className="detail-code-block">{resultContent}</pre>
+              </div>
+            );
+          }
+          if (showEmptyOutput) {
+            return (
+              <div
+                className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
+                data-testid="detail-output-surface"
+              >
+                <div className="detail-empty-card detail-empty-card--embedded">
+                  <strong>{transcriptAvailability.title}</strong>
+                  <p>{transcriptAvailability.detail}</p>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+      </DetailModalFrame>
+    </DetailOverlayModal>
   );
 }
 
-export function TaskArtifactPane({
+export function TaskArtifactModal({
   artifact,
   content,
   error,
+  onClose,
 }: ArtifactPaneProps) {
   return (
-    <div className="detail-pane" data-testid="artifact-pane">
-      <PanelHeader
-        subtitle={artifact?.node_name ?? "Artifact preview"}
-        title={artifact?.preview_name ? `Preview · ${artifact.preview_name}` : "Preview"}
-      />
-
-      {error ? <p className="screen-error">{error}</p> : null}
-
-      <DetailSurface
-        bodyClassName="detail-output-card detail-output-card--artifact"
-        label="Preview"
-        testId="detail-preview-surface"
+    <DetailOverlayModal onClose={onClose ?? (() => {})} testId="artifact-modal">
+      <DetailModalFrame
+        className="detail-modal-frame--artifact"
+        leading={
+          <span className="detail-artifact-modal__leading">
+            <FileText aria-hidden="true" size={16} strokeWidth={1.9} />
+          </span>
+        }
+        onClose={onClose}
+        subtitle={`from ${artifact?.source_label || artifact?.node_name || "preview"}`}
+        title={artifact?.preview_name || "Preview"}
       >
-        <DocumentContent
-          content={content ?? "Loading artifact..."}
-          format={artifact?.markdown ? "markdown" : "text"}
-          variant="detail"
-        />
-      </DetailSurface>
-    </div>
+        {error ? <p className="screen-error">{error}</p> : null}
+
+        <div
+          className="detail-modal-frame__surface detail-modal-frame__surface--artifact"
+          data-testid="artifact-preview-surface"
+        >
+          <ArtifactModalContent
+            content={content}
+            format={artifact?.markdown ? "markdown" : "text"}
+          />
+        </div>
+      </DetailModalFrame>
+    </DetailOverlayModal>
   );
 }
 
@@ -977,47 +1289,43 @@ export function TaskApprovalDock({
   submittingDecision,
   submitApprove,
   submitReject,
-  nodeName,
 }: ApprovalDockProps) {
   return (
-    <section className="detail-surface-panel" data-testid="approval-pane">
-      <div className="detail-surface-panel__header">
-        <span className="detail-surface-panel__title">
-          {nodeName ? `${nodeName} needs approval` : "Approval required"}
-        </span>
-      </div>
-      <div className="detail-surface-panel__body">
-        <label className="field-block">
-          <span className="field-block__hint">Feedback (optional)</span>
-          <textarea
-            className="approval-feedback approval-feedback--compact"
-            onChange={(event) => setFeedback(event.target.value)}
-            placeholder="Add feedback…"
-            rows={2}
-            value={feedback}
-          />
-        </label>
+    <section className="detail-inline-action detail-inline-action--approval" data-testid="approval-pane">
+      <p className="detail-inline-action__intro">
+        The agent has submitted work for your review. Open the artifact above to see the full
+        content.
+      </p>
+      <label className="detail-inline-action__field">
+        <span className="detail-inline-action__label">Feedback (optional)</span>
+        <textarea
+          className="detail-inline-action__textarea"
+          onChange={(event) => setFeedback(event.target.value)}
+          placeholder="Leave a note for the agent..."
+          rows={2}
+          value={feedback}
+        />
+      </label>
 
-        <div className="detail-surface-panel__footer">
-          <button
-            className="secondary-action secondary-action--danger"
-            data-testid="approval-reject"
-            disabled={submittingDecision}
-            onClick={() => void submitReject()}
-            type="button"
-          >
-            Reject
-          </button>
-          <button
-            className="primary-action"
-            data-testid="approval-approve"
-            disabled={submittingDecision}
-            onClick={() => void submitApprove()}
-            type="button"
-          >
-            Approve
-          </button>
-        </div>
+      <div className="detail-inline-action__footer">
+        <button
+          className="secondary-action secondary-action--danger detail-inline-action__secondary"
+          data-testid="approval-reject"
+          disabled={submittingDecision}
+          onClick={() => void submitReject()}
+          type="button"
+        >
+          Reject
+        </button>
+        <button
+          className="primary-action detail-inline-action__primary"
+          data-testid="approval-approve"
+          disabled={submittingDecision}
+          onClick={() => void submitApprove()}
+          type="button"
+        >
+          Approve
+        </button>
       </div>
     </section>
   );
@@ -1029,14 +1337,12 @@ function ClarificationQuestionField({
   answer,
   setAnswer,
   labelId,
-  descriptionId,
 }: {
   question: InputQuestionDto;
   index: number;
   answer: string | string[];
   setAnswer: (index: number, value: string | string[]) => void;
   labelId: string;
-  descriptionId?: string;
 }) {
   const options = question.options ?? [];
   const isMultiSelect = question.multi_select;
@@ -1044,11 +1350,10 @@ function ClarificationQuestionField({
   if (options.length === 0) {
     return (
       <textarea
-        aria-describedby={descriptionId}
         aria-labelledby={labelId}
-        className="approval-feedback approval-feedback--compact"
+        className="detail-inline-action__textarea detail-inline-action__textarea--multiline"
         onChange={(event) => setAnswer(index, event.target.value)}
-        placeholder="Answer this clarification…"
+        placeholder="Type your answer..."
         rows={3}
         value={typeof answer === "string" ? answer : answer.join(", ")}
       />
@@ -1059,19 +1364,26 @@ function ClarificationQuestionField({
     ? typeof answer === "string" && !options.some((o) => o.label === answer) && answer !== ""
     : false;
   const [otherText, setOtherText] = useState(isOther ? (answer as string) : "");
-  const otherSelected = isOther || (!isMultiSelect && answer === `__other__:${otherText}`);
+  const otherSelected = isOther || otherText.trim().length > 0;
 
   return (
-    <div className={`detail-choice-list${isMultiSelect ? " detail-choice-list--multi" : ""}`}>
+    <div
+      className={`detail-inline-choice-list${
+        isMultiSelect ? " detail-inline-choice-list--multi" : ""
+      }`}
+    >
       {options.map((option) => {
         const checked = Array.isArray(answer)
           ? answer.includes(option.label)
           : answer === option.label;
         return (
-          <label className={`detail-choice${checked ? " is-selected" : ""}`} key={option.label}>
+          <label
+            className={`detail-inline-choice${checked ? " is-selected" : ""}`}
+            key={option.label}
+          >
             <input
               checked={checked}
-              className="detail-choice__input"
+              className="detail-inline-choice__input"
               name={`clarification-${index}`}
               onChange={(event) => {
                 if (isMultiSelect) {
@@ -1086,37 +1398,22 @@ function ClarificationQuestionField({
               }}
               type={isMultiSelect ? "checkbox" : "radio"}
             />
-            <span className="detail-choice__control" aria-hidden="true" />
-            <span className="detail-choice__copy">
-              <strong>{option.label}</strong>
-              {option.description ? <small>{option.description}</small> : null}
+            <span className="detail-inline-choice__control" aria-hidden="true" />
+            <span className="detail-inline-choice__copy">
+              <span className="detail-inline-choice__label">{option.label}</span>
             </span>
           </label>
         );
       })}
-      <label className={`detail-choice detail-choice--other${otherSelected ? " is-selected" : ""}`}>
-        <input
-          checked={otherSelected}
-          className="detail-choice__input"
-          name={`clarification-${index}`}
-          onChange={() => {
-            if (isMultiSelect) {
-              const current = Array.isArray(answer) ? answer : [];
-              if (!otherText) return;
-              if (!current.includes(otherText)) {
-                setAnswer(index, [...current, otherText]);
-              }
-            } else {
-              setAnswer(index, otherText || "");
-            }
-          }}
-          type={isMultiSelect ? "checkbox" : "radio"}
-        />
-        <span className="detail-choice__control" aria-hidden="true" />
-        <span className="detail-choice__copy detail-choice__copy--other">
-          <strong>Other:</strong>
+      <div
+        className={`detail-inline-choice detail-inline-choice--other${
+          otherSelected ? " is-selected" : ""
+        }`}
+      >
+        <span className="detail-inline-choice__copy detail-inline-choice__copy--other">
+          <span className="detail-inline-choice__label">Other:</span>
           <input
-            className="detail-choice__other-input"
+            className="detail-inline-choice__other-input"
             onChange={(event) => {
               setOtherText(event.target.value);
               if (isMultiSelect) {
@@ -1141,13 +1438,12 @@ function ClarificationQuestionField({
             value={otherText}
           />
         </span>
-      </label>
+      </div>
     </div>
   );
 }
 
 export function TaskClarificationDock({
-  nodeName,
   requestKey,
   questions,
   answers,
@@ -1170,84 +1466,65 @@ export function TaskClarificationDock({
   const activeQuestion = questions[activeIndex];
   const activeAnswer = answers[activeIndex] ?? (activeQuestion?.multi_select ? [] : "");
   const questionId = `clarification-question-${requestKey ?? "task"}-${activeIndex}`;
-  const descriptionId = activeQuestion?.why_it_matters
-    ? `clarification-why-${requestKey ?? "task"}-${activeIndex}`
-    : undefined;
 
   return (
-    <section className="detail-surface-panel" data-testid="clarification-pane">
-      <div className="detail-surface-panel__header detail-surface-panel__header--attention">
-        <span className="detail-surface-panel__title">
-          <MessageCircle
-            aria-hidden="true"
-            className="detail-surface-panel__title-icon"
-            size={14}
-            strokeWidth={1.8}
-          />
-          {nodeName ? `${nodeName} needs clarification` : "Clarification needed"}
-        </span>
-        {questions.length > 1 ? (
-          <div className="detail-clarification__nav">
+    <section className="detail-inline-action detail-inline-action--clarification" data-testid="clarification-pane">
+      {questions.length > 1 ? (
+        <div className="detail-inline-action__nav-row">
+          <span className="detail-inline-action__nav-label">
+            Question {activeIndex + 1} of {questions.length}
+          </span>
+          <div className="detail-inline-action__nav-controls">
             <button
               aria-label="Previous clarification"
-              className="detail-clarification__nav-button"
+              className="detail-inline-action__nav-button"
               disabled={activeIndex === 0}
               onClick={() => setActiveIndex((current) => Math.max(current - 1, 0))}
               type="button"
             >
-              <ChevronLeft aria-hidden="true" size={14} strokeWidth={1.7} />
+              <span aria-hidden="true">‹</span>
             </button>
-            <span className="detail-clarification__nav-count">
-              {activeIndex + 1} / {questions.length}
-            </span>
             <button
               aria-label="Next clarification"
-              className="detail-clarification__nav-button"
+              className="detail-inline-action__nav-button"
               disabled={activeIndex === questions.length - 1}
               onClick={() =>
                 setActiveIndex((current) => Math.min(current + 1, questions.length - 1))
               }
               type="button"
             >
-              <ChevronRight aria-hidden="true" size={14} strokeWidth={1.7} />
+              <span aria-hidden="true">›</span>
             </button>
           </div>
-        ) : null}
-      </div>
-
-      <div className="detail-surface-panel__body">
-        {activeQuestion ? (
-          <div className="detail-clarification__question">
-            <div className="detail-clarification__copy">
-              <strong id={questionId}>{activeQuestion.question}</strong>
-              {activeQuestion.why_it_matters ? (
-                <p id={descriptionId}>{activeQuestion.why_it_matters}</p>
-              ) : null}
-            </div>
-            <ClarificationQuestionField
-              answer={activeAnswer}
-              index={activeIndex}
-              descriptionId={descriptionId}
-              labelId={questionId}
-              question={activeQuestion}
-              setAnswer={setAnswer}
-            />
-          </div>
-        ) : (
-          <p className="muted-copy">No clarification questions were provided.</p>
-        )}
-
-        <div className="detail-surface-panel__footer">
-          <button
-            className="primary-action"
-            disabled={submittingClarification}
-            onClick={() => void submitClarification()}
-            type="button"
-          >
-            {submittingClarification ? "Sending…" : "Submit"}
-          </button>
         </div>
-      </div>
+      ) : null}
+
+      {activeQuestion ? (
+        <div className="detail-inline-action__question-block">
+          <div className="detail-inline-action__question">
+            <strong id={questionId}>{activeQuestion.question}</strong>
+          </div>
+          <ClarificationQuestionField
+            answer={activeAnswer}
+            index={activeIndex}
+            labelId={questionId}
+            question={activeQuestion}
+            setAnswer={setAnswer}
+          />
+          <div className="detail-inline-action__footer">
+            <button
+              className="primary-action detail-inline-action__primary"
+              disabled={submittingClarification}
+              onClick={() => void submitClarification()}
+              type="button"
+            >
+              {submittingClarification ? "Sending…" : "Submit"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="muted-copy">No clarification questions were provided.</p>
+      )}
     </section>
   );
 }
@@ -1259,23 +1536,21 @@ export function TaskRetryDock({
   onRetry,
 }: RetryDockProps) {
   return (
-    <RecoveryCard
-      actions={
-        <button
-          className="primary-action"
-          data-testid="retry-step"
-          disabled={submittingRetry || !run}
-          onClick={() => void onRetry(false)}
-          type="button"
-        >
-          {submittingRetry ? "Retrying…" : "Retry"}
-        </button>
-      }
-      description={failureReason ?? "The current task requires intervention."}
-      testId="failed-pane"
-      title={run?.node_name ? `Task failed at ${run.node_name} node` : "Task failed"}
-      tone="failed"
-    />
+    <section className="detail-retry-dock" data-testid="failed-pane">
+      <p className="detail-retry-dock__error">
+        {failureReason ?? "The current task requires intervention."}
+      </p>
+      <button
+        className="secondary-action detail-retry-dock__button"
+        data-testid="retry-step"
+        disabled={submittingRetry || !run}
+        onClick={() => void onRetry(false)}
+        type="button"
+      >
+        <RotateCcw aria-hidden="true" size={12} strokeWidth={1.85} />
+        <span>{submittingRetry ? "Retrying…" : "Retry"}</span>
+      </button>
+    </section>
   );
 }
 
@@ -1350,26 +1625,20 @@ export function TaskBlockedDock({
   onContinue,
 }: BlockedDockProps) {
   return (
-    <RecoveryCard
-      actions={
-        <button
-          className="primary-action"
-          data-testid="continue-blocked"
-          disabled={submittingContinue}
-          onClick={() => void onContinue()}
-          type="button"
-        >
-          {submittingContinue ? "Continuing…" : "Continue"}
-        </button>
-      }
-      description={blockedStep?.reason ?? "The current task is waiting to continue."}
-      testId="blocked-pane"
-      title={
-        blockedStep?.node_name
-          ? `Task paused at ${blockedStep.node_name}`
-          : "Task is waiting to continue"
-      }
-      tone="blocked"
-    />
+    <section className="detail-retry-dock detail-blocked-dock" data-testid="blocked-pane">
+      <p className="detail-retry-dock__error detail-blocked-dock__description">
+        {blockedStep?.reason ?? "The current task is waiting to continue."}
+      </p>
+      <button
+        className="secondary-action detail-retry-dock__button detail-blocked-dock__button"
+        data-testid="continue-blocked"
+        disabled={submittingContinue}
+        onClick={() => void onContinue()}
+        type="button"
+      >
+        {!submittingContinue ? <ArrowRight aria-hidden="true" size={12} strokeWidth={1.85} /> : null}
+        <span>{submittingContinue ? "Continuing…" : "Continue"}</span>
+      </button>
+    </section>
   );
 }

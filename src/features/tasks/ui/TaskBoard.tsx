@@ -6,7 +6,6 @@ export type TaskBoardCardModel = {
   href: string;
   title: string;
   meta: string;
-  time: string;
   tone: "running" | "awaiting" | "done" | "failed" | "neutral";
 };
 
@@ -47,15 +46,10 @@ function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
       to={card.href}
     >
       <div className="task-board-card__body">
-        <div className="task-board-card__header">
-          <h3>{card.title}</h3>
-        </div>
-        <div className="task-board-card__footer">
-          <p className="task-board-card__meta">{card.meta}</p>
-          <span className={`task-board-card__stamp task-board-card__stamp--${card.tone}`}>
-            {card.time}
-          </span>
-        </div>
+        <h3>{card.title}</h3>
+        <p className={`task-board-card__meta task-board-card__meta--${card.tone}`}>
+          {card.meta}
+        </p>
       </div>
     </Link>
   );

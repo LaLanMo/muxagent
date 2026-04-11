@@ -41,15 +41,32 @@ const iconMap: Record<ShellIconName, LucideIcon> = {
   workspace: Folder,
 };
 
+const glyphMap: Partial<Record<ShellIconName, string>> = {
+  tasks: "◫",
+  configs: "⌘",
+  settings: "◔",
+};
+
 export function ShellIcon({ name }: ShellIconProps) {
-  const Icon = iconMap[name];
+  const glyph = glyphMap[name];
+  if (glyph) {
+    return (
+      <span aria-hidden="true" className="shell-icon shell-icon--glyph">
+        {glyph}
+      </span>
+    );
+  }
+
+  const Icon: LucideIcon = iconMap[name];
+  const size = name === "workspace" ? 13 : 14;
+  const strokeWidth = name === "workspace" ? 1.5 : 1.75;
 
   return (
     <Icon
       aria-hidden="true"
       className="shell-icon"
-      size={14}
-      strokeWidth={1.75}
+      size={size}
+      strokeWidth={strokeWidth}
     />
   );
 }

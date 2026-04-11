@@ -25,12 +25,16 @@ export type TranscriptTimelineItem =
   | {
       id: string;
       kind: "tool";
+      toolId: string;
       label: string;
       status?: string;
+      durationMs?: number;
       subject?: string;
       title?: string;
+      rawInputJson?: string;
       outputText?: string;
       errorText?: string;
+      eventIds: string[];
       paths: string[];
       diffs: Array<{
         path?: string;
@@ -219,6 +223,18 @@ function normalizeToolLike(
   return tool;
 }
 
+function toolDurationMs(tool: TranscriptToolCall | SessionHistoryToolEvent): number | undefined {
+  if ("eventIds" in tool) {
+    const first = Date.parse(tool.firstAt ?? "");
+    const last = Date.parse(tool.lastAt ?? "");
+    if (Number.isFinite(first) && Number.isFinite(last) && last > first) {
+      return last - first;
+    }
+    return undefined;
+  }
+  return tool.durationMs;
+}
+
 function summarizeTool(
   tool: TranscriptToolCall | SessionHistoryToolEvent,
 ): TranscriptTimelineItem {
@@ -226,12 +242,16 @@ function summarizeTool(
   return {
     id: normalizedTool.id,
     kind: "tool",
+    toolId: normalizedTool.callId || normalizedTool.id,
     label: toolLabel(normalizedTool),
     status: toolStatusText(normalizedTool.status),
+    durationMs: toolDurationMs(tool),
     subject: toolSubject(normalizedTool),
     title: normalizedTool.title,
+    rawInputJson: normalizedTool.rawInputJson,
     outputText: normalizedTool.outputText,
     errorText: normalizedTool.errorText,
+    eventIds: "eventIds" in tool ? [...tool.eventIds] : [normalizedTool.id],
     paths: normalizedTool.paths,
     diffs: normalizedTool.diffs,
     rawOutputJson: normalizedTool.rawOutputJson,

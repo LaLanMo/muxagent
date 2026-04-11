@@ -79,11 +79,12 @@ test("still allows starting a task from the all-workspaces task view", async ({ 
   await expect(page.getByTestId("new-task-submit")).toBeEnabled();
 });
 
-test("renders the inbox surface and drills back into task detail", async ({ page }) => {
+test("renders the needs-attention task filter and drills back into task detail", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
   await page.getByTestId("task-view-needs-attention").click();
-  await expect(page.getByTestId("inbox-screen")).toBeVisible();
+  await expect(page.getByTestId("task-board")).toBeVisible();
+  await expect(page).toHaveURL(/\/\?view=attention$/);
   await expect(page.getByText("Review PR #42")).toBeVisible();
   await expect(page.getByText("Deploy staging")).toBeVisible();
 
@@ -102,6 +103,8 @@ test("renders configs and settings from the desktop shell", async ({ page }) => 
 
   await page.getByRole("link", { name: /^Settings$/i }).click();
   await expect(page.getByTestId("settings-screen")).toBeVisible();
-  await expect(page.getByText("State dir")).toBeVisible();
-  await expect(page.getByText("Connected clients")).toBeVisible();
+  await expect(page.getByText("muxagent app-server")).toBeVisible();
+  await expect(page.getByText("Available")).toBeVisible();
+  await expect(page.getByText("Protocol")).toHaveCount(0);
+  await expect(page.getByText("Version")).toHaveCount(0);
 });
