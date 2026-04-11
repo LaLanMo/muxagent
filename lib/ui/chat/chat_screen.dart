@@ -636,7 +636,10 @@ class ChatScreen extends GetView<ChatViewModel> {
       case 'full-access':
         return AppTheme.errorText;
       case 'acceptEdits':
+      case 'autoEdit':
         return AppTheme.primary;
+      case 'yolo':
+        return AppTheme.errorText;
       case 'plan':
         return const Color(0xFF7C3AED);
       case 'dontAsk':
@@ -656,7 +659,10 @@ class ChatScreen extends GetView<ChatViewModel> {
       case 'plan':
         return AppTheme.modePlanBg;
       case 'acceptEdits':
+      case 'autoEdit':
         return AppTheme.modeAcceptBg;
+      case 'yolo':
+        return AppTheme.modeSkipBg;
       case 'read-only':
         return AppTheme.inputFill;
       default:
@@ -677,6 +683,10 @@ class ChatScreen extends GetView<ChatViewModel> {
         return 'Ask for each action';
       case 'acceptEdits':
         return 'Auto-approve edits';
+      case 'autoEdit':
+        return 'Auto-approve workspace edits';
+      case 'yolo':
+        return 'Minimal approval checks';
       case 'plan':
         return 'Plan before coding';
       case 'read-only':

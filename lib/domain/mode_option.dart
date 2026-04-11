@@ -51,6 +51,7 @@ class ModeOption {
         _copilotModePlanId: 1,
         _copilotModeAutopilotId: 2,
       },
+      'gemini' => const {'default': 0, 'autoEdit': 1, 'yolo': 2, 'plan': 3},
       'opencode' => const {'build': 0, 'plan': 1},
       _ => const <String, int>{},
     };
@@ -84,6 +85,10 @@ class ModeOption {
         return 'Accept Edits';
       case 'plan':
         return 'Plan';
+      case 'autoEdit':
+        return 'Auto Edit';
+      case 'yolo':
+        return 'YOLO';
       case 'dontAsk':
         return "Don't Ask";
       case 'bypassPermissions':

@@ -136,6 +136,16 @@ void main() {
       expect(identical(result, build), isTrue);
     });
 
+    test('falls back to Default for Gemini when there is no memory', () {
+      final defaultMode = buildMode('default');
+      final result = NewSessionViewModel.resolveSelectedMode(
+        runtimeId: 'gemini',
+        options: [buildMode('yolo'), buildMode('plan'), defaultMode],
+      );
+
+      expect(identical(result, defaultMode), isTrue);
+    });
+
     test('falls back to Agent for Copilot when there is no memory', () {
       final agent = buildMode(_copilotModeAgentId);
       final result = NewSessionViewModel.resolveSelectedMode(

@@ -103,6 +103,43 @@ void main() {
     expect(snapshot.availableModes.map((mode) => mode.id), ['build', 'plan']);
   });
 
+  test('orders Gemini modes as default then autoEdit then yolo then plan', () {
+    final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
+      runtimeId: 'gemini',
+      configOptions: const [
+        AcpSessionConfigOptionDto(
+          id: 'mode',
+          name: 'Mode',
+          type: 'select',
+          currentValue: 'default',
+          category: 'mode',
+          options: AcpSessionConfigSelectOptionsDto(
+            ungrouped: [
+              AcpSessionConfigSelectOptionDto(value: 'plan', name: 'Plan'),
+              AcpSessionConfigSelectOptionDto(
+                value: 'autoEdit',
+                name: 'Auto Edit',
+              ),
+              AcpSessionConfigSelectOptionDto(value: 'yolo', name: 'YOLO'),
+              AcpSessionConfigSelectOptionDto(
+                value: 'default',
+                name: 'Default',
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    expect(snapshot.currentMode?.id, 'default');
+    expect(snapshot.availableModes.map((mode) => mode.id), [
+      'default',
+      'autoEdit',
+      'yolo',
+      'plan',
+    ]);
+  });
+
   test('orders Copilot modes as agent then plan then autopilot', () {
     final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
       runtimeId: 'copilot',

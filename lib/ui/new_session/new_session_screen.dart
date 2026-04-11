@@ -430,6 +430,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         return _buildRuntimeAssetIcon('assets/openai-icon.png');
       case 'copilot':
         return _buildRuntimeAssetIcon('assets/github-copilot-icon.png');
+      case 'gemini':
+        return _buildRuntimeAssetIcon('assets/gemini-icon.png');
       case 'opencode':
         return _buildRuntimeAssetIcon('assets/opencode-icon.png');
       default:
