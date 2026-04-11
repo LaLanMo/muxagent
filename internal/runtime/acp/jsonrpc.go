@@ -1,6 +1,9 @@
 package acp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"errors"
+)
 
 // Request is a JSON-RPC 2.0 request sent from client to agent.
 type Request struct {
@@ -33,6 +36,11 @@ type RPCError struct {
 
 func (e *RPCError) Error() string {
 	return e.Message
+}
+
+func IsMethodNotFoundError(err error) bool {
+	var rpcErr *RPCError
+	return errors.As(err, &rpcErr) && rpcErr.Code == -32601
 }
 
 // IncomingMessage is a union type for parsing any incoming JSON-RPC message.

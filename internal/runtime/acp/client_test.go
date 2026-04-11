@@ -664,10 +664,32 @@ func TestClient_LoadSessionReturnsRequestedModeWhenSetModeSucceeds(t *testing.T)
 	assert.Equal(t, domain.ModeAcceptEdits, eventCurrentModeID(modeEvent))
 }
 
-func TestClient_LoadSessionKeepsRuntimeModelWhenSetConfigOptionFails(t *testing.T) {
+func TestClient_LoadSessionFallsBackToSetModelWhenSetConfigOptionFails(t *testing.T) {
 	bin := buildMockAgent(t)
 	client := newTestClientWithEnv(t, bin, map[string]string{
 		"MOCKAGENT_FAIL_SET_CONFIG_OPTION": "1",
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "opus")
+	require.NoError(t, err)
+	assert.Equal(t, "opus", findCurrentValue(resp.ConfigOptions, "model"))
+
+	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
+		return countEvents(events, appwire.EventHistoryComplete) >= 1
+	})
+	modelEvent := findEvent(events, appwire.EventModelChanged)
+	require.NotNil(t, modelEvent)
+	assert.Equal(t, "opus", modelEvent.ConfigChanged.App.CurrentValue)
+}
+
+func TestClient_LoadSessionKeepsRuntimeModelWhenSetConfigAndSetModelFail(t *testing.T) {
+	bin := buildMockAgent(t)
+	client := newTestClientWithEnv(t, bin, map[string]string{
+		"MOCKAGENT_FAIL_SET_CONFIG_OPTION": "1",
+		"MOCKAGENT_FAIL_SET_MODEL":         "1",
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -756,6 +778,48 @@ func TestClient_SetConfigOptionReturnsParseErrorForInvalidACPResponse(t *testing
 
 	err := client.SetConfigOption(ctx, "test-session-001", "model", "opus")
 	require.ErrorContains(t, err, "parse session/set_config_option result")
+}
+
+func TestClient_SetConfigOptionFallsBackToSetModelWhenUnsupported(t *testing.T) {
+	bin := buildMockAgent(t)
+	client := startTestClient(t, acp.NewClient(acp.Config{
+		Command:   bin,
+		RuntimeID: "gemini",
+		Env: map[string]string{
+			"MOCKAGENT_FAIL_SET_CONFIG_OPTION": "1",
+		},
+	}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.NewSession(ctx, "/tmp", "")
+	require.NoError(t, err)
+
+	err = client.SetConfigOption(ctx, "test-session-001", "model", "opus")
+	require.NoError(t, err)
+
+	events := collectEventsUntil(client.Events(), 2*time.Second, func(events []appwire.Event) bool {
+		for _, ev := range events {
+			if ev.Type == appwire.EventModelChanged &&
+				ev.ConfigChanged != nil &&
+				ev.ConfigChanged.App.CurrentValue == "opus" {
+				return true
+			}
+		}
+		return false
+	})
+	var modelEvent *appwire.Event
+	for i := range events {
+		if events[i].Type == appwire.EventModelChanged &&
+			events[i].ConfigChanged != nil &&
+			events[i].ConfigChanged.App.CurrentValue == "opus" {
+			modelEvent = &events[i]
+			break
+		}
+	}
+	require.NotNil(t, modelEvent)
+	assert.Equal(t, "opus", modelEvent.ConfigChanged.App.CurrentValue)
 }
 
 func TestClient_EnvRemoval_CLAUDECODE(t *testing.T) {

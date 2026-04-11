@@ -490,6 +490,10 @@ func main() {
 			respond(id, map[string]any{})
 
 		case "session/list":
+			if os.Getenv("MOCKAGENT_FAIL_SESSION_LIST") == "1" {
+				respondError(id, -32601, "Method not found")
+				continue
+			}
 			respond(id, map[string]any{
 				"sessions": []map[string]any{
 					{
@@ -531,6 +535,20 @@ func main() {
 					modelConfigOption(currentModelValue()),
 				},
 			})
+
+		case "session/set_model":
+			if os.Getenv("MOCKAGENT_FAIL_SET_MODEL") == "1" {
+				respondError(id, -32601, "Method not found")
+				continue
+			}
+			var params struct {
+				ModelID string `json:"modelId"`
+			}
+			json.Unmarshal(msg.Params, &params)
+			if params.ModelID != "" {
+				setCurrentModelValue(params.ModelID)
+			}
+			respond(id, map[string]any{})
 
 		case "session/prompt":
 			// Handle in goroutine so read loop can continue to

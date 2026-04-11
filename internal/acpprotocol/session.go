@@ -19,6 +19,19 @@ type SessionModeState struct {
 	AvailableModes []SessionMode `json:"availableModes"`
 }
 
+type SessionModel struct {
+	Meta        Meta    `json:"_meta,omitempty"`
+	ModelID     string  `json:"modelId"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+}
+
+type SessionModelState struct {
+	Meta            Meta           `json:"_meta,omitempty"`
+	CurrentModelID  string         `json:"currentModelId"`
+	AvailableModels []SessionModel `json:"availableModels"`
+}
+
 type SessionConfigSelectOption struct {
 	Meta        Meta    `json:"_meta,omitempty"`
 	Value       string  `json:"value"`
@@ -236,12 +249,14 @@ type NewSessionResponse struct {
 	Meta          Meta                  `json:"_meta,omitempty"`
 	SessionID     string                `json:"sessionId"`
 	Modes         *SessionModeState     `json:"modes,omitempty"`
+	Models        *SessionModelState    `json:"models,omitempty"`
 	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 }
 
 type LoadSessionResponse struct {
 	Meta          Meta                  `json:"_meta,omitempty"`
 	Modes         *SessionModeState     `json:"modes,omitempty"`
+	Models        *SessionModelState    `json:"models,omitempty"`
 	ConfigOptions []SessionConfigOption `json:"configOptions,omitempty"`
 }
 

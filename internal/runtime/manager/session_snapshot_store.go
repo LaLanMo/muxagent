@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
 	"github.com/LaLanMo/muxagent-cli/internal/privdir"
@@ -13,6 +14,8 @@ import (
 
 type sessionSnapshot struct {
 	ConfigOptions []acpprotocol.SessionConfigOption `json:"configOptions,omitempty"`
+	CWD           string                            `json:"cwd,omitempty"`
+	UpdatedAt     time.Time                         `json:"updatedAt,omitempty"`
 }
 
 type sessionSnapshotStore struct {
@@ -100,6 +103,8 @@ func (s *sessionSnapshotStore) Set(
 	}
 	runtimeSnapshots[sessionID] = sessionSnapshot{
 		ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
+		CWD:           snapshot.CWD,
+		UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
 	}
 }
 
@@ -117,7 +122,7 @@ func (s *sessionSnapshotStore) Ensure(
 	if _, exists := runtimeSnapshots[sessionID]; exists {
 		return nil
 	}
-	runtimeSnapshots[sessionID] = sessionSnapshot{}
+	runtimeSnapshots[sessionID] = sessionSnapshot{UpdatedAt: time.Now().UTC()}
 	return s.saveLocked()
 }
 
@@ -133,8 +138,13 @@ func (s *sessionSnapshotStore) Put(
 	defer s.mu.Unlock()
 
 	runtimeSnapshots := s.ensureRuntimeSnapshotsLocked(runtimeID)
+	if snapshot.UpdatedAt.IsZero() {
+		snapshot.UpdatedAt = time.Now().UTC()
+	}
 	runtimeSnapshots[sessionID] = sessionSnapshot{
 		ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
+		CWD:           snapshot.CWD,
+		UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
 	}
 	return s.saveLocked()
 }
@@ -156,8 +166,11 @@ func (s *sessionSnapshotStore) Update(
 	if !update(&current) {
 		return nil
 	}
+	current.UpdatedAt = time.Now().UTC()
 	runtimeSnapshots[sessionID] = sessionSnapshot{
 		ConfigOptions: cloneConfigOptions(current.ConfigOptions),
+		CWD:           current.CWD,
+		UpdatedAt:     normalizeSnapshotUpdatedAt(current.UpdatedAt),
 	}
 	return s.saveLocked()
 }
@@ -172,6 +185,8 @@ func (s *sessionSnapshotStore) All() map[string]map[string]sessionSnapshot {
 		for sessionID, snapshot := range runtimeSnapshots {
 			cloned[sessionID] = sessionSnapshot{
 				ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
+				CWD:           snapshot.CWD,
+				UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
 			}
 		}
 		out[runtimeID] = cloned
@@ -242,4 +257,11 @@ func cloneConfigOptions(
 		return append([]acpprotocol.SessionConfigOption(nil), options...)
 	}
 	return cloned
+}
+
+func normalizeSnapshotUpdatedAt(value time.Time) time.Time {
+	if value.IsZero() {
+		return time.Time{}
+	}
+	return value.UTC()
 }

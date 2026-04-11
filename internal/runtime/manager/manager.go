@@ -25,6 +25,11 @@ const (
 	copilotModeAgent     = "https://agentclientprotocol.com/protocol/session-modes#agent"
 	copilotModePlan      = "https://agentclientprotocol.com/protocol/session-modes#plan"
 	copilotModeAutopilot = "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+
+	geminiModeDefault  = "default"
+	geminiModeAutoEdit = "autoEdit"
+	geminiModeYolo     = "yolo"
+	geminiModePlan     = "plan"
 )
 
 type RuntimeInfo struct {
@@ -189,7 +194,7 @@ func (m *Manager) NewSession(
 		permissionMode,
 	)
 	m.setSessionRuntime(resp.SessionID, rid)
-	m.persistSessionSnapshot(resp.SessionID, rid, resp.ConfigOptions)
+	m.persistSessionSnapshot(resp.SessionID, rid, cwd, resp.ConfigOptions)
 	return resp.SessionID, string(rid), resp, nil
 }
 
@@ -223,7 +228,7 @@ func (m *Manager) LoadSession(
 		permissionMode,
 	)
 	m.setSessionRuntime(sessionID, rid)
-	m.persistSessionSnapshot(sessionID, rid, resp.ConfigOptions)
+	m.persistSessionSnapshot(sessionID, rid, cwd, resp.ConfigOptions)
 	return string(rid), resp, nil
 }
 
@@ -233,49 +238,22 @@ func (m *Manager) ResolveSessions(
 	sessionIDs []string,
 ) ([]domain.SessionSummary, error) {
 	if runtimeID != "" {
-		client, rid, err := m.ensureRuntime(ctx, runtimeID, "")
-		if err != nil {
-			return nil, err
-		}
-		sessions, err := client.ListSessions(ctx, "")
-		if err == nil || !shouldRetryRuntimeCall(client, err) {
-			return m.applyStoredSessionSnapshots(sessions, rid), err
-		}
-		m.retireRuntimeClient(rid, client)
-		client, _, retryErr := m.ensureRuntime(ctx, runtimeID, "")
-		if retryErr != nil {
-			return nil, fmt.Errorf("retired stale runtime after %v; restart failed: %w", err, retryErr)
-		}
-		sessions, err = client.ListSessions(ctx, "")
-		return m.applyStoredSessionSnapshots(sessions, rid), err
+		return m.resolveSessionsForRuntime(
+			ctx,
+			config.RuntimeID(runtimeID),
+			sessionIDs,
+		)
 	}
 
 	seen := make(map[string]struct{}, len(sessionIDs))
 	list := make([]domain.SessionSummary, 0)
 	for _, rid := range m.configuredRuntimeIDs() {
-		client, _, err := m.ensureRuntime(ctx, string(rid), "")
-		if err != nil {
-			log.Printf("[runtime] resolve start %s failed: %v", rid, err)
-			continue
-		}
-		sessions, err := client.ListSessions(ctx, "")
-		if err != nil {
-			if shouldRetryRuntimeCall(client, err) {
-				m.retireRuntimeClient(rid, client)
-				client, _, retryErr := m.ensureRuntime(ctx, string(rid), "")
-				if retryErr == nil {
-					sessions, err = client.ListSessions(ctx, "")
-				} else {
-					err = fmt.Errorf("retired stale runtime after %v; restart failed: %w", err, retryErr)
-				}
-			}
-		}
+		sessions, err := m.resolveSessionsForRuntime(ctx, rid, sessionIDs)
 		if err != nil {
 			log.Printf("[runtime] resolve list %s failed: %v", rid, err)
 			continue
 		}
 		for _, session := range sessions {
-			session = m.applyStoredSessionSnapshot(session, rid)
 			if _, ok := seen[session.SessionID]; ok {
 				continue
 			}
@@ -284,6 +262,50 @@ func (m *Manager) ResolveSessions(
 		}
 	}
 	return list, nil
+}
+
+func (m *Manager) resolveSessionsForRuntime(
+	ctx context.Context,
+	rid config.RuntimeID,
+	sessionIDs []string,
+) ([]domain.SessionSummary, error) {
+	client, _, err := m.ensureRuntime(ctx, string(rid), "")
+	if err != nil {
+		return nil, err
+	}
+
+	sessions, err := client.ListSessions(ctx, "")
+	if err == nil {
+		return m.applyStoredSessionSnapshots(sessions, rid), nil
+	}
+	if isSessionListUnsupported(err) {
+		return m.snapshotSessionSummaries(rid, sessionIDs), nil
+	}
+	if !shouldRetryRuntimeCall(client, err) {
+		return nil, err
+	}
+
+	m.retireRuntimeClient(rid, client)
+	client, _, retryErr := m.ensureRuntime(ctx, string(rid), "")
+	if retryErr != nil {
+		return nil, fmt.Errorf(
+			"retired stale runtime after %v; restart failed: %w",
+			err,
+			retryErr,
+		)
+	}
+	sessions, err = client.ListSessions(ctx, "")
+	if err != nil {
+		if isSessionListUnsupported(err) {
+			return m.snapshotSessionSummaries(rid, sessionIDs), nil
+		}
+		return nil, err
+	}
+	return m.applyStoredSessionSnapshots(sessions, rid), nil
+}
+
+func isSessionListUnsupported(err error) bool {
+	return acp.IsMethodNotFoundError(err)
 }
 
 func (m *Manager) Prompt(
@@ -458,6 +480,8 @@ func (m *Manager) resolveSettings(id config.RuntimeID, settings config.RuntimeSe
 		log.Printf("[runtime] resolved %s: %s", id, resolved)
 	} else if id == config.RuntimeCopilot {
 		settings = resolveCopilotSettings(settings)
+	} else if id == config.RuntimeGemini {
+		settings = resolveGeminiSettings(settings)
 	} else if id == config.RuntimeOpenCode {
 		settings = resolveOpenCodeSettings(settings)
 	}
@@ -593,6 +617,12 @@ func (m *Manager) applyStoredSessionSnapshot(
 				storedSnapshot.ConfigOptions,
 				session.ConfigOptions,
 			)
+			if strings.TrimSpace(session.CWD) == "" && strings.TrimSpace(storedSnapshot.CWD) != "" {
+				session.CWD = storedSnapshot.CWD
+			}
+			if session.UpdatedAt.IsZero() && !storedSnapshot.UpdatedAt.IsZero() {
+				session.UpdatedAt = storedSnapshot.UpdatedAt
+			}
 		}
 		session.ConfigOptions = enrichModeConfigOptions(
 			runtimeID,
@@ -615,6 +645,12 @@ func (m *Manager) applyStoredSessionSnapshot(
 			session.ConfigOptions,
 			"",
 		)
+	}
+	if strings.TrimSpace(session.CWD) == "" && strings.TrimSpace(storedSnapshot.CWD) != "" {
+		session.CWD = storedSnapshot.CWD
+	}
+	if session.UpdatedAt.IsZero() && !storedSnapshot.UpdatedAt.IsZero() {
+		session.UpdatedAt = storedSnapshot.UpdatedAt
 	}
 	return session
 }
@@ -644,6 +680,58 @@ func (m *Manager) sessionSnapshot(
 	return m.snapshotStore.Get(string(runtimeID), sessionID)
 }
 
+func (m *Manager) snapshotSessionSummaries(
+	runtimeID config.RuntimeID,
+	sessionIDs []string,
+) []domain.SessionSummary {
+	if m.snapshotStore == nil || runtimeID == "" {
+		return nil
+	}
+
+	targets := make(map[string]struct{}, len(sessionIDs))
+	for _, sessionID := range sessionIDs {
+		if sessionID == "" {
+			continue
+		}
+		if resolvedRuntime := m.resolveRuntimeID(sessionID, ""); resolvedRuntime != "" &&
+			resolvedRuntime != runtimeID {
+			continue
+		}
+		targets[sessionID] = struct{}{}
+	}
+
+	runtimeSnapshots := m.snapshotStore.All()[string(runtimeID)]
+	if len(runtimeSnapshots) == 0 {
+		return nil
+	}
+
+	summaries := make([]domain.SessionSummary, 0, len(runtimeSnapshots))
+	for sessionID, snapshot := range runtimeSnapshots {
+		if len(targets) > 0 {
+			if _, ok := targets[sessionID]; !ok {
+				continue
+			}
+		}
+		summaries = append(summaries, m.applyStoredSessionSnapshot(domain.SessionSummary{
+			SessionID:     sessionID,
+			CWD:           snapshot.CWD,
+			Runtime:       string(runtimeID),
+			UpdatedAt:     snapshot.UpdatedAt,
+			ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
+		}, runtimeID))
+	}
+
+	sort.Slice(summaries, func(i, j int) bool {
+		left := summaries[i].UpdatedAt
+		right := summaries[j].UpdatedAt
+		if !left.Equal(right) {
+			return left.After(right)
+		}
+		return summaries[i].SessionID < summaries[j].SessionID
+	})
+	return summaries
+}
+
 func (m *Manager) persistSessionRuntime(
 	sessionID string,
 	runtimeID config.RuntimeID,
@@ -659,6 +747,7 @@ func (m *Manager) persistSessionRuntime(
 func (m *Manager) persistSessionSnapshot(
 	sessionID string,
 	runtimeID config.RuntimeID,
+	cwd string,
 	configOptions []acpprotocol.SessionConfigOption,
 ) {
 	if sessionID == "" || runtimeID == "" || m.snapshotStore == nil {
@@ -666,6 +755,7 @@ func (m *Manager) persistSessionSnapshot(
 	}
 	if err := m.snapshotStore.Put(string(runtimeID), sessionID, sessionSnapshot{
 		ConfigOptions: configOptions,
+		CWD:           cwd,
 	}); err != nil {
 		log.Printf("[runtime] save session snapshot failed: %v", err)
 	}
@@ -968,6 +1058,8 @@ func runtimeLabel(id config.RuntimeID) string {
 		return "Claude Code"
 	case config.RuntimeCodex:
 		return "Codex"
+	case config.RuntimeGemini:
+		return "Gemini CLI"
 	case config.RuntimeOpenCode:
 		return "OpenCode"
 	default:
@@ -1074,6 +1166,40 @@ func runtimeConfigOptions(id config.RuntimeID) []acpprotocol.SessionConfigOption
 				},
 			},
 		}
+	case config.RuntimeGemini:
+		return []acpprotocol.SessionConfigOption{
+			{
+				ID:           "mode",
+				Name:         "Mode",
+				Type:         "select",
+				Category:     stringPtr("mode"),
+				CurrentValue: geminiModeDefault,
+				Options: acpprotocol.SessionConfigSelectOptions{
+					Ungrouped: []acpprotocol.SessionConfigSelectOption{
+						{
+							Value:       geminiModeDefault,
+							Name:        "Default",
+							Description: stringPtr("Standard Gemini approval mode."),
+						},
+						{
+							Value:       geminiModeAutoEdit,
+							Name:        "Auto Edit",
+							Description: stringPtr("Auto-approves edit operations in the workspace."),
+						},
+						{
+							Value:       geminiModeYolo,
+							Name:        "YOLO",
+							Description: stringPtr("Most permissive Gemini approval mode."),
+						},
+						{
+							Value:       geminiModePlan,
+							Name:        "Plan",
+							Description: stringPtr("Plan-first mode with minimal execution."),
+						},
+					},
+				},
+			},
+		}
 	case config.RuntimeOpenCode:
 		return []acpprotocol.SessionConfigOption{
 			{
@@ -1107,6 +1233,8 @@ func runtimeReady(id config.RuntimeID, settings config.RuntimeSettings) bool {
 	switch id {
 	case config.RuntimeCopilot:
 		return copilotRuntimeReady(settings)
+	case config.RuntimeGemini:
+		return geminiRuntimeReady(settings)
 	case config.RuntimeOpenCode:
 		return openCodeRuntimeReady(settings)
 	default:
@@ -1116,6 +1244,16 @@ func runtimeReady(id config.RuntimeID, settings config.RuntimeSettings) bool {
 
 func copilotRuntimeReady(settings config.RuntimeSettings) bool {
 	settings = resolveCopilotSettings(settings)
+	command := strings.TrimSpace(settings.Command)
+	if command == "" {
+		return false
+	}
+	_, err := exec.LookPath(command)
+	return err == nil
+}
+
+func geminiRuntimeReady(settings config.RuntimeSettings) bool {
+	settings = resolveGeminiSettings(settings)
 	command := strings.TrimSpace(settings.Command)
 	if command == "" {
 		return false
@@ -1136,7 +1274,7 @@ func openCodeRuntimeReady(settings config.RuntimeSettings) bool {
 
 func supportsManagedRuntime(id config.RuntimeID) bool {
 	switch id {
-	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeCopilot, config.RuntimeOpenCode:
+	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeCopilot, config.RuntimeGemini, config.RuntimeOpenCode:
 		return true
 	default:
 		return false
@@ -1155,6 +1293,18 @@ func resolveCopilotSettings(settings config.RuntimeSettings) config.RuntimeSetti
 	return settings
 }
 
+func resolveGeminiSettings(settings config.RuntimeSettings) config.RuntimeSettings {
+	if strings.TrimSpace(settings.Command) == "" {
+		settings.Command = "gemini"
+		settings.Args = defaultGeminiArgs(settings.Args)
+		return settings
+	}
+	if len(settings.Args) == 0 && looksLikeGeminiBinary(settings.Command) {
+		settings.Args = defaultGeminiArgs(nil)
+	}
+	return settings
+}
+
 func defaultCopilotArgs(args []string) []string {
 	if len(args) > 0 {
 		return args
@@ -1165,6 +1315,18 @@ func defaultCopilotArgs(args []string) []string {
 func looksLikeCopilotBinary(command string) bool {
 	base := filepath.Base(strings.TrimSpace(command))
 	return base == "copilot" || base == "copilot.exe"
+}
+
+func defaultGeminiArgs(args []string) []string {
+	if len(args) > 0 {
+		return args
+	}
+	return []string{"--acp"}
+}
+
+func looksLikeGeminiBinary(command string) bool {
+	base := filepath.Base(strings.TrimSpace(command))
+	return base == "gemini" || base == "gemini.exe"
 }
 
 func resolveOpenCodeSettings(settings config.RuntimeSettings) config.RuntimeSettings {

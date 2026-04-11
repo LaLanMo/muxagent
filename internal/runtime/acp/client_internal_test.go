@@ -25,7 +25,7 @@ func TestNormalizeSessionConfigOptionsSynthesizesModeOptionFromModes(t *testing.
 		},
 	}
 
-	options := normalizeSessionConfigOptions(nil, modes)
+	options := normalizeSessionConfigOptions(nil, modes, nil)
 	if len(options) != 1 {
 		t.Fatalf("len(options) = %d, want 1", len(options))
 	}
@@ -50,6 +50,7 @@ func TestModeConfigOptionEventCarriesModeConfigOption(t *testing.T) {
 				{ID: "read-only", Name: "Read Only"},
 			},
 		},
+		nil,
 	)
 
 	ev := modeConfigOptionEvent("session-123", "read-only", options)
@@ -67,6 +68,30 @@ func TestModeConfigOptionEventCarriesModeConfigOption(t *testing.T) {
 	}
 	if got := configOptionCategory(ev.ModeChanged.ACPConfigOption.ConfigOptions[0]); got != "mode" {
 		t.Fatalf("category = %q, want mode", got)
+	}
+}
+
+func TestNormalizeSessionConfigOptionsSynthesizesModelOptionFromModels(t *testing.T) {
+	models := &acpprotocol.SessionModelState{
+		CurrentModelID: "gemini-2.5-pro",
+		AvailableModels: []acpprotocol.SessionModel{
+			{ModelID: "gemini-2.5-pro", Name: "Gemini 2.5 Pro"},
+			{ModelID: "gemini-2.5-flash", Name: "Gemini 2.5 Flash"},
+		},
+	}
+
+	options := normalizeSessionConfigOptions(nil, nil, models)
+	if len(options) != 1 {
+		t.Fatalf("len(options) = %d, want 1", len(options))
+	}
+	if got := configOptionCategory(options[0]); got != "model" {
+		t.Fatalf("category = %q, want model", got)
+	}
+	if options[0].CurrentValue != "gemini-2.5-pro" {
+		t.Fatalf("currentValue = %q, want gemini-2.5-pro", options[0].CurrentValue)
+	}
+	if len(options[0].Options.Flatten()) != 2 {
+		t.Fatalf("len(flattened options) = %d, want 2", len(options[0].Options.Flatten()))
 	}
 }
 

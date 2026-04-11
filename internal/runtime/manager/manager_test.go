@@ -13,6 +13,7 @@ import (
 	"github.com/LaLanMo/muxagent-cli/internal/appwire"
 	"github.com/LaLanMo/muxagent-cli/internal/config"
 	"github.com/LaLanMo/muxagent-cli/internal/domain"
+	runtimeacp "github.com/LaLanMo/muxagent-cli/internal/runtime/acp"
 )
 
 func TestResolveSettings_ClaudeInjectsWrapper(t *testing.T) {
@@ -141,6 +142,25 @@ func TestResolveSettings_CopilotDefaultsToACPCommand(t *testing.T) {
 	}
 	if len(got.Args) != 2 || got.Args[0] != "--acp" || got.Args[1] != "--stdio" {
 		t.Fatalf("args = %#v, want [\"--acp\" \"--stdio\"]", got.Args)
+	}
+	if got.CWD != "/tmp/project" {
+		t.Fatalf("cwd = %q, want /tmp/project", got.CWD)
+	}
+}
+
+func TestResolveSettings_GeminiDefaultsToACPCommand(t *testing.T) {
+	cfg := config.Default()
+	m := New(cfg)
+
+	got, err := m.resolveSettings(config.RuntimeGemini, cfg.Runtimes[config.RuntimeGemini], "/tmp/project")
+	if err != nil {
+		t.Fatalf("resolveSettings: %v", err)
+	}
+	if got.Command != "gemini" {
+		t.Fatalf("command = %q, want gemini", got.Command)
+	}
+	if len(got.Args) != 1 || got.Args[0] != "--acp" {
+		t.Fatalf("args = %#v, want [\"--acp\"]", got.Args)
 	}
 	if got.CWD != "/tmp/project" {
 		t.Fatalf("cwd = %q, want /tmp/project", got.CWD)
@@ -310,6 +330,7 @@ func TestResolveSessionsUsesStoredConfigOptionsAfterManagerRestart(t *testing.T)
 	m1.persistSessionSnapshot(
 		"session-123",
 		config.RuntimeCodex,
+		"",
 		[]acpprotocol.SessionConfigOption{{
 			ID:           "mode",
 			Name:         "Approval Preset",
@@ -353,6 +374,58 @@ func TestResolveSessionsUsesStoredConfigOptionsAfterManagerRestart(t *testing.T)
 	}
 }
 
+func TestResolveSessionsFallsBackToStoredSnapshotsWhenSessionListUnsupported(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := config.Default()
+	modeCategory := "mode"
+	m1 := New(cfg)
+	m1.persistSessionSnapshot(
+		"session-123",
+		config.RuntimeGemini,
+		"/tmp/gemini-project",
+		[]acpprotocol.SessionConfigOption{{
+			ID:           "mode",
+			Name:         "Mode",
+			Type:         "select",
+			Category:     &modeCategory,
+			CurrentValue: geminiModePlan,
+		}},
+	)
+
+	m2 := New(cfg)
+	client := &fakeRuntimeClient{
+		alive:   true,
+		listErr: &runtimeacp.RPCError{Code: -32601, Message: "Method not found"},
+	}
+	m2.runtimes[config.RuntimeGemini].client = client
+
+	sessions, err := m2.ResolveSessions(
+		context.Background(),
+		string(config.RuntimeGemini),
+		[]string{"session-123"},
+	)
+	if err != nil {
+		t.Fatalf("ResolveSessions: %v", err)
+	}
+	if client.listCalls != 1 {
+		t.Fatalf("listCalls = %d, want 1", client.listCalls)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("len(sessions) = %d, want 1", len(sessions))
+	}
+	if sessions[0].Runtime != string(config.RuntimeGemini) {
+		t.Fatalf("runtime = %q, want %q", sessions[0].Runtime, config.RuntimeGemini)
+	}
+	if sessions[0].CWD != "/tmp/gemini-project" {
+		t.Fatalf("cwd = %q, want /tmp/gemini-project", sessions[0].CWD)
+	}
+	if got := findConfigOptionValue(sessions[0].ConfigOptions, "mode"); got != geminiModePlan {
+		t.Fatalf("mode = %q, want %q", got, geminiModePlan)
+	}
+}
+
 func TestSetModePersistsStoredConfigSnapshot(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -366,6 +439,7 @@ func TestSetModePersistsStoredConfigSnapshot(t *testing.T) {
 	m1.persistSessionSnapshot(
 		"session-123",
 		config.RuntimeCodex,
+		"",
 		[]acpprotocol.SessionConfigOption{{
 			ID:           "mode",
 			Name:         "Approval Preset",
@@ -576,6 +650,7 @@ func TestLoadSessionEnrichesModeConfigFromStoredSnapshotAndRuntimeCatalog(t *tes
 	m.persistSessionSnapshot(
 		"session-123",
 		config.RuntimeCodex,
+		"",
 		[]acpprotocol.SessionConfigOption{{
 			ID:           "mode",
 			Name:         "Mode",
@@ -671,6 +746,7 @@ func TestResolveSessionsMergesRuntimeConfigOptionsWithStoredSnapshot(t *testing.
 	m1.persistSessionSnapshot(
 		"session-123",
 		config.RuntimeCodex,
+		"",
 		[]acpprotocol.SessionConfigOption{
 			{
 				ID:           "mode",
@@ -780,6 +856,7 @@ func TestResolveSessionsScopesStoredSnapshotsByRuntime(t *testing.T) {
 	m1.persistSessionSnapshot(
 		"session-123",
 		config.RuntimeCodex,
+		"",
 		[]acpprotocol.SessionConfigOption{{
 			ID:           "mode",
 			Name:         "Approval Preset",
@@ -829,8 +906,8 @@ func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
 	m := New(config.Default())
 
 	list := m.RuntimeList()
-	if len(list) != 4 {
-		t.Fatalf("len(list) = %d, want 4", len(list))
+	if len(list) != 5 {
+		t.Fatalf("len(list) = %d, want 5", len(list))
 	}
 
 	var openCode *RuntimeInfo
@@ -858,6 +935,48 @@ func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
 	}
 	if got := len(modeOption.Options.Flatten()); got != 2 {
 		t.Fatalf("len(mode options) = %d, want 2", got)
+	}
+}
+
+func TestRuntimeListIncludesGeminiCatalog(t *testing.T) {
+	binDir := t.TempDir()
+	geminiBin := filepath.Join(binDir, "gemini")
+	if err := os.WriteFile(geminiBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var gemini *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeGemini) {
+			gemini = &list[i]
+			break
+		}
+	}
+	if gemini == nil {
+		t.Fatal("expected Gemini runtime in list")
+	}
+	if !gemini.Ready {
+		t.Fatal("expected Gemini runtime to be ready")
+	}
+	if gemini.Label != "Gemini CLI" {
+		t.Fatalf("label = %q, want Gemini CLI", gemini.Label)
+	}
+	modeOption := findConfigOption(gemini.ConfigOptions, "mode")
+	if modeOption == nil {
+		t.Fatal("expected Gemini mode config option")
+	}
+	if modeOption.Name != "Mode" {
+		t.Fatalf("mode option name = %q, want Mode", modeOption.Name)
+	}
+	if got := modeOption.CurrentValue; got != geminiModeDefault {
+		t.Fatalf("currentValue = %q, want %q", got, geminiModeDefault)
+	}
+	if got := len(modeOption.Options.Flatten()); got != 4 {
+		t.Fatalf("len(mode options) = %d, want 4", got)
 	}
 }
 
@@ -924,6 +1043,27 @@ func TestRuntimeListMarksCopilotNotReadyWhenUnavailable(t *testing.T) {
 	}
 }
 
+func TestRuntimeListMarksGeminiNotReadyWhenUnavailable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var gemini *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeGemini) {
+			gemini = &list[i]
+			break
+		}
+	}
+	if gemini == nil {
+		t.Fatal("expected Gemini runtime in list")
+	}
+	if gemini.Ready {
+		t.Fatal("expected Gemini runtime to be marked not ready")
+	}
+}
+
 func TestRuntimeListMarksConfiguredCopilotCommandReady(t *testing.T) {
 	binDir := t.TempDir()
 	custom := filepath.Join(binDir, "custom-copilot")
@@ -952,6 +1092,37 @@ func TestRuntimeListMarksConfiguredCopilotCommandReady(t *testing.T) {
 	}
 	if !copilot.Ready {
 		t.Fatal("expected configured Copilot runtime to be ready")
+	}
+}
+
+func TestRuntimeListMarksConfiguredGeminiCommandReady(t *testing.T) {
+	binDir := t.TempDir()
+	custom := filepath.Join(binDir, "custom-gemini")
+	if err := os.WriteFile(custom, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	cfg := config.Default()
+	cfg.Runtimes[config.RuntimeGemini] = config.RuntimeSettings{
+		Command: custom,
+		Args:    []string{"--acp"},
+	}
+	m := New(cfg)
+
+	list := m.RuntimeList()
+	var gemini *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeGemini) {
+			gemini = &list[i]
+			break
+		}
+	}
+	if gemini == nil {
+		t.Fatal("expected Gemini runtime in list")
+	}
+	if !gemini.Ready {
+		t.Fatal("expected configured Gemini runtime to be ready")
 	}
 }
 

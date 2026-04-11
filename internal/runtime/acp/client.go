@@ -195,7 +195,11 @@ func (c *Client) NewSession(ctx context.Context, cwd string, permissionMode stri
 	if modeApplied {
 		setConfigOptionCurrentValue(resp.ConfigOptions, "mode", permissionMode)
 	}
-	resp.ConfigOptions = normalizeSessionConfigOptions(resp.ConfigOptions, resp.Modes)
+	resp.ConfigOptions = normalizeSessionConfigOptions(
+		resp.ConfigOptions,
+		resp.Modes,
+		resp.Models,
+	)
 	if modeApplied {
 		setConfigOptionCurrentValue(resp.ConfigOptions, "mode", permissionMode)
 	}
@@ -288,12 +292,7 @@ func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode
 	// Re-apply model if non-default.
 	modelApplied := false
 	if model != "" && model != "default" {
-		_, err := c.transport.Call(ctx, "session/set_config_option", map[string]any{
-			"sessionId": sessionID,
-			"configId":  "model",
-			"value":     model,
-		})
-		if err != nil {
+		if err := c.setModel(ctx, sessionID, model); err != nil {
 			log.Printf("[acp] failed to restore model %q on load: %v", model, err)
 		} else {
 			modelApplied = true
@@ -307,9 +306,13 @@ func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode
 	loadResp.ConfigOptions = normalizeSessionConfigOptions(
 		loadResp.ConfigOptions,
 		loadResp.Modes,
+		loadResp.Models,
 	)
 	if modeApplied {
 		setConfigOptionCurrentValue(loadResp.ConfigOptions, "mode", permissionMode)
+	}
+	if modelApplied {
+		setConfigOptionCurrentValue(loadResp.ConfigOptions, "model", model)
 	}
 	c.storeSessionConfigOptions(sessionID, loadResp.ConfigOptions)
 
@@ -444,6 +447,21 @@ func (c *Client) SetConfigOption(ctx context.Context, sessionID, configID, value
 		"value":     value,
 	})
 	if err != nil {
+		if configID == "model" && IsMethodNotFoundError(err) {
+			if setModelErr := c.setModel(ctx, sessionID, value); setModelErr == nil {
+				c.updateSessionConfigCurrentValue(sessionID, "model", value)
+				if ev := configOptionEvent(
+					sessionID,
+					c.sessionConfigOptionsSnapshot(sessionID),
+					"model",
+					appwire.EventModelChanged,
+					nil,
+				); ev != nil {
+					c.emit(*ev)
+				}
+				return nil
+			}
+		}
 		return fmt.Errorf("session/set_config_option: %w", err)
 	}
 	log.Printf("[acp] SetConfigOption raw result: %s", string(result))
@@ -457,6 +475,17 @@ func (c *Client) SetConfigOption(ctx context.Context, sessionID, configID, value
 	c.mergeSessionConfigOptions(sessionID, resp.ConfigOptions)
 	if ev := configOptionEvent(sessionID, resp.ConfigOptions, "model", appwire.EventModelChanged, nil); ev != nil {
 		c.emit(*ev)
+	}
+	return nil
+}
+
+func (c *Client) setModel(ctx context.Context, sessionID, modelID string) error {
+	_, err := c.transport.Call(ctx, "session/set_model", map[string]any{
+		"sessionId": sessionID,
+		"modelId":   modelID,
+	})
+	if err != nil {
+		return fmt.Errorf("session/set_model: %w", err)
 	}
 	return nil
 }
@@ -1119,6 +1148,33 @@ func (c *Client) updateSessionConfigMode(sessionID, modeID string) {
 	c.sessionConfigOption[sessionID] = append(current, modeOption)
 }
 
+func (c *Client) updateSessionConfigCurrentValue(sessionID, category, value string) {
+	if sessionID == "" || category == "" || value == "" {
+		return
+	}
+	c.configMu.Lock()
+	defer c.configMu.Unlock()
+
+	current := append([]acpprotocol.SessionConfigOption(nil), c.sessionConfigOption[sessionID]...)
+	for i := range current {
+		if configOptionCategory(current[i]) != category && current[i].ID != category {
+			continue
+		}
+		current[i].CurrentValue = value
+		c.sessionConfigOption[sessionID] = current
+		return
+	}
+
+	current = append(current, acpprotocol.SessionConfigOption{
+		ID:           category,
+		Name:         fallbackConfigOptionName(category),
+		Type:         "select",
+		Category:     categoryPtr(category),
+		CurrentValue: value,
+	})
+	c.sessionConfigOption[sessionID] = current
+}
+
 func (c *Client) sessionConfigOptionsSnapshot(sessionID string) []acpprotocol.SessionConfigOption {
 	c.configMu.RLock()
 	defer c.configMu.RUnlock()
@@ -1219,21 +1275,34 @@ func configOptionCategory(opt acpprotocol.SessionConfigOption) string {
 func normalizeSessionConfigOptions(
 	opts []acpprotocol.SessionConfigOption,
 	modes *acpprotocol.SessionModeState,
+	models *acpprotocol.SessionModelState,
 ) []acpprotocol.SessionConfigOption {
 	current := append([]acpprotocol.SessionConfigOption(nil), opts...)
 	modeOption, hasModeOption := modeConfigOptionFromState(current, modes)
-	if !hasModeOption {
-		return current
+	if hasModeOption {
+		current = mergeNormalizedConfigOption(current, modeOption, "mode")
 	}
 
+	modelOption, hasModelOption := modelConfigOptionFromState(current, models)
+	if hasModelOption {
+		current = mergeNormalizedConfigOption(current, modelOption, "model")
+	}
+	return current
+}
+
+func mergeNormalizedConfigOption(
+	current []acpprotocol.SessionConfigOption,
+	option acpprotocol.SessionConfigOption,
+	category string,
+) []acpprotocol.SessionConfigOption {
 	for i, opt := range current {
-		if configOptionCategory(opt) != "mode" {
+		if configOptionCategory(opt) != category && opt.ID != category {
 			continue
 		}
-		current[i] = modeOption
+		current[i] = option
 		return current
 	}
-	return append(current, modeOption)
+	return append(current, option)
 }
 
 func modeConfigOptionFromState(
@@ -1300,6 +1369,70 @@ func modeConfigOptionFromState(
 	}, true
 }
 
+func modelConfigOptionFromState(
+	opts []acpprotocol.SessionConfigOption,
+	models *acpprotocol.SessionModelState,
+) (acpprotocol.SessionConfigOption, bool) {
+	var existing *acpprotocol.SessionConfigOption
+	for i := range opts {
+		if configOptionCategory(opts[i]) == "model" || opts[i].ID == "model" {
+			existing = &opts[i]
+			break
+		}
+	}
+
+	modelCategory := "model"
+	modelID := "model"
+	modelName := "Model"
+	modelType := "select"
+	if existing != nil {
+		if existing.ID != "" {
+			modelID = existing.ID
+		}
+		if existing.Name != "" {
+			modelName = existing.Name
+		}
+		if existing.Type != "" {
+			modelType = existing.Type
+		}
+	}
+
+	currentValue := ""
+	if models != nil {
+		currentValue = models.CurrentModelID
+	}
+	if currentValue == "" && existing != nil {
+		currentValue = existing.CurrentValue
+	}
+	if currentValue == "" {
+		return acpprotocol.SessionConfigOption{}, false
+	}
+
+	options := acpprotocol.SessionConfigSelectOptions{}
+	if models != nil && len(models.AvailableModels) > 0 {
+		ungrouped := make([]acpprotocol.SessionConfigSelectOption, 0, len(models.AvailableModels))
+		for _, model := range models.AvailableModels {
+			ungrouped = append(ungrouped, acpprotocol.SessionConfigSelectOption{
+				Value:       model.ModelID,
+				Name:        model.Name,
+				Description: model.Description,
+			})
+		}
+		options.Ungrouped = ungrouped
+	} else if existing != nil {
+		options = existing.Options
+	}
+
+	return acpprotocol.SessionConfigOption{
+		ID:           modelID,
+		Name:         modelName,
+		Type:         modelType,
+		Category:     &modelCategory,
+		CurrentValue: currentValue,
+		Options:      options,
+	}, true
+}
+
 func modeConfigOptionEvent(
 	sessionID, modeID string,
 	opts []acpprotocol.SessionConfigOption,
@@ -1340,4 +1473,22 @@ func expandAndValidateCWD(cwd string) (string, error) {
 		return "", fmt.Errorf("cwd must be an absolute path")
 	}
 	return cwd, nil
+}
+
+func fallbackConfigOptionName(category string) string {
+	switch category {
+	case "mode":
+		return "Mode"
+	case "model":
+		return "Model"
+	default:
+		if category == "" {
+			return ""
+		}
+		return category
+	}
+}
+
+func categoryPtr(value string) *string {
+	return &value
 }
