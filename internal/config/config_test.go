@@ -55,6 +55,14 @@ func TestDefault_ContainsBuiltInRuntimes(t *testing.T) {
 		t.Errorf("gemini command = %q, want empty", gemini.Command)
 	}
 
+	goose, ok := cfg.Runtimes[RuntimeGoose]
+	if !ok {
+		t.Fatal("default config missing goose runtime")
+	}
+	if goose.Command != "" {
+		t.Errorf("goose command = %q, want empty", goose.Command)
+	}
+
 	opencode, ok := cfg.Runtimes[RuntimeOpenCode]
 	if !ok {
 		t.Fatal("default config missing opencode runtime")
@@ -154,20 +162,22 @@ func TestConfiguredRuntimeIDs_Sorted(t *testing.T) {
 			RuntimeClaudeCode: {},
 			RuntimeCopilot:    {},
 			RuntimeGemini:     {},
+			RuntimeGoose:      {},
 			RuntimeOpenCode:   {},
 		},
 	}
 
 	ids := cfg.ConfiguredRuntimeIDs()
-	if len(ids) != 5 {
-		t.Fatalf("len(ids) = %d, want 5", len(ids))
+	if len(ids) != 6 {
+		t.Fatalf("len(ids) = %d, want 6", len(ids))
 	}
 	if ids[0] != RuntimeClaudeCode ||
 		ids[1] != RuntimeCodex ||
 		ids[2] != RuntimeCopilot ||
 		ids[3] != RuntimeGemini ||
-		ids[4] != RuntimeOpenCode {
-		t.Fatalf("ids = %v, want [claude-code codex copilot gemini opencode]", ids)
+		ids[4] != RuntimeGoose ||
+		ids[5] != RuntimeOpenCode {
+		t.Fatalf("ids = %v, want [claude-code codex copilot gemini goose opencode]", ids)
 	}
 }
 
@@ -193,6 +203,9 @@ func TestMergeConfig_NilOverlayRuntimesPreservesBase(t *testing.T) {
 	}
 	if _, ok := merged.Runtimes[RuntimeGemini]; !ok {
 		t.Fatal("gemini runtime missing after nil overlay")
+	}
+	if _, ok := merged.Runtimes[RuntimeGoose]; !ok {
+		t.Fatal("goose runtime missing after nil overlay")
 	}
 	if _, ok := merged.Runtimes[RuntimeOpenCode]; !ok {
 		t.Fatal("opencode runtime missing after nil overlay")
@@ -336,8 +349,8 @@ func TestLoadEffective_UserRuntimesKeepBuiltInDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEffective: %v", err)
 	}
-	if len(cfg.Runtimes) != 5 {
-		t.Fatalf("runtime count = %d, want 5", len(cfg.Runtimes))
+	if len(cfg.Runtimes) != 6 {
+		t.Fatalf("runtime count = %d, want 6", len(cfg.Runtimes))
 	}
 	if _, ok := cfg.Runtimes[RuntimeClaudeCode]; !ok {
 		t.Fatal("expected claude-code runtime to be restored from built-ins")
@@ -347,6 +360,9 @@ func TestLoadEffective_UserRuntimesKeepBuiltInDefaults(t *testing.T) {
 	}
 	if _, ok := cfg.Runtimes[RuntimeGemini]; !ok {
 		t.Fatal("expected gemini runtime to be restored from built-ins")
+	}
+	if _, ok := cfg.Runtimes[RuntimeGoose]; !ok {
+		t.Fatal("expected goose runtime to be restored from built-ins")
 	}
 	codex := cfg.Runtimes[RuntimeCodex]
 	if codex.Command != "" {
@@ -395,8 +411,8 @@ func TestLoadEffective_ProjectRuntimesKeepBuiltInDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEffective: %v", err)
 	}
-	if len(cfg.Runtimes) != 5 {
-		t.Fatalf("runtime count = %d, want 5", len(cfg.Runtimes))
+	if len(cfg.Runtimes) != 6 {
+		t.Fatalf("runtime count = %d, want 6", len(cfg.Runtimes))
 	}
 	if _, ok := cfg.Runtimes[RuntimeCodex]; !ok {
 		t.Fatal("expected codex runtime to be restored from built-ins")
@@ -406,6 +422,9 @@ func TestLoadEffective_ProjectRuntimesKeepBuiltInDefaults(t *testing.T) {
 	}
 	if _, ok := cfg.Runtimes[RuntimeGemini]; !ok {
 		t.Fatal("expected gemini runtime to be restored from built-ins")
+	}
+	if _, ok := cfg.Runtimes[RuntimeGoose]; !ok {
+		t.Fatal("expected goose runtime to be restored from built-ins")
 	}
 	cc := cfg.Runtimes[RuntimeClaudeCode]
 	if cc.Command != "/tmp/claude-agent-acp" {

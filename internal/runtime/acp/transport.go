@@ -176,15 +176,11 @@ func (t *Transport) Notify(method string, params any) error {
 }
 
 // Respond sends a response to an agent→client request.
-func (t *Transport) Respond(id int64, result any) error {
-	resultBytes, err := json.Marshal(result)
-	if err != nil {
-		return fmt.Errorf("marshal result: %w", err)
-	}
-	return t.send(Response{
-		JSONRPC: "2.0",
-		ID:      id,
-		Result:  resultBytes,
+func (t *Transport) Respond(id any, result any) error {
+	return t.send(map[string]any{
+		"jsonrpc": "2.0",
+		"id":      id,
+		"result":  result,
 	})
 }
 
@@ -246,17 +242,22 @@ func (t *Transport) readLoop() {
 		}
 
 		if msg.IsResponse() {
+			id, ok := msg.Int64ID()
+			if !ok {
+				log.Printf("[acp] ignored response with non-numeric id: %#v", msg.ID)
+				continue
+			}
 			t.mu.Lock()
-			ch, ok := t.pending[*msg.ID]
+			ch, ok := t.pending[id]
 			if ok {
-				delete(t.pending, *msg.ID)
+				delete(t.pending, id)
 			}
 			t.mu.Unlock()
 
 			if ok {
 				ch <- &Response{
 					JSONRPC: msg.JSONRPC,
-					ID:      *msg.ID,
+					ID:      id,
 					Result:  msg.Result,
 					Error:   msg.Error,
 				}

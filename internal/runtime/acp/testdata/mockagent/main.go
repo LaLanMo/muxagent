@@ -19,6 +19,13 @@ type message struct {
 	Error   *rpcError       `json:"error,omitempty"`
 }
 
+func (m message) Int64ID() (int64, bool) {
+	if m.ID == nil {
+		return 0, false
+	}
+	return *m.ID, true
+}
+
 type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
@@ -304,7 +311,10 @@ func main() {
 		if msg.ID == nil {
 			continue
 		}
-		id := *msg.ID
+		id, ok := msg.Int64ID()
+		if !ok {
+			continue
+		}
 
 		switch msg.Method {
 		case "initialize":

@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -68,7 +67,7 @@ type historyDrainRequest struct {
 }
 
 type pendingPermission struct {
-	rpcID   int64 // the JSON-RPC request ID from agent
+	rpcID   any // the JSON-RPC request ID from agent
 	request domain.ApprovalRequest
 }
 
@@ -592,7 +591,7 @@ func (c *Client) handleRequests() {
 			log.Printf("[acp] unhandled agent request: %s", req.Method)
 			// Respond with error for unknown methods
 			if req.ID != nil {
-				_ = c.transport.Respond(*req.ID, map[string]any{
+				_ = c.transport.Respond(req.IDValue(), map[string]any{
 					"error": fmt.Sprintf("unknown method: %s", req.Method),
 				})
 			}
@@ -609,17 +608,20 @@ func (c *Client) handlePermissionRequest(req *IncomingMessage) {
 	var permReq acpprotocol.RequestPermissionRequest
 	if err := json.Unmarshal(req.Params, &permReq); err != nil {
 		log.Printf("[acp] failed to parse permission request: %v", err)
-		_ = c.transport.Respond(*req.ID, selectedPermissionResponse("reject"))
+		_ = c.transport.Respond(req.IDValue(), selectedPermissionResponse("reject"))
 		return
 	}
 
-	requestID := strconv.FormatInt(*req.ID, 10)
+	requestID := req.IDString()
+	if requestID == "" {
+		requestID = "unknown"
+	}
 	approval := buildApprovalRequest(requestID, c.cfg.RuntimeID, permReq, time.Now())
 
 	// Store pending permission
 	c.permMu.Lock()
 	c.pendingPerm[requestID] = &pendingPermission{
-		rpcID:   *req.ID,
+		rpcID:   req.IDValue(),
 		request: approval,
 	}
 	c.permMu.Unlock()

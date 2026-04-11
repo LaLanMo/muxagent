@@ -364,6 +364,8 @@ func ensureRuntimeFor(cfg config.Config, runtimeID config.RuntimeID, u *updater,
 		return nil
 	case config.RuntimeGemini:
 		return nil
+	case config.RuntimeGoose:
+		return nil
 	default:
 		return fmt.Errorf("runtime %q is not supported", runtimeID)
 	}

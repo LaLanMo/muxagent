@@ -167,6 +167,25 @@ func TestResolveSettings_GeminiDefaultsToACPCommand(t *testing.T) {
 	}
 }
 
+func TestResolveSettings_GooseDefaultsToACPCommand(t *testing.T) {
+	cfg := config.Default()
+	m := New(cfg)
+
+	got, err := m.resolveSettings(config.RuntimeGoose, cfg.Runtimes[config.RuntimeGoose], "/tmp/project")
+	if err != nil {
+		t.Fatalf("resolveSettings: %v", err)
+	}
+	if got.Command != "goose" {
+		t.Fatalf("command = %q, want goose", got.Command)
+	}
+	if len(got.Args) != 1 || got.Args[0] != "acp" {
+		t.Fatalf("args = %#v, want [\"acp\"]", got.Args)
+	}
+	if got.CWD != "/tmp/project" {
+		t.Fatalf("cwd = %q, want /tmp/project", got.CWD)
+	}
+}
+
 func TestSelectRuntimeStartupCWD_FallsBackToHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -906,8 +925,8 @@ func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
 	m := New(config.Default())
 
 	list := m.RuntimeList()
-	if len(list) != 5 {
-		t.Fatalf("len(list) = %d, want 5", len(list))
+	if len(list) != 6 {
+		t.Fatalf("len(list) = %d, want 6", len(list))
 	}
 
 	var openCode *RuntimeInfo
@@ -935,6 +954,48 @@ func TestRuntimeListIncludesOpenCodeCatalog(t *testing.T) {
 	}
 	if got := len(modeOption.Options.Flatten()); got != 2 {
 		t.Fatalf("len(mode options) = %d, want 2", got)
+	}
+}
+
+func TestRuntimeListIncludesGooseCatalog(t *testing.T) {
+	binDir := t.TempDir()
+	gooseBin := filepath.Join(binDir, "goose")
+	if err := os.WriteFile(gooseBin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", binDir)
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var goose *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeGoose) {
+			goose = &list[i]
+			break
+		}
+	}
+	if goose == nil {
+		t.Fatal("expected Goose runtime in list")
+	}
+	if !goose.Ready {
+		t.Fatal("expected Goose runtime to be ready")
+	}
+	if goose.Label != "Goose" {
+		t.Fatalf("label = %q, want Goose", goose.Label)
+	}
+	modeOption := findConfigOption(goose.ConfigOptions, "mode")
+	if modeOption == nil {
+		t.Fatal("expected Goose mode config option")
+	}
+	if modeOption.Name != "Mode" {
+		t.Fatalf("mode option name = %q, want Mode", modeOption.Name)
+	}
+	if got := modeOption.CurrentValue; got != gooseModeAuto {
+		t.Fatalf("currentValue = %q, want %q", got, gooseModeAuto)
+	}
+	if got := len(modeOption.Options.Flatten()); got != 4 {
+		t.Fatalf("len(mode options) = %d, want 4", got)
 	}
 }
 
@@ -1064,6 +1125,27 @@ func TestRuntimeListMarksGeminiNotReadyWhenUnavailable(t *testing.T) {
 	}
 }
 
+func TestRuntimeListMarksGooseNotReadyWhenUnavailable(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	m := New(config.Default())
+
+	list := m.RuntimeList()
+	var goose *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeGoose) {
+			goose = &list[i]
+			break
+		}
+	}
+	if goose == nil {
+		t.Fatal("expected Goose runtime in list")
+	}
+	if goose.Ready {
+		t.Fatal("expected Goose runtime to be marked not ready")
+	}
+}
+
 func TestRuntimeListMarksConfiguredCopilotCommandReady(t *testing.T) {
 	binDir := t.TempDir()
 	custom := filepath.Join(binDir, "custom-copilot")
@@ -1123,6 +1205,37 @@ func TestRuntimeListMarksConfiguredGeminiCommandReady(t *testing.T) {
 	}
 	if !gemini.Ready {
 		t.Fatal("expected configured Gemini runtime to be ready")
+	}
+}
+
+func TestRuntimeListMarksConfiguredGooseCommandReady(t *testing.T) {
+	binDir := t.TempDir()
+	custom := filepath.Join(binDir, "custom-goose")
+	if err := os.WriteFile(custom, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	cfg := config.Default()
+	cfg.Runtimes[config.RuntimeGoose] = config.RuntimeSettings{
+		Command: custom,
+		Args:    []string{"acp"},
+	}
+	m := New(cfg)
+
+	list := m.RuntimeList()
+	var goose *RuntimeInfo
+	for i := range list {
+		if list[i].ID == string(config.RuntimeGoose) {
+			goose = &list[i]
+			break
+		}
+	}
+	if goose == nil {
+		t.Fatal("expected Goose runtime in list")
+	}
+	if !goose.Ready {
+		t.Fatal("expected configured Goose runtime to be ready")
 	}
 }
 

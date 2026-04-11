@@ -22,6 +22,7 @@ const (
 	RuntimeCodex      RuntimeID = "codex"
 	RuntimeCopilot    RuntimeID = "copilot"
 	RuntimeGemini     RuntimeID = "gemini"
+	RuntimeGoose      RuntimeID = "goose"
 	RuntimeOpenCode   RuntimeID = "opencode"
 
 	defaultRelayURL              = "wss://relay.muxagent.com/ws"
@@ -54,6 +55,7 @@ func Default() Config {
 			RuntimeCodex:    {},
 			RuntimeCopilot:  {},
 			RuntimeGemini:   {},
+			RuntimeGoose:    {},
 			RuntimeOpenCode: {},
 		},
 	}
@@ -463,7 +465,7 @@ func decodeRelaySigningPublicKey(relaySigningPublicKey string) (ed25519.PublicKe
 
 func IsSupportedRuntime(id RuntimeID) bool {
 	switch id {
-	case RuntimeClaudeCode, RuntimeCodex, RuntimeCopilot, RuntimeGemini, RuntimeOpenCode:
+	case RuntimeClaudeCode, RuntimeCodex, RuntimeCopilot, RuntimeGemini, RuntimeGoose, RuntimeOpenCode:
 		return true
 	default:
 		return false

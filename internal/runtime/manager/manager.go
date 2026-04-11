@@ -30,6 +30,11 @@ const (
 	geminiModeAutoEdit = "autoEdit"
 	geminiModeYolo     = "yolo"
 	geminiModePlan     = "plan"
+
+	gooseModeAuto         = "auto"
+	gooseModeApprove      = "approve"
+	gooseModeSmartApprove = "smart_approve"
+	gooseModeChat         = "chat"
 )
 
 type RuntimeInfo struct {
@@ -482,6 +487,8 @@ func (m *Manager) resolveSettings(id config.RuntimeID, settings config.RuntimeSe
 		settings = resolveCopilotSettings(settings)
 	} else if id == config.RuntimeGemini {
 		settings = resolveGeminiSettings(settings)
+	} else if id == config.RuntimeGoose {
+		settings = resolveGooseSettings(settings)
 	} else if id == config.RuntimeOpenCode {
 		settings = resolveOpenCodeSettings(settings)
 	}
@@ -1060,6 +1067,8 @@ func runtimeLabel(id config.RuntimeID) string {
 		return "Codex"
 	case config.RuntimeGemini:
 		return "Gemini CLI"
+	case config.RuntimeGoose:
+		return "Goose"
 	case config.RuntimeOpenCode:
 		return "OpenCode"
 	default:
@@ -1200,6 +1209,40 @@ func runtimeConfigOptions(id config.RuntimeID) []acpprotocol.SessionConfigOption
 				},
 			},
 		}
+	case config.RuntimeGoose:
+		return []acpprotocol.SessionConfigOption{
+			{
+				ID:           "mode",
+				Name:         "Mode",
+				Type:         "select",
+				Category:     stringPtr("mode"),
+				CurrentValue: gooseModeAuto,
+				Options: acpprotocol.SessionConfigSelectOptions{
+					Ungrouped: []acpprotocol.SessionConfigSelectOption{
+						{
+							Value:       gooseModeAuto,
+							Name:        "Auto",
+							Description: stringPtr("Automatically approve tool calls."),
+						},
+						{
+							Value:       gooseModeSmartApprove,
+							Name:        "Smart Approve",
+							Description: stringPtr("Ask only for sensitive tool calls."),
+						},
+						{
+							Value:       gooseModeApprove,
+							Name:        "Approve",
+							Description: stringPtr("Ask before every tool call."),
+						},
+						{
+							Value:       gooseModeChat,
+							Name:        "Chat",
+							Description: stringPtr("Chat only, no tool calls."),
+						},
+					},
+				},
+			},
+		}
 	case config.RuntimeOpenCode:
 		return []acpprotocol.SessionConfigOption{
 			{
@@ -1235,6 +1278,8 @@ func runtimeReady(id config.RuntimeID, settings config.RuntimeSettings) bool {
 		return copilotRuntimeReady(settings)
 	case config.RuntimeGemini:
 		return geminiRuntimeReady(settings)
+	case config.RuntimeGoose:
+		return gooseRuntimeReady(settings)
 	case config.RuntimeOpenCode:
 		return openCodeRuntimeReady(settings)
 	default:
@@ -1262,6 +1307,16 @@ func geminiRuntimeReady(settings config.RuntimeSettings) bool {
 	return err == nil
 }
 
+func gooseRuntimeReady(settings config.RuntimeSettings) bool {
+	settings = resolveGooseSettings(settings)
+	command := strings.TrimSpace(settings.Command)
+	if command == "" {
+		return false
+	}
+	_, err := exec.LookPath(command)
+	return err == nil
+}
+
 func openCodeRuntimeReady(settings config.RuntimeSettings) bool {
 	settings = resolveOpenCodeSettings(settings)
 	command := strings.TrimSpace(settings.Command)
@@ -1274,7 +1329,7 @@ func openCodeRuntimeReady(settings config.RuntimeSettings) bool {
 
 func supportsManagedRuntime(id config.RuntimeID) bool {
 	switch id {
-	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeCopilot, config.RuntimeGemini, config.RuntimeOpenCode:
+	case config.RuntimeClaudeCode, config.RuntimeCodex, config.RuntimeCopilot, config.RuntimeGemini, config.RuntimeGoose, config.RuntimeOpenCode:
 		return true
 	default:
 		return false
@@ -1305,6 +1360,18 @@ func resolveGeminiSettings(settings config.RuntimeSettings) config.RuntimeSettin
 	return settings
 }
 
+func resolveGooseSettings(settings config.RuntimeSettings) config.RuntimeSettings {
+	if strings.TrimSpace(settings.Command) == "" {
+		settings.Command = "goose"
+		settings.Args = defaultGooseArgs(settings.Args)
+		return settings
+	}
+	if len(settings.Args) == 0 && looksLikeGooseBinary(settings.Command) {
+		settings.Args = defaultGooseArgs(nil)
+	}
+	return settings
+}
+
 func defaultCopilotArgs(args []string) []string {
 	if len(args) > 0 {
 		return args
@@ -1324,9 +1391,21 @@ func defaultGeminiArgs(args []string) []string {
 	return []string{"--acp"}
 }
 
+func defaultGooseArgs(args []string) []string {
+	if len(args) > 0 {
+		return args
+	}
+	return []string{"acp"}
+}
+
 func looksLikeGeminiBinary(command string) bool {
 	base := filepath.Base(strings.TrimSpace(command))
 	return base == "gemini" || base == "gemini.exe"
+}
+
+func looksLikeGooseBinary(command string) bool {
+	base := filepath.Base(strings.TrimSpace(command))
+	return base == "goose" || base == "goose.exe"
 }
 
 func resolveOpenCodeSettings(settings config.RuntimeSettings) config.RuntimeSettings {
