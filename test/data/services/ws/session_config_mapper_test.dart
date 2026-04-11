@@ -140,6 +140,46 @@ void main() {
     ]);
   });
 
+  test(
+    'orders Goose modes as auto then smart_approve then approve then chat',
+    () {
+      final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
+        runtimeId: 'goose',
+        configOptions: const [
+          AcpSessionConfigOptionDto(
+            id: 'mode',
+            name: 'Mode',
+            type: 'select',
+            currentValue: 'auto',
+            category: 'mode',
+            options: AcpSessionConfigSelectOptionsDto(
+              ungrouped: [
+                AcpSessionConfigSelectOptionDto(value: 'chat', name: 'chat'),
+                AcpSessionConfigSelectOptionDto(
+                  value: 'approve',
+                  name: 'approve',
+                ),
+                AcpSessionConfigSelectOptionDto(
+                  value: 'smart_approve',
+                  name: 'smart_approve',
+                ),
+                AcpSessionConfigSelectOptionDto(value: 'auto', name: 'auto'),
+              ],
+            ),
+          ),
+        ],
+      );
+
+      expect(snapshot.currentMode?.id, 'auto');
+      expect(snapshot.availableModes.map((mode) => mode.id), [
+        'auto',
+        'smart_approve',
+        'approve',
+        'chat',
+      ]);
+    },
+  );
+
   test('orders Copilot modes as agent then plan then autopilot', () {
     final snapshot = SessionConfigMapper.snapshotFromConfigOptions(
       runtimeId: 'copilot',

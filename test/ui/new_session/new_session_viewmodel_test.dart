@@ -146,6 +146,16 @@ void main() {
       expect(identical(result, defaultMode), isTrue);
     });
 
+    test('falls back to Auto for Goose when there is no memory', () {
+      final auto = buildMode('auto');
+      final result = NewSessionViewModel.resolveSelectedMode(
+        runtimeId: 'goose',
+        options: [buildMode('chat'), buildMode('approve'), auto],
+      );
+
+      expect(identical(result, auto), isTrue);
+    });
+
     test('falls back to Agent for Copilot when there is no memory', () {
       final agent = buildMode(_copilotModeAgentId);
       final result = NewSessionViewModel.resolveSelectedMode(

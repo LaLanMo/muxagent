@@ -120,6 +120,7 @@ flutter:
     - assets/anthropic-icon.png
     - assets/github-copilot-icon.png
     - assets/gemini-icon.png
+    - assets/goose-icon.png
     - assets/openai-icon.png
     - assets/opencode-icon.png
 

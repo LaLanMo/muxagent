@@ -52,6 +52,7 @@ class ModeOption {
         _copilotModeAutopilotId: 2,
       },
       'gemini' => const {'default': 0, 'autoEdit': 1, 'yolo': 2, 'plan': 3},
+      'goose' => const {'auto': 0, 'smart_approve': 1, 'approve': 2, 'chat': 3},
       'opencode' => const {'build': 0, 'plan': 1},
       _ => const <String, int>{},
     };
@@ -79,7 +80,11 @@ class ModeOption {
   static String _displayLabel(String id, String? upstreamLabel) {
     switch (id) {
       case 'default':
+        return 'Default';
       case 'auto':
+        if (upstreamLabel != null && upstreamLabel.isNotEmpty) {
+          return _fallbackLabel(upstreamLabel);
+        }
         return 'Default';
       case 'acceptEdits':
         return 'Accept Edits';
@@ -87,6 +92,8 @@ class ModeOption {
         return 'Plan';
       case 'autoEdit':
         return 'Auto Edit';
+      case 'smart_approve':
+        return 'Smart Approve';
       case 'yolo':
         return 'YOLO';
       case 'dontAsk':
@@ -112,6 +119,7 @@ class ModeOption {
     if (id.isEmpty) return 'Default';
     return id
         .replaceAll('-', ' ')
+        .replaceAll('_', ' ')
         .replaceAllMapped(
           RegExp(r'([a-z])([A-Z])'),
           (match) => '${match[1]} ${match[2]}',

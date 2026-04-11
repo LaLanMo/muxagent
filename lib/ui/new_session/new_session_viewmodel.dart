@@ -27,6 +27,7 @@ import '../../routing/routes.dart';
 const _copilotModeAgentId =
     'https://agentclientprotocol.com/protocol/session-modes#agent';
 const _geminiModeDefaultId = 'default';
+const _gooseModeAutoId = 'auto';
 
 class NewSessionViewModel extends GetxController {
   static const _createSessionTimeout = Duration(seconds: 15);
@@ -780,6 +781,8 @@ class NewSessionViewModel extends GetxController {
         return _copilotModeAgentId;
       case 'gemini':
         return _geminiModeDefaultId;
+      case 'goose':
+        return _gooseModeAutoId;
       case 'opencode':
         return 'build';
       default:
