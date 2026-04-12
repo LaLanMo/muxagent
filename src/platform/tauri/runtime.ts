@@ -9,8 +9,6 @@ import type {
   ConfigDeleteParams,
   ConfigDeleteResult,
   ConfigGetResult,
-  ConfigSetDefaultParams,
-  ConfigSetDefaultResult,
   ConfigValidateParams,
   ConfigValidateResult,
   InitializeResult,
@@ -102,12 +100,6 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
     return this.request("config.delete", params);
-  }
-
-  configSetDefault(
-    params: ConfigSetDefaultParams,
-  ): Promise<ConfigSetDefaultResult> {
-    return this.request("config.set_default", params);
   }
 
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {

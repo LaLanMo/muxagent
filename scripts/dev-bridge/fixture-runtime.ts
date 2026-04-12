@@ -307,7 +307,6 @@ export class FixtureRuntime {
               "config.rename",
               "config.delete",
               "config.reset",
-              "config.set_default",
               "config.validate",
               "config.save",
               "config.prompt.get",
@@ -475,9 +474,6 @@ export class FixtureRuntime {
         if (config.builtin) {
           return this.fail(id, -32602, "built-in configs cannot be deleted");
         }
-        if (config.is_default) {
-          return this.fail(id, -32602, "default config cannot be deleted");
-        }
         state.configs = state.configs.filter((entry) => entry !== config);
         return this.respond(id, { removed: true });
       }
@@ -493,17 +489,6 @@ export class FixtureRuntime {
         config.revision = reset.revision;
         config.config = reset.config;
         config.prompts = reset.prompts;
-        return this.respond(id, { entry: this.configDetail(state, config) });
-      }
-      case "config.set_default": {
-        const config = this.requireConfig(state, String(params.alias ?? ""));
-        if (!config) {
-          return this.fail(id, -32011, "config not found");
-        }
-        for (const entry of state.configs) {
-          entry.is_default = entry === config;
-        }
-        config.revision = randomUUID();
         return this.respond(id, { entry: this.configDetail(state, config) });
       }
       case "config.validate": {

@@ -1,5 +1,6 @@
 import type { DesktopRuntime } from "@/platform/contract";
 import type {
+  ConfigCatalogEntryDto,
   ConfigCatalogResult,
   ConfigDetailDto,
   ConfigDraftDto,
@@ -40,14 +41,6 @@ export async function deleteConfig(
   alias: string,
 ): Promise<void> {
   await runtime.backend.configDelete({ alias: alias.trim() });
-}
-
-export async function setDefaultConfig(
-  runtime: DesktopRuntime,
-  alias: string,
-): Promise<ConfigDetailDto> {
-  const result = await runtime.backend.configSetDefault({ alias: alias.trim() });
-  return result.entry;
 }
 
 export async function validateConfigDraft(
@@ -102,4 +95,29 @@ export function suggestConfigAlias(
       return candidate;
     }
   }
+}
+
+export function pickBuiltinDefaultConfig(
+  entries: readonly ConfigCatalogEntryDto[],
+): ConfigCatalogEntryDto | undefined {
+  return (
+    entries.find((entry) => entry.builtin && entry.alias === "default") ??
+    entries.find((entry) => entry.alias === "default") ??
+    entries.find((entry) => entry.builtin) ??
+    entries[0]
+  );
+}
+
+export function pickPreferredLaunchableConfig(
+  entries: readonly ConfigCatalogEntryDto[],
+  rememberedAlias?: string,
+): ConfigCatalogEntryDto | undefined {
+  const rememberedEntry =
+    rememberedAlias == null
+      ? undefined
+      : entries.find((entry) => entry.alias === rememberedAlias);
+  if (rememberedEntry) {
+    return rememberedEntry;
+  }
+  return pickBuiltinDefaultConfig(entries);
 }

@@ -1,4 +1,4 @@
-import { Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
@@ -8,7 +8,6 @@ import type { KeyboardEvent } from "react";
 type ConfigCardModel = ConfigCatalogEntryDto & {
   open: () => void;
   edit: () => Promise<void>;
-  setDefault: () => Promise<void>;
   remove: () => Promise<void>;
 };
 
@@ -50,6 +49,14 @@ export function ConfigsScreen({
     return parts.at(-1) || source;
   }
 
+  function statusLabel(entry: ConfigCardModel) {
+    return entry.builtin ? "builtin" : "custom";
+  }
+
+  function summaryLabel(entry: ConfigCardModel) {
+    return [runtimeLabel(entry), nodeCountLabel(entry), locationLabel(entry)].join("  ·  ");
+  }
+
   function handleSurfaceKeyDown(
     event: KeyboardEvent<HTMLElement>,
     open: () => void,
@@ -73,19 +80,6 @@ export function ConfigsScreen({
         onAddWorkspace={() => void shell.addWorkspace()}
         topBarLeft={
           <h1 className="screen-title">Configs</h1>
-        }
-        topBarRight={
-          <div className="configs-topbar">
-            <button
-              aria-label="+ New Config"
-              className="topbar-action"
-              onClick={() => void createConfig()}
-              type="button"
-            >
-              <Plus aria-hidden="true" size={14} strokeWidth={2.2} />
-              <span>New Config</span>
-            </button>
-          </div>
         }
       >
         <section
@@ -112,7 +106,7 @@ export function ConfigsScreen({
             <div className="configs-grid">
               {entries.map((entry) => (
                 <article
-                  className={`config-list-card${entry.is_default ? " config-list-card--active" : ""}`}
+                  className="config-list-card"
                   data-testid={`config-card-${entry.alias}`}
                   key={entry.alias}
                 >
@@ -129,11 +123,6 @@ export function ConfigsScreen({
                         <div className="config-list-card__headline">
                           <h2>{entry.alias}</h2>
                           <div className="config-list-card__badges">
-                            {entry.is_default ? (
-                              <span className="config-list-card__state config-list-card__state--default">
-                                default
-                              </span>
-                            ) : null}
                             <span
                               className={`config-list-card__state${
                                 entry.builtin
@@ -141,7 +130,7 @@ export function ConfigsScreen({
                                   : " config-list-card__state--custom"
                               }`}
                             >
-                              {entry.builtin ? "builtin" : "custom"}
+                              {statusLabel(entry)}
                             </span>
                           </div>
                         </div>
@@ -178,47 +167,20 @@ export function ConfigsScreen({
                     </div>
 
                     {entry.node_names?.length ? (
-                      <p className="config-list-card__flow-line">
-                        {entry.node_names.join(" · ")}
-                      </p>
+                      <div className="config-list-card__flow-row" aria-label="Workflow nodes">
+                        {entry.node_names.map((nodeName) => (
+                          <span className="config-list-card__node-chip" key={`${entry.alias}-${nodeName}`}>
+                            {nodeName}
+                          </span>
+                        ))}
+                      </div>
                     ) : null}
 
                     {entry.load_error ? (
                       <div className="config-list-card__error">{entry.load_error}</div>
                     ) : null}
 
-                    <div className="config-list-card__meta-row">
-                      <p className="config-list-card__meta-line">
-                        <span className="config-list-card__meta-label">runtime</span>
-                        <span className="config-list-card__meta-value">{runtimeLabel(entry)}</span>
-                        <span className="config-list-card__meta-divider" aria-hidden="true">
-                          ·
-                        </span>
-                        <span className="config-list-card__meta-label">nodes</span>
-                        <span className="config-list-card__meta-value">{nodeCountLabel(entry)}</span>
-                        <span className="config-list-card__meta-divider" aria-hidden="true">
-                          ·
-                        </span>
-                        <span className="config-list-card__meta-label">file</span>
-                        <span className="config-list-card__meta-value">{locationLabel(entry)}</span>
-                      </p>
-                      {!entry.is_default ? (
-                        <button
-                          className="config-list-card__default-action"
-                          disabled={busyAlias === entry.alias}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void entry.setDefault();
-                          }}
-                          type="button"
-                        >
-                          <Star aria-hidden="true" size={12} strokeWidth={1.9} />
-                          <span>Make default</span>
-                        </button>
-                      ) : (
-                        <span className="config-list-card__default-note">Default for new tasks</span>
-                      )}
-                    </div>
+                    <p className="config-list-card__meta-line">{summaryLabel(entry)}</p>
                   </div>
 
                   {busyAlias === entry.alias ? (

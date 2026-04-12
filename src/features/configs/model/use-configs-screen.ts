@@ -3,11 +3,15 @@ import { useNavigate } from "react-router-dom";
 import {
   cloneConfig,
   deleteConfig,
+  pickBuiltinDefaultConfig,
   refreshConfigCatalog,
-  setDefaultConfig,
   suggestConfigAlias,
 } from "@/application/configs";
 import { getRuntime } from "@/app/runtime";
+import {
+  clearRememberedConfigAlias,
+  readRememberedConfigAlias,
+} from "@/features/app/model/config-memory";
 import { useShellModel } from "@/features/app/model/use-shell-model";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
@@ -32,19 +36,6 @@ export function useConfigsScreen() {
         edit: async () => {
           navigate(`/configs/${encodeURIComponent(entry.alias)}`);
         },
-        setDefault: async () => {
-          setBusyAlias(entry.alias);
-          setActionError(undefined);
-          try {
-            await setDefaultConfig(getRuntime(), entry.alias);
-            const nextCatalog = await refreshConfigCatalog(getRuntime());
-            setCatalog(nextCatalog);
-          } catch (error) {
-            setActionError(error instanceof Error ? error.message : "Failed to set default config");
-          } finally {
-            setBusyAlias(undefined);
-          }
-        },
         remove: async () => {
           setPendingRemoveAlias(entry.alias);
         },
@@ -67,6 +58,9 @@ export function useConfigsScreen() {
     setActionError(undefined);
     try {
       await deleteConfig(getRuntime(), entry.alias);
+      if (readRememberedConfigAlias() === entry.alias) {
+        clearRememberedConfigAlias();
+      }
       const nextCatalog = await refreshConfigCatalog(getRuntime());
       setCatalog(nextCatalog);
     } catch (error) {
@@ -81,7 +75,7 @@ export function useConfigsScreen() {
   }
 
   async function createConfig() {
-    const sourceAlias = catalog?.default_alias ?? entries[0]?.alias;
+    const sourceAlias = pickBuiltinDefaultConfig(entries)?.alias;
     if (!sourceAlias) {
       setActionError("No source config is available to customize");
       return;

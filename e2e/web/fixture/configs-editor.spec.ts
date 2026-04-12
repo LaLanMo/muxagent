@@ -18,6 +18,7 @@ test("shows a built-in config as a read-only file inspector", async ({
 
   await page.getByRole("link", { name: /^Configs$/i }).click();
   await expect(page.getByTestId("configs-screen")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^\+ New Config$/i })).toHaveCount(0);
   await expect(page.getByTestId("config-card-default")).toBeVisible();
 
   await page
@@ -64,30 +65,21 @@ test("shows a built-in config as a read-only file inspector", async ({
   expect(reviewNodeBox!.width).toBeGreaterThan(doneNodeBox!.width);
 });
 
-test("creates a customized config and deletes it from the config list", async ({ page }) => {
+test("deletes a customized config from the config list", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
   await page.getByRole("link", { name: /^Configs$/i }).click();
   await expect(page.getByTestId("configs-screen")).toBeVisible();
+  await expect(page.getByRole("button", { name: /^\+ New Config$/i })).toHaveCount(0);
+  await expect(page.getByTestId("config-card-quick")).toBeVisible();
 
   await page
-    .getByRole("button", { name: /^\+ New Config$/i })
-    .click();
-
-  await expect(page.getByTestId("config-editor-screen")).toBeVisible();
-  await expect(page.getByTestId("config-open-in-editor-button")).toBeVisible();
-  await expect(page.getByTestId("config-editor-toggle")).toHaveCount(0);
-
-  await page.getByRole("link", { name: /^Configs$/i }).click();
-  await expect(page.getByTestId("config-card-default-copy")).toBeVisible();
-
-  await page
-    .getByTestId("config-card-default-copy")
+    .getByTestId("config-card-quick")
     .getByRole("button", { name: /^Delete$/i })
     .click();
   await expect(page.getByTestId("confirm-dialog")).toBeVisible();
   await page.getByTestId("confirm-dialog-submit").click();
 
   await expect(page.getByTestId("configs-screen")).toBeVisible();
-  await expect(page.getByTestId("config-card-default-copy")).toHaveCount(0);
+  await expect(page.getByTestId("config-card-quick")).toHaveCount(0);
 });

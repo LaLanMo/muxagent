@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { loadConfigDetail } from "@/application/configs";
+import {
+  loadConfigDetail,
+  pickPreferredLaunchableConfig,
+} from "@/application/configs";
 import { startTask } from "@/application/tasks";
 import { getRuntime } from "@/app/runtime";
+import {
+  readRememberedConfigAlias,
+  rememberConfigAlias,
+} from "@/features/app/model/config-memory";
 import { flowNodesForConfig } from "@/domain/task-shell";
 import type { ConfigDraftDto } from "@/rpc/types";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
@@ -26,9 +33,11 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   );
   const setTasks = useTaskSnapshotStore((state) => state.setTasks);
 
-  const defaultAlias = catalog?.default_alias ?? "";
+  const entries = (catalog?.entries ?? []).filter((entry) => entry.launchable);
+  const preferredAlias =
+    pickPreferredLaunchableConfig(entries, readRememberedConfigAlias())?.alias ?? "";
   const [description, setDescription] = useState("");
-  const [selectedAlias, setSelectedAlias] = useState(defaultAlias);
+  const [selectedAlias, setSelectedAlias] = useState(preferredAlias);
   const [useWorktree, setUseWorktree] = useState(
     catalog?.default_use_worktree ?? false,
   );
@@ -49,7 +58,7 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
       }
       return selectedWorkspaceId ?? workspaces[0]?.workspace_id ?? "";
     });
-    setSelectedAlias((current) => current || defaultAlias);
+    setSelectedAlias(preferredAlias);
     setUseWorktree(catalog?.default_use_worktree ?? false);
     setWorkspacePicking(false);
     setConfigPicking(false);
@@ -57,8 +66,8 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     setError(undefined);
   }, [
     catalog?.default_use_worktree,
-    defaultAlias,
     open,
+    preferredAlias,
     selectedWorkspaceId,
     workspaces,
   ]);
@@ -82,9 +91,10 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
       });
   }, [open, selectedAlias]);
 
-  const entries = (catalog?.entries ?? []).filter((entry) => entry.launchable);
   const selectedEntry =
-    entries.find((entry) => entry.alias === selectedAlias) ?? entries[0];
+    entries.find((entry) => entry.alias === selectedAlias) ??
+    pickPreferredLaunchableConfig(entries, readRememberedConfigAlias()) ??
+    entries[0];
   const canSubmit = Boolean(
     description.trim() && selectedEntry && selectedTargetWorkspaceId,
   );
@@ -108,6 +118,7 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
         config_path: selectedEntry.config_path,
         use_worktree: Boolean(selectedWorkspace?.worktree_available && useWorktree),
       });
+      rememberConfigAlias(selectedEntry.alias);
       setDescription("");
       onClose();
       void getRuntime()

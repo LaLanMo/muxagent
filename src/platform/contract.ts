@@ -7,8 +7,6 @@ import type {
   ConfigDeleteParams,
   ConfigDeleteResult,
   ConfigGetResult,
-  ConfigSetDefaultParams,
-  ConfigSetDefaultResult,
   ConfigValidateParams,
   ConfigValidateResult,
   InitializeResult,
@@ -48,7 +46,6 @@ export interface TaskBackendClient {
   configGet(alias: string): Promise<ConfigGetResult>;
   configClone(params: ConfigCloneParams): Promise<ConfigCloneResult>;
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult>;
-  configSetDefault(params: ConfigSetDefaultParams): Promise<ConfigSetDefaultResult>;
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult>;
   taskList(workspaceId: string): Promise<TaskListResult>;
   taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult>;

@@ -115,6 +115,7 @@
 
 /* --- Workspace card --- */
 .task-modal__ws-card {
+  position: relative;
   display: grid;
   gap: 0;
   border: 1px solid var(--color-border);
@@ -125,6 +126,12 @@
 
 .task-modal__ws-card--picking {
   background: var(--color-surface);
+  z-index: 2;
+}
+
+.task-modal__ws-anchor,
+.task-modal__cfg-anchor {
+  position: relative;
 }
 
 .task-modal__ws-header {
@@ -141,6 +148,10 @@
   text-align: left;
 }
 
+.task-modal__ws-card--picking .task-modal__ws-header {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
 .task-modal__ws-stack {
   display: grid;
   gap: var(--space-1);
@@ -148,8 +159,17 @@
 }
 
 .task-modal__ws-list {
+  position: absolute;
+  top: 100%;
+  inset-inline: -1px;
+  z-index: 3;
   display: grid;
-  border-top: 1px solid var(--color-border-subtle);
+  max-height: min(240px, calc(100vh - 320px));
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-top: 0;
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
 }
 
 .task-modal__ws-left {
@@ -209,6 +229,7 @@
 
 /* --- Config card --- */
 .task-modal__cfg-card {
+  position: relative;
   display: grid;
   gap: 0;
   border-radius: 0;
@@ -222,15 +243,21 @@
   padding: 0;
   border-color: var(--color-border);
   gap: 0;
+  z-index: 2;
 }
 
 .task-modal__cfg-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
   width: 100%;
   padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
   cursor: pointer;
+  text-align: left;
 }
 
 .task-modal__cfg-card--picking .task-modal__cfg-header {
@@ -254,6 +281,11 @@
   display: grid;
   gap: var(--space-4);
   padding: 0 var(--space-4) var(--space-4);
+}
+
+.task-modal__cfg-body--hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .task-modal__cfg-desc {
@@ -299,19 +331,36 @@
   color: var(--color-text-primary);
 }
 
+.task-modal__cfg-field-value--placeholder {
+  color: var(--color-text-tertiary);
+}
+
 /* --- Config picker list --- */
 .task-modal__cfg-list {
-  border-top: 1px solid var(--color-border-subtle);
-  overflow-y: auto;
+  position: absolute;
+  top: 100%;
+  inset-inline: -1px;
+  z-index: 3;
+  display: grid;
   min-height: 0;
+  max-height: min(240px, calc(100vh - 320px));
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-top: 0;
   background: var(--color-surface);
+  box-shadow: var(--shadow);
 }
 
 .task-modal__cfg-option {
-  padding: 11px var(--space-4);
   display: grid;
+  width: 100%;
+  padding: 11px var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
   gap: var(--space-1);
   cursor: pointer;
+  text-align: left;
 }
 
 .task-modal__cfg-option:hover {

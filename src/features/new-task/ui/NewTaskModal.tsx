@@ -28,6 +28,39 @@ function shortenPath(path: string): string {
   return path.replace(/^\/Users\/[^/]+/, "~").replace(/^\/home\/[^/]+/, "~");
 }
 
+type ConfigFieldView = {
+  value: string;
+  placeholder: boolean;
+};
+
+type ConfigBodyView = {
+  description?: string;
+  runtime: ConfigFieldView;
+  maxIterations: ConfigFieldView;
+  entryNode: ConfigFieldView;
+};
+
+function configFieldView(value: string | number | undefined): ConfigFieldView {
+  if (value === undefined || value === null || value === "") {
+    return { value: "—", placeholder: true };
+  }
+  return { value: String(value), placeholder: false };
+}
+
+function buildConfigBodyView(args: {
+  description?: string;
+  runtimeName?: string;
+  maxIterations?: number;
+  entryNode?: string;
+}): ConfigBodyView {
+  return {
+    description: args.description,
+    runtime: configFieldView(args.runtimeName),
+    maxIterations: configFieldView(args.maxIterations),
+    entryNode: configFieldView(args.entryNode),
+  };
+}
+
 /* ── Component ── */
 
 type NewTaskModalProps = {
@@ -93,7 +126,13 @@ export function NewTaskModal({
 }: NewTaskModalProps) {
   const wsCardRef = useRef<HTMLDivElement>(null);
   const cfgCardRef = useRef<HTMLDivElement>(null);
-  const collapsedHeightRef = useRef<number | null>(null);
+  const liveConfigBody = buildConfigBodyView({
+    description: configDescription,
+    runtimeName: selectedRuntimeName,
+    maxIterations: configMaxIterations,
+    entryNode: configEntryNode,
+  });
+  const stableConfigBodyRef = useRef<ConfigBodyView>(liveConfigBody);
 
   // Click-outside + Escape handling for the expanded pickers
   useEffect(() => {
@@ -130,11 +169,28 @@ export function NewTaskModal({
     workspacePicking,
   ]);
 
+  // Freeze the in-flow config detail footprint while the picker overlay is open.
+  useEffect(() => {
+    if (!configPicking) {
+      stableConfigBodyRef.current = liveConfigBody;
+    }
+  }, [
+    configPicking,
+    liveConfigBody.description,
+    liveConfigBody.entryNode.placeholder,
+    liveConfigBody.entryNode.value,
+    liveConfigBody.maxIterations.placeholder,
+    liveConfigBody.maxIterations.value,
+    liveConfigBody.runtime.placeholder,
+    liveConfigBody.runtime.value,
+  ]);
+
   if (!open) {
     return null;
   }
 
   const selectedWorkspace = workspaceOptions.find((ws) => ws.id === selectedTargetWorkspaceId) ?? workspaceOptions[0];
+  const configBody = configPicking ? stableConfigBodyRef.current : liveConfigBody;
 
   function handleWorkspaceHeaderClick() {
     if (configPicking) {
@@ -148,12 +204,9 @@ export function NewTaskModal({
     onCloseWorkspacePicker();
   }
 
-  function handleHeaderClick() {
+  function handleConfigHeaderClick() {
     if (workspacePicking) {
       onCloseWorkspacePicker();
-    }
-    if (!configPicking && cfgCardRef.current) {
-      collapsedHeightRef.current = cfgCardRef.current.offsetHeight;
     }
     onToggleConfigPicker();
   }
@@ -196,112 +249,29 @@ export function NewTaskModal({
               ref={wsCardRef}
             >
               <input type="hidden" value={selectedTargetWorkspaceId} />
-              <button
-                aria-expanded={workspacePicking}
-                className="task-modal__ws-header"
-                data-testid="new-task-workspace"
-                onClick={handleWorkspaceHeaderClick}
-                type="button"
-              >
-                <div className="task-modal__ws-stack">
-                  <div className="task-modal__ws-left">
-                    <Folder
-                      aria-hidden="true"
-                      size={14}
-                      strokeWidth={2}
-                      style={secondaryIconStyle}
-                    />
-                    <span className="task-modal__ws-name">{selectedWorkspace?.label ?? "No workspace"}</span>
+              <div className="task-modal__ws-anchor">
+                <button
+                  aria-expanded={workspacePicking}
+                  className="task-modal__ws-header"
+                  data-testid="new-task-workspace"
+                  onClick={handleWorkspaceHeaderClick}
+                  type="button"
+                >
+                  <div className="task-modal__ws-stack">
+                    <div className="task-modal__ws-left">
+                      <Folder
+                        aria-hidden="true"
+                        size={14}
+                        strokeWidth={2}
+                        style={secondaryIconStyle}
+                      />
+                      <span className="task-modal__ws-name">{selectedWorkspace?.label ?? "No workspace"}</span>
+                    </div>
+                    <span className="task-modal__ws-path">
+                      {shortenPath(selectedWorkspace?.path ?? "")}
+                    </span>
                   </div>
-                  <span className="task-modal__ws-path">
-                    {shortenPath(selectedWorkspace?.path ?? "")}
-                  </span>
-                </div>
-                {workspacePicking ? (
-                  <ChevronUp
-                    aria-hidden="true"
-                    size={14}
-                    strokeWidth={2}
-                    style={tertiaryIconStyle}
-                  />
-                ) : (
-                  <ChevronDown
-                    aria-hidden="true"
-                    size={14}
-                    strokeWidth={2}
-                    style={tertiaryIconStyle}
-                  />
-                )}
-              </button>
-              {workspacePicking ? (
-                <div className="task-modal__ws-list" role="listbox" aria-label="Workspace">
-                  {workspaceOptions.map((workspace) => {
-                    const selected = workspace.id === selectedTargetWorkspaceId;
-                    return (
-                      <button
-                        aria-selected={selected}
-                        className={`task-modal__ws-option${selected ? " task-modal__ws-option--selected" : ""}`}
-                        key={workspace.id}
-                        onClick={() => handleSelectWorkspace(workspace.id)}
-                        type="button"
-                      >
-                        <div className="task-modal__ws-option-row">
-                          <div className="task-modal__ws-left">
-                            <Folder
-                              aria-hidden="true"
-                              size={14}
-                              strokeWidth={2}
-                              style={secondaryIconStyle}
-                            />
-                            <span className="task-modal__ws-name">{workspace.label}</span>
-                          </div>
-                          {selected ? (
-                            <Check
-                              aria-hidden="true"
-                              color="var(--color-accent)"
-                              size={14}
-                              strokeWidth={2.2}
-                            />
-                          ) : null}
-                        </div>
-                        <span className="task-modal__ws-path">
-                          {shortenPath(workspace.path)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
-            </div>
-          </div>
-
-          {/* Config selector */}
-          <div className="field-block">
-            <span className="field-block__label">Config</span>
-            <div
-              className={`task-modal__cfg-card${configPicking ? " task-modal__cfg-card--picking" : ""}`}
-              ref={cfgCardRef}
-              style={configPicking && collapsedHeightRef.current ? { height: collapsedHeightRef.current } : undefined}
-            >
-              <input
-                data-testid="new-task-config"
-                readOnly
-                tabIndex={-1}
-                type="hidden"
-                value={selectedAlias}
-              />
-              <button className="task-modal__cfg-header" onClick={handleHeaderClick} type="button">
-                <div className="task-modal__cfg-left">
-                  <SlidersHorizontal
-                    aria-hidden="true"
-                    size={14}
-                    strokeWidth={2}
-                    style={secondaryIconStyle}
-                  />
-                  <span className="task-modal__cfg-name">{selectedAlias}</span>
-                </div>
-                <span style={{ display: "grid", placeItems: "center" }}>
-                  {configPicking ? (
+                  {workspacePicking ? (
                     <ChevronUp
                       aria-hidden="true"
                       size={14}
@@ -316,75 +286,175 @@ export function NewTaskModal({
                       style={tertiaryIconStyle}
                     />
                   )}
-                </span>
-              </button>
+                </button>
+                {workspacePicking ? (
+                  <div className="task-modal__ws-list" role="listbox" aria-label="Workspace">
+                    {workspaceOptions.map((workspace) => {
+                      const selected = workspace.id === selectedTargetWorkspaceId;
+                      return (
+                        <button
+                          aria-selected={selected}
+                          className={`task-modal__ws-option${selected ? " task-modal__ws-option--selected" : ""}`}
+                          key={workspace.id}
+                          onClick={() => handleSelectWorkspace(workspace.id)}
+                          type="button"
+                        >
+                          <div className="task-modal__ws-option-row">
+                            <div className="task-modal__ws-left">
+                              <Folder
+                                aria-hidden="true"
+                                size={14}
+                                strokeWidth={2}
+                                style={secondaryIconStyle}
+                              />
+                              <span className="task-modal__ws-name">{workspace.label}</span>
+                            </div>
+                            {selected ? (
+                              <Check
+                                aria-hidden="true"
+                                color="var(--color-accent)"
+                                size={14}
+                                strokeWidth={2.2}
+                              />
+                            ) : null}
+                          </div>
+                          <span className="task-modal__ws-path">
+                            {shortenPath(workspace.path)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+
+          {/* Config selector */}
+          <div className="field-block">
+            <span className="field-block__label">Config</span>
+            <div
+              className={`task-modal__cfg-card${configPicking ? " task-modal__cfg-card--picking" : ""}`}
+              ref={cfgCardRef}
+            >
+              <input
+                data-testid="new-task-config"
+                readOnly
+                tabIndex={-1}
+                type="hidden"
+                value={selectedAlias}
+              />
+              <div className="task-modal__cfg-anchor">
+                <button
+                  aria-expanded={configPicking}
+                  className="task-modal__cfg-header"
+                  onClick={handleConfigHeaderClick}
+                  type="button"
+                >
+                  <div className="task-modal__cfg-left">
+                    <SlidersHorizontal
+                      aria-hidden="true"
+                      size={14}
+                      strokeWidth={2}
+                      style={secondaryIconStyle}
+                    />
+                    <span className="task-modal__cfg-name">{selectedAlias}</span>
+                  </div>
+                  <span style={{ display: "grid", placeItems: "center" }}>
+                    {configPicking ? (
+                      <ChevronUp
+                        aria-hidden="true"
+                        size={14}
+                        strokeWidth={2}
+                        style={tertiaryIconStyle}
+                      />
+                    ) : (
+                      <ChevronDown
+                        aria-hidden="true"
+                        size={14}
+                        strokeWidth={2}
+                        style={tertiaryIconStyle}
+                      />
+                    )}
+                  </span>
+                </button>
+
+                {/* Picker list */}
+                {configPicking && (
+                  <div className="task-modal__cfg-list" role="listbox" aria-label="Config">
+                    {entries.map((entry) => {
+                      const selected = entry.alias === selectedAlias;
+                      return (
+                        <button
+                          aria-selected={selected}
+                          type="button"
+                          key={entry.alias}
+                          className={`task-modal__cfg-option${selected ? " task-modal__cfg-option--selected" : ""}`}
+                          onClick={() => handleSelectConfig(entry.alias)}
+                        >
+                          <div className="task-modal__cfg-option-row">
+                            <span
+                              className={`task-modal__cfg-option-name${selected ? " task-modal__cfg-option-name--selected" : ""}`}
+                            >
+                              {entry.alias}
+                            </span>
+                            {selected ? (
+                              <Check
+                                aria-hidden="true"
+                                color="var(--color-accent)"
+                                size={14}
+                                strokeWidth={2.2}
+                              />
+                            ) : null}
+                          </div>
+                          {entry.description ? (
+                            <span className="task-modal__cfg-option-desc">{entry.description}</span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               {/* Config details */}
-              {!configPicking && (
-                <div className="task-modal__cfg-body">
-                  {configDescription ? (
-                    <p className="task-modal__cfg-desc">{configDescription}</p>
-                  ) : null}
-                  {configDescription && selectedRuntimeName ? (
-                    <div className="task-modal__cfg-divider" />
-                  ) : null}
-                  {(selectedRuntimeName || configMaxIterations !== undefined || configEntryNode) ? (
-                    <div className="task-modal__cfg-fields">
-                      {selectedRuntimeName ? (
-                        <div className="task-modal__cfg-field">
-                          <span className="task-modal__cfg-field-label">Runtime</span>
-                          <span className="task-modal__cfg-field-value">{selectedRuntimeName}</span>
-                        </div>
-                      ) : null}
-                      {configMaxIterations !== undefined ? (
-                        <div className="task-modal__cfg-field">
-                          <span className="task-modal__cfg-field-label">Max iterations</span>
-                          <span className="task-modal__cfg-field-value">{String(configMaxIterations)}</span>
-                        </div>
-                      ) : null}
-                      {configEntryNode ? (
-                        <div className="task-modal__cfg-field">
-                          <span className="task-modal__cfg-field-label">Entry node</span>
-                          <span className="task-modal__cfg-field-value">{configEntryNode}</span>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-              )}
-
-              {/* Picker list */}
-              {configPicking && (
-                <div className="task-modal__cfg-list">
-                  {entries.map((entry) => (
-                    <button
-                      type="button"
-                      key={entry.alias}
-                      className={`task-modal__cfg-option${entry.alias === selectedAlias ? " task-modal__cfg-option--selected" : ""}`}
-                      onClick={() => handleSelectConfig(entry.alias)}
+              <div
+                aria-hidden={configPicking}
+                className={`task-modal__cfg-body${configPicking ? " task-modal__cfg-body--hidden" : ""}`}
+              >
+                {configBody.description ? (
+                  <p className="task-modal__cfg-desc">{configBody.description}</p>
+                ) : null}
+                {configBody.description ? (
+                  <div className="task-modal__cfg-divider" />
+                ) : null}
+                <div className="task-modal__cfg-fields">
+                  <div className="task-modal__cfg-field">
+                    <span className="task-modal__cfg-field-label">Runtime</span>
+                    <span
+                      className={`task-modal__cfg-field-value${configBody.runtime.placeholder ? " task-modal__cfg-field-value--placeholder" : ""}`}
                     >
-                      <div className="task-modal__cfg-option-row">
-                        <span
-                          className={`task-modal__cfg-option-name${entry.alias === selectedAlias ? " task-modal__cfg-option-name--selected" : ""}`}
-                        >
-                          {entry.alias}
-                        </span>
-                        {entry.alias === selectedAlias && (
-                          <Check
-                            aria-hidden="true"
-                            color="var(--color-accent)"
-                            size={14}
-                            strokeWidth={2.2}
-                          />
-                        )}
-                      </div>
-                      {entry.description ? (
-                        <span className="task-modal__cfg-option-desc">{entry.description}</span>
-                      ) : null}
-                    </button>
-                  ))}
+                      {configBody.runtime.value}
+                    </span>
+                  </div>
+                  <div className="task-modal__cfg-field">
+                    <span className="task-modal__cfg-field-label">Max iterations</span>
+                    <span
+                      className={`task-modal__cfg-field-value${configBody.maxIterations.placeholder ? " task-modal__cfg-field-value--placeholder" : ""}`}
+                    >
+                      {configBody.maxIterations.value}
+                    </span>
+                  </div>
+                  <div className="task-modal__cfg-field">
+                    <span className="task-modal__cfg-field-label">Entry node</span>
+                    <span
+                      className={`task-modal__cfg-field-value${configBody.entryNode.placeholder ? " task-modal__cfg-field-value--placeholder" : ""}`}
+                    >
+                      {configBody.entryNode.value}
+                    </span>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 

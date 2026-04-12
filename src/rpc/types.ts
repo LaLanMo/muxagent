@@ -221,14 +221,6 @@ export interface ConfigDeleteResult {
   removed: boolean;
 }
 
-export interface ConfigSetDefaultParams {
-  alias: string;
-}
-
-export interface ConfigSetDefaultResult {
-  entry: ConfigDetailDto;
-}
-
 export interface ConfigValidateParams {
   config: ConfigDraftDto;
 }

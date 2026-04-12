@@ -10,8 +10,6 @@ import {
   type ConfigDeleteParams,
   type ConfigDeleteResult,
   type ConfigGetResult,
-  type ConfigSetDefaultParams,
-  type ConfigSetDefaultResult,
   type ConfigValidateParams,
   type ConfigValidateResult,
   type InitializeResult,
@@ -155,12 +153,6 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
     return this.request("config.delete", params);
-  }
-
-  configSetDefault(
-    params: ConfigSetDefaultParams,
-  ): Promise<ConfigSetDefaultResult> {
-    return this.request("config.set_default", params);
   }
 
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {
