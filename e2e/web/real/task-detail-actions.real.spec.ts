@@ -26,7 +26,8 @@ test("approves a seeded real awaiting task into the complete surface", async ({
     await page.getByTestId("approval-approve").click();
 
     await expect(page.getByTestId("complete-pane")).toBeVisible();
-    await expect(page.getByTestId("start-follow-up")).toBeVisible();
+    await expect(page.getByTestId("follow-up-description")).toBeVisible();
+    await expect(page.getByTestId("follow-up-config-trigger")).toBeVisible();
   });
 });
 
@@ -74,7 +75,7 @@ test("rejects a seeded real awaiting task without forcing the synthetic failed s
   });
 });
 
-test("starts a real follow-up task from a seeded completed task", async ({
+test("starts a real follow-up task from a seeded completed task with a switched config", async ({
   page,
 }) => {
   test.slow();
@@ -94,15 +95,22 @@ test("starts a real follow-up task from a seeded completed task", async ({
 
     await expect(page).toHaveURL(new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`));
     await expect(page.getByTestId("complete-pane")).toBeVisible();
+    await page.getByTestId("follow-up-config-trigger").click();
+    await expect(page.getByTestId("follow-up-config-picker")).toBeVisible();
+    await page.getByTestId("follow-up-config-option-default").click();
+    await expect(page.getByTestId("follow-up-config-trigger")).toContainText("default");
     await page.getByTestId("follow-up-description").fill(description);
     const previousPath = new URL(page.url()).pathname;
-    await page.getByTestId("start-follow-up").click();
+    await page.getByTestId("follow-up-description").press("Enter");
 
     await expect
       .poll(() => new URL(page.url()).pathname, { timeout: 30_000 })
       .not.toBe(previousPath);
     await expect(page.getByTestId("task-detail-screen")).toBeVisible();
-    await expect(page.getByRole("heading", { name: description })).toBeVisible();
+    await expect(page.locator(".detail-main-header__prompt-text")).toHaveText(description);
+    await expect(
+      page.locator(".detail-properties__block").filter({ hasText: /^Config/ }),
+    ).toContainText("default");
   });
 });
 

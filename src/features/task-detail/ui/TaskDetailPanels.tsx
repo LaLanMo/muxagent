@@ -1,4 +1,11 @@
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowRight,
   Bot,
@@ -7,6 +14,7 @@ import {
   FileText,
   RotateCcw,
   User,
+  Workflow,
   X,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -79,7 +87,8 @@ type RetryDockProps = {
 
 type FollowUpDockProps = {
   configEntries: ConfigCatalogEntryDto[];
-  followUpConfigAlias: string;
+  defaultConfigAlias?: string;
+  followUpConfigAlias?: string;
   followUpDescription: string;
   setFollowUpDescription: (value: string) => void;
   onConfigChange: (alias: string) => void;
@@ -1758,6 +1767,7 @@ export function TaskRetryDock({
 
 export function TaskFollowUpDock({
   configEntries,
+  defaultConfigAlias,
   followUpConfigAlias,
   followUpDescription,
   setFollowUpDescription,
@@ -1765,58 +1775,149 @@ export function TaskFollowUpDock({
   submittingFollowUp,
   onStartFollowUp,
 }: FollowUpDockProps) {
-  const launchable = configEntries.filter((e) => e.launchable);
-  const selectedDescription = launchable.find((e) => e.alias === followUpConfigAlias)?.description;
+  const launchable = configEntries.filter((entry) => entry.launchable);
+  const selectedEntry =
+    launchable.find((entry) => entry.alias === followUpConfigAlias) ??
+    launchable.find((entry) => entry.alias === defaultConfigAlias) ??
+    launchable[0];
+  const pickerId = useId();
+  const rootRef = useRef<HTMLElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const closePicker = useEffectEvent((focusTarget?: "trigger" | "input") => {
+    setPickerOpen(false);
+    if (focusTarget === "trigger") {
+      triggerRef.current?.focus();
+      return;
+    }
+    if (focusTarget === "input") {
+      inputRef.current?.focus();
+    }
+  });
+
+  useEffect(() => {
+    if (!pickerOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!(event.target instanceof Node)) {
+        return;
+      }
+      if (!rootRef.current?.contains(event.target)) {
+        closePicker();
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePicker("trigger");
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [closePicker, pickerOpen]);
+
+  const selectedAlias = selectedEntry?.alias ?? followUpConfigAlias ?? defaultConfigAlias ?? "";
 
   return (
-    <section className="detail-surface-panel" data-testid="complete-pane">
-      <div className="detail-surface-panel__header">
-        <span className="detail-surface-panel__title">Follow-up task</span>
-      </div>
-      <div className="detail-surface-panel__body">
-        {launchable.length > 1 ? (
-          <div className="follow-up-config">
-            <div className="follow-up-config__pills">
-              {launchable.map((entry) => (
-                <button
-                  className={`follow-up-config__pill${entry.alias === followUpConfigAlias ? " is-selected" : ""}`}
-                  key={entry.alias}
-                  onClick={() => onConfigChange(entry.alias)}
-                  type="button"
-                >
-                  {entry.alias}
-                </button>
-              ))}
-            </div>
-            {selectedDescription ? (
-              <span className="follow-up-config__desc">{selectedDescription}</span>
+    <section className="detail-follow-up-rail" data-testid="complete-pane" ref={rootRef}>
+      <form
+        className={`detail-follow-up-rail__box${pickerOpen ? " is-picker-open" : ""}`}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onStartFollowUp();
+        }}
+      >
+        <input
+          aria-label="Follow-up description"
+          className="detail-follow-up-rail__input"
+          data-testid="follow-up-description"
+          disabled={submittingFollowUp}
+          onChange={(event) => setFollowUpDescription(event.target.value)}
+          placeholder="Send a follow-up request..."
+          ref={inputRef}
+          type="text"
+          value={followUpDescription}
+        />
+
+        {selectedAlias ? (
+          <div className="detail-follow-up-rail__config-anchor">
+            <button
+              aria-controls={pickerOpen ? pickerId : undefined}
+              aria-expanded={pickerOpen}
+              aria-haspopup="listbox"
+              className="detail-follow-up-rail__config-trigger"
+              data-testid="follow-up-config-trigger"
+              disabled={submittingFollowUp || launchable.length < 2}
+              onClick={() => {
+                if (launchable.length < 2) {
+                  return;
+                }
+                setPickerOpen((current) => !current);
+              }}
+              ref={triggerRef}
+              type="button"
+            >
+              <Workflow aria-hidden="true" size={12} strokeWidth={1.9} />
+              <span>{selectedAlias}</span>
+            </button>
+
+            {pickerOpen ? (
+              <div
+                aria-label="Configs"
+                className="detail-follow-up-rail__config-picker"
+                data-testid="follow-up-config-picker"
+                id={pickerId}
+                role="listbox"
+              >
+                <span className="detail-follow-up-rail__config-picker-label">Configs</span>
+                {launchable.map((entry) => {
+                  const selected = entry.alias === selectedEntry?.alias;
+                  const nodeCountLabel =
+                    entry.node_names != null
+                      ? `${entry.node_names.length} ${entry.node_names.length === 1 ? "node" : "nodes"}`
+                      : undefined;
+                  return (
+                    <button
+                      aria-selected={selected}
+                      className={`detail-follow-up-rail__config-option${selected ? " is-selected" : ""}`}
+                      data-testid={`follow-up-config-option-${entry.alias}`}
+                      key={entry.alias}
+                      onClick={() => {
+                        onConfigChange(entry.alias);
+                        closePicker("input");
+                      }}
+                      role="option"
+                      type="button"
+                    >
+                      <span className="detail-follow-up-rail__config-option-name">
+                        {entry.alias}
+                      </span>
+                      {nodeCountLabel ? (
+                        <>
+                          <span className="detail-follow-up-rail__config-option-divider" />
+                          <span className="detail-follow-up-rail__config-option-count">
+                            {nodeCountLabel}
+                          </span>
+                        </>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
             ) : null}
           </div>
         ) : null}
-        <label className="field-block">
-          <span className="field-block__label">Describe the follow-up</span>
-          <textarea
-            aria-label="Describe the follow-up"
-            className="approval-feedback approval-feedback--compact"
-            data-testid="follow-up-description"
-            onChange={(event) => setFollowUpDescription(event.target.value)}
-            placeholder="Continue from here..."
-            rows={3}
-            value={followUpDescription}
-          />
-        </label>
-        <div className="detail-surface-panel__footer">
-          <button
-            className="primary-action"
-            data-testid="start-follow-up"
-            disabled={submittingFollowUp || !followUpDescription.trim()}
-            onClick={() => void onStartFollowUp()}
-            type="button"
-          >
-            {submittingFollowUp ? "Starting…" : "Start follow-up"}
-          </button>
-        </div>
-      </div>
+      </form>
     </section>
   );
 }

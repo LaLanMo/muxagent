@@ -430,7 +430,11 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   await expect(page).toHaveURL(/\/$/);
   await openTaskFromBoard(page, "task-done-login");
   await expect(page.getByTestId("complete-pane")).toBeVisible();
-  await expect(page.getByTestId("start-follow-up")).toBeVisible();
+  await expect(page.locator('[data-testid="detail-activity"] [data-testid="complete-pane"]')).toHaveCount(
+    0,
+  );
+  await expect(page.getByTestId("follow-up-description")).toBeVisible();
+  await expect(page.getByTestId("follow-up-config-trigger")).toContainText("default");
   await page.getByTestId("detail-run-run-login-implement").click();
   await expect(page.getByTestId("transcript-modal")).toBeVisible();
   await expect(page.getByTestId("detail-run-history-source")).toContainText(
@@ -442,6 +446,50 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   await expect(page.getByTestId("detail-output-surface")).toContainText(
     "patched the login guard to preserve the authenticated session cookie.",
   );
+});
+
+test("switches configs from the compact follow-up rail and starts a fixture follow-up", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-done-login");
+
+  const description = `Fixture follow-up ${Date.now()}`;
+  const completePane = page.getByTestId("complete-pane");
+  const configTrigger = page.getByTestId("follow-up-config-trigger");
+  const configPicker = page.getByTestId("follow-up-config-picker");
+  const descriptionInput = page.getByTestId("follow-up-description");
+
+  await expect(completePane).toBeVisible();
+  await expect(configTrigger).toContainText("default");
+
+  await configTrigger.click();
+  await expect(configPicker).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(configPicker).toHaveCount(0);
+
+  await configTrigger.click();
+  await expect(configPicker).toBeVisible();
+  await page.getByText("Activity").click();
+  await expect(configPicker).toHaveCount(0);
+
+  await configTrigger.click();
+  await expect(configPicker).toBeVisible();
+  await page.getByTestId("follow-up-config-option-quick").click();
+  await expect(configPicker).toHaveCount(0);
+  await expect(configTrigger).toContainText("quick");
+
+  const previousPath = new URL(page.url()).pathname;
+  await descriptionInput.fill(description);
+  await descriptionInput.press("Enter");
+
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+    .not.toBe(previousPath);
+  await expect(page.locator(".detail-main-header__prompt-text")).toHaveText(description);
+  await expect(
+    page.locator(".detail-properties__block").filter({ hasText: /^Config/ }),
+  ).toContainText("quick");
 });
 
 test("renders the blocked task surface", async ({ page }) => {

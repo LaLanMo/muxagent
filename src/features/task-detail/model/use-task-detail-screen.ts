@@ -229,6 +229,7 @@ export function useTaskDetailScreen() {
     workspaceId,
     taskId,
     task: resolvedTask,
+    configEntries,
     inputRequest,
     latestFailedRunId: retryRun?.id,
     loadDetail,

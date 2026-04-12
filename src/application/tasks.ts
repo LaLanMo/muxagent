@@ -62,7 +62,10 @@ type StartFollowUpFromTaskArgs = {
   taskId: string;
   task: TaskViewDto;
   description: string;
-  configAliasOverride?: string;
+  selectedConfig?: {
+    alias: string;
+    configPath: string;
+  };
 };
 
 type StartFollowUpAndReloadTaskListArgs = StartFollowUpFromTaskArgs & {
@@ -317,8 +320,8 @@ export async function startFollowUpFromTask(
     client_command_id: nextClientCommandId(),
     parent_task_id: args.taskId,
     description: args.description.trim(),
-    config_alias: args.configAliasOverride ?? args.task.task.config_alias,
-    config_path: args.task.task.config_path,
+    config_alias: args.selectedConfig?.alias ?? args.task.task.config_alias,
+    config_path: args.selectedConfig?.configPath ?? args.task.task.config_path,
   });
 }
 
@@ -329,7 +332,7 @@ export async function startFollowUpAndReloadTaskList(
   await startFollowUpFromTask(runtime, args);
 
   const trimmedDescription = args.description.trim();
-  const configAlias = args.configAliasOverride ?? args.task.task.config_alias;
+  const configAlias = args.selectedConfig?.alias ?? args.task.task.config_alias;
   const existingTaskIds = args.existingTaskIds ?? new Set<string>();
   const attempts = args.attempts ?? 20;
   const delayMs = args.delayMs ?? 250;

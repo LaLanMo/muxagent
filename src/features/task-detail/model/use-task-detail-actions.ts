@@ -12,15 +12,34 @@ import { getRuntime } from "@/app/runtime";
 import { buildTaskDetailPath } from "@/domain/routes";
 import type { LoadTaskDetailFn } from "@/features/task-detail/model/use-task-detail-data";
 import type {
+  ConfigCatalogEntryDto,
   InputRequestDto,
   TaskViewDto,
 } from "@/rpc/types";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 
+function resolveFollowUpConfigEntry(args: {
+  configEntries: ConfigCatalogEntryDto[];
+  task: TaskViewDto;
+  followUpConfigAlias?: string;
+}) {
+  const { configEntries, task, followUpConfigAlias } = args;
+  return (
+    configEntries.find(
+      (entry) => entry.launchable && entry.alias === followUpConfigAlias,
+    ) ??
+    configEntries.find(
+      (entry) => entry.launchable && entry.alias === task.task.config_alias,
+    ) ??
+    configEntries.find((entry) => entry.launchable)
+  );
+}
+
 type UseTaskDetailActionsArgs = {
   workspaceId: string;
   taskId: string;
   task: TaskViewDto | undefined;
+  configEntries: ConfigCatalogEntryDto[];
   inputRequest: InputRequestDto | undefined;
   latestFailedRunId: string | undefined;
   loadDetail: LoadTaskDetailFn;
@@ -30,6 +49,7 @@ export function useTaskDetailActions({
   workspaceId,
   taskId,
   task,
+  configEntries,
   inputRequest,
   latestFailedRunId,
   loadDetail,
@@ -70,6 +90,10 @@ export function useTaskDetailActions({
       ),
     );
   }, [inputRequest?.node_run_id, inputRequest?.questions, taskId]);
+
+  useEffect(() => {
+    setFollowUpConfigAlias(undefined);
+  }, [taskId, task?.task.config_alias, task?.task.config_path]);
 
   async function runTaskAction(
     fallbackMessage: string,
@@ -152,6 +176,11 @@ export function useTaskDetailActions({
     if (!task || !workspaceId || !taskId) {
       return;
     }
+    const selectedConfig = resolveFollowUpConfigEntry({
+      configEntries,
+      task,
+      followUpConfigAlias,
+    });
     const trimmed = followUpDescription.trim();
     if (!trimmed) {
       failTaskDetail(
@@ -170,7 +199,12 @@ export function useTaskDetailActions({
             taskId,
             task,
             description: trimmed,
-            configAliasOverride: followUpConfigAlias,
+            selectedConfig: selectedConfig
+              ? {
+                  alias: selectedConfig.alias,
+                  configPath: selectedConfig.config_path,
+                }
+              : undefined,
             existingTaskIds: new Set(tasks.map((entry) => entry.task.id)),
           });
         setTasks(workspaceId, nextTasks);

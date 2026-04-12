@@ -535,7 +535,8 @@ export function TaskDetailScreen({
     actionPanel = (
       <TaskFollowUpDock
         configEntries={configEntries}
-        followUpConfigAlias={followUpConfigAlias ?? configLabel}
+        defaultConfigAlias={task?.task.config_alias}
+        followUpConfigAlias={followUpConfigAlias}
         followUpDescription={followUpDescription}
         onConfigChange={setFollowUpConfigAlias}
         onStartFollowUp={submitFollowUp}
@@ -735,12 +736,6 @@ export function TaskDetailScreen({
                   );
                 })}
 
-                {actionSurface.kind === "follow_up" && actionPanel ? (
-                  <article className="detail-activity-card detail-activity-card--done is-selected">
-                    <div className="detail-activity-card__body">{actionPanel}</div>
-                  </article>
-                ) : null}
-
                 {ungroupedArtifacts.length > 0 ? (
                   <article className="detail-activity-card detail-activity-card--default">
                     <div className="detail-activity-card__summary">
@@ -777,9 +772,12 @@ export function TaskDetailScreen({
                     </div>
                   </article>
                 ) : null}
-
               </div>
             </section>
+
+            {actionSurface.kind === "follow_up" && actionPanel ? (
+              <div className="detail-follow-up-slot">{actionPanel}</div>
+            ) : null}
           </div>
 
           <aside className="detail-properties">

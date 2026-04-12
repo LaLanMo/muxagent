@@ -751,6 +751,100 @@ export class FixtureRuntime {
           client_command_id: String(params.client_command_id ?? ""),
         });
       }
+      case "task.start_follow_up": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const parentTaskId = String(params.parent_task_id ?? "");
+        const parentTask = this.fixtureTasks(state, workspace.workspace_id).find(
+          (entry) => entry.task.id === parentTaskId,
+        );
+        if (!parentTask) {
+          return this.fail(id, -32602, "parent task not found");
+        }
+        const description = String(params.description ?? "").trim();
+        if (!description) {
+          return this.fail(id, -32602, "description is required");
+        }
+        const configAlias =
+          String(params.config_alias ?? "").trim() || parentTask.task.config_alias;
+        const configPath =
+          String(params.config_path ?? "").trim() || parentTask.task.config_path;
+        if (!configAlias || !configPath) {
+          return this.fail(id, -32602, "config_alias and config_path are required");
+        }
+
+        const createdAt = new Date().toISOString();
+        const taskId = `task-${randomUUID().slice(0, 8)}`;
+        const isQuickConfig = configAlias === "quick";
+        const task = this.makeFixtureTask({
+          workspacePath: workspace.path,
+          taskId,
+          description,
+          configAlias,
+          createdAt,
+          status: "running",
+          currentNodeName: isQuickConfig ? "inspect" : "implement",
+          currentNodeType: "agent",
+          nodeRuns: isQuickConfig
+            ? [
+                {
+                  id: `${taskId}-inspect`,
+                  task_id: taskId,
+                  node_name: "inspect",
+                  status: "running",
+                  started_at: createdAt,
+                },
+              ]
+            : [
+                {
+                  id: `${taskId}-draft-plan`,
+                  task_id: taskId,
+                  node_name: "draft_plan",
+                  status: "done",
+                  started_at: createdAt,
+                  completed_at: createdAt,
+                  artifact_paths: ["plan.md"],
+                },
+                {
+                  id: `${taskId}-implement`,
+                  task_id: taskId,
+                  node_name: "implement",
+                  status: "running",
+                  started_at: createdAt,
+                },
+              ],
+        });
+        task.task.parent_task_id = parentTaskId;
+        task.task.parent_task_description = parentTask.task.description;
+        task.task.config_path = configPath;
+        state.tasksByWorkspaceId[workspace.workspace_id] = [
+          task,
+          ...this.fixtureTasks(state, workspace.workspace_id),
+        ];
+        workspace.task_counts = this.taskCounts(
+          state.tasksByWorkspaceId[workspace.workspace_id],
+        );
+        workspace.actor = this.workspaceActor(
+          state.tasksByWorkspaceId[workspace.workspace_id],
+        );
+        options.emitNotification("task.created", workspace.workspace_id, {
+          client_command_id: String(params.client_command_id ?? ""),
+          event: {
+            type: "task.created",
+            task_id: taskId,
+            task_view: task,
+          },
+        });
+        return this.respond(id, {
+          accepted: true,
+          client_command_id: String(params.client_command_id ?? ""),
+        });
+      }
       case "task.recover_stale": {
         const workspace = this.requireWorkspace(
           state,
