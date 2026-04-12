@@ -260,6 +260,25 @@ export interface TaskIssueDto {
   occurred_at: string;
 }
 
+export interface ClarificationAnswerDto {
+  selected?: string | string[];
+}
+
+export interface ClarificationRequestDto {
+  questions?: InputQuestionDto[];
+}
+
+export interface ClarificationResponseDto {
+  answers?: ClarificationAnswerDto[];
+}
+
+export interface ClarificationExchangeDto {
+  created_at?: string;
+  responded_at?: string;
+  request?: ClarificationRequestDto;
+  response?: ClarificationResponseDto;
+}
+
 export interface NodeRunViewDto {
   id: string;
   task_id: string;
@@ -268,7 +287,7 @@ export interface NodeRunViewDto {
   session_id?: string;
   failure_reason?: string;
   result?: Record<string, unknown>;
-  clarifications?: Array<Record<string, unknown>>;
+  clarifications?: ClarificationExchangeDto[];
   triggered_by?: TriggeredByDto;
   started_at: string;
   completed_at?: string;

@@ -11,6 +11,21 @@ export type FixtureNodeRun = {
   session_id?: string;
   failure_reason?: string;
   result?: Record<string, unknown>;
+  clarifications?: Array<{
+    created_at?: string;
+    responded_at?: string;
+    request?: {
+      questions?: Array<{
+        question?: string;
+        why_it_matters?: string;
+        options?: Array<{ label: string; description?: string }>;
+        multi_select?: boolean;
+      }>;
+    };
+    response?: {
+      answers?: Array<{ selected?: string | string[] }>;
+    };
+  }>;
   artifact_paths?: string[];
 };
 
@@ -1652,6 +1667,49 @@ export class FixtureRuntime {
             node_name: "implement",
             status: "running",
             started_at: makeTime(2),
+            clarifications: [
+              {
+                created_at: makeTime(1.6),
+                responded_at: makeTime(1.75),
+                request: {
+                  questions: [
+                    {
+                      question: "What should I inspect before editing?",
+                      options: [
+                        {
+                          label: "please inspect `auth middleware` before editing.",
+                        },
+                      ],
+                    },
+                  ],
+                },
+                response: {
+                  answers: [{ selected: "please inspect `auth middleware` before editing." }],
+                },
+              },
+              {
+                created_at: makeTime(2.6),
+                responded_at: makeTime(2.75),
+                request: {
+                  questions: [
+                    {
+                      question: "Which auth edge case should I prioritize?",
+                      options: [
+                        {
+                          label: "Expired session redirect",
+                        },
+                        {
+                          label: "Anonymous bypass",
+                        },
+                      ],
+                    },
+                  ],
+                },
+                response: {
+                  answers: [{ selected: "Expired session redirect" }],
+                },
+              },
+            ],
           },
         ],
         runHistoryByRunId: {
@@ -1720,6 +1778,69 @@ export class FixtureRuntime {
               text: "drafted **middleware** patch plan\n\n- trace anonymous requests\n- preserve redirect flow",
             },
           ],
+        },
+      }),
+      this.makeFixtureTask({
+        workspacePath,
+        taskId: "task-clarification-fixture",
+        description: "Resolve transcript clarification follow-up",
+        configAlias: "default",
+        createdAt: makeTime(3),
+        updatedAt: makeTime(7),
+        status: "done",
+        currentNodeName: "done",
+        currentNodeType: "human",
+        nodeRuns: [
+          {
+            id: "run-clarification-plan",
+            task_id: "task-clarification-fixture",
+            node_name: "plan",
+            status: "done",
+            started_at: makeTime(3),
+            completed_at: makeTime(4),
+            artifact_paths: ["plan.md"],
+          },
+          {
+            id: "run-clarification-implement",
+            task_id: "task-clarification-fixture",
+            node_name: "implement",
+            status: "done",
+            started_at: makeTime(4),
+            completed_at: makeTime(7),
+            clarifications: [
+              {
+                created_at: makeTime(5),
+                responded_at: makeTime(6),
+                request: {
+                  questions: [
+                    {
+                      question: "Which auth edge case should I prioritize?",
+                      why_it_matters:
+                        "The follow-up depends on the exact failure mode you want covered.",
+                      options: [
+                        {
+                          label: "Expired session redirect",
+                          description:
+                            "Handle expired sessions before the middleware reaches the route guard.",
+                        },
+                        {
+                          label: "Anonymous bypass",
+                          description:
+                            "Keep public routes reachable while protecting authenticated flows.",
+                        },
+                      ],
+                    },
+                  ],
+                },
+                response: {
+                  answers: [{ selected: "Expired session redirect" }],
+                },
+              },
+            ],
+          },
+        ],
+        runHistoryByRunId: {
+          "run-clarification-implement": [],
         },
       }),
       this.makeFixtureTask({

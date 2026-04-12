@@ -65,11 +65,31 @@ test("merges replay history with live output for the selected running run", asyn
   const transcriptModal = page.getByTestId("live-modal");
   await expect(transcriptModal).toBeVisible();
   const outputSurface = page.getByTestId("detail-output-surface");
+  const replayUserMessage = outputSurface
+    .locator(".transcript-message--user")
+    .filter({ hasText: "please inspect" });
+  const clarificationUserMessage = outputSurface
+    .locator(".transcript-message--user")
+    .filter({ hasText: "Expired session redirect" });
+  const toolGroup = page.getByTestId("transcript-tool-group-tool-search-live");
+  const assistantPlan = outputSurface.getByText("drafted middleware patch plan");
+
   await expect(outputSurface).toBeVisible();
+  await expect(outputSurface.locator(".transcript-message--user")).toHaveCount(2);
+  await expect(replayUserMessage).toHaveCount(1);
+  await expect(clarificationUserMessage).toHaveCount(1);
   await expect(outputSurface.locator(".transcript-message__markdown code")).toContainText(
     "auth middleware",
   );
   await expect(outputSurface).toContainText("2 tool calls");
+  const toolGroupBox = await toolGroup.boundingBox();
+  const clarificationBox = await clarificationUserMessage.boundingBox();
+  const assistantPlanBox = await assistantPlan.boundingBox();
+  expect(toolGroupBox).not.toBeNull();
+  expect(clarificationBox).not.toBeNull();
+  expect(assistantPlanBox).not.toBeNull();
+  expect(toolGroupBox!.y).toBeLessThan(clarificationBox!.y);
+  expect(clarificationBox!.y).toBeLessThan(assistantPlanBox!.y);
   await expect(outputSurface).toContainText("drafted middleware patch plan");
   await expect(outputSurface.locator(".transcript-message__markdown strong")).toContainText(
     "middleware",
@@ -110,6 +130,32 @@ test("merges replay history with live output for the selected running run", asyn
   await expect(page.getByTestId("detail-run-history-source")).toContainText("persisted replay");
   await expect(page.getByTestId("detail-run-history-completeness")).toContainText("open");
   await expect(page.getByTestId("detail-run-session")).toContainText("session-live-implement");
+});
+
+test("shows submitted clarification input even when no raw transcript was persisted", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-clarification-fixture");
+
+  await page.getByTestId("detail-run-run-clarification-implement").click();
+  await expect(page).toHaveURL(/[\?&]run=run-clarification-implement/);
+  await expect(page).toHaveURL(/[\?&]modal=transcript/);
+
+  const transcriptModal = page.getByTestId("transcript-modal");
+  const outputSurface = page.getByTestId("detail-output-surface");
+  const submittedInput = page.getByTestId("transcript-submitted-input");
+
+  await expect(transcriptModal).toBeVisible();
+  await expect(outputSurface).toContainText("No persisted stream for this run");
+  await expect(outputSurface).not.toContainText("Expired session redirect");
+  await expect(submittedInput).toBeVisible();
+  await expect(submittedInput).toContainText("Submitted input");
+  await expect(submittedInput).toContainText("Expired session redirect");
+  await expect(page.getByTestId("detail-run-history-source")).toContainText("not available");
+  await expect(page.getByTestId("detail-run-history-source")).toContainText(
+    "no structured transcript yet",
+  );
 });
 
 test("offers run recovery when the selected active run has no session or transcript", async ({

@@ -42,7 +42,9 @@ type RunPaneProps = {
   run?: NodeRunViewDto;
   streamLines: string[];
   transcript: TranscriptSnapshot;
-  transcriptItems: TranscriptTimelineItem[];
+  rawTranscriptItems: TranscriptTimelineItem[];
+  displayTranscriptItems: TranscriptTimelineItem[];
+  clarificationItems: Extract<TranscriptTimelineItem, { kind: "message" }>[];
   historyEntry?: RunHistoryCacheEntry;
   streamSource: "live" | "replay" | "loading" | "none";
   isCurrentRun: boolean;
@@ -1227,7 +1229,9 @@ export function TaskTranscriptModal({
   run,
   streamLines,
   transcript,
-  transcriptItems,
+  rawTranscriptItems,
+  displayTranscriptItems,
+  clarificationItems,
   streamSource,
   isCurrentRun,
   showEmptyOutput,
@@ -1245,7 +1249,7 @@ export function TaskTranscriptModal({
   const historyStatusDetail = describeHistoryStatus(streamSource, transcript);
   const sessionValue = shortenSessionId(transcript.sessionId || run.session_id);
   const sessionDetail = transcript.sessionId || run.session_id || "Awaiting session id";
-  const totalTokens = summarizeUsageTokens(transcriptItems);
+  const totalTokens = summarizeUsageTokens(rawTranscriptItems);
   const eventCount = transcript.events.length || streamLines.length;
   const runStatus = detailStatusLabel(run.status);
   const transcriptAvailability = describeTranscriptAvailability(
@@ -1330,6 +1334,28 @@ export function TaskTranscriptModal({
     );
   }
 
+  function renderTranscriptTimeline(items: GroupedTranscriptItem[]) {
+    return (
+      <div className="transcript-timeline" data-testid="transcript-timeline">
+        {items.map((item) => {
+          if (item.kind === "tool-group") {
+            return <TranscriptToolGroup key={item.id} tools={item.tools} transcript={transcript} />;
+          }
+          if (item.kind === "message" && item.partType === "reasoning") {
+            return <TranscriptThinkingBlock key={item.id} item={item} />;
+          }
+          if (item.kind === "message") {
+            return <TranscriptMessageBlock key={item.id} item={item} />;
+          }
+          return renderTranscriptItem(item);
+        })}
+      </div>
+    );
+  }
+
+  const groupedRawItems = groupTranscriptItems(rawTranscriptItems);
+  const groupedDisplayItems = groupTranscriptItems(displayTranscriptItems);
+
   return (
     <DetailOverlayModal
       onClose={onClose ?? (() => {})}
@@ -1380,33 +1406,20 @@ export function TaskTranscriptModal({
         </div>
 
         {(() => {
-          const grouped = groupTranscriptItems(transcriptItems);
-          if (grouped.length > 0) {
+          if (groupedRawItems.length > 0) {
             return (
               <div
                 className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
                 data-testid="detail-output-surface"
               >
-                <pre hidden>{legacyTranscriptText(transcriptItems)}</pre>
-                <div className="transcript-timeline" data-testid="transcript-timeline">
-                  {grouped.map((item) => {
-                    if (item.kind === "tool-group") {
-                      return <TranscriptToolGroup key={item.id} tools={item.tools} transcript={transcript} />;
-                    }
-                    if (item.kind === "message" && item.partType === "reasoning") {
-                      return <TranscriptThinkingBlock key={item.id} item={item} />;
-                    }
-                    if (item.kind === "message") {
-                      return <TranscriptMessageBlock key={item.id} item={item} />;
-                    }
-                    return renderTranscriptItem(item);
-                  })}
-                </div>
+                <pre hidden>{legacyTranscriptText(displayTranscriptItems)}</pre>
+                {renderTranscriptTimeline(groupedDisplayItems)}
               </div>
             );
           }
+          let fallbackBody: ReactNode = null;
           if (hasStreamOutput) {
-            return (
+            fallbackBody = (
               <div
                 className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
                 data-testid="detail-output-surface"
@@ -1414,9 +1427,8 @@ export function TaskTranscriptModal({
                 <pre className="detail-code-block">{streamLines.join("\n")}</pre>
               </div>
             );
-          }
-          if (resultContent) {
-            return (
+          } else if (resultContent) {
+            fallbackBody = (
               <div
                 className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
                 data-testid="detail-output-surface"
@@ -1424,9 +1436,8 @@ export function TaskTranscriptModal({
                 <pre className="detail-code-block">{resultContent}</pre>
               </div>
             );
-          }
-          if (showEmptyOutput) {
-            return (
+          } else if (showEmptyOutput) {
+            fallbackBody = (
               <div
                 className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
                 data-testid="detail-output-surface"
@@ -1452,7 +1463,23 @@ export function TaskTranscriptModal({
               </div>
             );
           }
-          return null;
+
+          if (clarificationItems.length === 0) {
+            return fallbackBody;
+          }
+
+          return (
+            <>
+              {fallbackBody}
+              <div
+                className="detail-modal-frame__surface detail-modal-frame__surface--transcript"
+                data-testid="transcript-submitted-input"
+              >
+                <span className="detail-section__label">Submitted input</span>
+                {renderTranscriptTimeline(groupTranscriptItems(clarificationItems))}
+              </div>
+            </>
+          );
         })()}
       </DetailModalFrame>
     </DetailOverlayModal>

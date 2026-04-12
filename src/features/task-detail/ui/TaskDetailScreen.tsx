@@ -7,10 +7,12 @@ import {
 import {
   buildTranscriptSnapshot,
   type SessionHistoryEvent,
+  type TranscriptSnapshot,
 } from "@/domain/session-history";
 import {
   deriveTranscriptTimelineItems,
   timelineItemsToLines,
+  type TranscriptTimelineItem,
 } from "@/features/task-history/model/timeline";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
@@ -33,6 +35,7 @@ import {
 import type {
   ArtifactRefDto,
   BlockedStepDto,
+  ClarificationExchangeDto,
   ConfigCatalogEntryDto,
   InputRequestDto,
   NodeRunViewDto,
@@ -178,6 +181,219 @@ function summarizeRuns(runs: NodeRunViewDto[]) {
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+function normalizeTranscriptText(value: string | undefined) {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function formatClarificationSelection(selected: string | string[] | undefined) {
+  if (typeof selected === "string") {
+    return selected.trim();
+  }
+  if (!Array.isArray(selected)) {
+    return "";
+  }
+  return selected
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function clarificationExchangeText(
+  exchange: ClarificationExchangeDto,
+): string | undefined {
+  const questions = exchange.request?.questions ?? [];
+  const answers = exchange.response?.answers ?? [];
+  const pairs = answers
+    .map((answer, index) => {
+      const selected = formatClarificationSelection(answer.selected);
+      if (!selected) {
+        return undefined;
+      }
+      return {
+        answer: selected,
+        question: questions[index]?.question?.trim() || `Question ${index + 1}`,
+      };
+    })
+    .filter((entry): entry is { answer: string; question: string } => Boolean(entry));
+  if (pairs.length === 0) {
+    return undefined;
+  }
+  if (pairs.length === 1 && questions.length <= 1) {
+    return pairs[0].answer;
+  }
+  return pairs
+    .map(({ question, answer }) => `**${question}**\n${answer}`)
+    .join("\n\n");
+}
+
+type ClarificationTranscriptItem = Extract<TranscriptTimelineItem, { kind: "message" }> & {
+  mergeAt?: number;
+};
+
+function parseTranscriptTimestamp(value: string | undefined): number | undefined {
+  const parsed = Date.parse(value ?? "");
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function transcriptItemTimestamps(transcript: TranscriptSnapshot) {
+  const eventTimes = new Map<string, number>();
+  for (const event of transcript.events) {
+    const timestamp = parseTranscriptTimestamp(event.at ?? event.recordedAt);
+    if (timestamp != null) {
+      eventTimes.set(event.id, timestamp);
+    }
+  }
+
+  const messageTimes = new Map<string, number>();
+  for (const messageId of transcript.messageOrder) {
+    const message = transcript.messages[messageId];
+    if (!message) {
+      continue;
+    }
+    for (const part of message.parts) {
+      const lastEventId = part.eventIds.at(-1);
+      const timestamp = lastEventId ? eventTimes.get(lastEventId) : undefined;
+      if (timestamp != null) {
+        messageTimes.set(`${message.id}:${part.id}`, timestamp);
+      }
+    }
+  }
+
+  const toolTimes = new Map<string, number>();
+  for (const toolId of transcript.toolOrder) {
+    const tool = transcript.tools[toolId];
+    const lastEventId = tool?.eventIds.at(-1);
+    const timestamp = lastEventId ? eventTimes.get(lastEventId) : undefined;
+    if (timestamp != null) {
+      toolTimes.set(toolId, timestamp);
+    }
+  }
+
+  return {
+    eventTimes,
+    messageTimes,
+    toolTimes,
+  };
+}
+
+function rawTranscriptItemTimestamp(args: {
+  item: TranscriptTimelineItem;
+  timestamps: ReturnType<typeof transcriptItemTimestamps>;
+}): number | undefined {
+  const { item, timestamps } = args;
+  if (item.kind === "message") {
+    return timestamps.messageTimes.get(item.id);
+  }
+  if (item.kind === "tool") {
+    return timestamps.toolTimes.get(item.id);
+  }
+  const timestamp = timestamps.eventTimes.get(item.id);
+  return timestamp;
+}
+
+function clarificationTranscriptItems(args: {
+  rawTranscriptItems: TranscriptTimelineItem[];
+  run: NodeRunViewDto | undefined;
+}): ClarificationTranscriptItem[] {
+  const { rawTranscriptItems, run } = args;
+  if (!run?.clarifications?.length) {
+    return [];
+  }
+  const rawUserMessages = new Set(
+    rawTranscriptItems
+      .filter(
+        (item): item is Extract<TranscriptTimelineItem, { kind: "message" }> =>
+          item.kind === "message" && item.role === "user",
+      )
+      .map((item) => normalizeTranscriptText(item.text)),
+  );
+
+  return run.clarifications.flatMap((exchange, index) => {
+    const text = clarificationExchangeText(exchange);
+    if (!text) {
+      return [];
+    }
+    if (rawUserMessages.has(normalizeTranscriptText(text))) {
+      return [];
+    }
+    return [
+      {
+        id: `clarification:${run.id}:${index}`,
+        kind: "message" as const,
+        role: "user",
+        partType: "text",
+        text,
+        source: "clarification",
+        mergeAt:
+          parseTranscriptTimestamp(exchange.responded_at) ??
+          parseTranscriptTimestamp(exchange.created_at),
+      },
+    ];
+  });
+}
+
+function mergeDisplayTranscriptItems(args: {
+  clarificationItems: ClarificationTranscriptItem[];
+  rawTranscriptItems: TranscriptTimelineItem[];
+  transcript: TranscriptSnapshot;
+}): TranscriptTimelineItem[] {
+  const { clarificationItems, rawTranscriptItems, transcript } = args;
+  if (clarificationItems.length === 0) {
+    return rawTranscriptItems;
+  }
+  if (rawTranscriptItems.length === 0) {
+    return clarificationItems;
+  }
+
+  const timestamps = transcriptItemTimestamps(transcript);
+  const rawEntries = rawTranscriptItems.map((item) => ({
+    item,
+    timestamp: rawTranscriptItemTimestamp({
+      item,
+      timestamps,
+    }),
+  }));
+  const mergedItems: TranscriptTimelineItem[] = [];
+  const pendingUndatedClarifications: ClarificationTranscriptItem[] = [];
+  let rawIndex = 0;
+
+  for (const clarificationItem of clarificationItems) {
+    if (clarificationItem.mergeAt == null) {
+      pendingUndatedClarifications.push(clarificationItem);
+      continue;
+    }
+
+    while (rawIndex < rawEntries.length) {
+      const rawEntry = rawEntries[rawIndex];
+      if (
+        rawEntry.timestamp != null &&
+        rawEntry.timestamp > clarificationItem.mergeAt
+      ) {
+        break;
+      }
+      mergedItems.push(rawEntry.item);
+      rawIndex += 1;
+    }
+
+    if (pendingUndatedClarifications.length > 0) {
+      mergedItems.push(...pendingUndatedClarifications);
+      pendingUndatedClarifications.length = 0;
+    }
+    mergedItems.push(clarificationItem);
+  }
+
+  while (rawIndex < rawEntries.length) {
+    mergedItems.push(rawEntries[rawIndex].item);
+    rawIndex += 1;
+  }
+
+  if (pendingUndatedClarifications.length > 0) {
+    mergedItems.push(...pendingUndatedClarifications);
+  }
+
+  return mergedItems;
 }
 
 function artifactsForRun(run: NodeRunViewDto, artifacts: ArtifactRefDto[]) {
@@ -369,8 +585,8 @@ export function TaskDetailScreen({
     replay: selectedRunHistory?.result,
     liveEvents: liveSelectedRunEvents,
   });
-  const selectedRunTimelineItems = deriveTranscriptTimelineItems(transcript);
-  const selectedRunStreamLines = timelineItemsToLines(selectedRunTimelineItems);
+  const rawTranscriptItems = deriveTranscriptTimelineItems(transcript);
+  const selectedRunStreamLines = timelineItemsToLines(rawTranscriptItems);
   const selectedRunStreamSource =
     liveSelectedRunEvents.length > 0
       ? "live"
@@ -393,6 +609,15 @@ export function TaskDetailScreen({
       supportsRunRecovery &&
       workspaceActorState !== "active",
   );
+  const selectedRunClarificationItems = clarificationTranscriptItems({
+    rawTranscriptItems,
+    run: selectedRun,
+  });
+  const displayTranscriptItems = mergeDisplayTranscriptItems({
+    clarificationItems: selectedRunClarificationItems,
+    rawTranscriptItems,
+    transcript,
+  });
   const createdLabel = formatAbsoluteStamp(task?.task.created_at);
   const durationLabel = summarizeTaskDuration(task, timelineRuns);
   const runsLabel = summarizeRuns(timelineRuns);
@@ -439,7 +664,9 @@ export function TaskDetailScreen({
         streamLines={selectedRunStreamLines}
         streamSource={selectedRunStreamSource}
         transcript={transcript}
-        transcriptItems={selectedRunTimelineItems}
+        rawTranscriptItems={rawTranscriptItems}
+        displayTranscriptItems={displayTranscriptItems}
+        clarificationItems={selectedRunClarificationItems}
         run={selectedRun}
         showEmptyOutput={Boolean(selectedRun)}
         recoveryAction={
