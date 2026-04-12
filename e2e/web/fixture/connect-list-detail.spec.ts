@@ -408,6 +408,37 @@ test("renders the blocked task surface", async ({ page }) => {
   expect(continueButtonStyles.borderRadius).toBe("4px");
 });
 
+test("adds a new blocked activity row when the next iteration is blocked by max iterations", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  await openTaskFromBoard(page, "task-blocked-max-iteration");
+  await expect(page.getByTestId("blocked-pane")).toBeVisible();
+  await expect(page.getByText('node "implement" exceeded max_iterations')).toBeVisible();
+
+  const completedRun = page.getByTestId("detail-run-run-limit-implement");
+  const syntheticBlockedRun = page.getByTestId(
+    "detail-run-synthetic-blocked-task-blocked-max-iteration-implement-2",
+  );
+  await expect(completedRun).toBeVisible();
+  await expect(syntheticBlockedRun).toBeVisible();
+
+  const completedRunBox = await completedRun.boundingBox();
+  const syntheticBlockedRunBox = await syntheticBlockedRun.boundingBox();
+  expect(completedRunBox).not.toBeNull();
+  expect(syntheticBlockedRunBox).not.toBeNull();
+  expect(completedRunBox!.y).toBeLessThan(syntheticBlockedRunBox!.y);
+
+  await completedRun.click();
+  await expect(page.getByTestId("transcript-modal")).toBeVisible();
+  await expect(page.getByTestId("detail-output-surface")).toContainText(
+    "captured the implementation constraints before the next iteration was blocked by max iterations.",
+  );
+  await expect(page).toHaveURL(/[\?&]run=run-limit-implement/);
+  await expect(page).not.toHaveURL(/synthetic-blocked-task-blocked-max-iteration/);
+});
+
 test("defaults to the board-only task surface and ignores legacy list routes", async ({
   page,
 }) => {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
+import { findLatestActionableBlockedRun } from "@/domain/task-shell";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
@@ -133,18 +134,6 @@ function isMarkerOnlyRun(run: NodeRunViewDto) {
   );
 }
 
-function findBlockedRun(
-  runs: NodeRunViewDto[],
-  blockedStep?: BlockedStepDto,
-): NodeRunViewDto | undefined {
-  if (!blockedStep) {
-    return undefined;
-  }
-  return [...runs]
-    .reverse()
-    .find((run) => run.node_name === blockedStep.node_name);
-}
-
 function isActiveRunStatus(status: string) {
   const normalized = status.toLowerCase();
   return normalized.includes("await") || normalized.includes("run");
@@ -161,9 +150,12 @@ function buildDefaultSelection(args: {
     return { kind: "run", runId: actionableRunId };
   }
 
-  const blockedRun = findBlockedRun(runs, blockedStep);
-  if (blockedRun) {
-    return { kind: "run", runId: blockedRun.id };
+  if (blockedStep) {
+    const blockedRun = findLatestActionableBlockedRun(runs, blockedStep);
+    if (blockedRun) {
+      return { kind: "run", runId: blockedRun.id };
+    }
+    return { kind: "overview" };
   }
 
   const activeRun = [...runs].reverse().find((run) => isActiveRunStatus(run.status));

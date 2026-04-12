@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import {
   buildStageNodes,
   detailStatusTitle,
+  findLatestActionableBlockedRun,
   latestRun,
   stageStatusForNode,
   statusTone,
@@ -79,6 +80,23 @@ function resolveRunActorType(args: {
 function isOpenRun(run: NodeRunViewDto) {
   const status = run.status.toLowerCase();
   return status.includes("run") || status.includes("await");
+}
+
+function buildSyntheticBlockedRunId(taskId: string, blockedStep: BlockedStepDto) {
+  return `synthetic-blocked-${taskId}-${blockedStep.node_name}-${blockedStep.iteration}`;
+}
+
+function buildSyntheticBlockedRun(
+  taskId: string,
+  blockedStep: BlockedStepDto,
+): NodeRunViewDto {
+  return {
+    id: buildSyntheticBlockedRunId(taskId, blockedStep),
+    task_id: taskId,
+    node_name: blockedStep.node_name,
+    status: "blocked",
+    started_at: blockedStep.created_at,
+  };
 }
 
 export type TaskDetailActionSurface =
@@ -201,39 +219,40 @@ export function useTaskDetailScreen() {
     latestFailedRunId: retryRun?.id,
     loadDetail,
   });
-  const blockedRun = latestBlockedStep
-    ? [...navigatorRuns]
-        .reverse()
-        .find((run) => run.node_name === latestBlockedStep.node_name)
+  const inputRequestRun = inputRequest?.node_run_id
+    ? navigatorRuns.find((run) => run.id === inputRequest.node_run_id)
     : undefined;
-  const actionRun =
-    (inputRequest?.node_run_id
-      ? navigatorRuns.find((run) => run.id === inputRequest.node_run_id)
-      : undefined) ??
-    blockedRun ??
-    retryRun;
+  const realBlockedRun = findLatestActionableBlockedRun(
+    navigatorRuns,
+    latestBlockedStep,
+  );
+  const blockedActivityRun =
+    resolvedTask?.task.id && latestBlockedStep
+      ? realBlockedRun ?? buildSyntheticBlockedRun(resolvedTask.task.id, latestBlockedStep)
+      : undefined;
+  const retrySurfaceRun = retryRun;
   const actionSurface: TaskDetailActionSurface = inputRequest
     ? inputRequest.kind === "clarification"
       ? {
           kind: "clarification",
           inputRequest,
-          run: actionRun,
+          run: inputRequestRun,
         }
       : {
           kind: "approval",
           inputRequest,
-          run: actionRun,
+          run: inputRequestRun,
         }
     : latestBlockedStep
       ? {
           kind: "blocked",
           blockedStep: latestBlockedStep,
-          run: actionRun,
+          run: blockedActivityRun,
         }
-      : retryRun
+      : retrySurfaceRun
         ? {
             kind: "retry",
-            run: retryRun,
+            run: retrySurfaceRun,
             failureReason,
           }
         : resolvedTask && taskBucket(resolvedTask) === "done"
@@ -289,7 +308,14 @@ export function useTaskDetailScreen() {
     elapsedLabel: latest?.started_at ? latest.started_at : "",
     timelineRuns: navigatorRuns,
     activityRunActorTypes: Object.fromEntries(
-      navigatorRuns.map((run) => [
+      [
+        ...navigatorRuns,
+        ...(actionSurface.kind === "blocked" &&
+        actionSurface.run &&
+        !navigatorRuns.some((run) => run.id === actionSurface.run?.id)
+          ? [actionSurface.run]
+          : []),
+      ].map((run) => [
         run.id,
         resolveRunActorType({
           run,

@@ -183,6 +183,25 @@ export function detailStatusLabel(status: string): DetailStatusLabel {
   return "pending";
 }
 
+export function findLatestActionableBlockedRun(
+  runs: NodeRunViewDto[],
+  blockedStep?: { node_name: string },
+): NodeRunViewDto | undefined {
+  if (!blockedStep) {
+    return undefined;
+  }
+
+  return [...runs]
+    .reverse()
+    .find((run) => {
+      if (run.node_name !== blockedStep.node_name) {
+        return false;
+      }
+      const statusLabel = detailStatusLabel(run.status);
+      return statusLabel === "awaiting" || statusLabel === "running";
+    });
+}
+
 export function detailStatusTitle(status: string): string {
   switch (detailStatusLabel(status)) {
     case "running":

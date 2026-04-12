@@ -346,6 +346,13 @@ export function TaskDetailScreen({
     actionSurface.kind !== "none" && "run" in actionSurface
       ? actionSurface.run?.id
       : undefined;
+  const realRunIds = new Set(timelineRuns.map((run) => run.id));
+  const displayedActivityRuns =
+    actionSurface.kind === "blocked" &&
+    actionSurface.run &&
+    !realRunIds.has(actionSurface.run.id)
+      ? [...timelineRuns, actionSurface.run]
+      : timelineRuns;
   const currentRunId = currentRun?.id;
   const liveSelectedRunEvents =
     selectedRun?.id && liveEventsRunId === selectedRun.id ? liveEvents : [];
@@ -452,7 +459,7 @@ export function TaskDetailScreen({
       return;
     }
     activity.scrollTop = activity.scrollHeight;
-  }, [timelineRuns.length, ungroupedArtifacts.length, actionSurface.kind]);
+  }, [displayedActivityRuns.length, ungroupedArtifacts.length, actionSurface.kind]);
 
   let actionPanel = null;
   if (actionSurface.kind === "approval") {
@@ -552,8 +559,9 @@ export function TaskDetailScreen({
               </div>
 
               <div className="detail-activity__list">
-                {timelineRuns.map((run) => {
-                  const runArtifacts = artifactsForRun(run, artifacts);
+                {displayedActivityRuns.map((run) => {
+                  const isRealRun = realRunIds.has(run.id);
+                  const runArtifacts = isRealRun ? artifactsForRun(run, artifacts) : [];
                   const actionKindForRun =
                     actionRunId === run.id && actionSurface.kind !== "none"
                       ? actionSurface.kind
@@ -565,13 +573,16 @@ export function TaskDetailScreen({
                   });
                   const actorType = activityRunActorTypes[run.id] ?? "agent";
                   const runStatus = detailStatusLabel(run.status);
-                  const runSelected =
-                    selection.kind === "run"
-                      ? selection.runId === run.id
-                      : selectedArtifact?.node_run_id === run.id;
                   const showActionPanel = actionRunId === run.id && actionPanel;
+                  const runSelected = isRealRun
+                    ? selection.kind === "run"
+                      ? selection.runId === run.id
+                      : selectedArtifact?.node_run_id === run.id
+                    : Boolean(showActionPanel && selection.kind === "overview");
                   const showInlineArtifactRow =
-                    runArtifacts.length === 1 && selectedArtifact?.node_run_id !== run.id;
+                    isRealRun &&
+                    runArtifacts.length === 1 &&
+                    selectedArtifact?.node_run_id !== run.id;
                   const timing = formatRunTiming(run);
                   const runMeta =
                     actionKindForRun === "approval" ||
@@ -593,6 +604,10 @@ export function TaskDetailScreen({
                         className="detail-activity-card__summary"
                         data-testid={`detail-run-${run.id}`}
                         onClick={() => {
+                          if (!isRealRun) {
+                            selectOverview();
+                            return;
+                          }
                           if (actionKindForRun !== "none") {
                             selectRun(run.id);
                             return;
@@ -602,6 +617,10 @@ export function TaskDetailScreen({
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
+                            if (!isRealRun) {
+                              selectOverview();
+                              return;
+                            }
                             if (actionKindForRun !== "none") {
                               selectRun(run.id);
                               return;
