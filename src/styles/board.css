@@ -17,6 +17,11 @@
   padding: var(--space-4) var(--space-6);
 }
 
+.board-screen--board-empty {
+  overflow: hidden;
+  padding: 0;
+}
+
 .board-empty-state {
   display: grid;
   align-content: center;
@@ -39,6 +44,72 @@
 .board-empty-state p {
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
+}
+
+.board-empty-state--task-list {
+  align-content: stretch;
+  justify-items: stretch;
+  gap: 0;
+  height: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: var(--space-12);
+}
+
+.board-empty-state__panel {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+}
+
+.board-empty-state__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-2);
+  color: var(--color-text-ghost);
+}
+
+.board-empty-state--task-list h2,
+.board-empty-state--task-list p {
+  text-align: center;
+}
+
+.board-empty-state--task-list p {
+  max-width: 420px;
+  color: var(--color-text-tertiary);
+}
+
+.board-empty-state__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-5);
+  background: var(--color-brand);
+  color: var(--color-text-on-accent);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+
+.board-empty-state__action:hover {
+  background: color-mix(in srgb, var(--color-brand) 88%, var(--color-accent) 12%);
+}
+
+.board-empty-state__action:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 
 .board-surface {

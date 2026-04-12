@@ -1,3 +1,4 @@
+import { Inbox, Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
@@ -56,6 +57,14 @@ export function EntryShellScreen({
   modalOpen,
   onCloseModal,
 }: EntryShellScreenProps) {
+  const showTaskViewSwitch = shell.phase === "connected" && hasTasks;
+  const showReconnectAction =
+    shell.phase !== "connected" &&
+    shell.phase !== "connecting" &&
+    !shell.bootstrapPending;
+  const showTaskListEmptyState =
+    shell.phase === "connected" && shell.workspaceCount > 0 && !hasTasks;
+
   return (
     <>
       <DesktopShellFrame
@@ -74,7 +83,7 @@ export function EntryShellScreen({
           </div>
         }
         topBarRight={
-          shell.phase === "connected" ? (
+          showTaskViewSwitch ? (
             <div className="task-view-switch" data-testid="task-view-switch">
               {shell.taskViewNav.map((item) => (
                 <NavLink
@@ -94,7 +103,7 @@ export function EntryShellScreen({
                 </NavLink>
               ))}
             </div>
-          ) : shell.phase === "connecting" || shell.bootstrapPending ? null : (
+          ) : showReconnectAction ? (
             <button
               className="secondary-action"
               data-testid="reconnect-app-server"
@@ -103,10 +112,15 @@ export function EntryShellScreen({
             >
               Reconnect
             </button>
-          )
+          ) : null
         }
       >
-        <section className="board-screen board-screen--board" data-testid="entry-shell">
+        <section
+          className={`board-screen board-screen--board${
+            showTaskListEmptyState ? " board-screen--board-empty" : ""
+          }`}
+          data-testid="entry-shell"
+        >
           {shell.error ? (
             <div className="inline-banner inline-banner--failed" data-testid="shell-error">
               {shell.error}
@@ -144,12 +158,21 @@ export function EntryShellScreen({
               </button>
             </div>
           ) : !hasTasks ? (
-            <div className="board-empty-state" data-testid="board-empty-state">
-              <h2>No tasks yet</h2>
-              <p>Start the first task for this workspace. Config, runtime, and flow stay in the launch modal.</p>
-              <button className="primary-action" onClick={onOpenModal} type="button">
-                New Task
-              </button>
+            <div
+              className="board-empty-state board-empty-state--task-list"
+              data-testid="board-empty-state"
+            >
+              <div className="board-empty-state__panel">
+                <div className="board-empty-state__icon" aria-hidden="true">
+                  <Inbox size={28} strokeWidth={1.75} />
+                </div>
+                <h2>No tasks yet</h2>
+                <p>Create your first task to start a workflow.</p>
+                <button className="board-empty-state__action" onClick={onOpenModal} type="button">
+                  <Plus aria-hidden="true" size={14} strokeWidth={2.1} />
+                  <span>New Task</span>
+                </button>
+              </div>
             </div>
           ) : (
             <TaskBoard columns={columns} />
