@@ -17,7 +17,10 @@ import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { Toast } from "@/features/shared/ui/Toast";
-import type { TaskDetailActionSurface } from "@/features/task-detail/model/use-task-detail-screen";
+import type {
+  ActivityRunActorType,
+  TaskDetailActionSurface,
+} from "@/features/task-detail/model/use-task-detail-screen";
 import type { TaskDetailModal, TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
 import {
   TaskApprovalDock,
@@ -56,11 +59,11 @@ function StageNodeIcon({ status }: { status: StageNode["status"] }) {
 }
 
 function ActivityRunIcon({
-  actionKind,
+  actorType,
 }: {
-  actionKind: TaskDetailActionSurface["kind"] | "none";
+  actorType: ActivityRunActorType;
 }) {
-  const Icon = actionKind === "approval" ? User : Bot;
+  const Icon = actorType === "human" ? User : Bot;
   return <Icon size={14} strokeWidth={1.9} />;
 }
 
@@ -245,6 +248,7 @@ type TaskDetailScreenProps = {
   elapsedLabel: string;
   stageNodes: StageNode[];
   timelineRuns: NodeRunViewDto[];
+  activityRunActorTypes: Record<string, ActivityRunActorType>;
   artifacts: ArtifactRefDto[];
   selection: TaskDetailSelection;
   modal: TaskDetailModal;
@@ -297,6 +301,7 @@ export function TaskDetailScreen({
   configLabel,
   stageNodes,
   timelineRuns,
+  activityRunActorTypes,
   artifacts,
   selection,
   modal,
@@ -558,6 +563,7 @@ export function TaskDetailScreen({
                     actionRunId,
                     actionKind: actionSurface.kind,
                   });
+                  const actorType = activityRunActorTypes[run.id] ?? "agent";
                   const runStatus = detailStatusLabel(run.status);
                   const runSelected =
                     selection.kind === "run"
@@ -609,8 +615,10 @@ export function TaskDetailScreen({
                         <span
                           aria-hidden="true"
                           className={`detail-activity-card__icon detail-activity-card__icon--${tone}`}
+                          data-actor-type={actorType}
+                          data-testid={`detail-run-icon-${run.id}`}
                         >
-                          <ActivityRunIcon actionKind={actionKindForRun} />
+                          <ActivityRunIcon actorType={actorType} />
                         </span>
                         <span className="detail-activity-card__copy">
                           <span className="detail-activity-card__title-row">

@@ -17,11 +17,65 @@ import { useTaskRunHistory } from "@/features/task-detail/model/use-task-run-his
 import type {
   ArtifactRefDto,
   BlockedStepDto,
+  ConfigViewDto,
   InputRequestDto,
   NodeRunViewDto,
+  TaskViewDto,
 } from "@/rpc/types";
 
 const emptyArtifacts: ArtifactRefDto[] = [];
+
+export type ActivityRunActorType = "agent" | "human";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function resolveNodeActorTypes(
+  config: ConfigViewDto | undefined,
+): Partial<Record<string, ActivityRunActorType>> {
+  if (!isRecord(config?.config)) {
+    return {};
+  }
+  const nodeDefinitions = config.config.node_definitions;
+  if (!isRecord(nodeDefinitions)) {
+    return {};
+  }
+
+  const actorTypes: Partial<Record<string, ActivityRunActorType>> = {};
+  for (const [nodeName, definition] of Object.entries(nodeDefinitions)) {
+    if (!isRecord(definition)) {
+      continue;
+    }
+    const type = definition.type;
+    if (type === "human" || type === "agent") {
+      actorTypes[nodeName] = type;
+    }
+  }
+
+  return actorTypes;
+}
+
+function resolveRunActorType(args: {
+  run: NodeRunViewDto;
+  task?: TaskViewDto;
+  inputRequest?: InputRequestDto;
+  nodeActorTypes: Partial<Record<string, ActivityRunActorType>>;
+}): ActivityRunActorType {
+  const { run, task, inputRequest, nodeActorTypes } = args;
+  const configActorType = nodeActorTypes[run.node_name];
+  if (configActorType) {
+    return configActorType;
+  }
+  if (task?.current_node_name === run.node_name && task.current_node_type === "human") {
+    return "human";
+  }
+  if (inputRequest?.node_run_id === run.id && inputRequest.kind === "approval") {
+    return "human";
+  }
+  return "agent";
+}
+
 function isOpenRun(run: NodeRunViewDto) {
   const status = run.status.toLowerCase();
   return status.includes("run") || status.includes("await");
@@ -69,6 +123,7 @@ export function useTaskDetailScreen() {
     });
   const artifacts = detailEntry?.artifacts ?? emptyArtifacts;
   const inputRequest = detailEntry?.inputRequest;
+  const nodeActorTypes = resolveNodeActorTypes(detailEntry?.config);
   const detailError = detailEntry?.error;
   const loading = detailEntry?.loading ?? false;
   const latestBlockedStep = resolvedTask?.blocked_steps?.at(-1) as
@@ -233,6 +288,17 @@ export function useTaskDetailScreen() {
     configEntries,
     elapsedLabel: latest?.started_at ? latest.started_at : "",
     timelineRuns: navigatorRuns,
+    activityRunActorTypes: Object.fromEntries(
+      navigatorRuns.map((run) => [
+        run.id,
+        resolveRunActorType({
+          run,
+          task: resolvedTask,
+          inputRequest,
+          nodeActorTypes,
+        }),
+      ]),
+    ) as Record<string, ActivityRunActorType>,
     currentRun,
     latestRun: latest,
     selectOverview,

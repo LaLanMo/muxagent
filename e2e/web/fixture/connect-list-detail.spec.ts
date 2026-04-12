@@ -199,6 +199,14 @@ test("renders approval and artifact preview task surfaces", async ({ page }) => 
   await expect(page.getByTestId("approval-pane")).toBeVisible();
   await expect(page.getByText("Review PR #42")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
+  await expect(page.getByTestId("detail-run-icon-run-awaiting-plan")).toHaveAttribute(
+    "data-actor-type",
+    "agent",
+  );
+  await expect(page.getByTestId("detail-run-icon-run-awaiting-review")).toHaveAttribute(
+    "data-actor-type",
+    "human",
+  );
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
