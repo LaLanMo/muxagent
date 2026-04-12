@@ -1,3 +1,4 @@
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { Bot, Check, CircleDashed, CircleX, FileText, Loader, User, type LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -361,6 +362,9 @@ export function TaskDetailScreen({
   const durationLabel = summarizeTaskDuration(task, timelineRuns);
   const runsLabel = summarizeRuns(timelineRuns);
   const promptLead = task?.task.description ?? title;
+  const activityRef = useRef<HTMLElement | null>(null);
+  const shouldStickActivityToBottomRef = useRef(true);
+  const lastTaskIdRef = useRef<string | undefined>(undefined);
   const groupedArtifactPaths = new Set(
     timelineRuns.flatMap((run) =>
       artifactsForRun(run, artifacts).map((artifact) => artifact.resolved_path),
@@ -405,6 +409,45 @@ export function TaskDetailScreen({
         showEmptyOutput={Boolean(selectedRun)}
       />
     ) : null;
+
+  useEffect(() => {
+    const activity = activityRef.current;
+    if (!activity) {
+      return;
+    }
+    const updateStickiness = () => {
+      const distanceFromBottom =
+        activity.scrollHeight - activity.scrollTop - activity.clientHeight;
+      shouldStickActivityToBottomRef.current = distanceFromBottom <= 24;
+    };
+    updateStickiness();
+    activity.addEventListener("scroll", updateStickiness);
+    return () => {
+      activity.removeEventListener("scroll", updateStickiness);
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const activity = activityRef.current;
+    const taskId = task?.task.id;
+    if (!activity || !taskId) {
+      return;
+    }
+    if (lastTaskIdRef.current === taskId) {
+      return;
+    }
+    activity.scrollTop = activity.scrollHeight;
+    shouldStickActivityToBottomRef.current = true;
+    lastTaskIdRef.current = taskId;
+  }, [task?.task.id]);
+
+  useLayoutEffect(() => {
+    const activity = activityRef.current;
+    if (!activity || !shouldStickActivityToBottomRef.current) {
+      return;
+    }
+    activity.scrollTop = activity.scrollHeight;
+  }, [timelineRuns.length, ungroupedArtifacts.length, actionSurface.kind]);
 
   let actionPanel = null;
   if (actionSurface.kind === "approval") {
@@ -495,7 +538,7 @@ export function TaskDetailScreen({
             </header>
             <div className="detail-main-divider" />
 
-            <section className="detail-activity">
+            <section className="detail-activity" data-testid="detail-activity" ref={activityRef}>
               <div className="detail-activity__header">
                 <span className="detail-activity__eyebrow">Activity</span>
                 {loading ? (

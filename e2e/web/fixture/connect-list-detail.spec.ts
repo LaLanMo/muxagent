@@ -35,6 +35,19 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await expect(page.getByText("Refactor auth middleware")).toBeVisible();
   await expect(page.getByTestId("detail-run-run-live-plan")).toBeVisible();
+  const activityScroll = await page.getByTestId("detail-activity").evaluate((element) => ({
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  const implementBox = await page.getByTestId("detail-run-run-live-implement").boundingBox();
+  const planBox = await page.getByTestId("detail-run-run-live-plan").boundingBox();
+  expect(activityScroll.scrollTop + activityScroll.clientHeight).toBeGreaterThanOrEqual(
+    activityScroll.scrollHeight - 1,
+  );
+  expect(implementBox).not.toBeNull();
+  expect(planBox).not.toBeNull();
+  expect(planBox!.y).toBeLessThan(implementBox!.y);
   await expect(page.getByTestId("transcript-modal")).toHaveCount(0);
   await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
 });
