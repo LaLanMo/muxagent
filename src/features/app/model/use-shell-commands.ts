@@ -1,6 +1,8 @@
 import { useLocation, useNavigate } from "react-router-dom";
+import { parseTaskDetailPath } from "@/domain/routes";
 import { useAppSessionController } from "@/features/app/model/use-app-session-controller";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
+import { useWorkspaceStore } from "@/state/workspace-store";
 
 export type ShellCommands = {
   addWorkspace: () => Promise<void>;
@@ -31,6 +33,9 @@ function buildCurrentTaskSurfacePath(pathname: string, search: string): string {
 export function useShellCommands(): ShellCommands {
   const location = useLocation();
   const navigate = useNavigate();
+  const clearTaskSurfaceReturnContext = useWorkspaceStore(
+    (state) => state.clearTaskSurfaceReturnContext,
+  );
   const {
     addWorkspaceFromPicker,
     clearWorkspaceSelection,
@@ -42,6 +47,9 @@ export function useShellCommands(): ShellCommands {
     addWorkspace: addWorkspaceFromPicker,
     disconnect,
     openWorkspaceTasks: async (workspaceId: string) => {
+      if (parseTaskDetailPath(location.pathname)) {
+        clearTaskSurfaceReturnContext();
+      }
       const result = await selectWorkspaceById(workspaceId);
       if (result.status !== "selected") {
         return;
@@ -63,6 +71,9 @@ export function useShellCommands(): ShellCommands {
     },
     reconnect,
     showAllTasks: () => {
+      if (parseTaskDetailPath(location.pathname)) {
+        clearTaskSurfaceReturnContext();
+      }
       clearWorkspaceSelection();
       navigate(buildCurrentTaskSurfacePath(location.pathname, location.search), {
         replace: false,

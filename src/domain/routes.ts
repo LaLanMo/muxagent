@@ -3,6 +3,15 @@ export type TaskRouteParams = {
   taskId: string;
 };
 
+export type TaskSurfaceReturnState = {
+  path: string;
+  workspaceId?: string;
+};
+
+export type TaskDetailLocationState = {
+  taskSurfaceReturnContext?: TaskSurfaceReturnState;
+};
+
 const taskRoutePattern = /^\/workspaces\/([^/]+)\/tasks\/([^/]+)$/;
 
 export function buildTaskDetailPath(

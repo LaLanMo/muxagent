@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Bot, Check, CircleDashed, CircleX, FileText, Loader, User, type LucideIcon } from "lucide-react";
-import { Link } from "react-router-dom";
 import {
   detailStatusLabel,
   formatRelativeTime,
@@ -238,6 +237,7 @@ function activityMeta(run: NodeRunViewDto, artifactCount: number) {
 
 type TaskDetailScreenProps = {
   shell: ShellChromeModel;
+  goBackToTaskSurface: () => void;
   task?: TaskViewDto;
   loading: boolean;
   detailError?: string;
@@ -292,6 +292,7 @@ type TaskDetailScreenProps = {
 
 export function TaskDetailScreen({
   shell,
+  goBackToTaskSurface,
   task,
   loading,
   detailError,
@@ -536,14 +537,15 @@ export function TaskDetailScreen({
         <div className="detail-layout">
           <div className="detail-main-column">
             <header className="detail-main-header">
-              <Link
+              <button
                 aria-label="Back to tasks"
                 className="detail-main-header__back"
                 data-testid="task-detail-back"
-                to="/"
+                onClick={goBackToTaskSurface}
+                type="button"
               >
                 <span>‹  Tasks</span>
-              </Link>
+              </button>
               <div className="detail-main-header__prompt">
                 <p className="detail-main-header__prompt-text">{promptLead}</p>
               </div>

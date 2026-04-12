@@ -211,9 +211,14 @@
 
 .detail-main-header__back {
   width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
+  cursor: pointer;
 }
 
 .detail-main-header__back:hover {

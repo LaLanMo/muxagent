@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   buildStageNodes,
   detailStatusTitle,
@@ -131,8 +131,13 @@ const emptyConfigEntries: import("@/rpc/types").ConfigCatalogEntryDto[] = [];
 
 export function useTaskDetailScreen() {
   const shell = useShellModel();
+  const navigate = useNavigate();
   const { taskId = "", workspaceId = "" } = useParams();
   const configEntries = useWorkspaceStore((state) => state.catalog?.entries) ?? emptyConfigEntries;
+  const taskSurfaceReturnContext = useWorkspaceStore(
+    (state) => state.taskSurfaceReturnContext,
+  );
+  const backHref = taskSurfaceReturnContext?.path ?? "/";
   const { task: resolvedTask, detailEntry, liveEvents, liveEventsRunId, loadDetail } =
     useTaskDetailData({
       workspaceId,
@@ -263,6 +268,7 @@ export function useTaskDetailScreen() {
     shell,
     workspaceId,
     taskId,
+    goBackToTaskSurface: () => navigate(backHref),
     task: resolvedTask,
     loading,
     detailError,

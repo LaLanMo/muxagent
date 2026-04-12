@@ -1,5 +1,11 @@
-import { Link, useNavigate } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import type { TaskDetailLocationState } from "@/domain/routes";
 import { useNativeContextMenu } from "@/features/shared/ui/use-native-context-menu";
+import { useWorkspaceStore } from "@/state/workspace-store";
 export type TaskBoardCardModel = {
   id: string;
   workspaceId?: string;
@@ -24,13 +30,31 @@ function hasAttentionAccent(tone: TaskBoardCardModel["tone"]) {
 }
 
 function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
+  const location = useLocation();
   const navigate = useNavigate();
+  const selectedWorkspaceId = useWorkspaceStore(
+    (state) => state.selectedWorkspaceId,
+  );
+  const captureTaskSurfaceReturnContext = useWorkspaceStore(
+    (state) => state.captureTaskSurfaceReturnContext,
+  );
+  const detailState: TaskDetailLocationState = {
+    taskSurfaceReturnContext: {
+      path: location.search ? `${location.pathname}${location.search}` : location.pathname,
+      workspaceId: selectedWorkspaceId,
+    },
+  };
   const contextMenu = useNativeContextMenu<HTMLAnchorElement>({
     actions: [
       {
         id: `open-task:${card.workspaceId ?? "global"}:${card.id}`,
         label: "Open Task",
-        onSelect: () => navigate(card.href),
+        onSelect: () => {
+          if (detailState.taskSurfaceReturnContext) {
+            captureTaskSurfaceReturnContext(detailState.taskSurfaceReturnContext);
+          }
+          navigate(card.href, { state: detailState });
+        },
       },
     ],
   });
@@ -42,7 +66,13 @@ function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
         hasAttentionAccent(card.tone) ? ` task-board-card--${card.tone}` : ""
       }`}
       data-testid={`board-card-${card.id}`}
+      onClick={() => {
+        if (detailState.taskSurfaceReturnContext) {
+          captureTaskSurfaceReturnContext(detailState.taskSurfaceReturnContext);
+        }
+      }}
       onContextMenu={contextMenu.onContextMenu}
+      state={detailState}
       to={card.href}
     >
       <div className="task-board-card__body">

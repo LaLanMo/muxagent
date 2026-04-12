@@ -231,6 +231,53 @@ test("treats Tasks as the all-workspaces view and workspace rows as task scope",
   await expect(page.getByTestId("task-board")).toBeVisible();
 });
 
+test("restores the originating task-surface workspace scope after leaving task detail", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-alt-workspace"));
+  await page.getByTestId("workspace-picker-button").click();
+  await page.getByRole("link", { name: /^Tasks$/i }).click();
+  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
+
+  const allTasksCard = page
+    .locator('[data-testid="board-card-task-live-fixture"]')
+    .filter({ hasText: "muxagent-workspace" })
+    .first();
+  await allTasksCard.click();
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+  await expect(
+    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+  ).toContainText("muxagent-workspace");
+
+  await page.getByTestId("task-detail-back").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
+
+  await allTasksCard.click();
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
+
+  await page
+    .locator(".shell-workspace__row")
+    .filter({ hasText: "muxagent-alt-workspace" })
+    .click();
+  await expect(
+    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+  ).toContainText("muxagent-alt-workspace");
+
+  await openTaskFromBoard(page, "task-live-fixture");
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+  ).toContainText("muxagent-alt-workspace");
+});
+
 test("renders approval and artifact preview task surfaces", async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 540 });
   await connectFixtureWorkspace(page);

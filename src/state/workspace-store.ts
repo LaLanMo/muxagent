@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { TaskSurfaceReturnState } from "@/domain/routes";
 import type {
   ConfigCatalogResult,
   InitializeResult,
@@ -14,6 +15,7 @@ interface WorkspaceState {
   catalog?: ConfigCatalogResult;
   workspaces: WorkspaceSummaryDto[];
   selectedWorkspaceId?: string;
+  taskSurfaceReturnContext?: TaskSurfaceReturnState;
   error?: string;
   setConnecting: () => void;
   requestBootstrap: () => void;
@@ -25,6 +27,8 @@ interface WorkspaceState {
   ) => void;
   setDisconnected: () => void;
   setSelectedWorkspace: (workspaceId?: string) => void;
+  captureTaskSurfaceReturnContext: (context: TaskSurfaceReturnState) => void;
+  clearTaskSurfaceReturnContext: () => void;
   setCatalog: (catalog?: ConfigCatalogResult) => void;
   upsertWorkspace: (workspace: WorkspaceSummaryDto) => void;
   removeWorkspace: (workspaceId: string) => void;
@@ -63,6 +67,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       catalog: undefined,
       workspaces: [],
       selectedWorkspaceId: undefined,
+      taskSurfaceReturnContext: undefined,
       error: undefined,
     }),
   setConnected: (server, status, catalog, workspaces) =>
@@ -91,11 +96,20 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       catalog: undefined,
       workspaces: [],
       selectedWorkspaceId: undefined,
+      taskSurfaceReturnContext: undefined,
       error: undefined,
     }),
   setSelectedWorkspace: (workspaceId) =>
     set({
       selectedWorkspaceId: workspaceId,
+    }),
+  captureTaskSurfaceReturnContext: (context) =>
+    set({
+      taskSurfaceReturnContext: context.path.trim() ? context : undefined,
+    }),
+  clearTaskSurfaceReturnContext: () =>
+    set({
+      taskSurfaceReturnContext: undefined,
     }),
   setCatalog: (catalog) =>
     set({
@@ -136,6 +150,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       catalog: undefined,
       workspaces: [],
       selectedWorkspaceId: undefined,
+      taskSurfaceReturnContext: undefined,
       error: message,
     }),
   reset: () =>
@@ -147,6 +162,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       catalog: undefined,
       workspaces: [],
       selectedWorkspaceId: undefined,
+      taskSurfaceReturnContext: undefined,
       error: undefined,
     }),
 }));

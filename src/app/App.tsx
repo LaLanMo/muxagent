@@ -13,11 +13,13 @@ import { ConfigEditorScreen } from "@/features/configs/ui/ConfigEditorScreen";
 import { useSettingsScreen } from "@/features/settings/model/use-settings-screen";
 import { SettingsScreen } from "@/features/settings/ui/SettingsScreen";
 import { useTaskRouteSelection } from "@/features/app/model/use-task-route-selection";
+import { useTaskSurfaceReturnContext } from "@/features/app/model/use-task-surface-return-context";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
 function RuntimeEffects() {
   useServerBootstrap();
   useRuntimeSync();
+  useTaskSurfaceReturnContext();
   return null;
 }
 
