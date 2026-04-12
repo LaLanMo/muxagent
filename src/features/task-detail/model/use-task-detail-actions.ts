@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   continueBlockedUntilResumed,
+  recoverStaleTaskRun,
   retryTaskNodeAction,
   startFollowUpAndReloadTaskList,
   submitTaskApproval,
@@ -58,6 +59,7 @@ export function useTaskDetailActions({
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
+  const [recoveringNodeId, setRecoveringNodeId] = useState<string | undefined>();
 
   useEffect(() => {
     setFeedback("");
@@ -221,6 +223,41 @@ export function useTaskDetailActions({
     }
   }
 
+  async function recoverRun(nodeRunId: string): Promise<void> {
+    if (!workspaceId || !taskId || !nodeRunId) {
+      return;
+    }
+    setRecoveringNodeId(nodeRunId);
+    clearTaskDetailIssue(workspaceId, taskId);
+    try {
+      const result = await recoverStaleTaskRun(getRuntime(), {
+        workspace_id: workspaceId,
+        task_id: taskId,
+        node_run_id: nodeRunId,
+      });
+      if (result.outcome === "busy") {
+        throw new Error(
+          "This workspace already has an active runtime. Wait for it to settle before recovering this run.",
+        );
+      }
+      const detail = await loadDetail({ showLoading: false });
+      if (!detail) {
+        throw new Error("Failed to refresh task detail after recovery");
+      }
+      if (result.outcome === "still_open") {
+        throw new Error(
+          "Recovery did not resolve this run yet. Refresh again shortly.",
+        );
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to recover run";
+      failTaskDetail(workspaceId, taskId, message);
+    } finally {
+      setRecoveringNodeId(undefined);
+    }
+  }
+
   return {
     feedback,
     setFeedback,
@@ -240,6 +277,7 @@ export function useTaskDetailActions({
     submittingFollowUp,
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,
+    submittingRecovery: Boolean(recoveringNodeId),
     submitApprove: () => submitDecision(true),
     submitReject: () => submitDecision(false),
     submitClarification,
@@ -247,5 +285,6 @@ export function useTaskDetailActions({
     retryTask: (force = false) =>
       latestFailedRunId ? retryNode(latestFailedRunId, force) : Promise.resolve(),
     continueBlockedTask: continueBlockedAction,
+    recoverRun,
   };
 }

@@ -133,7 +133,14 @@ export function useTaskDetailScreen() {
   const shell = useShellModel();
   const navigate = useNavigate();
   const { taskId = "", workspaceId = "" } = useParams();
+  const serverMethods =
+    useWorkspaceStore((state) => state.server?.capabilities.methods) ?? [];
   const configEntries = useWorkspaceStore((state) => state.catalog?.entries) ?? emptyConfigEntries;
+  const workspaceActorState = useWorkspaceStore(
+    (state) =>
+      state.workspaces.find((workspace) => workspace.workspace_id === workspaceId)?.actor
+        .state ?? "cold",
+  );
   const taskSurfaceReturnContext = useWorkspaceStore(
     (state) => state.taskSurfaceReturnContext,
   );
@@ -210,12 +217,14 @@ export function useTaskDetailScreen() {
     submittingFollowUp,
     submittingRetry,
     submittingContinue,
+    submittingRecovery,
     submitApprove,
     submitReject,
     submitClarification,
     submitFollowUp,
     retryTask,
     continueBlockedTask: continueBlocked,
+    recoverRun,
   } = useTaskDetailActions({
     workspaceId,
     taskId,
@@ -284,6 +293,8 @@ export function useTaskDetailScreen() {
     liveEvents,
     liveEventsRunId,
     selectedRunHistory,
+    workspaceActorState,
+    supportsRunRecovery: serverMethods.includes("task.recover_stale"),
     feedback,
     setFeedback,
     clarificationAnswers,
@@ -297,6 +308,7 @@ export function useTaskDetailScreen() {
     submittingFollowUp,
     submittingRetry,
     submittingContinue,
+    submittingRecovery,
     blockedStep: latestBlockedStep,
     failureReason,
     actionSurface,
@@ -344,5 +356,6 @@ export function useTaskDetailScreen() {
     submitFollowUp,
     retryTask,
     continueBlockedTask: continueBlocked,
+    recoverRun,
   };
 }

@@ -24,6 +24,8 @@ import {
   type TaskGetResult,
   type TaskInputRequestResult,
   type TaskListResult,
+  type TaskRecoverStaleParams,
+  type TaskRecoverStaleResult,
   type TaskRetryNodeParams,
   type WorkspaceAddParams,
   type WorkspaceAddResult,
@@ -211,6 +213,10 @@ class BrowserTaskBackendClient implements TaskBackendClient {
     params: TaskContinueBlockedParams,
   ): Promise<CommandAcceptedResult> {
     return this.request("task.continue_blocked", params);
+  }
+
+  taskRecoverStale(params: TaskRecoverStaleParams): Promise<TaskRecoverStaleResult> {
+    return this.request("task.recover_stale", params);
   }
 
   artifactList(workspaceId: string, taskId: string): Promise<ArtifactListResult> {

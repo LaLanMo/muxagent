@@ -39,6 +39,10 @@ type RunPaneProps = {
   streamSource: "live" | "replay" | "loading" | "none";
   isCurrentRun: boolean;
   showEmptyOutput: boolean;
+  recoveryAction?: {
+    submitting: boolean;
+    onRecover: () => Promise<void>;
+  };
   onClose?: () => void;
 };
 
@@ -491,11 +495,19 @@ function describeTranscriptAvailability(
   transcript: TranscriptSnapshot,
   run: NodeRunViewDto,
   isCurrentRun: boolean,
+  recoveryAction?: RunPaneProps["recoveryAction"],
 ) {
   if (streamSource === "loading") {
     return {
       title: "Loading run history…",
       detail: "Fetching persisted session events for this node run.",
+    };
+  }
+  if (recoveryAction) {
+    return {
+      title: "No live output recorded yet",
+      detail:
+        "This run is still marked active, but no session or transcript was attached. If the previous executor was interrupted, recover this run to refresh its state.",
     };
   }
   if (isCurrentRun) {
@@ -1210,6 +1222,7 @@ export function TaskTranscriptModal({
   streamSource,
   isCurrentRun,
   showEmptyOutput,
+  recoveryAction,
   onClose,
 }: RunPaneProps) {
   if (!run) {
@@ -1231,6 +1244,7 @@ export function TaskTranscriptModal({
     transcript,
     run,
     isCurrentRun,
+    recoveryAction,
   );
 
   function renderTranscriptItem(item: TranscriptTimelineItem) {
@@ -1411,6 +1425,20 @@ export function TaskTranscriptModal({
                 <div className="detail-empty-card detail-empty-card--embedded">
                   <strong>{transcriptAvailability.title}</strong>
                   <p>{transcriptAvailability.detail}</p>
+                  {recoveryAction ? (
+                    <button
+                      className="detail-retry-dock__button"
+                      data-testid="recover-run"
+                      disabled={recoveryAction.submitting}
+                      onClick={() => {
+                        void recoveryAction.onRecover();
+                      }}
+                      type="button"
+                    >
+                      <RotateCcw aria-hidden="true" size={14} strokeWidth={1.9} />
+                      {recoveryAction.submitting ? "Recovering…" : "Recover run"}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             );

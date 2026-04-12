@@ -13,6 +13,8 @@ import type {
   ConfigViewDto,
   InputRequestDto,
   TaskContinueBlockedParams,
+  TaskRecoverStaleParams,
+  TaskRecoverStaleResult,
   TaskRetryNodeParams,
   TaskStartFollowUpParams,
   TaskStartParams,
@@ -266,6 +268,13 @@ export async function continueBlockedTask(
   params: TaskContinueBlockedParams,
 ): Promise<CommandAcceptedResult> {
   return runtime.backend.taskContinueBlocked(params);
+}
+
+export async function recoverStaleTaskRun(
+  runtime: DesktopRuntime,
+  params: TaskRecoverStaleParams,
+): Promise<TaskRecoverStaleResult> {
+  return runtime.backend.taskRecoverStale(params);
 }
 
 export async function submitTaskApproval(

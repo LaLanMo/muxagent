@@ -335,10 +335,11 @@ export class FixtureRuntime {
               "task.list",
               "task.get",
               "task.run_history",
-              "task.input_request",
-              "task.start",
-              "artifact.list",
-            ],
+          "task.input_request",
+          "task.start",
+          "task.recover_stale",
+          "artifact.list",
+        ],
             notifications: ["notification"],
           },
         });
@@ -375,6 +376,7 @@ export class FixtureRuntime {
         );
         const tasks = this.fixtureTasksForWorkspace(normalizedPath);
         workspace.task_counts = this.taskCounts(tasks);
+        workspace.actor = this.workspaceActor(tasks);
         state.workspaces.unshift(workspace);
         state.tasksByWorkspaceId[workspace.workspace_id] = tasks;
         options.emitNotification("workspace.added", workspace.workspace_id, {
@@ -733,6 +735,9 @@ export class FixtureRuntime {
         workspace.task_counts = this.taskCounts(
           state.tasksByWorkspaceId[workspace.workspace_id],
         );
+        workspace.actor = this.workspaceActor(
+          state.tasksByWorkspaceId[workspace.workspace_id],
+        );
         options.emitNotification("task.created", workspace.workspace_id, {
           client_command_id: String(params.client_command_id ?? ""),
           event: {
@@ -745,6 +750,57 @@ export class FixtureRuntime {
           accepted: true,
           client_command_id: String(params.client_command_id ?? ""),
         });
+      }
+      case "task.recover_stale": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const taskId = String(params.task_id ?? "");
+        const nodeRunId = String(params.node_run_id ?? "");
+        const task = this.fixtureTasks(state, workspace.workspace_id).find(
+          (entry) => entry.task.id === taskId,
+        );
+        if (!task) {
+          return this.fail(id, -32602, "task not found");
+        }
+        const run = task.node_runs.find((entry) => entry.id === nodeRunId);
+        if (!run) {
+          return this.fail(id, -32602, "node run not found");
+        }
+        if (!["running", "awaiting_user"].includes(run.status)) {
+          return this.respond(id, { outcome: "already_terminal" });
+        }
+        if (workspace.actor.state === "active") {
+          return this.respond(id, { outcome: "busy" });
+        }
+
+        const recoveredAt = new Date().toISOString();
+        run.status = "failed";
+        run.failure_reason = "orphaned_after_restart";
+        run.completed_at = recoveredAt;
+        task.status = "failed";
+        task.current_issue = {
+          kind: "failed_run",
+          node_name: run.node_name,
+          iteration: 1,
+          reason: "orphaned_after_restart",
+          occurred_at: recoveredAt,
+        };
+        task.task.updated_at = recoveredAt;
+        task.live_events = [];
+        task.live_output_run_id = undefined;
+        workspace.task_counts = this.taskCounts(
+          state.tasksByWorkspaceId[workspace.workspace_id],
+        );
+        workspace.actor = this.workspaceActor(
+          state.tasksByWorkspaceId[workspace.workspace_id],
+        );
+
+        return this.respond(id, { outcome: "recovered_failed" });
       }
       case "artifact.list": {
         const workspace = this.requireWorkspace(
@@ -792,6 +848,23 @@ export class FixtureRuntime {
     }
 
     return counts;
+  }
+
+  private workspaceActor(tasks: FixtureTask[]) {
+    const hasAttachedExecutor = tasks.some(
+      (task) =>
+        task.status === "running" &&
+        (Boolean(task.live_output_run_id) ||
+          (task.live_events?.length ?? 0) > 0 ||
+          task.node_runs.some(
+            (run) =>
+              run.status === "running" && Boolean(run.session_id?.trim()),
+          )),
+    );
+    return {
+      state: hasAttachedExecutor ? "active" : "cold",
+      last_error: "",
+    };
   }
 
   private requireConfig(state: FixtureState, alias: string): FixtureConfig | undefined {
@@ -1187,7 +1260,7 @@ export class FixtureRuntime {
         failed: 0,
       },
       actor: {
-        state: "idle",
+        state: "cold",
         last_error: "",
       },
     };
@@ -1375,6 +1448,43 @@ export class FixtureRuntime {
     const base = Date.parse("2026-04-03T03:21:00.000Z");
     const makeTime = (offsetMinutes: number) =>
       new Date(base + offsetMinutes * 60_000).toISOString();
+
+    if (path.basename(workspacePath) === "muxagent-stale-workspace") {
+      return [
+        this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-stale-fixture",
+          description: "Recover orphaned planner run",
+          configAlias: "default",
+          createdAt: makeTime(0),
+          updatedAt: makeTime(105),
+          status: "running",
+          currentNodeName: "implement",
+          currentNodeType: "agent",
+          nodeRuns: [
+            {
+              id: "run-stale-plan",
+              task_id: "task-stale-fixture",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeTime(0),
+              completed_at: makeTime(4),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-stale-implement",
+              task_id: "task-stale-fixture",
+              node_name: "implement",
+              status: "running",
+              started_at: makeTime(5),
+            },
+          ],
+          runHistoryByRunId: {
+            "run-stale-implement": [],
+          },
+        }),
+      ];
+    }
 
     return [
       this.makeFixtureTask({

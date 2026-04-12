@@ -16,6 +16,8 @@ import type {
   NotificationEnvelopeParams,
   ServiceStatusResult,
   TaskContinueBlockedParams,
+  TaskRecoverStaleParams,
+  TaskRecoverStaleResult,
   TaskRunHistoryResult,
   TaskStartParams,
   TaskStartFollowUpParams,
@@ -158,6 +160,10 @@ class TauriTaskBackendClient implements TaskBackendClient {
     params: TaskContinueBlockedParams,
   ): Promise<CommandAcceptedResult> {
     return this.request("task.continue_blocked", params);
+  }
+
+  taskRecoverStale(params: TaskRecoverStaleParams): Promise<TaskRecoverStaleResult> {
+    return this.request("task.recover_stale", params);
   }
 
   artifactList(workspaceId: string, taskId: string): Promise<ArtifactListResult> {

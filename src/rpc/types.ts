@@ -409,6 +409,24 @@ export interface TaskContinueBlockedParams {
   task_id: string;
 }
 
+export interface TaskRecoverStaleParams {
+  workspace_id: string;
+  task_id: string;
+  node_run_id: string;
+}
+
+export type TaskRecoverStaleOutcome =
+  | "busy"
+  | "already_terminal"
+  | "recovered_done"
+  | "recovered_failed"
+  | "recovered_awaiting"
+  | "still_open";
+
+export interface TaskRecoverStaleResult {
+  outcome: TaskRecoverStaleOutcome;
+}
+
 export interface SessionHistoryToolDiffDto {
   path?: string;
   old_text?: string;

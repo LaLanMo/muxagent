@@ -116,7 +116,12 @@ export type SpawnedDesktopServerContext = {
   taskConfigRootDir: string;
   stop: () => Promise<void>;
   seedWorkspace: (
-    kind: "awaiting-review" | "completed-review" | "failed-retry" | "blocked-continue",
+    kind:
+      | "awaiting-review"
+      | "completed-review"
+      | "failed-retry"
+      | "blocked-continue"
+      | "stale-recover",
   ) => Promise<{ taskId: string; description: string }>;
 };
 

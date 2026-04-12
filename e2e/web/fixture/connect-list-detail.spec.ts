@@ -112,6 +112,30 @@ test("merges replay history with live output for the selected running run", asyn
   await expect(page.getByTestId("detail-run-session")).toContainText("session-live-implement");
 });
 
+test("offers run recovery when the selected active run has no session or transcript", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page, "/tmp/muxagent-stale-workspace");
+  await openTaskFromBoard(page, "task-stale-fixture");
+
+  await page.getByTestId("detail-run-run-stale-implement").click();
+  await expect(page).toHaveURL(/[\?&]modal=transcript/);
+  await expect(page.getByTestId("transcript-modal")).toBeVisible();
+  await expect(page.getByTestId("detail-output-surface")).toContainText(
+    "No live output recorded yet",
+  );
+  await expect(page.getByTestId("recover-run")).toBeVisible();
+
+  await page.getByTestId("recover-run").click();
+
+  await expect(page.getByTestId("recover-run")).toHaveCount(0);
+  await expect(page.getByTestId("transcript-modal")).toContainText(
+    "No persisted stream for this run",
+  );
+  await expect(page.getByTestId("transcript-modal")).toContainText("failed");
+  await expect(page.getByTestId("detail-run-run-stale-implement")).toContainText("failed");
+});
+
 test("renders MCP transcript rows as grouped tool details with image previews", async ({
   page,
 }) => {

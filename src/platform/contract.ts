@@ -16,6 +16,8 @@ import type {
   TaskGetResult,
   TaskInputRequestResult,
   TaskListResult,
+  TaskRecoverStaleParams,
+  TaskRecoverStaleResult,
   TaskRetryNodeParams,
   TaskRunHistoryResult,
   TaskStartParams,
@@ -66,6 +68,9 @@ export interface TaskBackendClient {
   taskContinueBlocked(
     params: TaskContinueBlockedParams,
   ): Promise<CommandAcceptedResult>;
+  taskRecoverStale(
+    params: TaskRecoverStaleParams,
+  ): Promise<TaskRecoverStaleResult>;
   artifactList(workspaceId: string, taskId: string): Promise<ArtifactListResult>;
   subscribe(listener: (notification: RuntimeNotification) => void): () => void;
   onConnectionLoss(listener: (error: Error) => void): () => void;

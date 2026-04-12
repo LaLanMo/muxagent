@@ -260,6 +260,8 @@ type TaskDetailScreenProps = {
   liveEvents: SessionHistoryEvent[];
   liveEventsRunId?: string;
   selectedRunHistory?: RunHistoryCacheEntry;
+  workspaceActorState: string;
+  supportsRunRecovery: boolean;
   actionSurface: TaskDetailActionSurface;
   inputRequest?: InputRequestDto;
   blockedStep?: BlockedStepDto;
@@ -277,6 +279,7 @@ type TaskDetailScreenProps = {
   submittingFollowUp: boolean;
   submittingRetry: boolean;
   submittingContinue: boolean;
+  submittingRecovery: boolean;
   failureReason?: string;
   selectOverview: () => void;
   selectRun: (runId: string) => void;
@@ -288,6 +291,7 @@ type TaskDetailScreenProps = {
   submitFollowUp: () => Promise<void>;
   retryTask: (force?: boolean) => Promise<void>;
   continueBlockedTask: () => Promise<void>;
+  recoverRun: (nodeRunId: string) => Promise<void>;
 };
 
 export function TaskDetailScreen({
@@ -314,6 +318,8 @@ export function TaskDetailScreen({
   liveEvents,
   liveEventsRunId,
   selectedRunHistory,
+  workspaceActorState,
+  supportsRunRecovery,
   actionSurface,
   inputRequest,
   blockedStep,
@@ -331,6 +337,7 @@ export function TaskDetailScreen({
   submittingFollowUp,
   submittingRetry,
   submittingContinue,
+  submittingRecovery,
   failureReason,
   selectOverview,
   selectRun,
@@ -342,6 +349,7 @@ export function TaskDetailScreen({
   submitFollowUp,
   retryTask,
   continueBlockedTask,
+  recoverRun,
 }: TaskDetailScreenProps) {
   const actionRunId =
     actionSurface.kind !== "none" && "run" in actionSurface
@@ -371,6 +379,20 @@ export function TaskDetailScreen({
         : selectedRunHistory?.loading
           ? "loading"
           : "none";
+  const canRecoverSelectedRun = Boolean(
+    selectedRun &&
+      selectedRun.id === currentRunId &&
+      detailStatusLabel(selectedRun.status) === "running" &&
+      selectedRunStreamSource === "none" &&
+      selectedRunHistory &&
+      !selectedRunHistory.loading &&
+      !selectedRunHistory.error &&
+      !selectedRun.session_id?.trim() &&
+      !selectedRunHistory.result?.sessionId?.trim() &&
+      !selectedRun.result &&
+      supportsRunRecovery &&
+      workspaceActorState !== "active",
+  );
   const createdLabel = formatAbsoluteStamp(task?.task.created_at);
   const durationLabel = summarizeTaskDuration(task, timelineRuns);
   const runsLabel = summarizeRuns(timelineRuns);
@@ -420,6 +442,14 @@ export function TaskDetailScreen({
         transcriptItems={selectedRunTimelineItems}
         run={selectedRun}
         showEmptyOutput={Boolean(selectedRun)}
+        recoveryAction={
+          selectedRun && canRecoverSelectedRun
+            ? {
+                submitting: submittingRecovery,
+                onRecover: () => recoverRun(selectedRun.id),
+              }
+            : undefined
+        }
       />
     ) : null;
 

@@ -38,13 +38,11 @@ function actorStateLabel(state: string, reachable: boolean): string {
     return "Unavailable";
   }
   switch (state) {
-    case "running":
-      return "Running";
-    case "failed":
+    case "active":
+      return "Active";
+    case "error":
       return "Failed";
-    case "starting":
-      return "Starting";
-    case "idle":
+    case "cold":
     default:
       return "Idle";
   }
