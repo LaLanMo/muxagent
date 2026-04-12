@@ -480,6 +480,124 @@ func TestServerTaskRunHistoryFallsBackToProviderTranscript(t *testing.T) {
 	}
 }
 
+func TestServerTaskRunHistoryExposesTypedMCPPayloadWithoutDuplicatingImageDebugData(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID, nodeRunID := seedAwaitingTask(t, workspacePath)
+	server.markInitialized()
+
+	recordedAt := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
+	tool := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+		CallID:     "item_22",
+		Server:     "pencil",
+		Tool:       "export_nodes",
+		Status:     taskexecutor.ToolStatusCompleted,
+		DurationMS: 1440,
+		Arguments: map[string]any{
+			"nodeIds": []string{"canvas-root"},
+		},
+		Content: []any{
+			map[string]any{"type": "text", "text": "Rendered a preview image."},
+			map[string]any{"type": "image", "data": "AAA", "mimeType": "image/png"},
+		},
+	})
+	if err := taskhistory.Append(workspacePath, taskID, nodeRunID, taskexecutor.Progress{
+		SessionID: "session-mcp",
+		Events: []taskexecutor.StreamEvent{{
+			EventID:    "evt-mcp",
+			Seq:        1,
+			EmittedAt:  recordedAt,
+			SessionID:  "session-mcp",
+			Kind:       taskexecutor.StreamEventKindTool,
+			Provenance: taskexecutor.StreamEventProvenanceExecutorPersisted,
+			Raw:        tool.MCP.DebugJSON,
+			Tool:       &tool,
+		}},
+	}, recordedAt); err != nil {
+		t.Fatalf("append mcp history: %v", err)
+	}
+
+	historyResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRunHistory,
+		Params: mustRawParams(t, taskRunHistoryParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   nodeRunID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.run_history rpc error: %+v", rpcErr)
+	}
+	historyResult := historyResultAny.(taskRunHistoryResult)
+	if got := len(historyResult.Events); got != 1 {
+		t.Fatalf("task.run_history event count = %d, want 1", got)
+	}
+	event := historyResult.Events[0]
+	if got := event.ToolKind; got != string(taskexecutor.ToolKindMCP) {
+		t.Fatalf("tool kind = %q, want mcp", got)
+	}
+	if got := event.DurationMS; got != 1440 {
+		t.Fatalf("tool duration = %d, want 1440", got)
+	}
+	if event.MCP == nil {
+		t.Fatal("task.run_history mcp payload = nil, want typed payload")
+	}
+	if got := event.MCP.Server; got != "pencil" {
+		t.Fatalf("mcp server = %q, want pencil", got)
+	}
+	if got := len(event.MCP.OutputBlocks); got != 2 {
+		t.Fatalf("mcp output block count = %d, want 2", got)
+	}
+	if got := event.MCP.OutputBlocks[1].DataURL; got != "data:image/png;base64,AAA" {
+		t.Fatalf("mcp image data url = %q, want data url", got)
+	}
+	if strings.Contains(event.Raw, "data:image") {
+		t.Fatalf("event raw leaked image payload: %s", event.Raw)
+	}
+	if strings.Contains(event.RawOutputJSON, "data:image") {
+		t.Fatalf("raw_output_json leaked image payload: %s", event.RawOutputJSON)
+	}
+}
+
+func TestSessionHistoryEventDTOMarshalPreservesDurationMSByKind(t *testing.T) {
+	payload, err := json.Marshal([]sessionHistoryEventDTO{
+		{
+			Kind:       string(taskexecutor.StreamEventKindTool),
+			CallID:     "item_22",
+			ToolKind:   string(taskexecutor.ToolKindMCP),
+			Status:     string(taskexecutor.ToolStatusCompleted),
+			DurationMS: 1440,
+		},
+		{
+			Kind:              string(taskexecutor.StreamEventKindUsage),
+			InputTokens:       128,
+			CachedInputTokens: 32,
+			OutputTokens:      64,
+			TotalTokens:       192,
+			DurationMS:        920,
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal session history events: %v", err)
+	}
+
+	var decoded []map[string]any
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal session history events: %v", err)
+	}
+	if got := decoded[0]["duration_ms"]; got != float64(1440) {
+		t.Fatalf("tool duration_ms = %#v, want 1440", got)
+	}
+	if got := decoded[1]["duration_ms"]; got != float64(920) {
+		t.Fatalf("usage duration_ms = %#v, want 920", got)
+	}
+}
+
 func TestServerTaskRunHistoryIgnoresPartialTrailingChunk(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "appserver")
 	workspacePath := t.TempDir()

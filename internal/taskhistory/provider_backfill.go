@@ -113,10 +113,19 @@ func readCodexBackfill(task taskdomain.Task, run taskdomain.NodeRun) (ReadResult
 			}
 		case "event_msg":
 			payload := asMap(envelope["payload"])
-			if strings.TrimSpace(asString(payload["type"])) == "task_complete" {
+			payloadType := strings.TrimSpace(asString(payload["type"]))
+			if payloadType == "task_complete" {
 				result.Completeness = "complete"
 			}
 			sessionID := firstNonEmpty(result.SessionID, run.SessionID)
+			if events := codexMCPEventMsgEvents(sessionID, payload, callState); len(events) > 0 {
+				for idx, event := range events {
+					seq++
+					result.Events = append(result.Events, providerEventRecord(event, sessionID, providerRecordID, idx, seq, timestamp))
+					result.LastSeq = seq
+				}
+				continue
+			}
 			if usage := codexUsageFromEventMsg(rawLine, sessionID, payload); usage != nil {
 				seq++
 				result.Events = append(result.Events, providerEventRecord(*usage, sessionID, providerRecordID, 0, seq, timestamp))
@@ -257,6 +266,18 @@ func codexResponseItemEvents(rawLine, sessionID string, payload map[string]any, 
 	case "function_call_output", "custom_tool_call_output":
 		callID := strings.TrimSpace(asString(payload["call_id"]))
 		call := callState[callID]
+		if call.Kind == taskexecutor.ToolKindMCP {
+			call = codexMCPToolOutputSupplement(call, payload)
+			if call.CallID != "" {
+				callState[call.CallID] = call
+			}
+			return []taskexecutor.StreamEvent{{
+				Kind:      taskexecutor.StreamEventKindTool,
+				SessionID: sessionID,
+				Raw:       call.MCP.DebugJSON,
+				Tool:      &call,
+			}}
+		}
 		if call.CallID == "" {
 			call.CallID = callID
 			call.Name = "tool_output"
@@ -279,6 +300,182 @@ func codexResponseItemEvents(rawLine, sessionID string, payload map[string]any, 
 		}}
 	}
 	return nil
+}
+
+func codexMCPEventMsgEvents(sessionID string, payload map[string]any, callState map[string]taskexecutor.ToolCall) []taskexecutor.StreamEvent {
+	switch strings.TrimSpace(asString(payload["type"])) {
+	case "mcp_tool_call_begin":
+		invocation := asMap(payload["invocation"])
+		call := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+			CallID:    strings.TrimSpace(asString(payload["call_id"])),
+			Server:    strings.TrimSpace(asString(invocation["server"])),
+			Tool:      strings.TrimSpace(asString(invocation["tool"])),
+			Status:    taskexecutor.ToolStatusInProgress,
+			Arguments: invocation["arguments"],
+		})
+		if call.CallID != "" {
+			callState[call.CallID] = call
+		}
+		return []taskexecutor.StreamEvent{{
+			Kind:      taskexecutor.StreamEventKindTool,
+			SessionID: sessionID,
+			Raw:       call.MCP.DebugJSON,
+			Tool:      &call,
+		}}
+	case "mcp_tool_call_end":
+		invocation := asMap(payload["invocation"])
+		callID := strings.TrimSpace(asString(payload["call_id"]))
+		content, structuredContent, resultIsError, errorText := codexMCPResultParts(payload["result"])
+		status := taskexecutor.ToolStatusCompleted
+		if resultIsError || strings.TrimSpace(errorText) != "" {
+			status = taskexecutor.ToolStatusFailed
+		}
+		call := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+			CallID:            callID,
+			Server:            strings.TrimSpace(asString(invocation["server"])),
+			Tool:              strings.TrimSpace(asString(invocation["tool"])),
+			Status:            status,
+			DurationMS:        parseDurationMS(payload["duration"]),
+			Arguments:         invocation["arguments"],
+			Content:           content,
+			StructuredContent: structuredContent,
+			ErrorText:         errorText,
+		})
+		if existing := callState[callID]; existing.CallID != "" {
+			merged := taskexecutor.MergeStreamEvent(
+				taskexecutor.StreamEvent{Kind: taskexecutor.StreamEventKindTool, Tool: &existing},
+				taskexecutor.StreamEvent{Kind: taskexecutor.StreamEventKindTool, Tool: &call},
+			)
+			if merged.Tool != nil {
+				call = *merged.Tool
+			}
+		}
+		if call.CallID != "" {
+			callState[call.CallID] = call
+		}
+		return []taskexecutor.StreamEvent{{
+			Kind:      taskexecutor.StreamEventKindTool,
+			SessionID: sessionID,
+			Raw:       call.MCP.DebugJSON,
+			Tool:      &call,
+		}}
+	default:
+		return nil
+	}
+}
+
+func codexMCPToolOutputSupplement(call taskexecutor.ToolCall, payload map[string]any) taskexecutor.ToolCall {
+	if call.MCP == nil {
+		return call
+	}
+	output := payload["output"]
+	supplement := codexMCPResponseItemPreview(output)
+	if call.OutputText == "" && supplement != "" {
+		call.OutputText = supplement
+	}
+	if call.ErrorText == "" && call.Status == taskexecutor.ToolStatusFailed && supplement != "" {
+		call.ErrorText = supplement
+	}
+	call.RawOutputJSON = call.MCP.DebugJSON
+	return call
+}
+
+func codexMCPResultParts(value any) ([]any, any, bool, string) {
+	resultMap, isError, errorText := codexMCPResultMap(value)
+	if len(resultMap) == 0 {
+		return nil, nil, isError, errorText
+	}
+	content := toAnySlice(asSlice(resultMap["content"]))
+	structuredContent := firstNonNil(resultMap["structuredContent"], resultMap["structured_content"])
+	isError = isError || asBoolValue(resultMap["isError"]) || asBoolValue(resultMap["is_error"])
+	return content, structuredContent, isError, errorText
+}
+
+func codexMCPResultMap(value any) (map[string]any, bool, string) {
+	switch item := value.(type) {
+	case map[string]any:
+		if errText := strings.TrimSpace(firstNonEmpty(asString(item["Err"]), asString(item["err"]))); errText != "" {
+			return nil, true, errText
+		}
+		if okValue, exists := item["Ok"]; exists {
+			return asMap(okValue), false, ""
+		}
+		if okValue, exists := item["ok"]; exists {
+			return asMap(okValue), false, ""
+		}
+		return item, false, ""
+	case string:
+		text := strings.TrimSpace(item)
+		if text == "" {
+			return nil, false, ""
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			return nil, true, text
+		}
+		return codexMCPResultMap(decoded)
+	default:
+		return nil, false, ""
+	}
+}
+
+func codexMCPResponseItemPreview(value any) string {
+	switch item := value.(type) {
+	case string:
+		text := strings.TrimSpace(item)
+		if text == "" {
+			return ""
+		}
+		var decoded any
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			return compactText(text)
+		}
+		return codexMCPResponseItemPreview(decoded)
+	case []any:
+		parts := make([]string, 0, len(item))
+		for _, entry := range item {
+			entryMap := asMap(entry)
+			switch strings.TrimSpace(asString(entryMap["type"])) {
+			case "input_text", "text":
+				if text := compactText(asString(entryMap["text"])); text != "" {
+					parts = append(parts, text)
+				}
+			case "input_image", "image":
+				parts = append(parts, "image output")
+			default:
+				if jsonText := compactText(canonicalJSON(entry)); jsonText != "" {
+					parts = append(parts, jsonText)
+				}
+			}
+		}
+		return strings.Join(parts, "\n\n")
+	case map[string]any:
+		if text := compactText(firstNonEmpty(asString(item["text"]), asString(item["output"]))); text != "" {
+			return text
+		}
+		return compactText(canonicalJSON(item))
+	default:
+		return ""
+	}
+}
+
+func parseDurationMS(value any) int64 {
+	switch item := value.(type) {
+	case string:
+		duration, err := time.ParseDuration(strings.TrimSpace(item))
+		if err != nil {
+			return 0
+		}
+		return int64(duration / time.Millisecond)
+	case float64:
+		return int64(item)
+	case int64:
+		return item
+	case int:
+		return int64(item)
+	default:
+		return 0
+	}
 }
 
 func codexUsageFromEventMsg(rawLine, sessionID string, payload map[string]any) *taskexecutor.StreamEvent {
@@ -610,4 +807,40 @@ func claudeToolResultContent(value any) string {
 	default:
 		return asString(value)
 	}
+}
+
+func toAnySlice(values []any) []any {
+	if len(values) == 0 {
+		return nil
+	}
+	items := make([]any, 0, len(values))
+	for _, value := range values {
+		items = append(items, value)
+	}
+	return items
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func asBoolValue(value any) bool {
+	flag, _ := value.(bool)
+	return flag
+}
+
+func canonicalJSON(value any) string {
+	if value == nil {
+		return ""
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(encoded)
 }

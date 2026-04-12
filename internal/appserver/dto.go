@@ -93,6 +93,24 @@ type sessionHistoryToolDiffDTO struct {
 	NewText string  `json:"new_text"`
 }
 
+type sessionHistoryMCPOutputBlockDTO struct {
+	Type     string `json:"type"`
+	Label    string `json:"label,omitempty"`
+	Text     string `json:"text,omitempty"`
+	JSON     string `json:"json,omitempty"`
+	DataURL  string `json:"data_url,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
+}
+
+type sessionHistoryMCPToolDTO struct {
+	Server                string                            `json:"server,omitempty"`
+	Tool                  string                            `json:"tool,omitempty"`
+	ArgumentsJSON         string                            `json:"arguments_json,omitempty"`
+	StructuredContentJSON string                            `json:"structured_content_json,omitempty"`
+	OutputBlocks          []sessionHistoryMCPOutputBlockDTO `json:"output_blocks,omitempty"`
+	DebugJSON             string                            `json:"debug_json,omitempty"`
+}
+
 type sessionHistoryPlanStepDTO struct {
 	Text   string `json:"text"`
 	Status string `json:"status"`
@@ -122,6 +140,7 @@ type sessionHistoryEventDTO struct {
 	ToolKind      string                      `json:"tool_kind,omitempty"`
 	Title         string                      `json:"title,omitempty"`
 	Status        string                      `json:"status,omitempty"`
+	DurationMS    int64                       `json:"duration_ms,omitempty"`
 	InputSummary  string                      `json:"input_summary,omitempty"`
 	OutputText    string                      `json:"output_text,omitempty"`
 	ErrorText     string                      `json:"error_text,omitempty"`
@@ -129,6 +148,7 @@ type sessionHistoryEventDTO struct {
 	Diffs         []sessionHistoryToolDiffDTO `json:"diffs,omitempty"`
 	RawInputJSON  string                      `json:"raw_input_json,omitempty"`
 	RawOutputJSON string                      `json:"raw_output_json,omitempty"`
+	MCP           *sessionHistoryMCPToolDTO   `json:"mcp,omitempty"`
 
 	PlanID string                      `json:"plan_id,omitempty"`
 	Steps  []sessionHistoryPlanStepDTO `json:"steps,omitempty"`
@@ -137,7 +157,6 @@ type sessionHistoryEventDTO struct {
 	CachedInputTokens int64 `json:"cached_input_tokens,omitempty"`
 	OutputTokens      int64 `json:"output_tokens,omitempty"`
 	TotalTokens       int64 `json:"total_tokens,omitempty"`
-	DurationMS        int64 `json:"duration_ms,omitempty"`
 }
 
 type progressInfoDTO struct {
@@ -411,6 +430,7 @@ func streamEventToDTO(event taskexecutor.StreamEvent) sessionHistoryEventDTO {
 		dto.ToolKind = string(event.Tool.Kind)
 		dto.Title = event.Tool.Title
 		dto.Status = string(event.Tool.Status)
+		dto.DurationMS = event.Tool.DurationMS
 		dto.InputSummary = event.Tool.InputSummary
 		dto.OutputText = event.Tool.OutputText
 		dto.ErrorText = event.Tool.ErrorText
@@ -418,6 +438,7 @@ func streamEventToDTO(event taskexecutor.StreamEvent) sessionHistoryEventDTO {
 		dto.Diffs = diffs
 		dto.RawInputJSON = event.Tool.RawInputJSON
 		dto.RawOutputJSON = event.Tool.RawOutputJSON
+		dto.MCP = mcpPayloadDTOFromExecutor(event.Tool.MCP)
 	}
 	if event.Plan != nil {
 		steps := make([]sessionHistoryPlanStepDTO, 0, len(event.Plan.Steps))
@@ -478,6 +499,7 @@ func historyStreamEventToDTO(event taskhistory.EventRecord) sessionHistoryEventD
 		dto.ToolKind = event.Tool.Kind
 		dto.Title = event.Tool.Title
 		dto.Status = event.Tool.Status
+		dto.DurationMS = event.Tool.DurationMS
 		dto.InputSummary = event.Tool.InputSummary
 		dto.OutputText = event.Tool.OutputText
 		dto.ErrorText = event.Tool.ErrorText
@@ -485,6 +507,7 @@ func historyStreamEventToDTO(event taskhistory.EventRecord) sessionHistoryEventD
 		dto.Diffs = diffs
 		dto.RawInputJSON = event.Tool.RawInputJSON
 		dto.RawOutputJSON = event.Tool.RawOutputJSON
+		dto.MCP = mcpPayloadDTOFromHistory(event.Tool.MCP)
 	}
 	if event.Plan != nil {
 		steps := make([]sessionHistoryPlanStepDTO, 0, len(event.Plan.Steps))
@@ -554,6 +577,56 @@ func buildConfigCatalogResult(catalog *taskconfig.Catalog, reg taskconfig.Regist
 		DefaultAlias:       catalog.DefaultAlias,
 		DefaultUseWorktree: defaultUseWorktree,
 		Entries:            entries,
+	}
+}
+
+func mcpPayloadDTOFromExecutor(payload *taskexecutor.MCPToolPayload) *sessionHistoryMCPToolDTO {
+	if payload == nil {
+		return nil
+	}
+	blocks := make([]sessionHistoryMCPOutputBlockDTO, 0, len(payload.OutputBlocks))
+	for _, block := range payload.OutputBlocks {
+		blocks = append(blocks, sessionHistoryMCPOutputBlockDTO{
+			Type:     string(block.Type),
+			Label:    block.Label,
+			Text:     block.Text,
+			JSON:     block.JSON,
+			DataURL:  block.DataURL,
+			MIMEType: block.MIMEType,
+		})
+	}
+	return &sessionHistoryMCPToolDTO{
+		Server:                payload.Server,
+		Tool:                  payload.Tool,
+		ArgumentsJSON:         payload.ArgumentsJSON,
+		StructuredContentJSON: payload.StructuredContentJSON,
+		OutputBlocks:          blocks,
+		DebugJSON:             payload.DebugJSON,
+	}
+}
+
+func mcpPayloadDTOFromHistory(payload *taskhistory.MCPToolPayload) *sessionHistoryMCPToolDTO {
+	if payload == nil {
+		return nil
+	}
+	blocks := make([]sessionHistoryMCPOutputBlockDTO, 0, len(payload.OutputBlocks))
+	for _, block := range payload.OutputBlocks {
+		blocks = append(blocks, sessionHistoryMCPOutputBlockDTO{
+			Type:     block.Type,
+			Label:    block.Label,
+			Text:     block.Text,
+			JSON:     block.JSON,
+			DataURL:  block.DataURL,
+			MIMEType: block.MIMEType,
+		})
+	}
+	return &sessionHistoryMCPToolDTO{
+		Server:                payload.Server,
+		Tool:                  payload.Tool,
+		ArgumentsJSON:         payload.ArgumentsJSON,
+		StructuredContentJSON: payload.StructuredContentJSON,
+		OutputBlocks:          blocks,
+		DebugJSON:             payload.DebugJSON,
 	}
 }
 

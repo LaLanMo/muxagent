@@ -375,6 +375,140 @@ func TestLoadPrefersPersistedHistoryWithoutProviderFallback(t *testing.T) {
 	}
 }
 
+func TestLoadBackfillsProviderMCPReplayFromEndEventWithoutBegin(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CODEX_HOME", root)
+
+	task := taskdomain.Task{
+		ID:           "task-codex-mcp",
+		WorkDir:      t.TempDir(),
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+	}
+	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
+	run := taskdomain.NodeRun{
+		ID:        "run-codex-mcp",
+		TaskID:    task.ID,
+		NodeName:  "implement",
+		Status:    taskdomain.NodeRunDone,
+		SessionID: "019d-mcp-session",
+	}
+
+	transcriptPath := filepath.Join(root, "sessions", "2026", "04", "08", "rollout-2026-04-08T10-00-00-019d-mcp-session.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir transcript dir: %v", err)
+	}
+	content := "" +
+		"{\"timestamp\":\"2026-04-08T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d-mcp-session\"}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:01Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"mcp_tool_call_end\",\"call_id\":\"call-mcp-1\",\"invocation\":{\"server\":\"pencil\",\"tool\":\"export_nodes\",\"arguments\":{\"nodeIds\":[\"canvas-root\"]}},\"duration\":\"1.44s\",\"result\":{\"Ok\":{\"content\":[{\"type\":\"text\",\"text\":\"Rendered a preview image.\"},{\"type\":\"image\",\"data\":\"AAA\",\"mimeType\":\"image/png\"}],\"isError\":false}}}}\n"
+	if err := os.WriteFile(transcriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	result, err := Load(task, cfg, run)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := len(result.Events); got != 1 {
+		t.Fatalf("event count = %d, want 1", got)
+	}
+	tool := result.Events[0].Tool
+	if tool == nil {
+		t.Fatal("tool event = nil, want mcp tool")
+	}
+	if got := tool.Kind; got != string(taskexecutor.ToolKindMCP) {
+		t.Fatalf("tool kind = %q, want mcp", got)
+	}
+	if got := tool.CallID; got != "call-mcp-1" {
+		t.Fatalf("tool call_id = %q, want call-mcp-1", got)
+	}
+	if got := tool.DurationMS; got != 1440 {
+		t.Fatalf("tool duration = %d, want 1440", got)
+	}
+	if tool.MCP == nil {
+		t.Fatal("tool mcp payload = nil, want typed payload")
+	}
+	if got := tool.MCP.Server; got != "pencil" {
+		t.Fatalf("mcp server = %q, want pencil", got)
+	}
+	if got := tool.MCP.Tool; got != "export_nodes" {
+		t.Fatalf("mcp tool = %q, want export_nodes", got)
+	}
+	if got := tool.MCP.OutputBlocks[1].DataURL; got != "data:image/png;base64,AAA" {
+		t.Fatalf("mcp image data url = %q, want data url", got)
+	}
+	if strings.Contains(tool.RawOutputJSON, "data:image") {
+		t.Fatalf("raw_output_json leaked image payload: %s", tool.RawOutputJSON)
+	}
+}
+
+func TestLoadKeepsExecutorAndProviderMCPNamespacesSeparateWhenIDsDiffer(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("CODEX_HOME", root)
+
+	workDir := t.TempDir()
+	task := taskdomain.Task{
+		ID:           "task-codex-mcp-mixed",
+		WorkDir:      workDir,
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+	}
+	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
+	run := taskdomain.NodeRun{
+		ID:        "run-codex-mcp-mixed",
+		TaskID:    task.ID,
+		NodeName:  "implement",
+		Status:    taskdomain.NodeRunRunning,
+		SessionID: "019d-mcp-mixed",
+	}
+
+	localTool := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+		CallID:    "item_22",
+		Server:    "pencil",
+		Tool:      "get_editor_state",
+		Status:    taskexecutor.ToolStatusInProgress,
+		Arguments: map[string]any{"include_schema": true},
+	})
+	if err := Append(workDir, task.ID, run.ID, taskexecutor.Progress{
+		SessionID: run.SessionID,
+		Events: []taskexecutor.StreamEvent{{
+			EventID:    "evt-local-mcp",
+			Seq:        1,
+			EmittedAt:  time.Date(2026, 4, 8, 10, 0, 1, 0, time.UTC),
+			SessionID:  run.SessionID,
+			Kind:       taskexecutor.StreamEventKindTool,
+			Provenance: taskexecutor.StreamEventProvenanceExecutorPersisted,
+			Raw:        localTool.MCP.DebugJSON,
+			Tool:       &localTool,
+		}},
+	}, time.Date(2026, 4, 8, 10, 0, 1, 0, time.UTC)); err != nil {
+		t.Fatalf("append local history: %v", err)
+	}
+
+	transcriptPath := filepath.Join(root, "sessions", "2026", "04", "08", "rollout-2026-04-08T10-00-00-019d-mcp-mixed.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir transcript dir: %v", err)
+	}
+	content := "" +
+		"{\"timestamp\":\"2026-04-08T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d-mcp-mixed\"}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:02Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"mcp_tool_call_end\",\"call_id\":\"call-provider-1\",\"invocation\":{\"server\":\"pencil\",\"tool\":\"get_editor_state\",\"arguments\":{\"include_schema\":true}},\"duration\":\"920ms\",\"result\":{\"Ok\":{\"content\":[{\"type\":\"text\",\"text\":\"Loaded the editor state.\"}],\"isError\":false}}}}\n"
+	if err := os.WriteFile(transcriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	result, err := Load(task, cfg, run)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got := len(result.Events); got != 2 {
+		t.Fatalf("event count = %d, want 2 separate namespaces", got)
+	}
+	if got := result.Events[0].Tool.CallID; got != "item_22" {
+		t.Fatalf("first tool call_id = %q, want item_22", got)
+	}
+	if got := result.Events[1].Tool.CallID; got != "call-provider-1" {
+		t.Fatalf("second tool call_id = %q, want call-provider-1", got)
+	}
+}
+
 func taskexecutorProgress(text string) taskexecutor.Progress {
 	return taskexecutor.Progress{
 		SessionID: "session-persisted",

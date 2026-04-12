@@ -48,6 +48,7 @@ const (
 	ToolKindEdit             ToolKind = "edit"
 	ToolKindWrite            ToolKind = "write"
 	ToolKindFetch            ToolKind = "fetch"
+	ToolKindMCP              ToolKind = "mcp"
 	ToolKindFileChange       ToolKind = "file_change"
 	ToolKindStructuredOutput ToolKind = "structured_output"
 	ToolKindOther            ToolKind = "other"
@@ -84,6 +85,7 @@ type ToolCall struct {
 	Kind          ToolKind
 	Title         string
 	Status        ToolStatus
+	DurationMS    int64
 	InputSummary  string
 	OutputText    string
 	ErrorText     string
@@ -91,6 +93,7 @@ type ToolCall struct {
 	Diffs         []ToolDiff
 	RawInputJSON  string
 	RawOutputJSON string
+	MCP           *MCPToolPayload
 }
 
 type PlanStep struct {
@@ -325,6 +328,9 @@ func MergeStreamEvent(existing, next StreamEvent) StreamEvent {
 			if next.Tool.Status != "" {
 				merged.Tool.Status = next.Tool.Status
 			}
+			if next.Tool.DurationMS != 0 {
+				merged.Tool.DurationMS = next.Tool.DurationMS
+			}
 			if shouldReplaceToolInputSummary(merged.Tool.InputSummary, next.Tool.InputSummary) {
 				merged.Tool.InputSummary = next.Tool.InputSummary
 			}
@@ -345,6 +351,32 @@ func MergeStreamEvent(existing, next StreamEvent) StreamEvent {
 			}
 			if next.Tool.RawOutputJSON != "" {
 				merged.Tool.RawOutputJSON = next.Tool.RawOutputJSON
+			}
+			if next.Tool.MCP != nil {
+				if merged.Tool.MCP == nil {
+					payload := *next.Tool.MCP
+					payload.OutputBlocks = append([]MCPOutputBlock(nil), next.Tool.MCP.OutputBlocks...)
+					merged.Tool.MCP = &payload
+				} else {
+					if next.Tool.MCP.Server != "" {
+						merged.Tool.MCP.Server = next.Tool.MCP.Server
+					}
+					if next.Tool.MCP.Tool != "" {
+						merged.Tool.MCP.Tool = next.Tool.MCP.Tool
+					}
+					if next.Tool.MCP.ArgumentsJSON != "" {
+						merged.Tool.MCP.ArgumentsJSON = next.Tool.MCP.ArgumentsJSON
+					}
+					if next.Tool.MCP.StructuredContentJSON != "" {
+						merged.Tool.MCP.StructuredContentJSON = next.Tool.MCP.StructuredContentJSON
+					}
+					if len(next.Tool.MCP.OutputBlocks) > 0 {
+						merged.Tool.MCP.OutputBlocks = append([]MCPOutputBlock(nil), next.Tool.MCP.OutputBlocks...)
+					}
+					if next.Tool.MCP.DebugJSON != "" {
+						merged.Tool.MCP.DebugJSON = next.Tool.MCP.DebugJSON
+					}
+				}
 			}
 		}
 	}
@@ -371,6 +403,9 @@ func (t *ToolCall) DisplaySubject() string {
 		return ""
 	}
 	subject := collapseWhitespace(t.InputSummary)
+	if subject == "" && t.Kind == ToolKindMCP && t.MCP != nil {
+		subject = collapseWhitespace(buildMCPInputSummary(t.MCP.Server, t.MCP.Tool))
+	}
 	if subject == "" && len(t.Paths) > 0 {
 		subject = strings.Join(compactPaths(t.Paths), ", ")
 	}
@@ -394,6 +429,8 @@ func toolLabel(kind ToolKind, fallback string) string {
 		return "write"
 	case ToolKindFetch:
 		return "fetch"
+	case ToolKindMCP:
+		return "mcp"
 	case ToolKindFileChange:
 		return "files"
 	case ToolKindStructuredOutput:

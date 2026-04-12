@@ -125,6 +125,49 @@ func TestExecutorHandlesVeryLargeJSONLMessages(t *testing.T) {
 	assert.Equal(t, "assistant: after huge event", progress[2].Message)
 }
 
+func TestParseJSONLLineCreatesMCPStartEvent(t *testing.T) {
+	parsed, err := parseJSONLLine([]byte(`{"type":"item.started","item":{"id":"item_22","type":"mcp_tool_call","server":"pencil","tool":"get_editor_state","arguments":{"include_schema":true},"status":"in_progress"}}`))
+	require.NoError(t, err)
+	require.Len(t, parsed.Events, 1)
+	event := parsed.Events[0]
+	require.NotNil(t, event.Tool)
+	assert.Equal(t, taskexecutor.ToolKindMCP, event.Tool.Kind)
+	assert.Equal(t, taskexecutor.ToolStatusInProgress, event.Tool.Status)
+	assert.Equal(t, "pencil.get_editor_state", event.Tool.InputSummary)
+	if assert.NotNil(t, event.Tool.MCP) {
+		assert.Equal(t, `{"include_schema":true}`, event.Tool.MCP.ArgumentsJSON)
+		assert.Empty(t, event.Tool.MCP.OutputBlocks)
+	}
+}
+
+func TestParseJSONLLineCreatesMCPCompletedEventWithTextAndImageResult(t *testing.T) {
+	parsed, err := parseJSONLLine([]byte(`{"type":"item.completed","item":{"id":"item_22","type":"mcp_tool_call","server":"pencil","tool":"export_nodes","arguments":{"nodeIds":["canvas-root"]},"result":{"content":[{"type":"text","text":"Rendered a preview image."},{"type":"image","data":"AAA","mimeType":"image/png"}],"structured_content":{"selection":"canvas-root"}},"status":"completed"}}`))
+	require.NoError(t, err)
+	require.Len(t, parsed.Events, 1)
+	event := parsed.Events[0]
+	require.NotNil(t, event.Tool)
+	assert.Equal(t, taskexecutor.ToolStatusCompleted, event.Tool.Status)
+	assert.Equal(t, "Rendered a preview image.", event.Tool.OutputText)
+	assert.NotContains(t, event.Raw, "data:image")
+	assert.NotContains(t, event.Tool.RawOutputJSON, "data:image")
+	if assert.NotNil(t, event.Tool.MCP) {
+		assert.Equal(t, `{"selection":"canvas-root"}`, event.Tool.MCP.StructuredContentJSON)
+		if assert.Len(t, event.Tool.MCP.OutputBlocks, 2) {
+			assert.Equal(t, "data:image/png;base64,AAA", event.Tool.MCP.OutputBlocks[1].DataURL)
+		}
+	}
+}
+
+func TestParseJSONLLineCreatesMCPFailedEventWithErrorMessage(t *testing.T) {
+	parsed, err := parseJSONLLine([]byte(`{"type":"item.completed","item":{"id":"item_22","type":"mcp_tool_call","server":"pencil","tool":"get_editor_state","arguments":{"include_schema":true},"error":{"message":"permission denied"},"status":"failed"}}`))
+	require.NoError(t, err)
+	require.Len(t, parsed.Events, 1)
+	event := parsed.Events[0]
+	require.NotNil(t, event.Tool)
+	assert.Equal(t, taskexecutor.ToolStatusFailed, event.Tool.Status)
+	assert.Equal(t, "permission denied", event.Tool.ErrorText)
+}
+
 func TestExecutorWithoutClarificationGeneratesResultOnlySchema(t *testing.T) {
 	binaryPath := writeFakeCodex(t)
 	t.Setenv("FAKE_CODEX_MODE", "result")

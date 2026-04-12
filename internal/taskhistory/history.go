@@ -30,20 +30,40 @@ type ToolDiff struct {
 	NewText string  `json:"new_text"`
 }
 
+type MCPOutputBlock struct {
+	Type     string `json:"type"`
+	Label    string `json:"label,omitempty"`
+	Text     string `json:"text,omitempty"`
+	JSON     string `json:"json,omitempty"`
+	DataURL  string `json:"data_url,omitempty"`
+	MIMEType string `json:"mime_type,omitempty"`
+}
+
+type MCPToolPayload struct {
+	Server                string           `json:"server,omitempty"`
+	Tool                  string           `json:"tool,omitempty"`
+	ArgumentsJSON         string           `json:"arguments_json,omitempty"`
+	StructuredContentJSON string           `json:"structured_content_json,omitempty"`
+	OutputBlocks          []MCPOutputBlock `json:"output_blocks,omitempty"`
+	DebugJSON             string           `json:"debug_json,omitempty"`
+}
+
 type ToolCall struct {
-	CallID        string     `json:"call_id,omitempty"`
-	ParentCallID  string     `json:"parent_call_id,omitempty"`
-	Name          string     `json:"name,omitempty"`
-	Kind          string     `json:"kind,omitempty"`
-	Title         string     `json:"title,omitempty"`
-	Status        string     `json:"status,omitempty"`
-	InputSummary  string     `json:"input_summary,omitempty"`
-	OutputText    string     `json:"output_text,omitempty"`
-	ErrorText     string     `json:"error_text,omitempty"`
-	Paths         []string   `json:"paths,omitempty"`
-	Diffs         []ToolDiff `json:"diffs,omitempty"`
-	RawInputJSON  string     `json:"raw_input_json,omitempty"`
-	RawOutputJSON string     `json:"raw_output_json,omitempty"`
+	CallID        string          `json:"call_id,omitempty"`
+	ParentCallID  string          `json:"parent_call_id,omitempty"`
+	Name          string          `json:"name,omitempty"`
+	Kind          string          `json:"kind,omitempty"`
+	Title         string          `json:"title,omitempty"`
+	Status        string          `json:"status,omitempty"`
+	DurationMS    int64           `json:"duration_ms,omitempty"`
+	InputSummary  string          `json:"input_summary,omitempty"`
+	OutputText    string          `json:"output_text,omitempty"`
+	ErrorText     string          `json:"error_text,omitempty"`
+	Paths         []string        `json:"paths,omitempty"`
+	Diffs         []ToolDiff      `json:"diffs,omitempty"`
+	RawInputJSON  string          `json:"raw_input_json,omitempty"`
+	RawOutputJSON string          `json:"raw_output_json,omitempty"`
+	MCP           *MCPToolPayload `json:"mcp,omitempty"`
 }
 
 type PlanStep struct {
@@ -207,6 +227,7 @@ func eventRecordFromExecutor(event taskexecutor.StreamEvent, recordedAt time.Tim
 			Kind:          string(event.Tool.Kind),
 			Title:         event.Tool.Title,
 			Status:        string(event.Tool.Status),
+			DurationMS:    event.Tool.DurationMS,
 			InputSummary:  event.Tool.InputSummary,
 			OutputText:    event.Tool.OutputText,
 			ErrorText:     event.Tool.ErrorText,
@@ -214,6 +235,7 @@ func eventRecordFromExecutor(event taskexecutor.StreamEvent, recordedAt time.Tim
 			Diffs:         diffs,
 			RawInputJSON:  event.Tool.RawInputJSON,
 			RawOutputJSON: event.Tool.RawOutputJSON,
+			MCP:           mcpPayloadRecordFromExecutor(event.Tool.MCP),
 		}
 	}
 	if event.Plan != nil {
@@ -420,6 +442,7 @@ func eventRecordToStream(record EventRecord) taskexecutor.StreamEvent {
 			Kind:          taskexecutor.ToolKind(record.Tool.Kind),
 			Title:         record.Tool.Title,
 			Status:        taskexecutor.ToolStatus(record.Tool.Status),
+			DurationMS:    record.Tool.DurationMS,
 			InputSummary:  record.Tool.InputSummary,
 			OutputText:    record.Tool.OutputText,
 			ErrorText:     record.Tool.ErrorText,
@@ -427,6 +450,7 @@ func eventRecordToStream(record EventRecord) taskexecutor.StreamEvent {
 			Diffs:         diffs,
 			RawInputJSON:  record.Tool.RawInputJSON,
 			RawOutputJSON: record.Tool.RawOutputJSON,
+			MCP:           mcpPayloadExecutorFromRecord(record.Tool.MCP),
 		}
 	}
 	if record.Plan != nil {
@@ -479,4 +503,54 @@ func laterRecordedAt(left, right time.Time) time.Time {
 		return right.UTC()
 	}
 	return left.UTC()
+}
+
+func mcpPayloadRecordFromExecutor(payload *taskexecutor.MCPToolPayload) *MCPToolPayload {
+	if payload == nil {
+		return nil
+	}
+	blocks := make([]MCPOutputBlock, 0, len(payload.OutputBlocks))
+	for _, block := range payload.OutputBlocks {
+		blocks = append(blocks, MCPOutputBlock{
+			Type:     string(block.Type),
+			Label:    block.Label,
+			Text:     block.Text,
+			JSON:     block.JSON,
+			DataURL:  block.DataURL,
+			MIMEType: block.MIMEType,
+		})
+	}
+	return &MCPToolPayload{
+		Server:                payload.Server,
+		Tool:                  payload.Tool,
+		ArgumentsJSON:         payload.ArgumentsJSON,
+		StructuredContentJSON: payload.StructuredContentJSON,
+		OutputBlocks:          blocks,
+		DebugJSON:             payload.DebugJSON,
+	}
+}
+
+func mcpPayloadExecutorFromRecord(payload *MCPToolPayload) *taskexecutor.MCPToolPayload {
+	if payload == nil {
+		return nil
+	}
+	blocks := make([]taskexecutor.MCPOutputBlock, 0, len(payload.OutputBlocks))
+	for _, block := range payload.OutputBlocks {
+		blocks = append(blocks, taskexecutor.MCPOutputBlock{
+			Type:     taskexecutor.MCPOutputBlockType(block.Type),
+			Label:    block.Label,
+			Text:     block.Text,
+			JSON:     block.JSON,
+			DataURL:  block.DataURL,
+			MIMEType: block.MIMEType,
+		})
+	}
+	return &taskexecutor.MCPToolPayload{
+		Server:                payload.Server,
+		Tool:                  payload.Tool,
+		ArgumentsJSON:         payload.ArgumentsJSON,
+		StructuredContentJSON: payload.StructuredContentJSON,
+		OutputBlocks:          blocks,
+		DebugJSON:             payload.DebugJSON,
+	}
 }

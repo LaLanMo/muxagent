@@ -128,6 +128,51 @@ func TestMergeStreamEventPreservesFailureStatusWhileKeepingSpecificKind(t *testi
 	assert.Equal(t, "permission denied", merged.Tool.ErrorText)
 }
 
+func TestMergeStreamEventMergesMCPPayloadAndKeepsDebugFieldsSanitized(t *testing.T) {
+	existingTool := NewMCPToolCall(MCPToolCallParams{
+		CallID:    "item_22",
+		Server:    "pencil",
+		Tool:      "get_editor_state",
+		Status:    ToolStatusInProgress,
+		Arguments: map[string]any{"include_schema": true},
+	})
+	nextTool := NewMCPToolCall(MCPToolCallParams{
+		CallID:     "item_22",
+		Server:     "pencil",
+		Tool:       "get_editor_state",
+		Status:     ToolStatusCompleted,
+		DurationMS: 920,
+		Arguments:  map[string]any{"include_schema": true},
+		Content: []any{
+			map[string]any{"type": "text", "text": "Loaded the editor schema."},
+			map[string]any{"type": "image", "data": "AAA", "mimeType": "image/png"},
+		},
+		StructuredContent: map[string]any{"selection": "canvas-root"},
+	})
+
+	merged := MergeStreamEvent(
+		StreamEvent{Kind: StreamEventKindTool, Raw: existingTool.MCP.DebugJSON, Tool: &existingTool},
+		StreamEvent{Kind: StreamEventKindTool, Raw: nextTool.MCP.DebugJSON, Tool: &nextTool},
+	)
+
+	assert.Equal(t, ToolKindMCP, merged.Tool.Kind)
+	assert.Equal(t, ToolStatusCompleted, merged.Tool.Status)
+	assert.Equal(t, int64(920), merged.Tool.DurationMS)
+	assert.Equal(t, "pencil.get_editor_state", merged.Tool.InputSummary)
+	assert.Equal(t, "Loaded the editor schema.", merged.Tool.OutputText)
+	if assert.NotNil(t, merged.Tool.MCP) {
+		assert.Equal(t, `{"include_schema":true}`, merged.Tool.MCP.ArgumentsJSON)
+		assert.Equal(t, `{"selection":"canvas-root"}`, merged.Tool.MCP.StructuredContentJSON)
+		if assert.Len(t, merged.Tool.MCP.OutputBlocks, 2) {
+			assert.Equal(t, MCPOutputBlockTypeText, merged.Tool.MCP.OutputBlocks[0].Type)
+			assert.Equal(t, MCPOutputBlockTypeImage, merged.Tool.MCP.OutputBlocks[1].Type)
+			assert.Equal(t, "data:image/png;base64,AAA", merged.Tool.MCP.OutputBlocks[1].DataURL)
+		}
+	}
+	assert.NotContains(t, merged.Raw, "data:image")
+	assert.NotContains(t, merged.Tool.RawOutputJSON, "data:image")
+}
+
 func TestToolDisplayLabelUsesSharedKindsAndPrettifiedNames(t *testing.T) {
 	tests := []struct {
 		name string
@@ -143,6 +188,11 @@ func TestToolDisplayLabelUsesSharedKindsAndPrettifiedNames(t *testing.T) {
 			name: "fetch kind",
 			tool: ToolCall{Kind: ToolKindFetch, Name: "WebFetch"},
 			want: "fetch",
+		},
+		{
+			name: "mcp kind",
+			tool: ToolCall{Kind: ToolKindMCP, Name: "get_editor_state"},
+			want: "mcp",
 		},
 		{
 			name: "web fetch fallback",
@@ -198,4 +248,16 @@ func TestStreamEventStableKeyFallsBackToKindNameAndSummaryWithoutCallID(t *testi
 	}
 
 	assert.Equal(t, "tool:search:Grep:theme /tmp/project", event.StableKey())
+}
+
+func TestMCPToolDisplaySubjectFallsBackToServerAndTool(t *testing.T) {
+	tool := ToolCall{
+		Kind: ToolKindMCP,
+		MCP: &MCPToolPayload{
+			Server: "pencil",
+			Tool:   "get_editor_state",
+		},
+	}
+
+	assert.Equal(t, "pencil.get_editor_state", tool.DisplaySubject())
 }

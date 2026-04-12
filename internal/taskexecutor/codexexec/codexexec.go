@@ -328,6 +328,8 @@ func codexStreamEvent(rawLine, kind string, payload map[string]interface{}) task
 				InputSummary: codexWebSearchSummary(item),
 			},
 		}
+	case "mcp_tool_call":
+		return codexMCPToolEvent(item, status)
 	case "agent_message":
 		text := asString(item["text"])
 		if summary, ok := codexAgentEnvelopeSummary(text); ok {
@@ -352,6 +354,25 @@ func codexStreamEvent(rawLine, kind string, payload map[string]interface{}) task
 		}
 	default:
 		return taskexecutor.StreamEvent{}
+	}
+}
+
+func codexMCPToolEvent(item map[string]interface{}, status taskexecutor.ToolStatus) taskexecutor.StreamEvent {
+	result := asMap(item["result"])
+	tool := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+		CallID:            asString(item["id"]),
+		Server:            asString(item["server"]),
+		Tool:              asString(item["tool"]),
+		Status:            status,
+		Arguments:         item["arguments"],
+		Content:           toAnySlice(asSlice(result["content"])),
+		StructuredContent: firstNonNil(result["structured_content"], result["structuredContent"]),
+		ErrorText:         codexMCPErrorText(item),
+	})
+	return taskexecutor.StreamEvent{
+		Kind: taskexecutor.StreamEventKindTool,
+		Raw:  tool.MCP.DebugJSON,
+		Tool: &tool,
 	}
 }
 
@@ -481,6 +502,17 @@ func asSlice(value interface{}) []interface{} {
 	return items
 }
 
+func toAnySlice(values []interface{}) []any {
+	if len(values) == 0 {
+		return nil
+	}
+	items := make([]any, 0, len(values))
+	for _, value := range values {
+		items = append(items, value)
+	}
+	return items
+}
+
 func asBool(value interface{}) bool {
 	flag, _ := value.(bool)
 	return flag
@@ -497,4 +529,21 @@ func asInt64(value interface{}) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func codexMCPErrorText(item map[string]interface{}) string {
+	errorMap := asMap(item["error"])
+	if len(errorMap) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(asString(errorMap["message"]))
+}
+
+func firstNonNil(values ...interface{}) interface{} {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
 }

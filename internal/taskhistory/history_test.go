@@ -3,6 +3,7 @@ package taskhistory
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -102,5 +103,68 @@ func TestReadAllRejectsMalformedCommittedChunk(t *testing.T) {
 
 	if _, err := ReadAll(workDir, taskID, nodeRunID); err == nil {
 		t.Fatal("ReadAll succeeded, want malformed committed line error")
+	}
+}
+
+func TestMCPHistoryRoundTripPreservesTypedPayloadWithoutDuplicatingImagesInDebugFields(t *testing.T) {
+	workDir := t.TempDir()
+	taskID := "task-mcp"
+	nodeRunID := "run-mcp"
+	recordedAt := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
+
+	tool := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+		CallID:     "item_22",
+		Server:     "pencil",
+		Tool:       "export_nodes",
+		Status:     taskexecutor.ToolStatusCompleted,
+		DurationMS: 1440,
+		Arguments: map[string]any{
+			"nodeIds": []string{"canvas-root"},
+		},
+		Content: []any{
+			map[string]any{"type": "text", "text": "Rendered a preview image."},
+			map[string]any{"type": "image", "data": "AAA", "mimeType": "image/png"},
+		},
+	})
+	event := taskexecutor.StreamEvent{
+		EventID:    "evt-mcp",
+		Seq:        1,
+		EmittedAt:  recordedAt,
+		SessionID:  "session-mcp",
+		Kind:       taskexecutor.StreamEventKindTool,
+		Provenance: taskexecutor.StreamEventProvenanceExecutorPersisted,
+		Raw:        tool.MCP.DebugJSON,
+		Tool:       &tool,
+	}
+
+	if err := Append(workDir, taskID, nodeRunID, taskexecutor.Progress{
+		SessionID: "session-mcp",
+		Events:    []taskexecutor.StreamEvent{event},
+	}, recordedAt); err != nil {
+		t.Fatalf("append mcp event: %v", err)
+	}
+
+	records, err := ReadAll(workDir, taskID, nodeRunID)
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	if got := len(records); got != 1 {
+		t.Fatalf("record count = %d, want 1", got)
+	}
+	record := records[0]
+	if record.Tool == nil || record.Tool.MCP == nil {
+		t.Fatalf("record tool mcp = %#v, want typed payload", record.Tool)
+	}
+	if record.Tool.DurationMS != 1440 {
+		t.Fatalf("tool duration = %d, want 1440", record.Tool.DurationMS)
+	}
+	if got := record.Tool.MCP.OutputBlocks[1].DataURL; got != "data:image/png;base64,AAA" {
+		t.Fatalf("image data url = %q, want data url", got)
+	}
+	if strings.Contains(record.Raw, "data:image") {
+		t.Fatalf("record raw leaked image payload: %s", record.Raw)
+	}
+	if strings.Contains(record.Tool.RawOutputJSON, "data:image") {
+		t.Fatalf("tool raw_output_json leaked image payload: %s", record.Tool.RawOutputJSON)
 	}
 }
