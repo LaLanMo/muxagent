@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -892,6 +893,138 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 	}
 }
 
+func TestServerTaskRecoverStaleMarksOrphanedRunFailed(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID, nodeRunID := seedRecoverableTerminalRun(t, workspacePath, nil)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRecoverStale,
+		Params: mustRawParams(t, taskRecoverStaleParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   nodeRunID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.recover_stale rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskRecoverStaleResult)
+	if result.Outcome != "recovered_failed" {
+		t.Fatalf("task.recover_stale outcome = %q, want recovered_failed", result.Outcome)
+	}
+
+	model, rpcErr := server.openWorkspaceReadModel(workspace)
+	if rpcErr != nil {
+		t.Fatalf("open read model: %+v", rpcErr)
+	}
+	defer func() { _ = model.Close() }()
+	run, err := model.store.GetNodeRun(context.Background(), nodeRunID)
+	if err != nil {
+		t.Fatalf("get recovered node run: %v", err)
+	}
+	if got := string(run.Status); got != string(taskdomain.NodeRunFailed) {
+		t.Fatalf("recovered run status = %q, want %q", got, taskdomain.NodeRunFailed)
+	}
+	if got := run.FailureReason; got != taskdomain.FailureReasonOrphanedAfterRestart {
+		t.Fatalf("recovered run failure_reason = %q, want %q", got, taskdomain.FailureReasonOrphanedAfterRestart)
+	}
+}
+
+func TestServerTaskRecoverStaleRecoversCompletedRun(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID, nodeRunID := seedRecoverableTerminalRun(
+		t,
+		workspacePath,
+		[]byte("{\"kind\":\"result\",\"result\":{\"file_paths\":[\"summary.md\"]}}\n"),
+	)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRecoverStale,
+		Params: mustRawParams(t, taskRecoverStaleParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   nodeRunID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.recover_stale rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskRecoverStaleResult)
+	if result.Outcome != "recovered_done" {
+		t.Fatalf("task.recover_stale outcome = %q, want recovered_done", result.Outcome)
+	}
+
+	model, rpcErr := server.openWorkspaceReadModel(workspace)
+	if rpcErr != nil {
+		t.Fatalf("open read model: %+v", rpcErr)
+	}
+	defer func() { _ = model.Close() }()
+	run, err := model.store.GetNodeRun(context.Background(), nodeRunID)
+	if err != nil {
+		t.Fatalf("get recovered node run: %v", err)
+	}
+	if got := string(run.Status); got != string(taskdomain.NodeRunDone) {
+		t.Fatalf("recovered run status = %q, want %q", got, taskdomain.NodeRunDone)
+	}
+}
+
+func TestServerTaskRecoverStaleReturnsBusyWhenActorIsActive(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	fakeService := newFakeRuntimeService()
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{
+		runtimeFactory: func(string) (runtimeService, error) {
+			return fakeService, nil
+		},
+	})
+	defer func() { _ = server.runtimes.closeAll() }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID, nodeRunID := seedRecoverableTerminalRun(t, workspacePath, nil)
+	server.markInitialized()
+
+	if _, err := server.runtimes.ensure(workspace); err != nil {
+		t.Fatalf("ensure runtime actor: %v", err)
+	}
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRecoverStale,
+		Params: mustRawParams(t, taskRecoverStaleParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   nodeRunID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.recover_stale rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskRecoverStaleResult)
+	if result.Outcome != "busy" {
+		t.Fatalf("task.recover_stale outcome = %q, want busy", result.Outcome)
+	}
+}
+
 func TestServeConnEOFDoesNotCloseRuntime(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "appserver")
 	workspacePath := t.TempDir()
@@ -1713,6 +1846,65 @@ func seedAwaitingTask(t *testing.T, workDir string) (taskID string, awaitingRunI
 		t.Fatalf("write artifact: %v", err)
 	}
 	return taskID, awaitingRunID
+}
+
+func seedRecoverableTerminalRun(t *testing.T, workDir string, output []byte) (taskID string, nodeRunID string) {
+	t.Helper()
+	store, err := taskstore.Open(workDir)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	taskID = "task-stale-terminal"
+	_, thisFile, _, ok := goruntime.Caller(0)
+	if !ok {
+		t.Fatal("resolve appserver test file path")
+	}
+	configPath := filepath.Join(filepath.Dir(thisFile), "..", "taskconfig", "defaults", "single-run.yaml")
+	materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
+	if err != nil {
+		t.Fatalf("materialize config: %v", err)
+	}
+
+	now := time.Date(2026, 4, 12, 2, 30, 0, 0, time.UTC)
+	task := taskdomain.Task{
+		ID:           taskID,
+		Description:  "Recover stale run",
+		ConfigAlias:  "default",
+		ConfigPath:   materialized.ConfigPath,
+		WorkDir:      taskstore.NormalizeWorkDir(workDir),
+		ExecutionDir: taskstore.NormalizeWorkDir(workDir),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.CreateTask(context.Background(), task); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+
+	nodeRunID = "run-stale-terminal"
+	run := taskdomain.NodeRun{
+		ID:        nodeRunID,
+		TaskID:    taskID,
+		NodeName:  "handle_request",
+		Status:    taskdomain.NodeRunRunning,
+		StartedAt: now.Add(time.Minute),
+	}
+	if err := store.SaveNodeRun(context.Background(), run); err != nil {
+		t.Fatalf("save node run: %v", err)
+	}
+
+	if len(output) > 0 {
+		outputPath := filepath.Join(taskstore.RunDir(workDir, taskID, nodeRunID), "output.json")
+		if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
+			t.Fatalf("mkdir output dir: %v", err)
+		}
+		if err := os.WriteFile(outputPath, output, 0o644); err != nil {
+			t.Fatalf("write output: %v", err)
+		}
+	}
+
+	return taskID, nodeRunID
 }
 
 type fakeRuntimeService struct {

@@ -395,6 +395,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodTaskSubmitInput,
 					methodTaskRetryNode,
 					methodTaskContinueBlocked,
+					methodTaskRecoverStale,
 					methodArtifactList,
 					methodConfigCatalog,
 					methodConfigGet,
@@ -754,6 +755,66 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
 		}
 		return commandAcceptedResult{Accepted: true, ClientCommandID: params.ClientCommandID}, nil, stopModeContinue, nil
+
+	case methodTaskRecoverStale:
+		params, err := decodeParams[taskRecoverStaleParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		taskID := strings.TrimSpace(params.TaskID)
+		if taskID == "" {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "task_id is required"}
+		}
+		nodeRunID := strings.TrimSpace(params.NodeRunID)
+		if nodeRunID == "" {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "node_run_id is required"}
+		}
+
+		model, rpcErr := s.openWorkspaceReadModel(workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		run, err := model.store.GetNodeRun(ctx, nodeRunID)
+		if closeErr := model.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		if run.TaskID != taskID {
+			return nil, nil, stopModeContinue, &rpcError{
+				Code:    errorCodeInvalidParams,
+				Message: fmt.Sprintf("node run %q does not belong to task %q", nodeRunID, taskID),
+			}
+		}
+		if !isRecoverableRunStatus(run.Status) {
+			return taskRecoverStaleResult{Outcome: "already_terminal"}, nil, stopModeContinue, nil
+		}
+		if actor := s.runtimes.snapshot(workspace.WorkspaceID); actor.State == "active" {
+			return taskRecoverStaleResult{Outcome: "busy"}, nil, stopModeContinue, nil
+		}
+		if _, err := s.runtimes.ensure(workspace); err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+		}
+
+		model, rpcErr = s.openWorkspaceReadModel(workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		run, err = model.store.GetNodeRun(ctx, nodeRunID)
+		if closeErr := model.Close(); err == nil && closeErr != nil {
+			err = closeErr
+		}
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		return taskRecoverStaleResult{
+			Outcome: classifyRecoveredRunOutcome(run.Status),
+		}, nil, stopModeContinue, nil
 
 	case methodArtifactList:
 		params, err := decodeParams[artifactListParams](req.Params)
@@ -1323,6 +1384,23 @@ func decodeParams[T any](raw json.RawMessage) (T, error) {
 		return params, err
 	}
 	return params, nil
+}
+
+func isRecoverableRunStatus(status taskdomain.NodeRunStatus) bool {
+	return status == taskdomain.NodeRunRunning || status == taskdomain.NodeRunAwaitingUser
+}
+
+func classifyRecoveredRunOutcome(status taskdomain.NodeRunStatus) string {
+	switch status {
+	case taskdomain.NodeRunDone:
+		return "recovered_done"
+	case taskdomain.NodeRunFailed:
+		return "recovered_failed"
+	case taskdomain.NodeRunAwaitingUser:
+		return "recovered_awaiting"
+	default:
+		return "still_open"
+	}
 }
 
 func firstNonEmpty(values ...string) string {

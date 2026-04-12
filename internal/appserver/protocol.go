@@ -32,6 +32,7 @@ const (
 	methodTaskSubmitInput     = "task.submit_input"
 	methodTaskRetryNode       = "task.retry_node"
 	methodTaskContinueBlocked = "task.continue_blocked"
+	methodTaskRecoverStale    = "task.recover_stale"
 	methodArtifactList        = "artifact.list"
 	methodConfigCatalog       = "config.catalog"
 	methodConfigGet           = "config.get"
@@ -253,6 +254,12 @@ type taskContinueBlockedParams struct {
 	TaskID          string `json:"task_id"`
 }
 
+type taskRecoverStaleParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	TaskID      string `json:"task_id"`
+	NodeRunID   string `json:"node_run_id"`
+}
+
 type artifactListParams struct {
 	WorkspaceID string `json:"workspace_id"`
 	TaskID      string `json:"task_id"`
@@ -418,6 +425,10 @@ type artifactListResult struct {
 type commandAcceptedResult struct {
 	Accepted        bool   `json:"accepted"`
 	ClientCommandID string `json:"client_command_id,omitempty"`
+}
+
+type taskRecoverStaleResult struct {
+	Outcome string `json:"outcome"`
 }
 
 type taskNotificationPayload struct {

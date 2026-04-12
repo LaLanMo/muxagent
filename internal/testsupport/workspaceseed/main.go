@@ -137,16 +137,16 @@ func main() {
 		kind    string
 	)
 	flag.StringVar(&workDir, "workdir", "", "workspace directory to seed")
-	flag.StringVar(&kind, "kind", "", "seed kind: awaiting-review | completed-review | failed-retry | blocked-continue")
+	flag.StringVar(&kind, "kind", "", "seed kind: awaiting-review | completed-review | failed-retry | blocked-continue | stale-recover")
 	flag.Parse()
 
 	if workDir == "" {
 		fatalf("--workdir is required")
 	}
 	switch kind {
-	case "awaiting-review", "completed-review", "failed-retry", "blocked-continue":
+	case "awaiting-review", "completed-review", "failed-retry", "blocked-continue", "stale-recover":
 	default:
-		fatalf("--kind must be one of awaiting-review, completed-review, failed-retry, or blocked-continue")
+		fatalf("--kind must be one of awaiting-review, completed-review, failed-retry, blocked-continue, or stale-recover")
 	}
 
 	normalized := taskstore.NormalizeWorkDir(workDir)
@@ -165,12 +165,14 @@ func seed(workDir, kind string) (*seedResult, error) {
 		"completed-review": "task-complete-real",
 		"failed-retry":     "task-failed-real",
 		"blocked-continue": "task-blocked-real",
+		"stale-recover":    "task-stale-real",
 	}[kind]
 	description := map[string]string{
 		"awaiting-review":  "Seeded approval review",
 		"completed-review": "Seeded completed review",
 		"failed-retry":     "Seeded failed retry",
 		"blocked-continue": "Seeded blocked continue",
+		"stale-recover":    "Seeded stale recovery",
 	}[kind]
 
 	configPath, err := writeSeedConfig(workDir, kind+".yaml")
@@ -267,6 +269,17 @@ func seed(workDir, kind string) (*seedResult, error) {
 		if err := store.CreateTaskWithEntryRun(ctx, task, entryRun); err != nil {
 			return nil, err
 		}
+	case "stale-recover":
+		entryRun := taskdomain.NodeRun{
+			ID:        "run-implement-stale",
+			TaskID:    taskID,
+			NodeName:  "implement",
+			Status:    taskdomain.NodeRunRunning,
+			StartedAt: now.Add(time.Minute),
+		}
+		if err := store.CreateTaskWithEntryRun(ctx, task, entryRun); err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("unsupported seed kind %q", kind)
 	}
@@ -289,7 +302,7 @@ func writeSeedConfig(workDir, name string) (string, error) {
 	}
 	path := filepath.Join(bundleDir, "config.yaml")
 	payload := seededReviewConfig
-	if name == "failed-retry.yaml" {
+	if name == "failed-retry.yaml" || name == "stale-recover.yaml" {
 		payload = seededRetryConfig
 		if err := os.WriteFile(filepath.Join(promptDir, "implement.md"), []byte("Implement the requested task."), 0o644); err != nil {
 			return "", err
