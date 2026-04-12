@@ -668,48 +668,68 @@ function tryPrettyToolJson(value: string | undefined): string | undefined {
   }
 }
 
-type ToolDetailSection = {
-  label: string;
-  content: string;
-  tone?: "error";
-};
+type ToolDetailSection =
+  | {
+      kind: "meta";
+      label: string;
+      items: Array<{ label: string; value: string }>;
+    }
+  | {
+      kind: "json" | "text" | "raw";
+      label: string;
+      content: string;
+      tone?: "error";
+    }
+  | {
+      kind: "image";
+      label: string;
+      src: string;
+      alt: string;
+      mimeType?: string;
+    };
 
-function buildToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot): ToolDetailSection[] {
+function collectToolDetailContext(tool: ToolItem, transcript: TranscriptSnapshot) {
   const aggregatedTool = transcript.tools[tool.toolId];
   const eventIdSet = new Set(aggregatedTool?.eventIds || tool.eventIds);
   const toolEvents = transcript.events.filter(
     (event): event is Extract<(typeof transcript.events)[number], { kind: "tool" }> =>
       event.kind === "tool" && eventIdSet.has(event.id),
   );
+  return { aggregatedTool, toolEvents };
+}
+
+function uniqueJoined(values: Array<string | undefined>, separator = "\n\n") {
+  return values
+    .filter((value): value is string => Boolean(value?.trim()))
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .join(separator);
+}
+
+function buildGenericToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot): ToolDetailSection[] {
+  const { aggregatedTool, toolEvents } = collectToolDetailContext(tool, transcript);
   const inputSummary = [
     aggregatedTool?.inputSummary,
     tool.subject,
     ...toolEvents.map((event) => event.inputSummary),
   ]
-    .filter(Boolean)
+    .filter((value): value is string => Boolean(value?.trim()))
     .filter((value, index, values) => values.indexOf(value) === index)
     .join("\n");
   const rawInputJson = aggregatedTool?.rawInputJson || tool.rawInputJson || toolEvents.find((event) => event.rawInputJson)?.rawInputJson;
-  const outputText = [
+  const outputText = uniqueJoined([
     aggregatedTool?.outputText,
     tool.outputText,
     ...toolEvents.map((event) => event.outputText),
-  ]
-    .filter(Boolean)
-    .filter((value, index, values) => values.indexOf(value) === index)
-    .join("\n\n");
+  ]);
   const rawOutputJson =
     aggregatedTool?.rawOutputJson ||
     tool.rawOutputJson ||
     toolEvents.find((event) => event.rawOutputJson)?.rawOutputJson;
-  const errorText = [
+  const errorText = uniqueJoined([
     aggregatedTool?.errorText,
     tool.errorText,
     ...toolEvents.map((event) => event.errorText),
-  ]
-    .filter(Boolean)
-    .filter((value, index, values) => values.indexOf(value) === index)
-    .join("\n\n");
+  ]);
   const paths = [...(aggregatedTool?.paths || []), ...tool.paths, ...toolEvents.flatMap((event) => event.paths)]
     .filter(Boolean)
     .filter((value, index, values) => values.indexOf(value) === index);
@@ -726,32 +746,34 @@ function buildToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot)
   const sections: ToolDetailSection[] = [];
 
   if (inputSummary?.trim()) {
-    sections.push({ label: "Input", content: inputSummary.trim() });
+    sections.push({ kind: "text", label: "Input", content: inputSummary.trim() });
   }
 
   const prettyInput = tryPrettyToolJson(rawInputJson);
   if (prettyInput) {
-    sections.push({ label: "Raw input", content: prettyInput });
+    sections.push({ kind: "json", label: "Raw input", content: prettyInput });
   }
 
   if (paths.length > 0) {
     sections.push({
+      kind: "text",
       label: paths.length === 1 ? "Path" : "Paths",
       content: paths.join("\n"),
     });
   }
 
   if (outputText?.trim()) {
-    sections.push({ label: "Output", content: outputText.trim() });
+    sections.push({ kind: "text", label: "Output", content: outputText.trim() });
   }
 
   const prettyOutput = tryPrettyToolJson(rawOutputJson);
   if (prettyOutput) {
-    sections.push({ label: "Raw output", content: prettyOutput });
+    sections.push({ kind: "json", label: "Raw output", content: prettyOutput });
   }
 
   if (diffs.length > 0) {
     sections.push({
+      kind: "text",
       label: diffs.length === 1 ? "Diff" : "Diffs",
       content: diffs
         .map((diff, index) =>
@@ -768,10 +790,113 @@ function buildToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot)
   }
 
   if (errorText?.trim()) {
-    sections.push({ label: "Error", content: errorText.trim(), tone: "error" });
+    sections.push({ kind: "text", label: "Error", content: errorText.trim(), tone: "error" });
   }
 
   return sections;
+}
+
+function buildMcpToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot): ToolDetailSection[] {
+  const { aggregatedTool, toolEvents } = collectToolDetailContext(tool, transcript);
+  const mcp =
+    aggregatedTool?.mcp ??
+    toolEvents.find((event) => event.mcp)?.mcp;
+  if (!mcp) {
+    return buildGenericToolDetailSections(tool, transcript);
+  }
+
+  const sections: ToolDetailSection[] = [];
+  const metadata = [
+    { label: "Server", value: mcp.server?.trim() },
+    { label: "Tool", value: mcp.tool?.trim() },
+    { label: "Status", value: (aggregatedTool?.status || tool.status || "").trim() || undefined },
+    { label: "Duration", value: formatInlineDuration(aggregatedTool?.durationMs ?? tool.durationMs) },
+  ]
+    .filter((item): item is { label: string; value: string } => Boolean(item.value?.trim()));
+  if (metadata.length > 0) {
+    sections.push({ kind: "meta", label: "Invocation", items: metadata });
+  }
+
+  const prettyArguments = tryPrettyToolJson(mcp.argumentsJson);
+  if (prettyArguments) {
+    sections.push({ kind: "json", label: "Arguments", content: prettyArguments });
+  }
+
+  const prettyStructured = tryPrettyToolJson(mcp.structuredContentJson);
+  if (prettyStructured) {
+    sections.push({ kind: "json", label: "Structured content", content: prettyStructured });
+  }
+
+  let textIndex = 0;
+  let imageIndex = 0;
+  let fallbackIndex = 0;
+  for (const block of mcp.outputBlocks) {
+    if (block.type === "text" && block.text?.trim()) {
+      textIndex += 1;
+      sections.push({
+        kind: "text",
+        label: textIndex > 1 ? `Text output ${textIndex}` : "Text output",
+        content: block.text.trim(),
+      });
+      continue;
+    }
+    if (block.type === "image" && block.dataUrl?.trim()) {
+      imageIndex += 1;
+      sections.push({
+        kind: "image",
+        label: imageIndex > 1 ? `Image ${imageIndex}` : "Image",
+        src: block.dataUrl,
+        alt: `${formatToolRowLabel(tool)} image ${imageIndex}`,
+        mimeType: block.mimeType,
+      });
+      continue;
+    }
+    if (block.type === "json" && block.json?.trim()) {
+      fallbackIndex += 1;
+      sections.push({
+        kind: "json",
+        label: block.label?.trim() || (fallbackIndex > 1 ? `JSON block ${fallbackIndex}` : "JSON block"),
+        content: tryPrettyToolJson(block.json) || block.json.trim(),
+      });
+      continue;
+    }
+    if (block.text?.trim() || block.json?.trim()) {
+      fallbackIndex += 1;
+      sections.push({
+        kind: "raw",
+        label: block.label?.trim() || (fallbackIndex > 1 ? `Raw block ${fallbackIndex}` : "Raw block"),
+        content: (block.text || block.json || "").trim(),
+      });
+    }
+  }
+
+  if (!mcp.outputBlocks.length && aggregatedTool?.outputText?.trim()) {
+    sections.push({ kind: "text", label: "Output preview", content: aggregatedTool.outputText.trim() });
+  }
+
+  const errorText = uniqueJoined([
+    aggregatedTool?.errorText,
+    tool.errorText,
+    ...toolEvents.map((event) => event.errorText),
+  ]);
+  if (errorText.trim()) {
+    sections.push({ kind: "text", label: "Error", content: errorText.trim(), tone: "error" });
+  }
+
+  const prettyDebug = tryPrettyToolJson(mcp.debugJson ?? aggregatedTool?.rawOutputJson);
+  if (prettyDebug) {
+    sections.push({ kind: "json", label: "Debug", content: prettyDebug });
+  }
+
+  return sections;
+}
+
+function buildToolDetailSections(tool: ToolItem, transcript: TranscriptSnapshot): ToolDetailSection[] {
+  const aggregatedTool = transcript.tools[tool.toolId];
+  if (tool.label === "MCP" || aggregatedTool?.toolKind === "mcp" || aggregatedTool?.mcp) {
+    return buildMcpToolDetailSections(tool, transcript);
+  }
+  return buildGenericToolDetailSections(tool, transcript);
 }
 
 function TranscriptToolGroup({
@@ -875,17 +1000,66 @@ function TranscriptToolGroup({
                     className="transcript-tool-group__detail-panel"
                     data-testid={`transcript-tool-detail-${toolKey}`}
                   >
-                    {sections.map((section) => (
-                      <section
-                        className={`transcript-tool-group__detail-block${
-                          section.tone ? ` transcript-tool-group__detail-block--${section.tone}` : ""
-                        }`}
-                        key={`${tool.id}-${section.label}`}
-                      >
-                        <span className="transcript-tool-group__detail-label">{section.label}</span>
-                        <pre className="transcript-tool-group__detail-content">{section.content}</pre>
-                      </section>
-                    ))}
+                    {sections.map((section, index) => {
+                      if (section.kind === "meta") {
+                        return (
+                          <section
+                            className="transcript-tool-group__detail-block transcript-tool-group__detail-block--meta"
+                            key={`${tool.id}-${section.label}-${index}`}
+                          >
+                            <span className="transcript-tool-group__detail-label">{section.label}</span>
+                            <div className="transcript-tool-group__detail-metadata">
+                              {section.items.map((item) => (
+                                <div
+                                  className="transcript-tool-group__detail-metadata-row"
+                                  key={`${tool.id}-${section.label}-${item.label}`}
+                                >
+                                  <span className="transcript-tool-group__detail-metadata-label">
+                                    {item.label}
+                                  </span>
+                                  <span className="transcript-tool-group__detail-metadata-value">
+                                    {item.value}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        );
+                      }
+                      if (section.kind === "image") {
+                        return (
+                          <section
+                            className="transcript-tool-group__detail-block transcript-tool-group__detail-block--image"
+                            key={`${tool.id}-${section.label}-${index}`}
+                          >
+                            <span className="transcript-tool-group__detail-label">{section.label}</span>
+                            <div className="transcript-tool-group__detail-image-frame">
+                              <img
+                                alt={section.alt}
+                                className="transcript-tool-group__detail-image"
+                                src={section.src}
+                              />
+                            </div>
+                            {section.mimeType ? (
+                              <span className="transcript-tool-group__detail-image-meta">
+                                {section.mimeType}
+                              </span>
+                            ) : null}
+                          </section>
+                        );
+                      }
+                      return (
+                        <section
+                          className={`transcript-tool-group__detail-block${
+                            section.tone ? ` transcript-tool-group__detail-block--${section.tone}` : ""
+                          }`}
+                          key={`${tool.id}-${section.label}-${index}`}
+                        >
+                          <span className="transcript-tool-group__detail-label">{section.label}</span>
+                          <pre className="transcript-tool-group__detail-content">{section.content}</pre>
+                        </section>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>

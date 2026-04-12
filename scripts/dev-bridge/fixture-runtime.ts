@@ -14,6 +14,24 @@ export type FixtureNodeRun = {
   artifact_paths?: string[];
 };
 
+type FixtureMcpOutputBlock = {
+  type: string;
+  label?: string;
+  text?: string;
+  json?: string;
+  data_url?: string;
+  mime_type?: string;
+};
+
+type FixtureMcpTool = {
+  server?: string;
+  tool?: string;
+  arguments_json?: string;
+  structured_content_json?: string;
+  output_blocks?: FixtureMcpOutputBlock[];
+  debug_json?: string;
+};
+
 export type FixtureTask = {
   task: {
     id: string;
@@ -84,6 +102,7 @@ export type FixtureTask = {
     }>;
     raw_input_json?: string;
     raw_output_json?: string;
+    mcp?: FixtureMcpTool;
     plan_id?: string;
     steps?: Array<{ text: string; status?: string }>;
     input_tokens?: number;
@@ -129,6 +148,7 @@ export type FixtureTask = {
       }>;
       raw_input_json?: string;
       raw_output_json?: string;
+      mcp?: FixtureMcpTool;
       plan_id?: string;
       steps?: Array<{ text: string; status?: string }>;
       input_tokens?: number;
@@ -1494,6 +1514,139 @@ export class FixtureRuntime {
               role: "assistant",
               part_type: "text",
               text: "drafted **middleware** patch plan\n\n- trace anonymous requests\n- preserve redirect flow",
+            },
+          ],
+        },
+      }),
+      this.makeFixtureTask({
+        workspacePath,
+        taskId: "task-live-mcp",
+        description: "Inspect MCP runtime transcript",
+        configAlias: "default",
+        createdAt: makeTime(4),
+        status: "running",
+        currentNodeName: "implement",
+        currentNodeType: "agent",
+        liveOutputRunId: "run-mcp-implement",
+        liveEvents: [
+          {
+            event_id: "evt-live-mcp-start",
+            seq: 11,
+            emitted_at: makeTime(10),
+            recorded_at: makeTime(10),
+            session_id: "session-live-mcp",
+            provenance: "executor_persisted",
+            kind: "tool",
+            call_id: "item_22",
+            name: "get_editor_state",
+            tool_kind: "mcp",
+            title: "MCP",
+            status: "in_progress",
+            input_summary: "pencil.get_editor_state",
+            raw_output_json:
+              "{\"server\":\"pencil\",\"tool\":\"get_editor_state\",\"status\":\"in_progress\",\"block_count\":0,\"block_types\":[],\"mime_types\":[],\"has_structured_content\":false,\"has_error\":false}",
+            mcp: {
+              server: "pencil",
+              tool: "get_editor_state",
+              arguments_json: "{\"include_schema\":true}",
+              output_blocks: [],
+              debug_json:
+                "{\"server\":\"pencil\",\"tool\":\"get_editor_state\",\"status\":\"in_progress\",\"block_count\":0,\"block_types\":[],\"mime_types\":[],\"has_structured_content\":false,\"has_error\":false}",
+            },
+          },
+          {
+            event_id: "evt-live-mcp-complete",
+            seq: 12,
+            emitted_at: makeTime(11),
+            recorded_at: makeTime(11),
+            session_id: "session-live-mcp",
+            provenance: "executor_persisted",
+            kind: "tool",
+            call_id: "item_22",
+            name: "get_editor_state",
+            tool_kind: "mcp",
+            title: "MCP",
+            status: "completed",
+            duration_ms: 920,
+            input_summary: "pencil.get_editor_state",
+            output_text: "Loaded the editor schema and confirmed the active canvas selection.",
+            raw_output_json:
+              "{\"server\":\"pencil\",\"tool\":\"get_editor_state\",\"status\":\"completed\",\"block_count\":1,\"block_types\":[\"text\"],\"mime_types\":[],\"has_structured_content\":true,\"has_error\":false}",
+            mcp: {
+              server: "pencil",
+              tool: "get_editor_state",
+              arguments_json: "{\"include_schema\":true}",
+              structured_content_json:
+                "{\"selection\":{\"id\":\"canvas-root\",\"name\":\"Landing Shell\"}}",
+              output_blocks: [
+                {
+                  type: "text",
+                  text: "Loaded the editor schema and confirmed the active canvas selection.",
+                },
+              ],
+              debug_json:
+                "{\"server\":\"pencil\",\"tool\":\"get_editor_state\",\"status\":\"completed\",\"block_count\":1,\"block_types\":[\"text\"],\"mime_types\":[],\"has_structured_content\":true,\"has_error\":false}",
+            },
+          },
+        ],
+        nodeRuns: [
+          {
+            id: "run-mcp-plan",
+            task_id: "task-live-mcp",
+            node_name: "plan",
+            status: "done",
+            started_at: makeTime(4),
+            completed_at: makeTime(5),
+          },
+          {
+            id: "run-mcp-implement",
+            task_id: "task-live-mcp",
+            node_name: "implement",
+            status: "running",
+            started_at: makeTime(5),
+            session_id: "session-live-mcp",
+          },
+        ],
+        runHistoryByRunId: {
+          "run-mcp-implement": [
+            {
+              event_id: "evt-provider-mcp-1",
+              seq: 1,
+              emitted_at: makeTime(5.5),
+              recorded_at: makeTime(9),
+              session_id: "session-live-mcp",
+              provenance: "provider_backfilled",
+              kind: "tool",
+              call_id: "call-provider-render",
+              name: "export_nodes",
+              tool_kind: "mcp",
+              title: "MCP",
+              status: "completed",
+              duration_ms: 1440,
+              input_summary: "pencil.export_nodes",
+              output_text: "Rendered a preview image for the selected artboard.",
+              raw_output_json:
+                "{\"server\":\"pencil\",\"tool\":\"export_nodes\",\"status\":\"completed\",\"block_count\":2,\"block_types\":[\"text\",\"image\"],\"mime_types\":[\"image/png\"],\"has_structured_content\":false,\"has_error\":false}",
+              mcp: {
+                server: "pencil",
+                tool: "export_nodes",
+                arguments_json:
+                  "{\"nodeIds\":[\"canvas-root\"],\"outputDir\":\"artifacts/devbox/mcp-preview\"}",
+                output_blocks: [
+                  {
+                    type: "text",
+                    text: "Rendered a preview image for the selected artboard.",
+                  },
+                  {
+                    type: "image",
+                    data_url:
+                      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAHklEQVR42mP4H2X2n5qYYdTAUQNHDRw1cNTAkWogACay/g6GVKnLAAAAAElFTkSuQmCC",
+                    mime_type: "image/png",
+                  },
+                ],
+                debug_json:
+                  "{\"server\":\"pencil\",\"tool\":\"export_nodes\",\"status\":\"completed\",\"block_count\":2,\"block_types\":[\"text\",\"image\"],\"mime_types\":[\"image/png\"],\"has_structured_content\":false,\"has_error\":false}",
+              },
             },
           ],
         },

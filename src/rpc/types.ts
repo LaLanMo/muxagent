@@ -415,6 +415,24 @@ export interface SessionHistoryToolDiffDto {
   new_text?: string;
 }
 
+export interface SessionHistoryMcpOutputBlockDto {
+  type: string;
+  label?: string;
+  text?: string;
+  json?: string;
+  data_url?: string;
+  mime_type?: string;
+}
+
+export interface SessionHistoryMcpToolDto {
+  server?: string;
+  tool?: string;
+  arguments_json?: string;
+  structured_content_json?: string;
+  output_blocks?: SessionHistoryMcpOutputBlockDto[];
+  debug_json?: string;
+}
+
 export interface SessionHistoryPlanStepDto {
   text: string;
   status?: string;
@@ -457,6 +475,7 @@ export interface SessionHistoryToolEventDto extends SessionHistoryEventBaseDto {
   diffs?: SessionHistoryToolDiffDto[];
   raw_input_json?: string;
   raw_output_json?: string;
+  mcp?: SessionHistoryMcpToolDto;
 }
 
 export interface SessionHistoryPlanEventDto extends SessionHistoryEventBaseDto {

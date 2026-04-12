@@ -33,6 +33,7 @@ export type TranscriptToolCall = {
   toolKind?: string;
   title?: string;
   status?: string;
+  durationMs?: number;
   inputSummary?: string;
   outputText?: string;
   errorText?: string;
@@ -44,6 +45,7 @@ export type TranscriptToolCall = {
   }>;
   rawInputJson?: string;
   rawOutputJson?: string;
+  mcp?: SessionHistoryToolEvent["mcp"];
   eventIds: string[];
   firstAt?: string;
   lastAt?: string;
@@ -183,6 +185,7 @@ function mergeToolItem(existing: TranscriptToolCall | undefined, event: SessionH
       toolKind: event.toolKind,
       title: event.title,
       status: event.status,
+      durationMs: event.durationMs,
       inputSummary: event.inputSummary,
       outputText: event.outputText,
       errorText: event.errorText,
@@ -190,6 +193,7 @@ function mergeToolItem(existing: TranscriptToolCall | undefined, event: SessionH
       diffs: [...event.diffs],
       rawInputJson: event.rawInputJson,
       rawOutputJson: event.rawOutputJson,
+      mcp: event.mcp,
       eventIds: [event.id],
       firstAt: event.at,
       lastAt: event.at,
@@ -203,6 +207,7 @@ function mergeToolItem(existing: TranscriptToolCall | undefined, event: SessionH
     toolKind: event.toolKind || existing.toolKind,
     title: event.title || existing.title,
     status: event.status || existing.status,
+    durationMs: event.durationMs ?? existing.durationMs,
     inputSummary: event.inputSummary || existing.inputSummary,
     outputText: event.outputText || existing.outputText,
     errorText: event.errorText || existing.errorText,
@@ -210,6 +215,7 @@ function mergeToolItem(existing: TranscriptToolCall | undefined, event: SessionH
     diffs: event.diffs.length > 0 ? [...event.diffs] : existing.diffs,
     rawInputJson: event.rawInputJson || existing.rawInputJson,
     rawOutputJson: event.rawOutputJson || existing.rawOutputJson,
+    mcp: event.mcp || existing.mcp,
     firstAt: existing.firstAt || event.at,
     lastAt: event.at || existing.lastAt,
     eventIds: existing.eventIds.includes(event.id)

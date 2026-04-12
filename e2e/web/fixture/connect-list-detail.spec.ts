@@ -112,6 +112,46 @@ test("merges replay history with live output for the selected running run", asyn
   await expect(page.getByTestId("detail-run-session")).toContainText("session-live-implement");
 });
 
+test("renders MCP transcript rows as grouped tool details with image previews", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-live-mcp");
+
+  await page.getByTestId("detail-run-run-mcp-implement").click();
+  await expect(page).toHaveURL(/[\?&]run=run-mcp-implement/);
+  await expect(page).toHaveURL(/[\?&]modal=transcript/);
+
+  const outputSurface = page.getByTestId("detail-output-surface");
+  await expect(outputSurface).toBeVisible();
+  await expect(outputSurface).toContainText("2 tool calls");
+
+  await page.getByTestId("transcript-tool-group-call-provider-render").click();
+  await expect(page.getByTestId("transcript-tool-item_22")).toHaveCount(1);
+  await expect(page.getByTestId("transcript-tool-item_22")).toContainText(
+    "MCP · pencil.get_editor_state",
+  );
+
+  await page.getByTestId("transcript-tool-item_22").click();
+  await expect(page.getByTestId("transcript-tool-detail-item_22")).toContainText(
+    '"include_schema": true',
+  );
+  await expect(page.getByTestId("transcript-tool-detail-item_22")).toContainText(
+    "Loaded the editor schema and confirmed the active canvas selection.",
+  );
+
+  await page.getByTestId("transcript-tool-call-provider-render").click();
+  await expect(page.getByTestId("transcript-tool-detail-call-provider-render")).toContainText(
+    "Rendered a preview image for the selected artboard.",
+  );
+  await expect(
+    page.getByTestId("transcript-tool-detail-call-provider-render").locator("img"),
+  ).toBeVisible();
+
+  await expect(outputSurface).not.toContainText('{"type":"item.started"');
+  await expect(outputSurface).not.toContainText("item.completed");
+});
+
 test("task deep links restore the route workspace even after switching to another workspace", async ({
   page,
 }) => {

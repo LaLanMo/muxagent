@@ -1,5 +1,7 @@
 import type {
   SessionHistoryEventDto,
+  SessionHistoryMcpOutputBlockDto,
+  SessionHistoryMcpToolDto,
   SessionHistoryPlanStepDto,
   SessionHistoryToolDiffDto,
 } from "@/rpc/types";
@@ -49,6 +51,21 @@ export type SessionHistoryToolEvent = SessionHistoryEventBase & {
   }>;
   rawInputJson?: string;
   rawOutputJson?: string;
+  mcp?: {
+    server?: string;
+    tool?: string;
+    argumentsJson?: string;
+    structuredContentJson?: string;
+    outputBlocks: Array<{
+      type: string;
+      label?: string;
+      text?: string;
+      json?: string;
+      dataUrl?: string;
+      mimeType?: string;
+    }>;
+    debugJson?: string;
+  };
 };
 
 export type SessionHistoryPlanEvent = SessionHistoryEventBase & {
@@ -103,6 +120,31 @@ function normalizePlanSteps(steps: SessionHistoryPlanStepDto[] | undefined) {
       text: step.text,
       status: step.status,
     }));
+}
+
+function normalizeMcpOutputBlocks(blocks: SessionHistoryMcpOutputBlockDto[] | undefined) {
+  return (blocks ?? []).map((block) => ({
+    type: block.type,
+    label: block.label,
+    text: block.text,
+    json: block.json,
+    dataUrl: block.data_url,
+    mimeType: block.mime_type,
+  }));
+}
+
+function normalizeMcpTool(mcp: SessionHistoryMcpToolDto | undefined) {
+  if (!mcp) {
+    return undefined;
+  }
+  return {
+    server: mcp.server,
+    tool: mcp.tool,
+    argumentsJson: mcp.arguments_json,
+    structuredContentJson: mcp.structured_content_json,
+    outputBlocks: normalizeMcpOutputBlocks(mcp.output_blocks),
+    debugJson: mcp.debug_json,
+  };
 }
 
 function synthesizeEventId(
@@ -215,6 +257,7 @@ export function normalizeStreamEvent(
       diffs: normalizeDiffs(dto.diffs),
       rawInputJson: dto.raw_input_json,
       rawOutputJson: dto.raw_output_json,
+      mcp: normalizeMcpTool(dto.mcp),
     };
   }
 

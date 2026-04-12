@@ -122,6 +122,8 @@ function toolLabel(event: SessionHistoryToolEvent): string {
       return "write";
     case "fetch":
       return "fetch";
+    case "mcp":
+      return "MCP";
     case "file_change":
       return "files";
     case "structured_output":
@@ -135,6 +137,16 @@ function toolSubject(event: SessionHistoryToolEvent): string {
   const inputSummary = collapseWhitespace(event.inputSummary);
   if (inputSummary) {
     return inputSummary;
+  }
+  if (event.toolKind === "mcp") {
+    const server = event.mcp?.server?.trim();
+    const tool = event.mcp?.tool?.trim();
+    if (server && tool) {
+      return `${server}.${tool}`;
+    }
+    if (tool) {
+      return tool;
+    }
   }
   const paths = compactPaths(event.paths);
   if (paths.length > 0) {
@@ -211,6 +223,7 @@ function normalizeToolLike(
       toolKind: tool.toolKind,
       title: tool.title,
       status: tool.status,
+      durationMs: tool.durationMs,
       inputSummary: tool.inputSummary,
       outputText: tool.outputText,
       errorText: tool.errorText,
@@ -218,6 +231,7 @@ function normalizeToolLike(
       diffs: tool.diffs,
       rawInputJson: tool.rawInputJson,
       rawOutputJson: tool.rawOutputJson,
+      mcp: tool.mcp,
     };
   }
   return tool;
@@ -225,6 +239,9 @@ function normalizeToolLike(
 
 function toolDurationMs(tool: TranscriptToolCall | SessionHistoryToolEvent): number | undefined {
   if ("eventIds" in tool) {
+    if (tool.durationMs != null) {
+      return tool.durationMs;
+    }
     const first = Date.parse(tool.firstAt ?? "");
     const last = Date.parse(tool.lastAt ?? "");
     if (Number.isFinite(first) && Number.isFinite(last) && last > first) {
