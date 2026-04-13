@@ -3,11 +3,13 @@ package appserver
 import (
 	"context"
 	"errors"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
 	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/claudeexec"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codexexec"
+	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codex"
 	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/opencodehttp"
 	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
 )
@@ -44,8 +46,24 @@ type workspaceActor struct {
 func defaultRuntimeServiceFactory(workDir string) (runtimeService, error) {
 	return taskruntime.NewService(
 		workDir,
-		taskexecutor.NewRouter(codexexec.New(""), claudeexec.New(""), opencodehttp.New("")),
+		taskexecutor.NewRouter(newCodexExecutorForAppServer(), claudeexec.New(""), opencodehttp.New("")),
 	)
+}
+
+func newCodexExecutorForAppServer() taskexecutor.Executor {
+	return codex.NewWithMode("", codexExecutorModeForAppServer(os.Getenv(codex.EnvExecutorMode)))
+}
+
+func codexExecutorModeForAppServer(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case codex.ModeAppServer, "app-server":
+		return codex.ModeAppServer
+	case codex.ModeExec, "":
+		return codex.ModeExec
+	default:
+		// Keep the daemon on the proven exec path unless rollout is explicit.
+		return codex.ModeExec
+	}
 }
 
 func newRuntimeManager(factory runtimeServiceFactory, onEvent func(workspaceID string, event taskruntime.RunEvent)) *runtimeManager {

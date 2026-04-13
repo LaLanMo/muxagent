@@ -17,6 +17,7 @@ import (
 	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
 	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
 	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codex"
 	"github.com/LaLanMo/muxagent-cli/internal/taskhistory"
 	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
 	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
@@ -481,6 +482,136 @@ func TestServerTaskRunHistoryFallsBackToProviderTranscript(t *testing.T) {
 	}
 }
 
+func TestServerTaskRunHistoryKeepsProviderBackfillAfterLocalHistoryStarts(t *testing.T) {
+	workspacePath := t.TempDir()
+	codexHome := t.TempDir()
+	t.Setenv("CODEX_HOME", codexHome)
+
+	server := newTestServer(t)
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	server.markInitialized()
+
+	store, err := taskstore.Open(workspacePath)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	taskID := "task-provider-merged-history"
+	configPath, err := taskconfig.DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("default config path: %v", err)
+	}
+	materialized, err := taskconfig.Materialize(workspacePath, taskID, configPath)
+	if err != nil {
+		t.Fatalf("materialize config: %v", err)
+	}
+	configBytes, err := os.ReadFile(materialized.ConfigPath)
+	if err != nil {
+		t.Fatalf("read materialized config: %v", err)
+	}
+	configText := strings.Replace(string(configBytes), "runtime: claude-code", "runtime: codex", 1)
+	configText = strings.Replace(configText, "runtime: default", "runtime: codex", 1)
+	if err := os.WriteFile(materialized.ConfigPath, []byte(configText), 0o644); err != nil {
+		t.Fatalf("force codex runtime: %v", err)
+	}
+
+	now := time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC)
+	task := taskdomain.Task{
+		ID:           taskID,
+		Description:  "provider merged history",
+		ConfigAlias:  "default",
+		ConfigPath:   materialized.ConfigPath,
+		WorkDir:      taskstore.NormalizeWorkDir(workspacePath),
+		ExecutionDir: taskstore.NormalizeWorkDir(workspacePath),
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := store.CreateTask(context.Background(), task); err != nil {
+		t.Fatalf("create task: %v", err)
+	}
+	run := taskdomain.NodeRun{
+		ID:        "run-provider-merged-history",
+		TaskID:    taskID,
+		NodeName:  "draft_plan",
+		Status:    taskdomain.NodeRunRunning,
+		SessionID: "019d-provider-merged-history",
+		StartedAt: now,
+	}
+	if err := store.SaveNodeRun(context.Background(), run); err != nil {
+		t.Fatalf("save run: %v", err)
+	}
+
+	if err := taskhistory.Append(workspacePath, taskID, run.ID, taskexecutor.Progress{
+		SessionID: run.SessionID,
+		Events: []taskexecutor.StreamEvent{{
+			EventID:    "evt-local-1",
+			Seq:        1,
+			EmittedAt:  now.Add(time.Second),
+			SessionID:  run.SessionID,
+			Kind:       taskexecutor.StreamEventKindTool,
+			Provenance: taskexecutor.StreamEventProvenanceExecutorPersisted,
+			Tool: &taskexecutor.ToolCall{
+				CallID:       "call-1",
+				Name:         "exec_command",
+				Kind:         taskexecutor.ToolKindShell,
+				Status:       taskexecutor.ToolStatusInProgress,
+				InputSummary: "pwd",
+			},
+		}},
+	}, now.Add(time.Second)); err != nil {
+		t.Fatalf("append local history: %v", err)
+	}
+
+	transcriptPath := filepath.Join(codexHome, "sessions", "2026", "04", "08", "rollout-2026-04-08T10-00-00-019d-provider-merged-history.jsonl")
+	if err := os.MkdirAll(filepath.Dir(transcriptPath), 0o755); err != nil {
+		t.Fatalf("mkdir transcript dir: %v", err)
+	}
+	content := "" +
+		"{\"timestamp\":\"2026-04-08T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d-provider-merged-history\",\"cwd\":\"" + task.ExecutionDir + "\"}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:01Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"call_id\":\"call-1\",\"name\":\"exec_command\",\"arguments\":\"{\\\"cmd\\\":\\\"pwd\\\"}\"}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:02Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"function_call_output\",\"call_id\":\"call-1\",\"output\":\"Exit code: 0\\nWall time: 0.1 seconds\\nOutput:\\n" + task.ExecutionDir + "\\n\"}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:03Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:04Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"task_complete\"}}\n"
+	if err := os.WriteFile(transcriptPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	historyResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRunHistory,
+		Params: mustRawParams(t, taskRunHistoryParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   run.ID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.run_history rpc error: %+v", rpcErr)
+	}
+	historyResult := historyResultAny.(taskRunHistoryResult)
+	if got := historyResult.Provenance; got != "mixed_recovered" {
+		t.Fatalf("task.run_history provenance = %q, want mixed_recovered", got)
+	}
+	if got := historyResult.Completeness; got != "complete" {
+		t.Fatalf("task.run_history completeness = %q, want complete", got)
+	}
+	if got := len(historyResult.Events); got != 3 {
+		t.Fatalf("task.run_history event count = %d, want 3", got)
+	}
+	if got := historyResult.Events[0].InputSummary; got != "pwd" {
+		t.Fatalf("task.run_history local tool input = %q, want pwd", got)
+	}
+	if got := historyResult.Events[1].OutputText; !strings.Contains(got, task.ExecutionDir) {
+		t.Fatalf("task.run_history merged tool output = %q, want %q", got, task.ExecutionDir)
+	}
+	if got := historyResult.Events[2].Text; got != "done" {
+		t.Fatalf("task.run_history assistant text = %q, want done", got)
+	}
+}
+
 func TestServerTaskRunHistoryExposesTypedMCPPayloadWithoutDuplicatingImageDebugData(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "appserver")
 	workspacePath := t.TempDir()
@@ -890,6 +1021,158 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 	}
 	if dispatches[1].Type != taskruntime.CommandSubmitInput {
 		t.Fatalf("second dispatch type = %q, want %q", dispatches[1].Type, taskruntime.CommandSubmitInput)
+	}
+}
+
+func TestServerTaskStartSmokeRunsOptInCodexAppServer(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	server.markInitialized()
+
+	fakeDir := t.TempDir()
+	writeSmokeCodexAppServerBinary(t, filepath.Join(fakeDir, "codex"))
+	basePath := os.Getenv("PATH")
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+basePath)
+	t.Setenv(codex.EnvExecutorMode, codex.ModeAppServer)
+
+	notifications := make(chan notification, 64)
+	server.setNotificationSink(func(n notification) {
+		notifications <- n
+	})
+	defer server.setNotificationSink(nil)
+
+	startResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskStart,
+		Params: mustRawParams(t, taskStartParams{
+			WorkspaceID: workspace.WorkspaceID,
+			Description: "Smoke codex app-server",
+			ConfigAlias: taskconfig.BuiltinIDSingleRun,
+			ConfigPath:  singleRunConfigPathForAppServerTest(t),
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.start rpc error: %+v", rpcErr)
+	}
+	startResult := startResultAny.(commandAcceptedResult)
+	if !startResult.Accepted {
+		t.Fatal("task.start accepted = false")
+	}
+
+	created := waitForNotificationWhere(t, notifications, 5*time.Second, func(params notificationParams) bool {
+		return params.Kind == string(taskruntime.EventTaskCreated)
+	})
+	createdPayload := created.Payload.(taskNotificationPayload)
+	taskID := createdPayload.Event.TaskID
+	if taskID == "" {
+		t.Fatal("task.created task_id = empty, want value")
+	}
+
+	completed := waitForNotificationWhere(t, notifications, 5*time.Second, func(params notificationParams) bool {
+		if params.Kind != string(taskruntime.EventTaskCompleted) && params.Kind != string(taskruntime.EventTaskFailed) {
+			return false
+		}
+		payload, ok := params.Payload.(taskNotificationPayload)
+		return ok && payload.Event.TaskID == taskID
+	})
+	if completed.Kind != string(taskruntime.EventTaskCompleted) {
+		payload := completed.Payload.(taskNotificationPayload)
+		message := ""
+		if payload.Event.Error != nil {
+			message = payload.Event.Error.Message
+		}
+		t.Fatalf("task completed notification kind = %q, want %q (%s)", completed.Kind, taskruntime.EventTaskCompleted, message)
+	}
+
+	getResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGet,
+		Params: mustRawParams(t, taskGetParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get rpc error: %+v", rpcErr)
+	}
+	getResult := getResultAny.(taskGetResult)
+	if got := getResult.Task.Status; got != string(taskdomain.TaskStatusDone) {
+		t.Fatalf("task.get status = %q, want %q", got, taskdomain.TaskStatusDone)
+	}
+
+	nodeRunID := ""
+	for _, run := range getResult.Task.NodeRuns {
+		if run.NodeName == "handle_request" {
+			nodeRunID = run.ID
+			break
+		}
+	}
+	if nodeRunID == "" {
+		t.Fatalf("handle_request node run missing in task.get: %#v", getResult.Task.NodeRuns)
+	}
+
+	historyResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRunHistory,
+		Params: mustRawParams(t, taskRunHistoryParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   nodeRunID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.run_history rpc error: %+v", rpcErr)
+	}
+	historyResult := historyResultAny.(taskRunHistoryResult)
+	if got := historyResult.SessionID; got != "thread-smoke" {
+		t.Fatalf("task.run_history session_id = %q, want thread-smoke", got)
+	}
+	if got := historyResult.Provenance; got != "executor_persisted" {
+		t.Fatalf("task.run_history provenance = %q, want executor_persisted", got)
+	}
+	if got := historyResult.Completeness; got != "complete" {
+		t.Fatalf("task.run_history completeness = %q, want complete", got)
+	}
+	if got := len(historyResult.Events); got < 6 {
+		t.Fatalf("task.run_history event count = %d, want >= 6", got)
+	}
+
+	var (
+		sawCommentary bool
+		sawReasoning  bool
+		sawMCP        bool
+		sawUsage      bool
+	)
+	for _, event := range historyResult.Events {
+		switch {
+		case event.Kind == "message" && event.MessageID == "msg-commentary" && event.PartID == "phase:commentary" && event.Text == "Inspect repo":
+			sawCommentary = true
+		case event.Kind == "message" && event.MessageID == "reason-1" && event.PartID == "summary" && event.PartType == "reasoning" && event.Text == "Check state":
+			sawReasoning = true
+		case event.Kind == "tool" && event.CallID == "mcp-1" && event.ToolKind == "mcp" && event.Status == "completed" && event.OutputText == "Loaded schema.":
+			sawMCP = true
+		case event.Kind == "usage" && event.InputTokens == 7 && event.OutputTokens == 5:
+			sawUsage = true
+		}
+		if strings.Contains(event.Text, `"file_paths"`) {
+			t.Fatalf("task.run_history leaked structured output envelope into message text: %q", event.Text)
+		}
+	}
+	if !sawCommentary {
+		t.Fatalf("task.run_history missing commentary snapshot: %#v", historyResult.Events)
+	}
+	if !sawReasoning {
+		t.Fatalf("task.run_history missing reasoning snapshot: %#v", historyResult.Events)
+	}
+	if !sawMCP {
+		t.Fatalf("task.run_history missing mcp event: %#v", historyResult.Events)
+	}
+	if !sawUsage {
+		t.Fatalf("task.run_history missing usage event: %#v", historyResult.Events)
 	}
 }
 
@@ -1905,6 +2188,82 @@ func seedRecoverableTerminalRun(t *testing.T, workDir string, output []byte) (ta
 	}
 
 	return taskID, nodeRunID
+}
+
+func waitForNotificationWhere(t *testing.T, notifications <-chan notification, timeout time.Duration, match func(notificationParams) bool) notificationParams {
+	t.Helper()
+	deadline := time.After(timeout)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for matching notification")
+		case n := <-notifications:
+			params, ok := n.Params.(notificationParams)
+			if !ok {
+				continue
+			}
+			if match(params) {
+				return params
+			}
+		}
+	}
+}
+
+func singleRunConfigPathForAppServerTest(t *testing.T) string {
+	t.Helper()
+	_, thisFile, _, ok := goruntime.Caller(0)
+	if !ok {
+		t.Fatal("resolve appserver test file path")
+	}
+	return filepath.Join(filepath.Dir(thisFile), "..", "taskconfig", "defaults", "single-run.yaml")
+}
+
+func writeSmokeCodexAppServerBinary(t *testing.T, path string) {
+	t.Helper()
+	script := `#!/bin/sh
+set -eu
+
+if [ "${1:-}" != "app-server" ]; then
+  echo "unexpected args" >&2
+  exit 2
+fi
+
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*)
+      printf '%s\n' '{"id":1,"result":{"userAgent":"fake","codexHome":"/tmp/.codex","platformFamily":"unix","platformOs":"linux"}}'
+      ;;
+    *'"method":"initialized"'*)
+      ;;
+    *'"method":"thread/start"'*)
+      printf '%s\n' '{"id":2,"result":{"thread":{"id":"thread-smoke","status":{"type":"idle"},"cwd":"/tmp/project"}}}'
+      ;;
+    *'"method":"turn/start"'*)
+      cat <<'JSON'
+{"id":3,"result":{"turn":{"id":"turn-smoke","status":"inProgress","items":[],"error":null}}}
+{"method":"turn/started","params":{"threadId":"thread-smoke","turn":{"id":"turn-smoke","status":"inProgress","items":[],"error":null}}}
+{"method":"item/started","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"agentMessage","id":"msg-commentary","text":"","phase":"commentary"}}}
+{"method":"item/agentMessage/delta","params":{"threadId":"thread-smoke","turnId":"turn-smoke","itemId":"msg-commentary","delta":"Inspect"}}
+{"method":"item/agentMessage/delta","params":{"threadId":"thread-smoke","turnId":"turn-smoke","itemId":"msg-commentary","delta":" repo"}}
+JSON
+      cat <<'JSON'
+{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"thread-smoke","turnId":"turn-smoke","itemId":"reason-1","summaryIndex":0,"delta":"Check"}}
+{"method":"item/reasoning/summaryTextDelta","params":{"threadId":"thread-smoke","turnId":"turn-smoke","itemId":"reason-1","summaryIndex":0,"delta":" state"}}
+{"method":"item/started","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"mcpToolCall","id":"mcp-1","server":"pencil","tool":"get_editor_state","arguments":{"include_schema":true},"status":"inProgress"}}}
+{"method":"item/mcpToolCall/progress","params":{"threadId":"thread-smoke","turnId":"turn-smoke","itemId":"mcp-1","message":"Loaded schema."}}
+{"method":"item/completed","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"mcpToolCall","id":"mcp-1","server":"pencil","tool":"get_editor_state","arguments":{"include_schema":true},"status":"completed","durationMs":42,"result":{"content":[{"type":"text","text":"Loaded schema."}],"structuredContent":{"selection":"canvas-root"}}}}}
+{"method":"item/completed","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"agentMessage","id":"msg-final","text":"{\"kind\":\"result\",\"result\":{\"file_paths\":[\"/tmp/result.md\"]},\"clarification\":null}","phase":"final_answer"}}}
+{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-smoke","turnId":"turn-smoke","tokenUsage":{"total":{"totalTokens":12,"inputTokens":7,"cachedInputTokens":1,"outputTokens":5}}}}
+{"method":"turn/completed","params":{"threadId":"thread-smoke","turn":{"id":"turn-smoke","status":"completed","items":[],"error":null}}}
+JSON
+      exit 0
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write fake codex app-server binary: %v", err)
+	}
 }
 
 type fakeRuntimeService struct {

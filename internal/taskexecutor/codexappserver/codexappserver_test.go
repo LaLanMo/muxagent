@@ -137,6 +137,298 @@ func TestExecutorPropagatesSubprocessFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "stderr boom")
 }
 
+func TestParseNotificationEmitsCommentaryMessageDeltaSnapshots(t *testing.T) {
+	state := newStreamState()
+	turnID := "turn-123"
+
+	startedParams := map[string]any{
+		"turnId": turnID,
+		"item": map[string]any{
+			"type":  "agentMessage",
+			"id":    "msg-1",
+			"phase": "commentary",
+			"text":  "",
+		},
+	}
+	events, completed, failed, messageText := parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/started", "params": startedParams}),
+		"item/started",
+		startedParams,
+		turnID,
+		state,
+	)
+	require.Empty(t, events)
+	assert.False(t, completed)
+	assert.Empty(t, failed)
+	assert.Empty(t, messageText)
+
+	deltaParams := map[string]any{
+		"turnId": turnID,
+		"itemId": "msg-1",
+		"delta":  "Inspect",
+	}
+	events, _, _, _ = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/agentMessage/delta", "params": deltaParams}),
+		"item/agentMessage/delta",
+		deltaParams,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	require.NotNil(t, events[0].Message)
+	assert.Equal(t, "msg-1", events[0].Message.MessageID)
+	assert.Equal(t, "phase:commentary", events[0].Message.PartID)
+	assert.Equal(t, "Inspect", events[0].Message.Text)
+
+	deltaParams["delta"] = " repo"
+	events, _, _, _ = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/agentMessage/delta", "params": deltaParams}),
+		"item/agentMessage/delta",
+		deltaParams,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	require.NotNil(t, events[0].Message)
+	assert.Equal(t, "Inspect repo", events[0].Message.Text)
+}
+
+func TestParseNotificationKeepsStructuredFinalAnswerOutOfMessageStream(t *testing.T) {
+	state := newStreamState()
+	turnID := "turn-123"
+	finalText := `{"kind":"result","result":{"file_paths":["/tmp/artifact.md"]},"clarification":null}`
+
+	startedParams := map[string]any{
+		"turnId": turnID,
+		"item": map[string]any{
+			"type":  "agentMessage",
+			"id":    "msg-final",
+			"phase": "final_answer",
+			"text":  "",
+		},
+	}
+	parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/started", "params": startedParams}),
+		"item/started",
+		startedParams,
+		turnID,
+		state,
+	)
+
+	deltaParams := map[string]any{
+		"turnId": turnID,
+		"itemId": "msg-final",
+		"delta":  finalText,
+	}
+	events, completed, failed, messageText := parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/agentMessage/delta", "params": deltaParams}),
+		"item/agentMessage/delta",
+		deltaParams,
+		turnID,
+		state,
+	)
+	require.Empty(t, events)
+	assert.False(t, completed)
+	assert.Empty(t, failed)
+	assert.Empty(t, messageText)
+
+	completedParams := map[string]any{
+		"turnId": turnID,
+		"item": map[string]any{
+			"type":  "agentMessage",
+			"id":    "msg-final",
+			"phase": "final_answer",
+			"text":  finalText,
+		},
+	}
+	events, _, _, messageText = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/completed", "params": completedParams}),
+		"item/completed",
+		completedParams,
+		turnID,
+		state,
+	)
+	require.Empty(t, events)
+	assert.Equal(t, finalText, messageText)
+}
+
+func TestParseNotificationSuppressesPartialStructuredFinalAnswerDeltas(t *testing.T) {
+	state := newStreamState()
+	turnID := "turn-123"
+
+	startedParams := map[string]any{
+		"turnId": turnID,
+		"item": map[string]any{
+			"type":  "agentMessage",
+			"id":    "msg-final",
+			"phase": "final_answer",
+			"text":  "",
+		},
+	}
+	parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/started", "params": startedParams}),
+		"item/started",
+		startedParams,
+		turnID,
+		state,
+	)
+
+	deltaParams := map[string]any{
+		"turnId": turnID,
+		"itemId": "msg-final",
+		"delta":  `{"clar`,
+	}
+	events, completed, failed, messageText := parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/agentMessage/delta", "params": deltaParams}),
+		"item/agentMessage/delta",
+		deltaParams,
+		turnID,
+		state,
+	)
+	require.Empty(t, events)
+	assert.False(t, completed)
+	assert.Empty(t, failed)
+	assert.Empty(t, messageText)
+
+	deltaParams["delta"] = `ification":null}`
+	events, completed, failed, messageText = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/agentMessage/delta", "params": deltaParams}),
+		"item/agentMessage/delta",
+		deltaParams,
+		turnID,
+		state,
+	)
+	require.Empty(t, events)
+	assert.False(t, completed)
+	assert.Empty(t, failed)
+	assert.Empty(t, messageText)
+}
+
+func TestParseNotificationEmitsReasoningSummarySnapshots(t *testing.T) {
+	state := newStreamState()
+	turnID := "turn-123"
+
+	params := map[string]any{
+		"turnId":       turnID,
+		"itemId":       "reason-1",
+		"summaryIndex": 0,
+		"delta":        "Inspect",
+	}
+	events, completed, failed, messageText := parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/reasoning/summaryTextDelta", "params": params}),
+		"item/reasoning/summaryTextDelta",
+		params,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	assert.False(t, completed)
+	assert.Empty(t, failed)
+	assert.Empty(t, messageText)
+	require.NotNil(t, events[0].Message)
+	assert.Equal(t, taskexecutor.MessagePartTypeReasoning, events[0].Message.Type)
+	assert.Equal(t, "reason-1", events[0].Message.MessageID)
+	assert.Equal(t, "summary", events[0].Message.PartID)
+	assert.Equal(t, "Inspect", events[0].Message.Text)
+
+	params["delta"] = " repo"
+	events, _, _, _ = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/reasoning/summaryTextDelta", "params": params}),
+		"item/reasoning/summaryTextDelta",
+		params,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	require.NotNil(t, events[0].Message)
+	assert.Equal(t, "Inspect repo", events[0].Message.Text)
+}
+
+func TestParseNotificationHandlesMCPToolCallLifecycle(t *testing.T) {
+	state := newStreamState()
+	turnID := "turn-123"
+
+	startedParams := map[string]any{
+		"turnId": turnID,
+		"item": map[string]any{
+			"type":      "mcpToolCall",
+			"id":        "mcp-1",
+			"server":    "pencil",
+			"tool":      "get_editor_state",
+			"arguments": map[string]any{"include_schema": true},
+			"status":    "inProgress",
+		},
+	}
+	events, completed, failed, messageText := parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/started", "params": startedParams}),
+		"item/started",
+		startedParams,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	assert.False(t, completed)
+	assert.Empty(t, failed)
+	assert.Empty(t, messageText)
+	require.NotNil(t, events[0].Tool)
+	assert.Equal(t, taskexecutor.ToolKindMCP, events[0].Tool.Kind)
+	assert.Equal(t, taskexecutor.ToolStatusInProgress, events[0].Tool.Status)
+	assert.Equal(t, "pencil.get_editor_state", events[0].Tool.InputSummary)
+
+	progressParams := map[string]any{
+		"turnId":  turnID,
+		"itemId":  "mcp-1",
+		"message": "Loaded the editor schema.",
+	}
+	events, _, _, _ = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/mcpToolCall/progress", "params": progressParams}),
+		"item/mcpToolCall/progress",
+		progressParams,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	require.NotNil(t, events[0].Tool)
+	assert.Equal(t, taskexecutor.ToolKindMCP, events[0].Tool.Kind)
+	assert.Equal(t, "Loaded the editor schema.", events[0].Tool.OutputText)
+
+	completedParams := map[string]any{
+		"turnId": turnID,
+		"item": map[string]any{
+			"type":       "mcpToolCall",
+			"id":         "mcp-1",
+			"server":     "pencil",
+			"tool":       "get_editor_state",
+			"arguments":  map[string]any{"include_schema": true},
+			"status":     "completed",
+			"durationMs": 920,
+			"result": map[string]any{
+				"content": []any{
+					map[string]any{"type": "text", "text": "Loaded the editor schema."},
+				},
+				"structuredContent": map[string]any{"selection": "canvas-root"},
+			},
+		},
+	}
+	events, _, _, _ = parseNotification(
+		mustRawJSON(t, map[string]any{"method": "item/completed", "params": completedParams}),
+		"item/completed",
+		completedParams,
+		turnID,
+		state,
+	)
+	require.Len(t, events, 1)
+	require.NotNil(t, events[0].Tool)
+	assert.Equal(t, taskexecutor.ToolKindMCP, events[0].Tool.Kind)
+	assert.Equal(t, taskexecutor.ToolStatusCompleted, events[0].Tool.Status)
+	assert.Equal(t, int64(920), events[0].Tool.DurationMS)
+	assert.Equal(t, "Loaded the editor schema.", events[0].Tool.OutputText)
+	if assert.NotNil(t, events[0].Tool.MCP) {
+		assert.Equal(t, `{"include_schema":true}`, events[0].Tool.MCP.ArgumentsJSON)
+		assert.Equal(t, `{"selection":"canvas-root"}`, events[0].Tool.MCP.StructuredContentJSON)
+	}
+}
+
 func requestFixture(artifactDir string) taskexecutor.Request {
 	allow := false
 	return taskexecutor.Request{
@@ -187,6 +479,13 @@ func requestFixture(artifactDir string) taskexecutor.Request {
 			},
 		},
 	}
+}
+
+func mustRawJSON(t *testing.T, payload map[string]any) json.RawMessage {
+	t.Helper()
+	data, err := json.Marshal(payload)
+	require.NoError(t, err)
+	return data
 }
 
 func writeFakeCodexAppServer(t *testing.T) string {

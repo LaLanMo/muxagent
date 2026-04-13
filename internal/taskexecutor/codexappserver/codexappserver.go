@@ -303,12 +303,24 @@ type rpcErrorPayload struct {
 }
 
 type streamState struct {
-	messageText map[string]string
+	messageText      map[string]string
+	messagePhase     map[string]string
+	mcpCalls         map[string]mcpToolState
+	reasoningSummary map[string][]string
+}
+
+type mcpToolState struct {
+	Server    string
+	Tool      string
+	Arguments any
 }
 
 func newStreamState() *streamState {
 	return &streamState{
-		messageText: map[string]string{},
+		messageText:      map[string]string{},
+		messagePhase:     map[string]string{},
+		mcpCalls:         map[string]mcpToolState{},
+		reasoningSummary: map[string][]string{},
 	}
 }
 
@@ -374,54 +386,64 @@ func parseNotification(raw json.RawMessage, method string, params map[string]any
 			return nil, false, "", ""
 		}
 		state.messageText[itemID] += asString(params["delta"])
-		return nil, false, "", ""
-	case "item/completed", "item/started":
-		event, messageText := parseItemEvent(raw, method, params, state)
+		if strings.EqualFold(strings.TrimSpace(state.messagePhase[itemID]), "final_answer") {
+			return nil, false, "", ""
+		}
+		event := buildAgentMessageEvent(strings.TrimSpace(string(raw)), itemID, state.messagePhase[itemID], state.messageText[itemID])
 		if event == nil {
+			return nil, false, "", ""
+		}
+		return []taskexecutor.StreamEvent{*event}, false, "", ""
+	case "item/mcpToolCall/progress":
+		event := parseMCPToolProgressEvent(raw, params, state)
+		if event == nil {
+			return nil, false, "", ""
+		}
+		return []taskexecutor.StreamEvent{*event}, false, "", ""
+	case "item/reasoning/summaryTextDelta":
+		event := parseReasoningSummaryDeltaEvent(raw, params, state)
+		if event == nil {
+			return nil, false, "", ""
+		}
+		return []taskexecutor.StreamEvent{*event}, false, "", ""
+	case "item/completed", "item/started":
+		events, messageText := parseItemEvents(raw, method, params, state)
+		if len(events) == 0 {
 			return nil, false, "", messageText
 		}
-		return []taskexecutor.StreamEvent{*event}, false, "", messageText
+		return events, false, "", messageText
 	default:
 		return nil, false, "", ""
 	}
 }
 
-func parseItemEvent(raw json.RawMessage, method string, params map[string]any, state *streamState) (*taskexecutor.StreamEvent, string) {
+func parseItemEvents(raw json.RawMessage, method string, params map[string]any, state *streamState) ([]taskexecutor.StreamEvent, string) {
 	item := asMap(params["item"])
 	itemType := strings.TrimSpace(asString(item["type"]))
 	if itemType == "" {
 		return nil, ""
 	}
+	rememberItemState(item, state)
 
 	switch itemType {
 	case "agentMessage":
-		text := strings.TrimSpace(asString(item["text"]))
-		if text == "" {
-			text = strings.TrimSpace(state.messageText[asString(item["id"])])
+		event, messageText := parseAgentMessageItemEvent(raw, method, item, state)
+		if event == nil {
+			return nil, messageText
 		}
-		if method == "item/completed" {
-			state.messageText[asString(item["id"])] = text
+		return []taskexecutor.StreamEvent{*event}, messageText
+	case "reasoning":
+		event := parseReasoningItemEvent(raw, item, state)
+		if event == nil {
+			return nil, ""
 		}
-		if summary, ok := codexAgentEnvelopeSummary(text); ok {
-			if summary == "" {
-				return nil, text
-			}
-			text = summary
+		return []taskexecutor.StreamEvent{*event}, ""
+	case "mcpToolCall":
+		event := parseMCPToolItemEvent(raw, method, item, state)
+		if event == nil {
+			return nil, ""
 		}
-		text = strings.TrimSpace(text)
-		if text == "" {
-			return nil, state.messageText[asString(item["id"])]
-		}
-		return &taskexecutor.StreamEvent{
-			Kind: taskexecutor.StreamEventKindMessage,
-			Raw:  strings.TrimSpace(string(raw)),
-			Message: &taskexecutor.MessagePart{
-				MessageID: asString(item["id"]),
-				Role:      taskexecutor.MessageRoleAssistant,
-				Type:      taskexecutor.MessagePartTypeText,
-				Text:      text,
-			},
-		}, state.messageText[asString(item["id"])]
+		return []taskexecutor.StreamEvent{*event}, ""
 	case "commandExecution":
 		tool := &taskexecutor.ToolCall{
 			CallID:       asString(item["id"]),
@@ -436,11 +458,11 @@ func parseItemEvent(raw json.RawMessage, method string, params map[string]any, s
 			tool.Status = taskexecutor.ToolStatusFailed
 			tool.ErrorText = fmt.Sprintf("exit code %d", exitCode)
 		}
-		return &taskexecutor.StreamEvent{
+		return []taskexecutor.StreamEvent{{
 			Kind: taskexecutor.StreamEventKindTool,
 			Raw:  strings.TrimSpace(string(raw)),
 			Tool: tool,
-		}, ""
+		}}, ""
 	case "fileChange":
 		paths := make([]string, 0, len(asSlice(item["changes"])))
 		summaries := make([]string, 0, len(asSlice(item["changes"])))
@@ -456,7 +478,7 @@ func parseItemEvent(raw json.RawMessage, method string, params map[string]any, s
 		if len(paths) == 0 {
 			return nil, ""
 		}
-		return &taskexecutor.StreamEvent{
+		return []taskexecutor.StreamEvent{{
 			Kind: taskexecutor.StreamEventKindTool,
 			Raw:  strings.TrimSpace(string(raw)),
 			Tool: &taskexecutor.ToolCall{
@@ -468,9 +490,9 @@ func parseItemEvent(raw json.RawMessage, method string, params map[string]any, s
 				InputSummary: strings.Join(summaries, ", "),
 				Paths:        paths,
 			},
-		}, ""
+		}}, ""
 	case "webSearch":
-		return &taskexecutor.StreamEvent{
+		return []taskexecutor.StreamEvent{{
 			Kind: taskexecutor.StreamEventKindTool,
 			Raw:  strings.TrimSpace(string(raw)),
 			Tool: &taskexecutor.ToolCall{
@@ -481,9 +503,189 @@ func parseItemEvent(raw json.RawMessage, method string, params map[string]any, s
 				Status:       normalizeToolStatus(asString(item["status"]), method),
 				InputSummary: codexWebSearchSummary(item),
 			},
-		}, ""
+		}}, ""
 	default:
 		return nil, ""
+	}
+}
+
+func parseAgentMessageItemEvent(raw json.RawMessage, method string, item map[string]any, state *streamState) (*taskexecutor.StreamEvent, string) {
+	itemID := strings.TrimSpace(asString(item["id"]))
+	if itemID == "" {
+		return nil, ""
+	}
+	text := strings.TrimSpace(asString(item["text"]))
+	if text == "" {
+		text = strings.TrimSpace(state.messageText[itemID])
+	}
+	if text != "" {
+		state.messageText[itemID] = text
+	}
+	phase := strings.TrimSpace(asString(item["phase"]))
+	if phase == "" {
+		phase = state.messagePhase[itemID]
+	} else {
+		state.messagePhase[itemID] = phase
+	}
+	event := buildAgentMessageEvent(strings.TrimSpace(string(raw)), itemID, phase, text)
+	if event == nil {
+		return nil, state.messageText[itemID]
+	}
+	return event, state.messageText[itemID]
+}
+
+func parseReasoningItemEvent(raw json.RawMessage, item map[string]any, state *streamState) *taskexecutor.StreamEvent {
+	itemID := strings.TrimSpace(asString(item["id"]))
+	if itemID == "" {
+		return nil
+	}
+	summaries := state.reasoningSummary[itemID]
+	if len(summaries) == 0 {
+		summaries = normalizeStringSlice(asSlice(item["summary"]))
+		if len(summaries) > 0 {
+			state.reasoningSummary[itemID] = summaries
+		}
+	}
+	return buildReasoningSummaryEvent(strings.TrimSpace(string(raw)), itemID, summaries)
+}
+
+func parseMCPToolItemEvent(raw json.RawMessage, method string, item map[string]any, state *streamState) *taskexecutor.StreamEvent {
+	itemID := strings.TrimSpace(asString(item["id"]))
+	if itemID == "" {
+		return nil
+	}
+	meta := state.mcpCalls[itemID]
+	server := firstNonEmptyString(strings.TrimSpace(asString(item["server"])), meta.Server)
+	toolName := firstNonEmptyString(strings.TrimSpace(asString(item["tool"])), meta.Tool)
+	arguments := item["arguments"]
+	if arguments == nil {
+		arguments = meta.Arguments
+	}
+	durationMS, _ := asInt64(item["durationMs"])
+	result := asMap(item["result"])
+	tool := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+		CallID:            itemID,
+		Server:            server,
+		Tool:              toolName,
+		Status:            normalizeToolStatus(asString(item["status"]), method),
+		DurationMS:        durationMS,
+		Arguments:         arguments,
+		Content:           toAnySlice(asSlice(result["content"])),
+		StructuredContent: firstNonNil(result["structuredContent"], result["structured_content"]),
+		ErrorText:         codexMCPErrorText(item),
+	})
+	return &taskexecutor.StreamEvent{
+		Kind: taskexecutor.StreamEventKindTool,
+		Raw:  tool.MCP.DebugJSON,
+		Tool: &tool,
+	}
+}
+
+func parseMCPToolProgressEvent(raw json.RawMessage, params map[string]any, state *streamState) *taskexecutor.StreamEvent {
+	itemID := strings.TrimSpace(asString(params["itemId"]))
+	message := strings.TrimSpace(asString(params["message"]))
+	if itemID == "" || message == "" {
+		return nil
+	}
+	meta := state.mcpCalls[itemID]
+	tool := taskexecutor.NewMCPToolCall(taskexecutor.MCPToolCallParams{
+		CallID:    itemID,
+		Server:    meta.Server,
+		Tool:      meta.Tool,
+		Status:    taskexecutor.ToolStatusInProgress,
+		Arguments: meta.Arguments,
+		Content: []any{
+			map[string]any{"type": "text", "text": message},
+		},
+	})
+	return &taskexecutor.StreamEvent{
+		Kind: taskexecutor.StreamEventKindTool,
+		Raw:  tool.MCP.DebugJSON,
+		Tool: &tool,
+	}
+}
+
+func parseReasoningSummaryDeltaEvent(raw json.RawMessage, params map[string]any, state *streamState) *taskexecutor.StreamEvent {
+	itemID := strings.TrimSpace(asString(params["itemId"]))
+	summaryIndex, ok := asInt64(params["summaryIndex"])
+	if itemID == "" || !ok || summaryIndex < 0 {
+		return nil
+	}
+	summaries := ensureStringSliceLen(state.reasoningSummary[itemID], int(summaryIndex)+1)
+	summaries[summaryIndex] += asString(params["delta"])
+	state.reasoningSummary[itemID] = summaries
+	return buildReasoningSummaryEvent(strings.TrimSpace(string(raw)), itemID, summaries)
+}
+
+func rememberItemState(item map[string]any, state *streamState) {
+	itemID := strings.TrimSpace(asString(item["id"]))
+	if itemID == "" {
+		return
+	}
+	switch strings.TrimSpace(asString(item["type"])) {
+	case "agentMessage":
+		if phase := strings.TrimSpace(asString(item["phase"])); phase != "" {
+			state.messagePhase[itemID] = phase
+		}
+		if text := strings.TrimSpace(asString(item["text"])); text != "" {
+			state.messageText[itemID] = text
+		}
+	case "mcpToolCall":
+		state.mcpCalls[itemID] = mcpToolState{
+			Server:    strings.TrimSpace(asString(item["server"])),
+			Tool:      strings.TrimSpace(asString(item["tool"])),
+			Arguments: item["arguments"],
+		}
+	case "reasoning":
+		if summaries := normalizeStringSlice(asSlice(item["summary"])); len(summaries) > 0 {
+			state.reasoningSummary[itemID] = summaries
+		}
+	}
+}
+
+func buildAgentMessageEvent(raw, itemID, phase, text string) *taskexecutor.StreamEvent {
+	if summary, ok := codexAgentEnvelopeSummary(text); ok {
+		if summary == "" {
+			return nil
+		}
+		text = summary
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	partID := "text"
+	if strings.TrimSpace(phase) != "" {
+		partID = "phase:" + strings.TrimSpace(phase)
+	}
+	return &taskexecutor.StreamEvent{
+		Kind: taskexecutor.StreamEventKindMessage,
+		Raw:  raw,
+		Message: &taskexecutor.MessagePart{
+			MessageID: itemID,
+			PartID:    partID,
+			Role:      taskexecutor.MessageRoleAssistant,
+			Type:      taskexecutor.MessagePartTypeText,
+			Text:      text,
+		},
+	}
+}
+
+func buildReasoningSummaryEvent(raw, itemID string, summaries []string) *taskexecutor.StreamEvent {
+	text := strings.TrimSpace(strings.Join(nonEmptyStrings(summaries), "\n\n"))
+	if text == "" {
+		return nil
+	}
+	return &taskexecutor.StreamEvent{
+		Kind: taskexecutor.StreamEventKindMessage,
+		Raw:  raw,
+		Message: &taskexecutor.MessagePart{
+			MessageID: itemID,
+			PartID:    "summary",
+			Role:      taskexecutor.MessageRoleAssistant,
+			Type:      taskexecutor.MessagePartTypeReasoning,
+			Text:      text,
+		},
 	}
 }
 
@@ -719,6 +921,79 @@ func codexAgentEnvelopeSummary(text string) (string, bool) {
 		}
 	}
 	return "", true
+}
+
+func toAnySlice(values []interface{}) []any {
+	if len(values) == 0 {
+		return nil
+	}
+	items := make([]any, 0, len(values))
+	for _, value := range values {
+		items = append(items, value)
+	}
+	return items
+}
+
+func codexMCPErrorText(item map[string]any) string {
+	errorMap := asMap(item["error"])
+	if len(errorMap) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(asString(errorMap["message"]))
+}
+
+func ensureStringSliceLen(values []string, size int) []string {
+	if len(values) >= size {
+		return values
+	}
+	next := append([]string(nil), values...)
+	for len(next) < size {
+		next = append(next, "")
+	}
+	return next
+}
+
+func normalizeStringSlice(values []interface{}) []string {
+	items := make([]string, 0, len(values))
+	for _, value := range values {
+		text := strings.TrimSpace(asString(value))
+		if text == "" {
+			continue
+		}
+		items = append(items, text)
+	}
+	return items
+}
+
+func nonEmptyStrings(values []string) []string {
+	items := make([]string, 0, len(values))
+	for _, value := range values {
+		text := strings.TrimSpace(value)
+		if text == "" {
+			continue
+		}
+		items = append(items, text)
+	}
+	return items
+}
+
+func firstNonNil(values ...interface{}) interface{} {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func asString(value interface{}) string {

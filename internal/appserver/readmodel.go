@@ -115,24 +115,24 @@ func (m *taskReadModel) LoadRunHistory(ctx context.Context, taskID, nodeRunID st
 	if run.TaskID != taskID {
 		return taskdomain.NodeRun{}, taskhistory.ReadResult{}, fmt.Errorf("%w: node run %q does not belong to task %q", taskruntime.ErrNodeRunTaskMismatch, nodeRunID, taskID)
 	}
-	history, err := taskhistory.Load(task, nil, run)
+	localHistory, err := taskhistory.Load(task, nil, run)
 	if err != nil {
 		if taskhistory.IsMissing(err) || errors.Is(err, os.ErrNotExist) {
 			return run, taskhistory.ReadResult{}, nil
 		}
 		return taskdomain.NodeRun{}, taskhistory.ReadResult{}, err
 	}
-	if history.Provenance != "none" || strings.TrimSpace(run.SessionID) == "" {
-		return run, history, nil
+	if strings.TrimSpace(run.SessionID) == "" {
+		return run, localHistory, nil
 	}
 	cfg, err := taskconfig.Load(taskstore.ConfigPath(task.WorkDir, task.ID))
 	if err != nil {
-		return run, history, nil
+		return run, localHistory, nil
 	}
-	history, err = taskhistory.Load(task, cfg, run)
+	history, err := taskhistory.Load(task, cfg, run)
 	if err != nil {
 		if taskhistory.IsMissing(err) || errors.Is(err, os.ErrNotExist) {
-			return run, taskhistory.ReadResult{}, nil
+			return run, localHistory, nil
 		}
 		return taskdomain.NodeRun{}, taskhistory.ReadResult{}, err
 	}
