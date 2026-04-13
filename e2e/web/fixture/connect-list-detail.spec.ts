@@ -19,6 +19,24 @@ async function openTaskFromBoard(page: Page, taskId: string) {
   await page.getByTestId(`board-card-${taskId}`).click();
 }
 
+async function readHeaderAlignment(page: Page) {
+  const [backIconBox, backLabelBox, promptBox, activityBox] = await Promise.all([
+    page.locator(".detail-main-header__back-icon").boundingBox(),
+    page.locator(".detail-main-header__back-label").boundingBox(),
+    page.locator(".detail-main-header__prompt-text").boundingBox(),
+    page.locator(".detail-activity__eyebrow").boundingBox(),
+  ]);
+  if (!backIconBox || !backLabelBox || !promptBox || !activityBox) {
+    throw new Error("Expected task detail header alignment targets to be visible");
+  }
+  return {
+    activityX: activityBox.x,
+    backIconX: backIconBox.x,
+    backLabelX: backLabelBox.x,
+    promptX: promptBox.x,
+  };
+}
+
 async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
   await page.evaluate(async ({ workspaceId }) => {
     const [{ getRuntime }, { useTaskSnapshotStore }] = await Promise.all([
@@ -68,6 +86,31 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   expect(planBox!.y).toBeLessThan(implementBox!.y);
   await expect(page.getByTestId("transcript-modal")).toHaveCount(0);
   await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
+});
+
+test("aligns the task detail header and section labels on one content column in default and follow-up states", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  await openTaskFromBoard(page, "task-live-fixture");
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+
+  const runningAlignment = await readHeaderAlignment(page);
+  expect(Math.abs(runningAlignment.backLabelX - runningAlignment.promptX)).toBeLessThanOrEqual(1);
+  expect(Math.abs(runningAlignment.activityX - runningAlignment.promptX)).toBeLessThanOrEqual(1);
+  expect(Math.round(runningAlignment.backLabelX - runningAlignment.backIconX)).toBe(16);
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
+
+  await openTaskFromBoard(page, "task-done-login");
+  await expect(page.getByTestId("complete-pane")).toBeVisible();
+
+  const followUpAlignment = await readHeaderAlignment(page);
+  expect(Math.abs(followUpAlignment.backLabelX - followUpAlignment.promptX)).toBeLessThanOrEqual(1);
+  expect(Math.abs(followUpAlignment.activityX - followUpAlignment.promptX)).toBeLessThanOrEqual(1);
+  expect(Math.round(followUpAlignment.backLabelX - followUpAlignment.backIconX)).toBe(20);
 });
 
 test("shows running preview rows on the card and keeps the feed pinned on live updates", async ({

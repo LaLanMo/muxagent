@@ -1,5 +1,15 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { Bot, Check, CircleDashed, CircleX, FileText, Loader, User, type LucideIcon } from "lucide-react";
+import {
+  Bot,
+  Check,
+  ChevronLeft,
+  CircleDashed,
+  CircleX,
+  FileText,
+  Loader,
+  User,
+  type LucideIcon,
+} from "lucide-react";
 import {
   detailStatusLabel,
   formatRelativeTime,
@@ -785,6 +795,11 @@ export function TaskDetailScreen({
     );
   }
 
+  const detailMainColumnClassName =
+    actionSurface.kind === "follow_up"
+      ? "detail-main-column detail-main-column--follow-up"
+      : "detail-main-column";
+
   return (
     <DesktopShellFrame
       addWorkspaceDisabled={shell.phase !== "connected"}
@@ -805,7 +820,7 @@ export function TaskDetailScreen({
         ) : null}
 
         <div className="detail-layout">
-          <div className="detail-main-column">
+          <div className={detailMainColumnClassName}>
             <header
               className="detail-main-header"
               onMouseDown={(event) => {
@@ -819,7 +834,10 @@ export function TaskDetailScreen({
                 onClick={goBackToTaskSurface}
                 type="button"
               >
-                <span>‹  Tasks</span>
+                <span aria-hidden="true" className="detail-main-header__back-icon">
+                  <ChevronLeft size={12} strokeWidth={1.9} />
+                </span>
+                <span className="detail-main-header__back-label">Tasks</span>
               </button>
               <div className="detail-main-header__prompt">
                 <p className="detail-main-header__prompt-text">{promptLead}</p>
