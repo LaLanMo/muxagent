@@ -70,6 +70,82 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
 });
 
+test("shows running preview rows on the card and keeps the feed pinned on live updates", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-live-fixture");
+
+  const preview = page.getByTestId("detail-run-preview-run-live-implement");
+  const runningCard = page.getByTestId("detail-run-run-live-implement");
+  const artifactChip = page.getByRole("button", { name: "implement-preview.md" });
+
+  await expect(preview).toBeVisible();
+  await expect(preview).toContainText("applying middleware changes");
+  await expect(preview).toContainText("Editing src/auth/middleware.ts");
+  await expect(preview).not.toContainText(
+    "Need to verify whether the middleware redirect should happen before the anonymous bypass.",
+  );
+  await expect(runningCard.locator(".detail-activity-card__file-row")).toHaveCount(0);
+  await expect(artifactChip).toBeVisible();
+
+  await artifactChip.click();
+  await expect(page.getByTestId("artifact-modal")).toBeVisible();
+  await expect(page.getByTestId("artifact-modal")).toContainText("implement-preview.md");
+  await page.getByRole("button", { name: "Close detail" }).click();
+  await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
+
+  await page.evaluate(async () => {
+    const [{ useTaskSnapshotStore }] = await Promise.all([
+      import("/src/state/task-snapshot-store.ts"),
+    ]);
+    const workspaceId = window.location.pathname.match(/\/workspaces\/([^/]+)\//)?.[1];
+    if (!workspaceId) {
+      throw new Error("Missing workspace id");
+    }
+    const now = new Date().toISOString();
+    useTaskSnapshotStore.getState().appendLiveEvents(
+      workspaceId,
+      "task-live-fixture",
+      "run-live-implement",
+      [
+        {
+          id: "evt-live-message-2",
+          kind: "message",
+          source: "live",
+          nodeRunId: "run-live-implement",
+          sessionId: "session-live-implement",
+          seq: 10,
+          at: now,
+          recordedAt: now,
+          provenance: "executor_persisted",
+          messageId: "msg-live-2",
+          partId: "part-live-2",
+          role: "assistant",
+          partType: "text",
+          text: "middleware guard patched and ready for verification",
+        },
+      ],
+    );
+  });
+
+  await expect(preview).toContainText("middleware guard patched and ready for verification");
+  await expect(preview).toContainText("applying middleware changes");
+  const activityScroll = await page.getByTestId("detail-activity").evaluate((element) => ({
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+  }));
+  expect(activityScroll.scrollTop + activityScroll.clientHeight).toBeGreaterThanOrEqual(
+    activityScroll.scrollHeight - 1,
+  );
+
+  await runningCard.click();
+  await expect(page).toHaveURL(/[\?&]run=run-live-implement/);
+  await expect(page).toHaveURL(/[\?&]modal=transcript/);
+  await expect(page.getByTestId("live-modal")).toBeVisible();
+});
+
 test("merges replay history with live output for the selected running run", async ({
   page,
 }) => {

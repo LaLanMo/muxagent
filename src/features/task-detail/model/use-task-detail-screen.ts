@@ -1,6 +1,8 @@
 import { useNavigate, useParams } from "react-router-dom";
+import { buildTranscriptSnapshot } from "@/domain/session-history";
 import {
   buildStageNodes,
+  detailStatusLabel,
   detailStatusTitle,
   findLatestActionableBlockedRun,
   latestRun,
@@ -9,6 +11,11 @@ import {
   taskBucket,
 } from "@/domain/task-shell";
 import { useShellModel } from "@/features/app/model/use-shell-model";
+import {
+  deriveRunningActivityPreview,
+  deriveTranscriptTimelineItems,
+  type RunningActivityPreviewRow,
+} from "@/features/task-history/model/timeline";
 import { useWorkspaceStore } from "@/state/workspace-store";
 import { useTaskDetailActions } from "@/features/task-detail/model/use-task-detail-actions";
 import { useTaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
@@ -273,6 +280,33 @@ export function useTaskDetailScreen() {
         : resolvedTask && taskBucket(resolvedTask) === "done"
           ? { kind: "follow_up" }
           : { kind: "none" };
+  const runningActivityPreviewByRunId: Record<string, RunningActivityPreviewRow[]> = {};
+  const activityPreviewParts: string[] = [];
+  for (const run of navigatorRuns) {
+    if (detailStatusLabel(run.status) !== "running") {
+      continue;
+    }
+    const liveRunEvents = liveEventsRunId === run.id ? liveEvents : [];
+    const replay = detailEntry?.runHistoryByRunId?.[run.id]?.result;
+    if (liveRunEvents.length === 0 && !replay) {
+      continue;
+    }
+    const preview = deriveRunningActivityPreview(
+      deriveTranscriptTimelineItems(
+        buildTranscriptSnapshot({
+          replay,
+          liveEvents: liveRunEvents,
+        }),
+      ),
+    );
+    if (preview.length === 0) {
+      continue;
+    }
+    runningActivityPreviewByRunId[run.id] = preview;
+    activityPreviewParts.push(
+      `${run.id}:${preview.map((row) => `${row.id}:${row.text}`).join("|")}`,
+    );
+  }
 
   return {
     shell,
@@ -326,6 +360,8 @@ export function useTaskDetailScreen() {
     configEntries,
     elapsedLabel: latest?.started_at ? latest.started_at : "",
     timelineRuns: navigatorRuns,
+    runningActivityPreviewByRunId,
+    activityPreviewSignature: activityPreviewParts.join("||"),
     activityRunActorTypes: Object.fromEntries(
       [
         ...navigatorRuns,

@@ -1719,10 +1719,24 @@ export class FixtureRuntime {
             duration_ms: 2100,
           },
           {
-            event_id: "evt-live-message",
+            event_id: "evt-live-reasoning",
             seq: 8,
             emitted_at: makeTime(9),
             recorded_at: makeTime(9),
+            session_id: "session-live-implement",
+            provenance: "executor_persisted",
+            kind: "message",
+            message_id: "msg-live-reasoning",
+            part_id: "part-live-reasoning",
+            role: "assistant",
+            part_type: "reasoning",
+            text: "Need to verify whether the middleware redirect should happen before the anonymous bypass.",
+          },
+          {
+            event_id: "evt-live-message",
+            seq: 9,
+            emitted_at: makeTime(9.2),
+            recorded_at: makeTime(9.2),
             session_id: "session-live-implement",
             provenance: "executor_persisted",
             kind: "message",
@@ -1749,6 +1763,7 @@ export class FixtureRuntime {
             node_name: "implement",
             status: "running",
             started_at: makeTime(2),
+            artifact_paths: ["implement-preview.md"],
             clarifications: [
               {
                 created_at: makeTime(1.6),

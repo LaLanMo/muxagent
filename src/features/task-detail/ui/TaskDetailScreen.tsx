@@ -12,6 +12,7 @@ import {
 import {
   deriveTranscriptTimelineItems,
   timelineItemsToLines,
+  type RunningActivityPreviewRow,
   type TranscriptTimelineItem,
 } from "@/features/task-history/model/timeline";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
@@ -55,6 +56,7 @@ const stageStatusIcons: Record<StageNode["status"], LucideIcon> = {
   pending: CircleDashed,
   failed: CircleX,
 };
+const emptyRunningActivityPreview: RunningActivityPreviewRow[] = [];
 
 function StageNodeIcon({ status }: { status: StageNode["status"] }) {
   const Icon = stageStatusIcons[status];
@@ -465,6 +467,8 @@ type TaskDetailScreenProps = {
   elapsedLabel: string;
   stageNodes: StageNode[];
   timelineRuns: NodeRunViewDto[];
+  runningActivityPreviewByRunId: Record<string, RunningActivityPreviewRow[]>;
+  activityPreviewSignature: string;
   activityRunActorTypes: Record<string, ActivityRunActorType>;
   artifacts: ArtifactRefDto[];
   selection: TaskDetailSelection;
@@ -523,6 +527,8 @@ export function TaskDetailScreen({
   configLabel,
   stageNodes,
   timelineRuns,
+  runningActivityPreviewByRunId,
+  activityPreviewSignature,
   activityRunActorTypes,
   artifacts,
   selection,
@@ -718,7 +724,12 @@ export function TaskDetailScreen({
       return;
     }
     activity.scrollTop = activity.scrollHeight;
-  }, [displayedActivityRuns.length, ungroupedArtifacts.length, actionSurface.kind]);
+  }, [
+    actionSurface.kind,
+    activityPreviewSignature,
+    displayedActivityRuns.length,
+    ungroupedArtifacts.length,
+  ]);
 
   let actionPanel = null;
   if (actionSurface.kind === "approval") {
@@ -845,8 +856,14 @@ export function TaskDetailScreen({
                       ? selection.runId === run.id
                       : selectedArtifact?.node_run_id === run.id
                     : Boolean(showActionPanel && selection.kind === "overview");
+                  const runningActivityPreview = isRealRun
+                    ? runningActivityPreviewByRunId[run.id] ?? emptyRunningActivityPreview
+                    : emptyRunningActivityPreview;
+                  const showRunningPreview =
+                    !showActionPanel && runningActivityPreview.length > 0;
                   const showInlineArtifactRow =
                     isRealRun &&
+                    !showRunningPreview &&
                     runArtifacts.length === 1 &&
                     selectedArtifact?.node_run_id !== run.id;
                   const timing = formatRunTiming(run);
@@ -855,9 +872,11 @@ export function TaskDetailScreen({
                     actionKindForRun === "clarification" ||
                     actionKindForRun === "retry"
                       ? undefined
-                      : showInlineArtifactRow
-                      ? undefined
-                      : activityMeta(run, runArtifacts.length);
+                      : showRunningPreview
+                        ? undefined
+                        : showInlineArtifactRow
+                          ? undefined
+                          : activityMeta(run, runArtifacts.length);
                   return (
                     <article
                       className={`detail-activity-card detail-activity-card--${tone}${
@@ -867,7 +886,9 @@ export function TaskDetailScreen({
                     >
                       <div
                         aria-pressed={runSelected}
-                        className="detail-activity-card__summary"
+                        className={`detail-activity-card__summary${
+                          showRunningPreview ? " detail-activity-card__summary--with-preview" : ""
+                        }`}
                         data-testid={`detail-run-${run.id}`}
                         onClick={() => {
                           if (!isRealRun) {
@@ -921,7 +942,28 @@ export function TaskDetailScreen({
                             ) : null}
                             <span className="detail-activity-card__time">{timing.relative}</span>
                           </span>
-                          {showInlineArtifactRow ? (
+                          {showRunningPreview ? (
+                            <span
+                              className="detail-activity-card__preview"
+                              data-testid={`detail-run-preview-${run.id}`}
+                            >
+                              {runningActivityPreview.map((row, index) => (
+                                <span
+                                  className={`detail-activity-card__preview-row detail-activity-card__preview-row--${row.tone}`}
+                                  data-testid={`detail-run-preview-row-${run.id}-${index}`}
+                                  key={row.id}
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    className={`detail-activity-card__preview-dot detail-activity-card__preview-dot--${row.tone}`}
+                                  />
+                                  <span className="detail-activity-card__preview-text">
+                                    {row.text}
+                                  </span>
+                                </span>
+                              ))}
+                            </span>
+                          ) : showInlineArtifactRow ? (
                             <button
                               className="detail-activity-card__file-row"
                               onClick={(event) => {

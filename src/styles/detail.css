@@ -329,6 +329,10 @@
   text-align: left;
 }
 
+.detail-activity-card__summary--with-preview {
+  align-items: flex-start;
+}
+
 .detail-activity-card__summary:focus-visible {
   outline: 2px solid rgba(47, 40, 37, 0.26);
   outline-offset: -2px;
@@ -373,6 +377,10 @@
   flex: 1 1 auto;
 }
 
+.detail-activity-card__summary--with-preview .detail-activity-card__copy {
+  gap: 6px;
+}
+
 .detail-activity-card__title-row {
   gap: var(--space-2);
   min-width: 0;
@@ -393,6 +401,52 @@
 
 .detail-activity-card__meta {
   color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.detail-activity-card__preview {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.detail-activity-card__preview-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.detail-activity-card__preview-row--current {
+  color: var(--color-text-primary);
+}
+
+.detail-activity-card__preview-row--previous {
+  color: #8f837b;
+}
+
+.detail-activity-card__preview-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: none;
+  margin-top: 5px;
+}
+
+.detail-activity-card__preview-dot--current {
+  background: #4cb782;
+}
+
+.detail-activity-card__preview-dot--previous {
+  background: #9b8e87;
+}
+
+.detail-activity-card__preview-text {
+  min-width: 0;
+  color: inherit;
+  font-family: var(--font-mono);
   font-size: var(--font-size-xs);
   line-height: 1.35;
   overflow-wrap: anywhere;

@@ -79,6 +79,12 @@ export type TranscriptTimelineItem =
       provenance?: string;
     };
 
+export type RunningActivityPreviewRow = {
+  id: string;
+  text: string;
+  tone: "current" | "previous";
+};
+
 function collapseWhitespace(value: string | undefined): string {
   return value?.replace(/\s+/g, " ").trim() ?? "";
 }
@@ -164,6 +170,180 @@ function toolStatusText(status: string | undefined): string {
       return "failed";
     default:
       return "";
+  }
+}
+
+function stripMarkdownFormatting(value: string | undefined): string {
+  if (!value) {
+    return "";
+  }
+  const lines = value
+    .replace(/\r/g, "")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1")
+    .split("\n")
+    .map((line) =>
+      line
+        .trim()
+        .replace(/^#{1,6}\s+/, "")
+        .replace(/^>\s+/, "")
+        .replace(/^[-*+]\s+/, "")
+        .replace(/^\d+\.\s+/, ""),
+    )
+    .filter(Boolean);
+  return collapseWhitespace(
+    lines
+      .join(" · ")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/```+/g, "")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/__([^_]+)__/g, "$1")
+      .replace(/~~([^~]+)~~/g, "$1"),
+  );
+}
+
+function truncatePreviewText(value: string, maxLength = 104): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+  const slice = value.slice(0, maxLength);
+  const lastSpace = slice.lastIndexOf(" ");
+  const cutoff = lastSpace >= Math.floor(maxLength * 0.6) ? lastSpace : maxLength;
+  return `${slice.slice(0, cutoff).trim()}...`;
+}
+
+function compactPreviewText(value: string | undefined): string {
+  const compacted = stripMarkdownFormatting(value);
+  return compacted ? truncatePreviewText(compacted) : "";
+}
+
+function capitalizePreviewText(value: string): string {
+  if (!value) {
+    return "";
+  }
+  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
+}
+
+function looksLikeJsonBlob(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return (
+    ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+      (trimmed.startsWith("[") && trimmed.endsWith("]"))) &&
+    /"\w+"\s*:/.test(trimmed)
+  );
+}
+
+function toolPreviewText(item: Extract<TranscriptTimelineItem, { kind: "tool" }>): string {
+  const subject = compactPreviewText(item.subject || item.title);
+  const isRunning = item.status === "running";
+  switch (item.label.trim().toLowerCase()) {
+    case "edit":
+      return subject
+        ? `${isRunning ? "Editing" : "Edited"} ${subject}`
+        : `${isRunning ? "Editing" : "Edited"} files`;
+    case "read":
+      return subject ? `Read ${subject}` : "Read file";
+    case "search":
+      return subject
+        ? `${isRunning ? "Searching" : "Searched"} ${subject}`
+        : isRunning
+          ? "Searching"
+          : "Searched";
+    case "write":
+      return subject
+        ? `${isRunning ? "Writing" : "Wrote"} ${subject}`
+        : isRunning
+          ? "Writing file"
+          : "Wrote file";
+    case "fetch":
+      return subject
+        ? `${isRunning ? "Fetching" : "Fetched"} ${subject}`
+        : isRunning
+          ? "Fetching"
+          : "Fetched";
+    case "shell":
+      return subject
+        ? `${isRunning ? "Running" : "Ran"} ${subject}`
+        : isRunning
+          ? "Running shell"
+          : "Ran shell";
+    case "mcp":
+      return subject
+        ? `${isRunning ? "Calling" : "Called"} ${subject}`
+        : isRunning
+          ? "Calling MCP"
+          : "Called MCP";
+    case "files":
+      return subject
+        ? `${isRunning ? "Updating" : "Updated"} ${subject}`
+        : `${isRunning ? "Updating" : "Updated"} files`;
+    case "structured output":
+      return subject ? `Structured output ${subject}` : "Structured output";
+    default: {
+      const label = capitalizePreviewText(compactPreviewText(item.label));
+      if (label && subject) {
+        return `${label} ${subject}`;
+      }
+      return label || subject;
+    }
+  }
+}
+
+function previewTextForItem(args: {
+  item: TranscriptTimelineItem;
+  allowRaw: boolean;
+}): string | undefined {
+  const { item, allowRaw } = args;
+  if (item.kind === "tool") {
+    return compactPreviewText(toolPreviewText(item)) || undefined;
+  }
+  if (item.kind === "plan") {
+    return compactPreviewText(item.summary) || undefined;
+  }
+  if (item.kind === "message") {
+    if (item.role !== "assistant" || item.partType === "reasoning") {
+      return undefined;
+    }
+    return compactPreviewText(item.text) || undefined;
+  }
+  if (item.kind === "raw" && allowRaw) {
+    const text = compactPreviewText(item.text);
+    if (!text || looksLikeJsonBlob(text)) {
+      return undefined;
+    }
+    return text;
+  }
+  return undefined;
+}
+
+function appendPreviewRows(args: {
+  items: TranscriptTimelineItem[];
+  rows: Array<Omit<RunningActivityPreviewRow, "tone"> & { itemIndex: number }>;
+  seenTexts: Set<string>;
+  allowRaw: boolean;
+  limit: number;
+}) {
+  const { items, rows, seenTexts, allowRaw, limit } = args;
+  for (let index = items.length - 1; index >= 0 && rows.length < limit; index -= 1) {
+    const item = items[index];
+    if (item.kind === "raw" && !allowRaw) {
+      continue;
+    }
+    if (item.kind !== "raw" && allowRaw) {
+      continue;
+    }
+    const text = previewTextForItem({ item, allowRaw });
+    if (!text || seenTexts.has(text)) {
+      continue;
+    }
+    rows.push({
+      id: item.id,
+      text,
+      itemIndex: index,
+    });
+    seenTexts.add(text);
   }
 }
 
@@ -434,6 +614,36 @@ export function deriveTranscriptTimelineItems(
   }
 
   return timelineItems;
+}
+
+export function deriveRunningActivityPreview(
+  items: TranscriptTimelineItem[],
+  limit = 2,
+): RunningActivityPreviewRow[] {
+  const rows: Array<Omit<RunningActivityPreviewRow, "tone"> & { itemIndex: number }> = [];
+  const seenTexts = new Set<string>();
+  appendPreviewRows({
+    items,
+    rows,
+    seenTexts,
+    allowRaw: false,
+    limit,
+  });
+  if (rows.length < limit) {
+    appendPreviewRows({
+      items,
+      rows,
+      seenTexts,
+      allowRaw: true,
+      limit,
+    });
+  }
+  return rows
+    .sort((left, right) => right.itemIndex - left.itemIndex)
+    .map(({ itemIndex: _itemIndex, ...row }, index) => ({
+      ...row,
+      tone: index === 0 ? "current" : "previous",
+    }));
 }
 
 export function timelineItemsToLines(
