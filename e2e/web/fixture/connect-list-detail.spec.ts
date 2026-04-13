@@ -827,3 +827,53 @@ test("keeps board lane headers aligned when neighboring columns overflow", async
   expect(Math.max(...headerHeights) - Math.min(...headerHeights)).toBeLessThanOrEqual(1);
   expect(Math.max(...stackYs) - Math.min(...stackYs)).toBeLessThanOrEqual(1);
 });
+
+test("hides board lane scrollbars while preserving lane scrolling", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1200, height: 540 });
+  await connectFixtureWorkspace(page);
+
+  const lanes = await page.getByTestId("task-board").evaluate((board) => {
+    const stacks = board.querySelectorAll<HTMLElement>(".board-column__stack");
+    stacks.forEach((stack) => {
+      const seed = stack.firstElementChild;
+      if (!seed) {
+        return;
+      }
+      for (let i = 0; i < 18; i += 1) {
+        stack.appendChild(seed.cloneNode(true));
+      }
+    });
+
+    return Array.from(stacks).map((stack) => {
+      const before = stack.scrollTop;
+      stack.scrollTop = 120;
+      const after = stack.scrollTop;
+      const style = getComputedStyle(stack);
+      const webkitScrollbar = getComputedStyle(stack, "::-webkit-scrollbar");
+
+      return {
+        clientHeight: stack.clientHeight,
+        scrollHeight: stack.scrollHeight,
+        before,
+        after,
+        scrollbarWidth: style.getPropertyValue("scrollbar-width").trim(),
+        webkitScrollbarWidth: webkitScrollbar.width,
+        webkitScrollbarHeight: webkitScrollbar.height,
+      };
+    });
+  });
+
+  expect(lanes).toHaveLength(3);
+
+  lanes.forEach((lane) => {
+    expect(lane.scrollHeight).toBeGreaterThan(lane.clientHeight);
+    expect(lane.after).toBeGreaterThan(lane.before);
+    expect(
+      lane.scrollbarWidth === "none" ||
+        lane.webkitScrollbarWidth === "0px" ||
+        lane.webkitScrollbarHeight === "0px",
+    ).toBe(true);
+  });
+});

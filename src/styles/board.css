@@ -198,7 +198,14 @@
   gap: var(--space-2);
   min-height: 0;
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   align-items: stretch;
+}
+
+.board-column__stack::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .task-board-card {
