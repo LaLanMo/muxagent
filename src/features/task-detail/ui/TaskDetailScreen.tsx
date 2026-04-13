@@ -1013,7 +1013,7 @@ export function TaskDetailScreen({
             </div>
             <div className="detail-properties__divider" />
             <div className="detail-properties__content">
-              <div className="detail-properties__block">
+              <div className="detail-properties__block" data-testid="detail-task-status">
                 <span className="detail-properties__label">Status</span>
                 <StatusBadge label={statusLabel} tone={statusTone} />
               </div>

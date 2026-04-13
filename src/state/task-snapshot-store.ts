@@ -4,6 +4,7 @@ import {
   type NormalizedTaskRunHistoryResult,
   type SessionHistoryEvent,
 } from "@/domain/session-history";
+import { taskEntityId } from "@/domain/task-identity";
 import type {
   ArtifactRefDto,
   ConfigViewDto,
@@ -11,10 +12,63 @@ import type {
   TaskViewDto,
 } from "@/rpc/types";
 
-function sortTasks(tasks: TaskViewDto[]): TaskViewDto[] {
-  return [...tasks].sort((left, right) =>
-    right.task.updated_at.localeCompare(left.task.updated_at),
-  );
+type TasksById = Record<string, TaskViewDto>;
+type TaskIdsByWorkspace = Record<string, string[]>;
+type LiveEventsByWorkspace = Record<string, Record<string, SessionHistoryEvent[]>>;
+type LiveEventRunIdsByWorkspace = Record<string, Record<string, string | undefined>>;
+type TaskDetailsByWorkspace = Record<string, Record<string, TaskDetailCacheEntry>>;
+
+function compareTaskSnapshots(left: TaskViewDto, right: TaskViewDto): number {
+  return left.task.updated_at.localeCompare(right.task.updated_at);
+}
+
+export function shouldReplaceTask(
+  current: TaskViewDto | undefined,
+  incoming: TaskViewDto,
+): boolean {
+  if (!current) {
+    return true;
+  }
+  return compareTaskSnapshots(incoming, current) >= 0;
+}
+
+function sortTaskIds(
+  workspaceId: string,
+  taskIds: string[],
+  tasksById: TasksById,
+): string[] {
+  return [...new Set(taskIds)].filter(Boolean).sort((left, right) => {
+    const leftTask = tasksById[taskEntityId(workspaceId, left)];
+    const rightTask = tasksById[taskEntityId(workspaceId, right)];
+    if (!leftTask && !rightTask) {
+      return 0;
+    }
+    if (!leftTask) {
+      return 1;
+    }
+    if (!rightTask) {
+      return -1;
+    }
+    return rightTask.task.updated_at.localeCompare(leftTask.task.updated_at);
+  });
+}
+
+export function taskForWorkspace(
+  tasksById: TasksById,
+  workspaceId: string,
+  taskId: string,
+): TaskViewDto | undefined {
+  return tasksById[taskEntityId(workspaceId, taskId)];
+}
+
+export function tasksForWorkspace(
+  taskIdsByWorkspaceId: TaskIdsByWorkspace,
+  tasksById: TasksById,
+  workspaceId: string,
+): TaskViewDto[] {
+  return (taskIdsByWorkspaceId[workspaceId] ?? [])
+    .map((taskId) => taskForWorkspace(tasksById, workspaceId, taskId))
+    .filter((task): task is TaskViewDto => Boolean(task));
 }
 
 function reconcileHydratedLiveEvents(
@@ -30,11 +84,6 @@ function reconcileHydratedLiveEvents(
   return mergeSessionHistoryEvents(existingEvents, hydratedEvents);
 }
 
-type TasksByWorkspace = Record<string, TaskViewDto[]>;
-type LiveEventsByWorkspace = Record<string, Record<string, SessionHistoryEvent[]>>;
-type LiveEventRunIdsByWorkspace = Record<string, Record<string, string | undefined>>;
-type TaskDetailsByWorkspace = Record<string, Record<string, TaskDetailCacheEntry>>;
-
 export type RunHistoryCacheEntry = {
   loading: boolean;
   signature?: string;
@@ -43,7 +92,6 @@ export type RunHistoryCacheEntry = {
 };
 
 export type TaskDetailCacheEntry = {
-  task?: TaskViewDto;
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
   artifacts: ArtifactRefDto[];
@@ -55,7 +103,8 @@ export type TaskDetailCacheEntry = {
 };
 
 interface TaskSnapshotState {
-  tasksByWorkspaceId: TasksByWorkspace;
+  tasksById: TasksById;
+  taskIdsByWorkspaceId: TaskIdsByWorkspace;
   liveEventsByWorkspaceId: LiveEventsByWorkspace;
   liveEventRunIdsByWorkspaceId: LiveEventRunIdsByWorkspace;
   taskDetailsByWorkspaceId: TaskDetailsByWorkspace;
@@ -79,7 +128,6 @@ interface TaskSnapshotState {
     workspaceId: string,
     taskId: string,
     detail: {
-      task: TaskViewDto;
       config?: ConfigViewDto;
       inputRequest?: InputRequestDto;
       artifacts: ArtifactRefDto[];
@@ -134,41 +182,55 @@ function updateTaskDetailEntry(
 }
 
 export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
-  tasksByWorkspaceId: {},
+  tasksById: {},
+  taskIdsByWorkspaceId: {},
   liveEventsByWorkspaceId: {},
   liveEventRunIdsByWorkspaceId: {},
   taskDetailsByWorkspaceId: {},
   setTasks: (workspaceId, tasks) =>
-    set((state) => ({
-      tasksByWorkspaceId: {
-        ...state.tasksByWorkspaceId,
-        [workspaceId]: sortTasks(tasks),
-      },
-    })),
+    set((state) => {
+      const nextTasksById = { ...state.tasksById };
+      const nextTaskIds = tasks.map((task) => task.task.id);
+      const nextTaskIdSet = new Set(nextTaskIds);
+      for (const taskId of state.taskIdsByWorkspaceId[workspaceId] ?? []) {
+        if (!nextTaskIdSet.has(taskId)) {
+          delete nextTasksById[taskEntityId(workspaceId, taskId)];
+        }
+      }
+      for (const task of tasks) {
+        const entityId = taskEntityId(workspaceId, task.task.id);
+        if (shouldReplaceTask(nextTasksById[entityId], task)) {
+          nextTasksById[entityId] = task;
+        }
+      }
+      return {
+        tasksById: nextTasksById,
+        taskIdsByWorkspaceId: {
+          ...state.taskIdsByWorkspaceId,
+          [workspaceId]: sortTaskIds(workspaceId, nextTaskIds, nextTasksById),
+        },
+      };
+    }),
   upsertTask: (workspaceId, task) =>
     set((state) => {
-      const existing = state.tasksByWorkspaceId[workspaceId] ?? [];
-      const nextTasks = existing.some((entry) => entry.task.id === task.task.id)
-        ? existing.map((entry) => (entry.task.id === task.task.id ? task : entry))
-        : [...existing, task];
-      const workspaceDetails = state.taskDetailsByWorkspaceId[workspaceId];
+      const entityId = taskEntityId(workspaceId, task.task.id);
+      const nextTasksById = {
+        ...state.tasksById,
+        ...(shouldReplaceTask(state.tasksById[entityId], task)
+          ? { [entityId]: task }
+          : {}),
+      };
+      const nextTaskIds = sortTaskIds(
+        workspaceId,
+        [...(state.taskIdsByWorkspaceId[workspaceId] ?? []), task.task.id],
+        nextTasksById,
+      );
       return {
-        tasksByWorkspaceId: {
-          ...state.tasksByWorkspaceId,
-          [workspaceId]: sortTasks(nextTasks),
+        tasksById: nextTasksById,
+        taskIdsByWorkspaceId: {
+          ...state.taskIdsByWorkspaceId,
+          [workspaceId]: nextTaskIds,
         },
-        taskDetailsByWorkspaceId: workspaceDetails?.[task.task.id]
-          ? {
-              ...state.taskDetailsByWorkspaceId,
-              [workspaceId]: {
-                ...workspaceDetails,
-                [task.task.id]: {
-                  ...workspaceDetails[task.task.id],
-                  task,
-                },
-              },
-            }
-          : state.taskDetailsByWorkspaceId,
       };
     }),
   hydrateLiveEvents: (workspaceId, taskId, taskStatus, runId, events) =>
@@ -233,7 +295,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -252,7 +313,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         () => ({
-          task: detail.task,
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
@@ -272,7 +332,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -299,7 +358,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -326,7 +384,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -353,7 +410,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -372,7 +428,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -391,7 +446,6 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          task: current?.task,
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
@@ -405,8 +459,13 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
     })),
   resetWorkspace: (workspaceId) =>
     set((state) => {
-      const { [workspaceId]: _tasks, ...tasksByWorkspaceId } =
-        state.tasksByWorkspaceId;
+      const taskIds = state.taskIdsByWorkspaceId[workspaceId] ?? [];
+      const tasksById = { ...state.tasksById };
+      for (const taskId of taskIds) {
+        delete tasksById[taskEntityId(workspaceId, taskId)];
+      }
+      const { [workspaceId]: _taskIds, ...taskIdsByWorkspaceId } =
+        state.taskIdsByWorkspaceId;
       const { [workspaceId]: _output, ...liveEventsByWorkspaceId } =
         state.liveEventsByWorkspaceId;
       const { [workspaceId]: _outputRunIds, ...liveEventRunIdsByWorkspaceId } =
@@ -414,7 +473,8 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
       const { [workspaceId]: _details, ...taskDetailsByWorkspaceId } =
         state.taskDetailsByWorkspaceId;
       return {
-        tasksByWorkspaceId,
+        tasksById,
+        taskIdsByWorkspaceId,
         liveEventsByWorkspaceId,
         liveEventRunIdsByWorkspaceId,
         taskDetailsByWorkspaceId,
@@ -422,7 +482,8 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
     }),
   reset: () =>
     set({
-      tasksByWorkspaceId: {},
+      tasksById: {},
+      taskIdsByWorkspaceId: {},
       liveEventsByWorkspaceId: {},
       liveEventRunIdsByWorkspaceId: {},
       taskDetailsByWorkspaceId: {},

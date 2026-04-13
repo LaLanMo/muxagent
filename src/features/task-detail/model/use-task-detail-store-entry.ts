@@ -1,8 +1,9 @@
 import type { SessionHistoryEvent } from "@/domain/session-history";
-import type { TaskViewDto } from "@/rpc/types";
-import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
+import {
+  taskForWorkspace,
+  useTaskSnapshotStore,
+} from "@/state/task-snapshot-store";
 
-const emptyTasks: never[] = [];
 const emptyLiveEvents: SessionHistoryEvent[] = [];
 
 type UseTaskDetailStoreEntryArgs = {
@@ -14,11 +15,10 @@ export function useTaskDetailStoreEntry({
   workspaceId,
   taskId,
 }: UseTaskDetailStoreEntryArgs) {
-  const tasks = useTaskSnapshotStore(
-    (state) =>
-      (workspaceId
-        ? state.tasksByWorkspaceId[workspaceId]
-        : undefined) ?? emptyTasks,
+  const task = useTaskSnapshotStore((state) =>
+    taskId && workspaceId
+      ? taskForWorkspace(state.tasksById, workspaceId, taskId)
+      : undefined,
   );
   const detailEntry = useTaskSnapshotStore(
     (state) =>
@@ -38,10 +38,9 @@ export function useTaskDetailStoreEntry({
         ? state.liveEventRunIdsByWorkspaceId[workspaceId]?.[taskId]
         : undefined,
   );
-  const taskFromList = tasks.find((entry: TaskViewDto) => entry.task.id === taskId);
 
   return {
-    task: detailEntry?.task ?? taskFromList,
+    task,
     detailEntry,
     liveEvents,
     liveEventsRunId,

@@ -10,10 +10,8 @@ import type {
   ShellNavItem,
   ShellWorkspaceItem,
 } from "@/features/layout/ui/DesktopShellFrame";
-import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
+import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
-
-const emptyTasks: never[] = [];
 
 function parseBoardFilter(raw: string | null): BoardFilter {
   switch (raw) {
@@ -76,14 +74,17 @@ export function useShellChrome(): ShellChromeState {
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.workspace_id === selectedWorkspaceId,
   );
-  const tasksByWorkspaceId = useTaskSnapshotStore((state) => state.tasksByWorkspaceId);
+  const tasksById = useTaskSnapshotStore((state) => state.tasksById);
+  const taskIdsByWorkspaceId = useTaskSnapshotStore(
+    (state) => state.taskIdsByWorkspaceId,
+  );
   const scopedTasks = selectedWorkspaceId
-    ? (tasksByWorkspaceId[selectedWorkspaceId] ?? emptyTasks).map((task) => ({
+    ? tasksForWorkspace(taskIdsByWorkspaceId, tasksById, selectedWorkspaceId).map((task) => ({
         workspaceId: selectedWorkspaceId,
         workspaceLabel: selectedWorkspace?.display_name ?? "Workspace",
         task,
       }))
-    : collectScopedTasks(workspaces, tasksByWorkspaceId);
+    : collectScopedTasks(workspaces, taskIdsByWorkspaceId, tasksById);
 
   const inboxItems = buildInboxItems(scopedTasks);
   const boardFilter = parseBoardFilter(searchParams.get("view"));

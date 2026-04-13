@@ -1,8 +1,13 @@
 import { useEffect, useEffectEvent } from "react";
 import { hydrateTaskDetail } from "@/application/tasks";
 import { getRuntime } from "@/app/runtime";
+import type { TaskViewDto } from "@/rpc/types";
 import type { TaskDetailCacheEntry } from "@/state/task-snapshot-store";
-import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
+import {
+  shouldReplaceTask,
+  taskForWorkspace,
+  useTaskSnapshotStore,
+} from "@/state/task-snapshot-store";
 
 export type LoadTaskDetailFn = (
   options?: { showLoading?: boolean },
@@ -12,6 +17,7 @@ type UseTaskDetailHydrationArgs = {
   workspaceId: string;
   taskId: string;
   connected: boolean;
+  task?: TaskViewDto;
   detailEntry?: TaskDetailCacheEntry;
 };
 
@@ -19,6 +25,7 @@ export function useTaskDetailHydration({
   workspaceId,
   taskId,
   connected,
+  task,
   detailEntry,
 }: UseTaskDetailHydrationArgs) {
   const upsertTask = useTaskSnapshotStore((state) => state.upsertTask);
@@ -45,16 +52,23 @@ export function useTaskDetailHydration({
       }
       try {
         const detail = await hydrateTaskDetail(getRuntime(), workspaceId, taskId);
-        upsertTask(workspaceId, detail.task);
-        hydrateLiveEvents(
+        const currentTask = taskForWorkspace(
+          useTaskSnapshotStore.getState().tasksById,
           workspaceId,
           taskId,
-          detail.task.status,
-          detail.liveEventsRunId,
-          detail.liveEvents,
         );
+        const shouldApplyTaskSnapshot = shouldReplaceTask(currentTask, detail.task);
+        if (shouldApplyTaskSnapshot) {
+          upsertTask(workspaceId, detail.task);
+          hydrateLiveEvents(
+            workspaceId,
+            taskId,
+            detail.task.status,
+            detail.liveEventsRunId,
+            detail.liveEvents,
+          );
+        }
         resolveTaskDetail(workspaceId, taskId, {
-          task: detail.task,
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
@@ -80,10 +94,10 @@ export function useTaskDetailHydration({
     if (!taskId || !connected) {
       return;
     }
-    if (!detailEntry || detailEntry.stale) {
+    if (!task || !detailEntry || detailEntry.stale) {
       void hydrate();
     }
-  }, [connected, detailEntry, hydrate, taskId]);
+  }, [connected, detailEntry, hydrate, task, taskId]);
 
   return { loadDetail };
 }

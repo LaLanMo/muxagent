@@ -16,7 +16,7 @@ import type {
   InputRequestDto,
   TaskViewDto,
 } from "@/rpc/types";
-import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
+import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
 
 function resolveFollowUpConfigEntry(args: {
   configEntries: ConfigCatalogEntryDto[];
@@ -55,8 +55,9 @@ export function useTaskDetailActions({
   loadDetail,
 }: UseTaskDetailActionsArgs) {
   const navigate = useNavigate();
-  const tasks = useTaskSnapshotStore(
-    (state) => state.tasksByWorkspaceId[workspaceId] ?? [],
+  const tasksById = useTaskSnapshotStore((state) => state.tasksById);
+  const taskIdsByWorkspaceId = useTaskSnapshotStore(
+    (state) => state.taskIdsByWorkspaceId,
   );
   const setTasks = useTaskSnapshotStore((state) => state.setTasks);
   const failTaskDetail = useTaskSnapshotStore(
@@ -80,6 +81,7 @@ export function useTaskDetailActions({
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
   const [recoveringNodeId, setRecoveringNodeId] = useState<string | undefined>();
+  const tasks = tasksForWorkspace(taskIdsByWorkspaceId, tasksById, workspaceId);
 
   useEffect(() => {
     setFeedback("");

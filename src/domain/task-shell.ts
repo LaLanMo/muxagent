@@ -1,3 +1,4 @@
+import { taskEntityId } from "@/domain/task-identity";
 import type {
   ArtifactRefDto,
   ConfigCatalogEntryDto,
@@ -374,15 +375,19 @@ export function buildInboxItems(
 
 export function collectScopedTasks(
   workspaces: WorkspaceSummaryDto[],
-  tasksByWorkspaceId: Record<string, TaskViewDto[]>,
+  taskIdsByWorkspaceId: Record<string, string[]>,
+  tasksById: Record<string, TaskViewDto>,
 ): ScopedTaskView[] {
   return workspaces
     .flatMap((workspace) =>
-      (tasksByWorkspaceId[workspace.workspace_id] ?? []).map((task) => ({
-        workspaceId: workspace.workspace_id,
-        workspaceLabel: workspace.display_name,
-        task,
-      })),
+      (taskIdsByWorkspaceId[workspace.workspace_id] ?? [])
+        .map((taskId) => tasksById[taskEntityId(workspace.workspace_id, taskId)])
+        .filter((task): task is TaskViewDto => Boolean(task))
+        .map((task) => ({
+          workspaceId: workspace.workspace_id,
+          workspaceLabel: workspace.display_name,
+          task,
+        })),
     )
     .sort((left, right) =>
       right.task.task.updated_at.localeCompare(left.task.task.updated_at),

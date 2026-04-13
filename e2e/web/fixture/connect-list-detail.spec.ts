@@ -19,6 +19,24 @@ async function openTaskFromBoard(page: Page, taskId: string) {
   await page.getByTestId(`board-card-${taskId}`).click();
 }
 
+async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
+  await page.evaluate(async ({ workspaceId }) => {
+    const [{ getRuntime }, { useTaskSnapshotStore }] = await Promise.all([
+      import("/src/app/runtime.ts"),
+      import("/src/state/task-snapshot-store.ts"),
+    ]);
+    const runtime = getRuntime();
+    await runtime.taskStart({
+      workspace_id: workspaceId,
+      description: "Trigger workspace refresh",
+      config_alias: "default",
+      config_path: "/tmp/muxagent-sync-workspace/.muxagent/configs/default.yaml",
+    });
+    const result = await runtime.taskList(workspaceId);
+    useTaskSnapshotStore.getState().setTasks(workspaceId, result.tasks);
+  }, { workspaceId });
+}
+
 test("opens a workspace from the shell and drills into task detail", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
@@ -180,6 +198,31 @@ test("offers run recovery when the selected active run has no session or transcr
   );
   await expect(page.getByTestId("transcript-modal")).toContainText("failed");
   await expect(page.getByTestId("detail-run-run-stale-implement")).toContainText("failed");
+});
+
+test("keeps task detail aligned when a full workspace task-list reload lands after detail is open", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page, "/tmp/muxagent-sync-workspace");
+  await openTaskFromBoard(page, "task-sync-fixture");
+  const detailUrl = new URL(page.url());
+  const detailPath = detailUrl.pathname;
+  const workspaceId = detailPath.match(/\/workspaces\/([^/]+)\//)?.[1];
+  expect(workspaceId).toBeTruthy();
+
+  const statusBlock = page.getByTestId("detail-task-status");
+  await expect(statusBlock).toContainText("Status");
+  await expect(statusBlock).toContainText("Running");
+  await expect(page.getByTestId("detail-run-run-sync-implement")).toContainText("running");
+
+  await triggerWorkspaceTaskReload(page, workspaceId!);
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+
+  const refreshedUrl = new URL(page.url());
+  expect(refreshedUrl.pathname).toBe(detailPath);
+
+  await expect(statusBlock).toContainText("Done");
+  await expect(page.getByTestId("detail-run-run-sync-implement")).toContainText("done");
 });
 
 test("renders MCP transcript rows as grouped tool details with image previews", async ({

@@ -12,10 +12,8 @@ import {
 import { useShellModel } from "@/features/app/model/use-shell-model";
 import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
 import type { TaskViewDto } from "@/rpc/types";
-import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
+import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
-
-const emptyTasks: never[] = [];
 
 function homeRelativePath(normalized: string): string | undefined {
   const unixMatch = normalized.match(/^\/(?:Users|home)\/[^/]+(\/.*)?$/);
@@ -76,16 +74,19 @@ export function useEntryScreen() {
     (state) => state.selectedWorkspaceId,
   );
   const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const tasksByWorkspaceId = useTaskSnapshotStore((state) => state.tasksByWorkspaceId);
+  const tasksById = useTaskSnapshotStore((state) => state.tasksById);
+  const taskIdsByWorkspaceId = useTaskSnapshotStore(
+    (state) => state.taskIdsByWorkspaceId,
+  );
   const scopedTasks = selectedWorkspaceId
-    ? (tasksByWorkspaceId[selectedWorkspaceId] ?? emptyTasks).map((task) => ({
+    ? tasksForWorkspace(taskIdsByWorkspaceId, tasksById, selectedWorkspaceId).map((task) => ({
         workspaceId: selectedWorkspaceId,
         workspaceLabel:
           workspaces.find((workspace) => workspace.workspace_id === selectedWorkspaceId)
             ?.display_name ?? "Workspace",
         task,
       }))
-    : collectScopedTasks(workspaces, tasksByWorkspaceId);
+    : collectScopedTasks(workspaces, taskIdsByWorkspaceId, tasksById);
   const tasks = scopedTasks.map((entry) => entry.task);
   const scopedTaskByView = new WeakMap(
     scopedTasks.map((entry) => [entry.task, entry] as const),

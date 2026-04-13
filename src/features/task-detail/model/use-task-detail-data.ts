@@ -21,6 +21,7 @@ export function useTaskDetailData({
     workspaceId,
     taskId,
     connected,
+    task,
     detailEntry,
   });
 

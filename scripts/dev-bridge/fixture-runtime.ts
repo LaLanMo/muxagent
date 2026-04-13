@@ -199,6 +199,7 @@ export type FixtureWorkspace = {
 export type FixtureState = {
   workspaces: FixtureWorkspace[];
   tasksByWorkspaceId: Record<string, FixtureTask[]>;
+  pendingSyncCompletionByWorkspaceId: Record<string, boolean>;
   configs: FixtureConfig[];
   runtimes: FixtureRuntimeOption[];
 };
@@ -302,9 +303,48 @@ export class FixtureRuntime {
     return {
       workspaces: [],
       tasksByWorkspaceId: {},
+      pendingSyncCompletionByWorkspaceId: {},
       configs: this.defaultConfigs(),
       runtimes: this.defaultRuntimes(),
     };
+  }
+
+  private applyPendingSyncCompletion(state: FixtureState, workspaceId: string) {
+    if (!state.pendingSyncCompletionByWorkspaceId[workspaceId]) {
+      return;
+    }
+    const syncTask = this.fixtureTasks(state, workspaceId).find(
+      (entry) => entry.task.id === "task-sync-fixture",
+    );
+    if (!syncTask || syncTask.status === "done") {
+      delete state.pendingSyncCompletionByWorkspaceId[workspaceId];
+      return;
+    }
+    const completedAt = new Date().toISOString();
+    syncTask.status = "done";
+    syncTask.current_node_name = "done";
+    syncTask.current_node_type = "terminal";
+    syncTask.task.updated_at = completedAt;
+    syncTask.live_events = [];
+    syncTask.live_output_run_id = undefined;
+    const implementRun = syncTask.node_runs.find(
+      (entry) => entry.id === "run-sync-implement",
+    );
+    if (implementRun) {
+      implementRun.status = "done";
+      implementRun.completed_at = completedAt;
+    }
+    if (!syncTask.node_runs.some((entry) => entry.id === "run-sync-done")) {
+      syncTask.node_runs.push({
+        id: "run-sync-done",
+        task_id: syncTask.task.id,
+        node_name: "done",
+        status: "done",
+        started_at: completedAt,
+        completed_at: completedAt,
+      });
+    }
+    delete state.pendingSyncCompletionByWorkspaceId[workspaceId];
   }
 
   readFileContent(normalizedPath: string): string | null {
@@ -436,6 +476,7 @@ export class FixtureRuntime {
         }
         state.workspaces.splice(index, 1);
         delete state.tasksByWorkspaceId[workspaceId];
+        delete state.pendingSyncCompletionByWorkspaceId[workspaceId];
         options.emitNotification("workspace.removed", workspaceId, {
           removed: true,
         });
@@ -613,6 +654,7 @@ export class FixtureRuntime {
         if (!workspace) {
           return this.fail(id, -32010, "workspace not found");
         }
+        this.applyPendingSyncCompletion(state, workspace.workspace_id);
         return this.respond(id, {
           tasks: this.fixtureTasks(state, workspace.workspace_id),
         });
@@ -712,6 +754,9 @@ export class FixtureRuntime {
         const configPath = String(params.config_path ?? "").trim();
         if (!configAlias || !configPath) {
           return this.fail(id, -32602, "config_alias and config_path are required");
+        }
+        if (path.basename(workspace.path) === "muxagent-sync-workspace") {
+          state.pendingSyncCompletionByWorkspaceId[workspace.workspace_id] = true;
         }
         const createdAt = new Date().toISOString();
         const taskId = `task-${randomUUID().slice(0, 8)}`;
@@ -1590,6 +1635,43 @@ export class FixtureRuntime {
           ],
           runHistoryByRunId: {
             "run-stale-implement": [],
+          },
+        }),
+      ];
+    }
+
+    if (path.basename(workspacePath) === "muxagent-sync-workspace") {
+      return [
+        this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-sync-fixture",
+          description: "Keep task detail aligned with board refresh",
+          configAlias: "default",
+          createdAt: makeTime(0),
+          updatedAt: makeTime(12),
+          status: "running",
+          currentNodeName: "implement",
+          currentNodeType: "agent",
+          nodeRuns: [
+            {
+              id: "run-sync-plan",
+              task_id: "task-sync-fixture",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeTime(0),
+              completed_at: makeTime(4),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-sync-implement",
+              task_id: "task-sync-fixture",
+              node_name: "implement",
+              status: "running",
+              started_at: makeTime(5),
+            },
+          ],
+          runHistoryByRunId: {
+            "run-sync-implement": [],
           },
         }),
       ];
