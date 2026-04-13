@@ -532,6 +532,19 @@ test("renders approval and artifact preview task surfaces", async ({ page }) => 
   ).toBeVisible();
   await expect(artifactModal.locator("table")).toBeVisible();
   await expect(artifactModal.locator('input[type="checkbox"]')).toHaveCount(2);
+  await expect(artifactModal.getByText("src/styles/detail.css")).toBeVisible();
+  await expect(artifactModal.getByText("design.pen")).toBeVisible();
+  await expect(artifactModal.locator(".detail-artifact-modal__document a")).toHaveCount(2);
+  const artifactLink = artifactModal
+    .locator(".detail-artifact-modal__document a")
+    .first();
+  const artifactHrefAttributes = await artifactModal
+    .locator(".detail-artifact-modal__document a")
+    .evaluateAll((links) => links.map((link) => link.getAttribute("href")));
+  expect(artifactHrefAttributes).toEqual([null, null]);
+  const artifactModalUrl = page.url();
+  await artifactLink.click();
+  expect(page.url()).toBe(artifactModalUrl);
   await expect(artifactModal.getByText("export const fixture = true;")).toBeVisible();
   const artifactBody = artifactModal.locator(".detail-modal-frame__body");
   const scrollInfo = await artifactBody.evaluate((element) => ({

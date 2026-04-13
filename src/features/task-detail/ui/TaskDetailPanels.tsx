@@ -309,12 +309,6 @@ function prettyResult(result: Record<string, unknown> | undefined) {
   return JSON.stringify(result, null, 2);
 }
 
-const artifactModalMarkdownComponents: Components = {
-  table({ children }) {
-    return <table>{children}</table>;
-  },
-};
-
 const transcriptMarkdownComponents: Components = {
   p({ children }) {
     return <p className="transcript-message__text">{children}</p>;
@@ -408,14 +402,19 @@ function ArtifactModalContent({
   format: "markdown" | "text";
 }) {
   const normalized = normalizeArtifactModalContent(content) ?? "Loading artifact...";
+  const markdownComponents: Components = {
+    table({ children }) {
+      return <table>{children}</table>;
+    },
+    a({ children }) {
+      return <a className="detail-artifact-modal__link">{children}</a>;
+    },
+  };
 
   if (format === "markdown") {
     return (
       <article className="document-content markdown-document detail-artifact-modal__document">
-        <ReactMarkdown
-          components={artifactModalMarkdownComponents}
-          remarkPlugins={[remarkGfm]}
-        >
+        <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
           {normalized}
         </ReactMarkdown>
       </article>
