@@ -1898,6 +1898,39 @@
   color: #9b8e87;
 }
 
+.detail-transcript-modal__session-label {
+  color: #9b8e87;
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.detail-transcript-modal__session-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #9b8e87;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+}
+
+.detail-transcript-modal__session-copy span {
+  color: #5f5550;
+}
+
+.detail-transcript-modal__session-copy:hover {
+  color: #5f5550;
+}
+
+.detail-transcript-modal__session-copy:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .detail-modal-frame__header {
   justify-content: space-between;
   gap: var(--space-4);

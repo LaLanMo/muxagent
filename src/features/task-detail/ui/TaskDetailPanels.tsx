@@ -13,6 +13,7 @@ import {
   Bot,
   Check,
   ChevronRight,
+  Copy,
   FileText,
   RotateCcw,
   User,
@@ -474,6 +475,28 @@ function shortenSessionId(value: string | undefined): string {
     return trimmed;
   }
   return `${trimmed.slice(0, 8)}…${trimmed.slice(-6)}`;
+}
+
+async function copyTextToClipboard(value: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  if (typeof document === "undefined") {
+    throw new Error("Clipboard API unavailable");
+  }
+  const textarea = document.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "absolute";
+  textarea.style.left = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) {
+    throw new Error("Clipboard copy failed");
+  }
 }
 
 function describeHistoryStatus(
@@ -1249,11 +1272,13 @@ export function TaskTranscriptModal({
   const historyProvenance = formatHistoryProvenance(transcript.provenance);
   const historyCompleteness = formatHistoryCompleteness(transcript.completeness);
   const historyStatusDetail = describeHistoryStatus(streamSource, transcript);
-  const sessionValue = shortenSessionId(transcript.sessionId || run.session_id);
-  const sessionDetail = transcript.sessionId || run.session_id || "Awaiting session id";
+  const providerSessionId = (transcript.sessionId || run.session_id || "").trim();
+  const sessionValue = shortenSessionId(providerSessionId);
+  const sessionDetail = providerSessionId || "Awaiting session id";
   const totalTokens = summarizeUsageTokens(rawTranscriptItems);
   const eventCount = transcript.events.length || streamLines.length;
   const runStatus = detailStatusLabel(run.status);
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
   const transcriptAvailability = describeTranscriptAvailability(
     streamSource,
     transcript,
@@ -1261,6 +1286,30 @@ export function TaskTranscriptModal({
     isCurrentRun,
     recoveryAction,
   );
+
+  useEffect(() => {
+    if (copyState === "idle") {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setCopyState("idle");
+    }, 1600);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copyState]);
+
+  async function handleCopySessionId() {
+    if (!providerSessionId) {
+      return;
+    }
+    try {
+      await copyTextToClipboard(providerSessionId);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  }
 
   function renderTranscriptItem(item: TranscriptTimelineItem) {
     if (item.kind === "message") {
@@ -1371,9 +1420,8 @@ export function TaskTranscriptModal({
             <Bot aria-hidden="true" size={12} strokeWidth={1.9} />
           </span>
         }
-        metaClassName="detail-modal-frame__meta--transcript-inline"
         meta={
-          <div className="detail-transcript-modal__meta-inline">
+          <>
             <span className="detail-transcript-modal__meta-value">
               {formatPanelDuration(run.started_at, run.completed_at)}
             </span>
@@ -1385,7 +1433,26 @@ export function TaskTranscriptModal({
             <span className="detail-transcript-modal__meta-value">
               {eventCount} events
             </span>
-          </div>
+            <span className="detail-transcript-modal__meta-separator">·</span>
+            <span className="detail-transcript-modal__session-label">Session</span>
+            <button
+              aria-label={providerSessionId ? "Copy provider session ID" : "Provider session ID unavailable"}
+              className="detail-transcript-modal__session-copy"
+              disabled={!providerSessionId}
+              onClick={() => {
+                void handleCopySessionId();
+              }}
+              title={providerSessionId || undefined}
+              type="button"
+            >
+              {copyState === "copied" ? (
+                <Check aria-hidden="true" size={11} strokeWidth={2} />
+              ) : (
+                <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
+              )}
+              <span>{sessionValue}</span>
+            </button>
+          </>
         }
         onClose={onClose}
         title={run.node_name}
