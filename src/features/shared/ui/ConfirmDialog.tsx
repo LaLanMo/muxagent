@@ -1,3 +1,5 @@
+import { Button } from "@/features/shared/ui/Button";
+
 type ConfirmDialogProps = {
   open: boolean;
   title: string;
@@ -36,18 +38,19 @@ export function ConfirmDialog({
         </div>
 
         <footer className="confirm-modal__footer">
-          <button className="secondary-action" onClick={onCancel} type="button">
+          <Button onClick={onCancel} size="md" type="button" variant="secondary">
             {cancelLabel}
-          </button>
-          <button
-            className="secondary-action secondary-action--danger"
+          </Button>
+          <Button
             data-testid="confirm-dialog-submit"
             disabled={confirmDisabled}
             onClick={onConfirm}
+            size="md"
             type="button"
+            variant="danger"
           >
             {confirmLabel}
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

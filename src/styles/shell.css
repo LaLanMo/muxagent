@@ -41,33 +41,6 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   overflow: auto;
 }
 
-.shell-primary-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 0;
-  border-radius: var(--radius-sm);
-  padding: var(--space-2) var(--space-4);
-  background: var(--color-accent);
-  color: var(--color-text-on-accent);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  letter-spacing: 0.01em;
-}
-
-.shell-primary-action__label {
-  letter-spacing: 0.01em;
-}
-
-.shell-primary-action:hover {
-  background: var(--color-accent-hover);
-}
-
-.shell-primary-action:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
 .shell-nav {
   display: block;
 }

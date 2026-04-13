@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { ShellIcon, type ShellIconName } from "@/features/layout/ui/ShellIcon";
+import { Button } from "@/features/shared/ui/Button";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
 
 export type ShellNavItem = {
@@ -130,16 +131,18 @@ export function DesktopShellFrame({
         />
         <div className="desktop-shell__sidebar-top">
           {onPrimaryAction ? (
-            <button
-              className="shell-primary-action"
+            <Button
               data-testid="open-new-task"
               disabled={primaryActionDisabled}
+              fullWidth
+              leadingIcon={<Plus strokeWidth={2.2} />}
               onClick={onPrimaryAction}
+              size="md"
               type="button"
+              variant="primary"
             >
-              <Plus aria-hidden="true" className="shell-primary-action__plus" size={14} strokeWidth={2.2} />
-              <span className="shell-primary-action__label">New Task</span>
-            </button>
+              New Task
+            </Button>
           ) : null}
 
           <nav className="shell-nav">

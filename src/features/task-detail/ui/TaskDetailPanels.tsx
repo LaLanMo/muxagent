@@ -33,6 +33,7 @@ import type {
   TaskViewDto,
 } from "@/rpc/types";
 import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
+import { Button } from "@/features/shared/ui/Button";
 
 type OverviewPaneProps = {
   task?: TaskViewDto;
@@ -1447,18 +1448,19 @@ export function TaskTranscriptModal({
                   <strong>{transcriptAvailability.title}</strong>
                   <p>{transcriptAvailability.detail}</p>
                   {recoveryAction ? (
-                    <button
-                      className="detail-retry-dock__button"
+                    <Button
                       data-testid="recover-run"
                       disabled={recoveryAction.submitting}
+                      leadingIcon={<RotateCcw strokeWidth={1.9} />}
                       onClick={() => {
                         void recoveryAction.onRecover();
                       }}
+                      size="sm"
                       type="button"
+                      variant="ghost"
                     >
-                      <RotateCcw aria-hidden="true" size={14} strokeWidth={1.9} />
                       {recoveryAction.submitting ? "Recovering…" : "Recover run"}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </div>
@@ -1547,24 +1549,26 @@ export function TaskApprovalDock({
       </label>
 
       <div className="detail-inline-action__footer">
-        <button
-          className="secondary-action secondary-action--danger detail-inline-action__secondary"
+        <Button
           data-testid="approval-reject"
           disabled={submittingDecision}
           onClick={() => void submitReject()}
+          size="md"
           type="button"
+          variant="secondary"
         >
           Reject
-        </button>
-        <button
-          className="primary-action detail-inline-action__primary"
+        </Button>
+        <Button
           data-testid="approval-approve"
           disabled={submittingDecision}
           onClick={() => void submitApprove()}
+          size="md"
           type="button"
+          variant="primary"
         >
           Approve
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -1751,14 +1755,15 @@ export function TaskClarificationDock({
             setAnswer={setAnswer}
           />
           <div className="detail-inline-action__footer">
-            <button
-              className="primary-action detail-inline-action__primary"
+            <Button
               disabled={submittingClarification}
               onClick={() => void submitClarification()}
+              size="md"
               type="button"
+              variant="primary"
             >
               {submittingClarification ? "Sending…" : "Submit"}
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -1779,16 +1784,17 @@ export function TaskRetryDock({
       <p className="detail-retry-dock__error">
         {failureReason ?? "The current task requires intervention."}
       </p>
-      <button
-        className="secondary-action detail-retry-dock__button"
+      <Button
         data-testid="retry-step"
         disabled={submittingRetry || !run}
+        leadingIcon={<RotateCcw strokeWidth={1.85} />}
         onClick={() => void onRetry(false)}
+        size="sm"
         type="button"
+        variant="ghost"
       >
-        <RotateCcw aria-hidden="true" size={12} strokeWidth={1.85} />
-        <span>{submittingRetry ? "Retrying…" : "Retry"}</span>
-      </button>
+        {submittingRetry ? "Retrying…" : "Retry"}
+      </Button>
     </section>
   );
 }
@@ -1989,16 +1995,21 @@ export function TaskBlockedDock({
       <p className="detail-retry-dock__error detail-blocked-dock__description">
         {blockedStep?.reason ?? "The current task is waiting to continue."}
       </p>
-      <button
-        className="secondary-action detail-retry-dock__button detail-blocked-dock__button"
+      <Button
         data-testid="continue-blocked"
         disabled={submittingContinue}
         onClick={() => void onContinue()}
+        size="xl"
+        trailingIcon={
+          !submittingContinue
+            ? <ArrowRight strokeWidth={1.85} />
+            : undefined
+        }
         type="button"
+        variant="primary"
       >
-        {!submittingContinue ? <ArrowRight aria-hidden="true" size={12} strokeWidth={1.85} /> : null}
-        <span>{submittingContinue ? "Continuing…" : "Continue"}</span>
-      </button>
+        {submittingContinue ? "Continuing…" : "Continue"}
+      </Button>
     </section>
   );
 }

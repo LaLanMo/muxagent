@@ -631,6 +631,7 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   });
   expect(failedPaneStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   const retryStep = page.getByTestId("retry-step");
+  await expect(retryStep.locator(".button__icon--leading svg")).toHaveCount(1);
   const retryStepStyles = await retryStep.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
@@ -739,11 +740,14 @@ test("renders the blocked task surface", async ({ page }) => {
   expect(blockedPaneStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   const continueButton = page.getByTestId("continue-blocked");
   await expect(continueButton).toBeVisible();
-  await expect(continueButton.locator("svg")).toHaveCount(1);
+  await expect(continueButton.locator(".button__icon--trailing svg")).toHaveCount(1);
   const continueButtonChildOrder = await continueButton.evaluate((element) => {
-    return Array.from(element.children).map((child) => child.tagName.toLowerCase());
+    return Array.from(element.children).map((child) =>
+      child instanceof HTMLElement ? child.className : child.tagName.toLowerCase(),
+    );
   });
-  expect(continueButtonChildOrder[0]).toBe("svg");
+  expect(continueButtonChildOrder[0]).toContain("button__label");
+  expect(continueButtonChildOrder[1]).toContain("button__icon--trailing");
   const continueButtonStyles = await continueButton.evaluate((element) => {
     const styles = getComputedStyle(element);
     return {
@@ -751,7 +755,7 @@ test("renders the blocked task surface", async ({ page }) => {
       borderRadius: styles.borderRadius,
     };
   });
-  expect(continueButtonStyles.backgroundColor).toBe("rgb(251, 248, 246)");
+  expect(continueButtonStyles.backgroundColor).toBe("rgb(47, 40, 37)");
   expect(continueButtonStyles.borderRadius).toBe("4px");
 });
 

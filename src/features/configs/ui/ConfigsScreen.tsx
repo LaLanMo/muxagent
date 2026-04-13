@@ -1,5 +1,6 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
+import { Button } from "@/features/shared/ui/Button";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
@@ -97,9 +98,15 @@ export function ConfigsScreen({
               <h2>No configs yet</h2>
               <p>Configs define how tasks flow between agents. Start with the built-in default, or create your own.</p>
               <div className="configs-empty-state__actions">
-                <button className="primary-action" onClick={() => void createConfig()} type="button">
+                <Button
+                  leadingIcon={<Plus strokeWidth={2.1} />}
+                  onClick={() => void createConfig()}
+                  size="lg"
+                  type="button"
+                  variant="primary"
+                >
                   New Config
-                </button>
+                </Button>
               </div>
             </div>
           ) : (

@@ -5,6 +5,7 @@ import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
 import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
 import { ConfigGraphCanvas } from "@/features/configs/ui/ConfigGraphCanvas";
+import { Button } from "@/features/shared/ui/Button";
 
 type ConfigEditorScreenProps = ReturnType<typeof useConfigEditorScreen>;
 
@@ -179,24 +180,28 @@ export function ConfigEditorScreen({
                     </div>
 
                     <div className="config-editor-panel__summary-actions">
-                      <button
-                        className="config-editor-panel__file-action config-editor-panel__file-action--primary"
+                      <Button
                         data-testid="config-open-in-editor-button"
+                        fullWidth
+                        leadingIcon={<SquareArrowOutUpRight strokeWidth={2} />}
                         onClick={() => void handleOpenConfigFile()}
+                        size="lg"
                         type="button"
+                        variant="primary"
                       >
-                        <SquareArrowOutUpRight aria-hidden="true" size={14} strokeWidth={2} />
-                        <span>Open in editor</span>
-                      </button>
-                      <button
-                        className="config-editor-panel__file-action"
+                        Open in editor
+                      </Button>
+                      <Button
                         data-testid="config-reveal-in-finder-button"
+                        fullWidth
+                        leadingIcon={<FolderOpen strokeWidth={2} />}
                         onClick={() => void handleRevealConfigDirectory()}
+                        size="lg"
                         type="button"
+                        variant="secondary"
                       >
-                        <FolderOpen aria-hidden="true" size={14} strokeWidth={2} />
-                        <span>Reveal in Finder</span>
-                      </button>
+                        Reveal in Finder
+                      </Button>
                     </div>
 
                     <p className="config-editor-panel__note">

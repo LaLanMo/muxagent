@@ -1,7 +1,8 @@
-import { Inbox, Plus } from "lucide-react";
+import { ArrowRight, Inbox, Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
+import { Button } from "@/features/shared/ui/Button";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 import type { TaskBoardColumnModel } from "@/features/tasks/ui/TaskBoard";
 import { TaskBoard } from "@/features/tasks/ui/TaskBoard";
@@ -70,14 +71,15 @@ export function EntryShellScreen({
               ))}
             </div>
           ) : showReconnectAction ? (
-            <button
-              className="secondary-action"
+            <Button
               data-testid="reconnect-app-server"
               onClick={shell.reconnect}
+              size="md"
               type="button"
+              variant="secondary"
             >
               Reconnect
-            </button>
+            </Button>
           ) : null
         }
       >
@@ -102,26 +104,29 @@ export function EntryShellScreen({
             <div className="board-empty-state" data-testid="entry-empty-state">
               <h2>App-server disconnected</h2>
               <p>Reconnect the local task control plane to browse workspaces and tasks.</p>
-              <button
-                className="primary-action"
+              <Button
                 data-testid="entry-reconnect-button"
                 onClick={shell.reconnect}
+                size="md"
                 type="button"
+                variant="primary"
               >
                 Reconnect
-              </button>
+              </Button>
             </div>
           ) : shell.workspaceCount === 0 ? (
             <div className="board-empty-state" data-testid="entry-empty-state">
               <h2>Add a workspace to start</h2>
               <p>Register a local workspace, then start or review tasks from the same shell.</p>
-              <button
-                className="primary-action"
+              <Button
                 onClick={() => void shell.addWorkspace()}
+                size="xl"
+                trailingIcon={<ArrowRight strokeWidth={2} />}
                 type="button"
+                variant="primary"
               >
                 Add workspace
-              </button>
+              </Button>
             </div>
           ) : !hasTasks ? (
             <div
@@ -134,14 +139,15 @@ export function EntryShellScreen({
                 </div>
                 <h2>No tasks yet</h2>
                 <p>Create your first task to start a workflow.</p>
-                <button
-                  className="board-empty-state__action"
+                <Button
+                  leadingIcon={<Plus strokeWidth={2.1} />}
                   onClick={shell.openNewTask}
+                  size="lg"
                   type="button"
+                  variant="primary"
                 >
-                  <Plus aria-hidden="true" size={14} strokeWidth={2.1} />
-                  <span>New Task</span>
-                </button>
+                  New Task
+                </Button>
               </div>
             </div>
           ) : (

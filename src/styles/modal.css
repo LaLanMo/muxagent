@@ -483,15 +483,6 @@
   font-size: var(--font-size-xs);
 }
 
-/* --- Start button override --- */
-.task-modal__footer .primary-action {
-  border-radius: 4px;
-  font-size: var(--font-size-sm);
-  font-weight: 500;
-  padding: var(--space-2) var(--space-5);
-  letter-spacing: 0;
-}
-
 @media (max-width: 1240px) {
   .task-modal__grid {
     grid-template-columns: 1fr;

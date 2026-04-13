@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
   X,
 } from "lucide-react";
+import { Button } from "@/features/shared/ui/Button";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 
 const secondaryIconStyle = {
@@ -499,15 +500,16 @@ export function NewTaskModal({
         </div>
 
         <footer className="task-modal__footer">
-          <button
-            className="primary-action"
+          <Button
             data-testid="new-task-submit"
             disabled={submitting || !canSubmit}
             onClick={onSubmit}
+            size="md"
             type="button"
+            variant="primary"
           >
             {submitting ? "Starting…" : "Start task"}
-          </button>
+          </Button>
         </footer>
       </section>
     </div>

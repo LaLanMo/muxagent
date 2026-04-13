@@ -2618,18 +2618,6 @@
   justify-content: flex-end;
 }
 
-.detail-inline-action__secondary {
-  background: #fbf8f6;
-  color: #5f5550;
-  box-shadow: inset 0 0 0 1px #a79a91;
-}
-
-.detail-inline-action__secondary:hover {
-  background: #f7f2ee;
-  color: #2a2421;
-  box-shadow: inset 0 0 0 1px #8f8178;
-}
-
 .detail-inline-choice-list {
   gap: var(--space-2);
 }
@@ -3078,37 +3066,6 @@
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
   color: #a14c45;
-}
-
-.detail-retry-dock__button {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 0;
-  padding: var(--space-2) var(--space-4);
-  border-radius: var(--radius-sm);
-  background: #fbf8f6;
-  color: #5f5550;
-  box-shadow: inset 0 0 0 1px #bdafa6;
-  font-size: var(--font-size-xs);
-  font-weight: 500;
-}
-
-.detail-retry-dock__button:hover {
-  background: #f5efea;
-  color: var(--color-text-primary);
-  box-shadow: inset 0 0 0 1px #a79a91;
-}
-
-.detail-retry-dock__button:disabled {
-  background: #fbf8f6;
-  color: var(--color-text-disabled);
-  box-shadow: inset 0 0 0 1px #d9cec7;
-}
-
-.detail-retry-dock__button svg {
-  display: block;
-  flex: none;
 }
 
 @media (max-width: 1240px) {
