@@ -757,6 +757,35 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
   await expect
     .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
     .not.toBe(previousPath);
+  await expect(page.locator(".detail-main-header__prompt")).not.toHaveAttribute(
+    "data-no-window-drag",
+    "true",
+  );
+  await expect(page.locator(".detail-main-header__prompt-copy")).toHaveAttribute(
+    "data-no-window-drag",
+    "true",
+  );
+  const promptDragProbe = await page.evaluate(() => {
+    const prompt = document.querySelector(".detail-main-header__prompt");
+    const promptCopy = document.querySelector(".detail-main-header__prompt-copy");
+    if (!(prompt instanceof HTMLElement) || !(promptCopy instanceof HTMLElement)) {
+      throw new Error("Expected task detail header prompt surfaces to exist");
+    }
+    const promptRect = prompt.getBoundingClientRect();
+    const promptCopyRect = promptCopy.getBoundingClientRect();
+    const blankSpaceWidth = promptRect.right - promptCopyRect.right;
+    const probeX = promptCopyRect.right + Math.min(8, Math.max(blankSpaceWidth - 2, 1));
+    const probeY = promptCopyRect.top + promptCopyRect.height / 2;
+    const probeTarget = document.elementFromPoint(probeX, probeY);
+    return {
+      blankSpaceWidth,
+      insideNoDragSurface: Boolean(
+        probeTarget instanceof Element && probeTarget.closest("[data-no-window-drag]"),
+      ),
+    };
+  });
+  expect(promptDragProbe.blankSpaceWidth).toBeGreaterThan(8);
+  expect(promptDragProbe.insideNoDragSurface).toBe(false);
   await expect(page.locator(".detail-main-header__prompt-text")).toContainText(description);
   await expect(page.locator(".detail-main-header__prompt-text")).toContainText(secondLine);
   await expect(
