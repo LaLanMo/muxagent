@@ -1222,6 +1222,117 @@ func TestServerTaskRecoverStaleMarksOrphanedRunFailed(t *testing.T) {
 	}
 }
 
+func TestServerWorkspaceReconcileStaleMarksOrphanedRunFailed(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	_, nodeRunID := seedRecoverableTerminalRun(t, workspacePath, nil)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodWorkspaceReconcile,
+		Params: mustRawParams(t, workspaceReconcileParams{
+			WorkspaceID: workspace.WorkspaceID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("workspace.reconcile_stale rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(workspaceReconcileResult)
+	if result.Outcome != workspaceReconcileOutcomeReconciled {
+		t.Fatalf("workspace.reconcile_stale outcome = %q, want %q", result.Outcome, workspaceReconcileOutcomeReconciled)
+	}
+	if got := server.runtimes.snapshot(workspace.WorkspaceID).State; got != "cold" {
+		t.Fatalf("workspace actor state = %q, want cold", got)
+	}
+
+	model, rpcErr := server.openWorkspaceReadModel(workspace)
+	if rpcErr != nil {
+		t.Fatalf("open read model: %+v", rpcErr)
+	}
+	defer func() { _ = model.Close() }()
+	run, err := model.store.GetNodeRun(context.Background(), nodeRunID)
+	if err != nil {
+		t.Fatalf("get recovered node run: %v", err)
+	}
+	if got := string(run.Status); got != string(taskdomain.NodeRunFailed) {
+		t.Fatalf("recovered run status = %q, want %q", got, taskdomain.NodeRunFailed)
+	}
+	if got := run.FailureReason; got != taskdomain.FailureReasonOrphanedAfterRestart {
+		t.Fatalf("recovered run failure_reason = %q, want %q", got, taskdomain.FailureReasonOrphanedAfterRestart)
+	}
+}
+
+func TestServerWorkspaceReconcileStaleReturnsNoopWithoutRunningRuns(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodWorkspaceReconcile,
+		Params: mustRawParams(t, workspaceReconcileParams{
+			WorkspaceID: workspace.WorkspaceID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("workspace.reconcile_stale rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(workspaceReconcileResult)
+	if result.Outcome != workspaceReconcileOutcomeNoop {
+		t.Fatalf("workspace.reconcile_stale outcome = %q, want %q", result.Outcome, workspaceReconcileOutcomeNoop)
+	}
+}
+
+func TestServerWorkspaceReconcileStaleReturnsBusyWhenActorIsActive(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	fakeService := newFakeRuntimeService()
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{
+		runtimeFactory: func(string) (runtimeService, error) {
+			return fakeService, nil
+		},
+	})
+	defer func() { _ = server.runtimes.closeAll() }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	seedRecoverableTerminalRun(t, workspacePath, nil)
+	server.markInitialized()
+
+	if _, err := server.runtimes.ensure(workspace); err != nil {
+		t.Fatalf("ensure runtime actor: %v", err)
+	}
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodWorkspaceReconcile,
+		Params: mustRawParams(t, workspaceReconcileParams{
+			WorkspaceID: workspace.WorkspaceID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("workspace.reconcile_stale rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(workspaceReconcileResult)
+	if result.Outcome != workspaceReconcileOutcomeBusy {
+		t.Fatalf("workspace.reconcile_stale outcome = %q, want %q", result.Outcome, workspaceReconcileOutcomeBusy)
+	}
+}
+
 func TestServerTaskRecoverStaleRecoversCompletedRun(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "appserver")
 	workspacePath := t.TempDir()
@@ -1235,7 +1346,7 @@ func TestServerTaskRecoverStaleRecoversCompletedRun(t *testing.T) {
 	taskID, nodeRunID := seedRecoverableTerminalRun(
 		t,
 		workspacePath,
-		[]byte("{\"kind\":\"result\",\"result\":{\"file_paths\":[\"summary.md\"]}}\n"),
+		[]byte("{\"kind\":\"result\",\"result\":{\"summary\":\"Recovered summary\",\"file_paths\":[\"summary.md\"]}}\n"),
 	)
 	server.markInitialized()
 
@@ -2252,7 +2363,7 @@ JSON
 {"method":"item/started","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"mcpToolCall","id":"mcp-1","server":"pencil","tool":"get_editor_state","arguments":{"include_schema":true},"status":"inProgress"}}}
 {"method":"item/mcpToolCall/progress","params":{"threadId":"thread-smoke","turnId":"turn-smoke","itemId":"mcp-1","message":"Loaded schema."}}
 {"method":"item/completed","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"mcpToolCall","id":"mcp-1","server":"pencil","tool":"get_editor_state","arguments":{"include_schema":true},"status":"completed","durationMs":42,"result":{"content":[{"type":"text","text":"Loaded schema."}],"structuredContent":{"selection":"canvas-root"}}}}}
-{"method":"item/completed","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"agentMessage","id":"msg-final","text":"{\"kind\":\"result\",\"result\":{\"file_paths\":[\"/tmp/result.md\"]},\"clarification\":null}","phase":"final_answer"}}}
+{"method":"item/completed","params":{"threadId":"thread-smoke","turnId":"turn-smoke","item":{"type":"agentMessage","id":"msg-final","text":"{\"kind\":\"result\",\"result\":{\"summary\":\"Smoke summary\",\"file_paths\":[\"/tmp/result.md\"]},\"clarification\":null}","phase":"final_answer"}}}
 {"method":"thread/tokenUsage/updated","params":{"threadId":"thread-smoke","turnId":"turn-smoke","tokenUsage":{"total":{"totalTokens":12,"inputTokens":7,"cachedInputTokens":1,"outputTokens":5}}}}
 {"method":"turn/completed","params":{"threadId":"thread-smoke","turn":{"id":"turn-smoke","status":"completed","items":[],"error":null}}}
 JSON

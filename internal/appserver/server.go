@@ -386,6 +386,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodWorkspaceRemove,
 					methodWorkspaceUpdate,
 					methodWorkspaceGet,
+					methodWorkspaceReconcile,
 					methodTaskList,
 					methodTaskGet,
 					methodTaskRunHistory,
@@ -497,6 +498,21 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, workspaceMissingRPCError(params.WorkspaceID)
 		}
 		return workspaceGetResult{Workspace: s.workspaceDTO(record)}, nil, stopModeContinue, nil
+
+	case methodWorkspaceReconcile:
+		params, err := decodeParams[workspaceReconcileParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		outcome, rpcErr := s.reconcileWorkspaceStale(ctx, workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		return workspaceReconcileResult{Outcome: outcome}, nil, stopModeContinue, nil
 
 	case methodTaskList:
 		params, err := decodeParams[taskListParams](req.Params)
@@ -1105,6 +1121,55 @@ func (s *Server) workspaceDTO(record workspaceRecord) workspaceSummaryDTO {
 		dto.LastOpenedAt = &at
 	}
 	return dto
+}
+
+func (s *Server) reconcileWorkspaceStale(ctx context.Context, workspace workspaceRecord) (workspaceReconcileOutcome, *rpcError) {
+	if s.runtimes.snapshot(workspace.WorkspaceID).State == "active" {
+		return workspaceReconcileOutcomeBusy, nil
+	}
+
+	hasRunningRuns, rpcErr := s.workspaceHasRunningRuns(ctx, workspace)
+	if rpcErr != nil {
+		return workspaceReconcileOutcomeBusy, rpcErr
+	}
+	if !hasRunningRuns {
+		return workspaceReconcileOutcomeNoop, nil
+	}
+
+	outcome, err := s.runtimes.reconcile(workspace)
+	if err != nil {
+		if runtimeInstanceBusy(err) {
+			return workspaceReconcileOutcomeBusy, nil
+		}
+		return workspaceReconcileOutcomeBusy, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+	}
+	if outcome == workspaceReconcileOutcomeReconciled {
+		hasRunningRuns, rpcErr = s.workspaceHasRunningRuns(ctx, workspace)
+		if rpcErr != nil {
+			return workspaceReconcileOutcomeBusy, rpcErr
+		}
+		if !hasRunningRuns && s.runtimes.snapshot(workspace.WorkspaceID).State == "active" {
+			if err := s.runtimes.remove(workspace.WorkspaceID); err != nil {
+				return workspaceReconcileOutcomeBusy, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+			}
+		}
+	}
+	return outcome, nil
+}
+
+func (s *Server) workspaceHasRunningRuns(ctx context.Context, workspace workspaceRecord) (bool, *rpcError) {
+	model, rpcErr := s.openWorkspaceReadModel(workspace)
+	if rpcErr != nil {
+		return false, rpcErr
+	}
+	runningRuns, err := model.store.ListNodeRunsByStatus(ctx, taskdomain.NodeRunRunning)
+	if closeErr := model.Close(); err == nil && closeErr != nil {
+		err = closeErr
+	}
+	if err != nil {
+		return false, runtimeLookupRPCError(err)
+	}
+	return len(runningRuns) > 0, nil
 }
 
 func (s *Server) openWorkspaceReadModel(workspace workspaceRecord) (*taskReadModel, *rpcError) {

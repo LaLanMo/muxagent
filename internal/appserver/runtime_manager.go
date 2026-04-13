@@ -12,6 +12,7 @@ import (
 	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codex"
 	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/opencodehttp"
 	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	"golang.org/x/sync/singleflight"
 )
 
 type runtimeService interface {
@@ -28,8 +29,9 @@ type runtimeManager struct {
 	factory runtimeServiceFactory
 	onEvent func(workspaceID string, event taskruntime.RunEvent)
 
-	mu     sync.Mutex
-	actors map[string]*workspaceActor
+	mu             sync.Mutex
+	actors         map[string]*workspaceActor
+	reconcileGroup singleflight.Group
 }
 
 type workspaceActor struct {
@@ -156,18 +158,41 @@ func (m *runtimeManager) prepareShutdownAll(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func (m *runtimeManager) ensure(workspace workspaceRecord) (*workspaceActor, error) {
-	m.mu.Lock()
-	if actor, ok := m.actors[workspace.WorkspaceID]; ok {
-		if actor.isRunning() {
-			m.mu.Unlock()
-			return actor, nil
+func (m *runtimeManager) reconcile(workspace workspaceRecord) (workspaceReconcileOutcome, error) {
+	result, err, _ := m.reconcileGroup.Do(workspace.WorkspaceID, func() (interface{}, error) {
+		staleActor, busy := m.detachInactiveActor(workspace.WorkspaceID)
+		if busy {
+			return workspaceReconcileOutcomeBusy, nil
 		}
-		delete(m.actors, workspace.WorkspaceID)
-		m.mu.Unlock()
-		_ = closeWorkspaceActor(actor)
-	} else {
-		m.mu.Unlock()
+		if staleActor != nil {
+			if err := closeWorkspaceActor(staleActor); err != nil {
+				return workspaceReconcileOutcomeBusy, err
+			}
+		}
+
+		if _, err := m.ensure(workspace); err != nil {
+			if runtimeInstanceBusy(err) {
+				return workspaceReconcileOutcomeBusy, nil
+			}
+			return workspaceReconcileOutcomeBusy, err
+		}
+		return workspaceReconcileOutcomeReconciled, nil
+	})
+	if err != nil {
+		return workspaceReconcileOutcomeBusy, err
+	}
+	outcome, ok := result.(workspaceReconcileOutcome)
+	if !ok {
+		return workspaceReconcileOutcomeBusy, errors.New("unexpected reconcile outcome")
+	}
+	return outcome, nil
+}
+
+func (m *runtimeManager) ensure(workspace workspaceRecord) (*workspaceActor, error) {
+	if actor, staleActor := m.activeOrDetachedActor(workspace.WorkspaceID); actor != nil {
+		return actor, nil
+	} else if staleActor != nil {
+		_ = closeWorkspaceActor(staleActor)
 	}
 
 	service, err := m.factory(workspace.Path)
@@ -230,4 +255,32 @@ func (a *workspaceActor) isRunning() bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.running
+}
+
+func (m *runtimeManager) activeOrDetachedActor(workspaceID string) (active *workspaceActor, stale *workspaceActor) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if actor, ok := m.actors[workspaceID]; ok {
+		if actor.isRunning() {
+			return actor, nil
+		}
+		delete(m.actors, workspaceID)
+		return nil, actor
+	}
+	return nil, nil
+}
+
+func (m *runtimeManager) detachInactiveActor(workspaceID string) (*workspaceActor, bool) {
+	active, stale := m.activeOrDetachedActor(workspaceID)
+	if active != nil {
+		return nil, true
+	}
+	return stale, false
+}
+
+func runtimeInstanceBusy(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "already running in this directory")
 }

@@ -23,6 +23,7 @@ const (
 	methodWorkspaceRemove     = "workspace.remove"
 	methodWorkspaceUpdate     = "workspace.update"
 	methodWorkspaceGet        = "workspace.get"
+	methodWorkspaceReconcile  = "workspace.reconcile_stale"
 	methodTaskList            = "task.list"
 	methodTaskGet             = "task.get"
 	methodTaskRunHistory      = "task.run_history"
@@ -156,6 +157,22 @@ type workspaceGetParams struct {
 
 type workspaceGetResult struct {
 	Workspace workspaceSummaryDTO `json:"workspace"`
+}
+
+type workspaceReconcileParams struct {
+	WorkspaceID string `json:"workspace_id"`
+}
+
+type workspaceReconcileOutcome string
+
+const (
+	workspaceReconcileOutcomeBusy       workspaceReconcileOutcome = "busy"
+	workspaceReconcileOutcomeNoop       workspaceReconcileOutcome = "noop"
+	workspaceReconcileOutcomeReconciled workspaceReconcileOutcome = "reconciled"
+)
+
+type workspaceReconcileResult struct {
+	Outcome workspaceReconcileOutcome `json:"outcome"`
 }
 
 type workspaceAddParams struct {
