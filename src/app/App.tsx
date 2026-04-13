@@ -1,9 +1,15 @@
 import { type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useServerBootstrap } from "@/features/app/model/use-server-bootstrap";
 import { useRuntimeSync } from "@/features/app/model/use-runtime-sync";
 import { useEntryScreen } from "@/features/entry/model/use-entry-screen";
 import { EntryShellScreen } from "@/features/entry/ui/EntryShellScreen";
+import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
+import {
+  buildNewTaskModalSearch,
+  isNewTaskModalOpen,
+} from "@/features/new-task/model/new-task-route-state";
+import { NewTaskModal } from "@/features/new-task/ui/NewTaskModal";
 import { useTaskDetailScreen } from "@/features/task-detail/model/use-task-detail-screen";
 import { TaskDetailScreen } from "@/features/task-detail/ui/TaskDetailScreen";
 import { useConfigsScreen } from "@/features/configs/model/use-configs-screen";
@@ -41,11 +47,63 @@ function EntryRoute() {
       columns={model.columns}
       hasTasks={model.hasTasks}
       launchableEntries={model.launchableEntries}
-      modal={model.modal}
-      modalOpen={model.modalOpen}
-      onCloseModal={model.closeModal}
-      onOpenModal={model.openModal}
       shell={model.shell}
+    />
+  );
+}
+
+function GlobalNewTaskModal() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const catalog = useWorkspaceStore((state) => state.catalog);
+  const modalOpen = isNewTaskModalOpen(location.search);
+  const launchableEntries = (catalog?.entries ?? []).filter((entry) => entry.launchable);
+
+  function setModalOpen(nextOpen: boolean) {
+    navigate(
+      {
+        pathname: location.pathname,
+        search: buildNewTaskModalSearch(location.search, nextOpen),
+      },
+      { replace: true },
+    );
+  }
+
+  const modal = useNewTaskModal({
+    open: modalOpen,
+    onClose: () => setModalOpen(false),
+  });
+
+  return (
+    <NewTaskModal
+      configDescription={modal.selectedEntry?.description}
+      selectedRuntimeName={modal.selectedEntry?.runtime_name}
+      configMaxIterations={modal.configMaxIterations}
+      configEntryNode={modal.configEntryNode}
+      configPicking={modal.configPicking}
+      onToggleConfigPicker={modal.toggleConfigPicker}
+      onCloseConfigPicker={modal.closeConfigPicker}
+      description={modal.description}
+      entries={launchableEntries}
+      error={modal.error}
+      flowNodes={modal.flowNodes}
+      workspacePicking={modal.workspacePicking}
+      onToggleWorkspacePicker={modal.toggleWorkspacePicker}
+      onCloseWorkspacePicker={modal.closeWorkspacePicker}
+      onTargetWorkspaceChange={modal.setSelectedTargetWorkspaceId}
+      onAliasChange={modal.setSelectedAlias}
+      onClose={() => setModalOpen(false)}
+      onDescriptionChange={modal.setDescription}
+      onSubmit={() => void modal.submit()}
+      onToggleWorktree={modal.setUseWorktree}
+      open={modalOpen}
+      selectedTargetWorkspaceId={modal.selectedTargetWorkspaceId}
+      selectedAlias={modal.selectedAlias}
+      submitting={modal.submitting}
+      canSubmit={modal.canSubmit}
+      useWorktree={modal.useWorktree}
+      workspaceOptions={modal.workspaceOptions}
+      worktreeAvailable={modal.worktreeAvailable}
     />
   );
 }
@@ -136,6 +194,7 @@ export function App() {
         <Route element={<SettingsRoute />} path="/settings" />
         <Route element={<Navigate replace to="/" />} path="*" />
       </Routes>
+      <GlobalNewTaskModal />
     </BrowserRouter>
   );
 }

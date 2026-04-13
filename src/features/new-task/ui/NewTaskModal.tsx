@@ -222,7 +222,12 @@ export function NewTaskModal({
       <section className="task-modal">
         <header className="task-modal__header">
           <h2>New Task</h2>
-          <button className="icon-button task-modal__close" onClick={onClose} type="button">
+          <button
+            className="icon-button task-modal__close"
+            data-testid="new-task-close"
+            onClick={onClose}
+            type="button"
+          >
             <X aria-hidden="true" size={16} strokeWidth={2} />
           </button>
         </header>

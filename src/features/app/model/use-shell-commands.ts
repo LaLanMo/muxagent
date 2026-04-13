@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { parseTaskDetailPath } from "@/domain/routes";
 import { useAppSessionController } from "@/features/app/model/use-app-session-controller";
+import { buildNewTaskModalSearch } from "@/features/new-task/model/new-task-route-state";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
@@ -59,14 +60,9 @@ export function useShellCommands(): ShellCommands {
       });
     },
     openNewTask: () => {
-      const params = new URLSearchParams(
-        location.pathname === "/" ? location.search : "",
-      );
-      params.delete("layout");
-      params.set("newTask", "1");
       navigate({
-        pathname: "/",
-        search: `?${params.toString()}`,
+        pathname: location.pathname,
+        search: buildNewTaskModalSearch(location.search, true),
       });
     },
     reconnect,

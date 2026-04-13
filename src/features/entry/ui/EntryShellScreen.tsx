@@ -2,7 +2,6 @@ import { Inbox, Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
-import { NewTaskModal } from "@/features/new-task/ui/NewTaskModal";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 import type { TaskBoardColumnModel } from "@/features/tasks/ui/TaskBoard";
 import { TaskBoard } from "@/features/tasks/ui/TaskBoard";
@@ -12,35 +11,6 @@ type EntryShellScreenProps = {
   columns: TaskBoardColumnModel[];
   hasTasks: boolean;
   launchableEntries: ConfigCatalogEntryDto[];
-  onOpenModal: () => void;
-  modal: {
-    description: string;
-    setDescription: (value: string) => void;
-    selectedTargetWorkspaceId: string;
-    setSelectedTargetWorkspaceId: (value: string) => void;
-    workspaceOptions: Array<{ id: string; label: string; path: string }>;
-    workspacePicking: boolean;
-    toggleWorkspacePicker: () => void;
-    closeWorkspacePicker: () => void;
-    selectedAlias: string;
-    setSelectedAlias: (value: string) => void;
-    selectedEntry?: ConfigCatalogEntryDto;
-    flowNodes: string[];
-    useWorktree: boolean;
-    setUseWorktree: (value: boolean) => void;
-    worktreeAvailable: boolean;
-    configMaxIterations?: number;
-    configEntryNode?: string;
-    configPicking: boolean;
-    toggleConfigPicker: () => void;
-    closeConfigPicker: () => void;
-    submitting: boolean;
-    canSubmit: boolean;
-    error?: string;
-    submit: () => Promise<void>;
-  };
-  modalOpen: boolean;
-  onCloseModal: () => void;
 };
 
 function slugifyTaskView(label: string) {
@@ -52,10 +22,6 @@ export function EntryShellScreen({
   columns,
   hasTasks,
   launchableEntries,
-  onOpenModal,
-  modal,
-  modalOpen,
-  onCloseModal,
 }: EntryShellScreenProps) {
   const showTaskViewSwitch = shell.phase === "connected" && hasTasks;
   const showReconnectAction =
@@ -168,7 +134,11 @@ export function EntryShellScreen({
                 </div>
                 <h2>No tasks yet</h2>
                 <p>Create your first task to start a workflow.</p>
-                <button className="board-empty-state__action" onClick={onOpenModal} type="button">
+                <button
+                  className="board-empty-state__action"
+                  onClick={shell.openNewTask}
+                  type="button"
+                >
                   <Plus aria-hidden="true" size={14} strokeWidth={2.1} />
                   <span>New Task</span>
                 </button>
@@ -179,37 +149,6 @@ export function EntryShellScreen({
           )}
         </section>
       </DesktopShellFrame>
-
-      <NewTaskModal
-        configDescription={modal.selectedEntry?.description}
-        selectedRuntimeName={modal.selectedEntry?.runtime_name}
-        configMaxIterations={modal.configMaxIterations}
-        configEntryNode={modal.configEntryNode}
-        configPicking={modal.configPicking}
-        onToggleConfigPicker={modal.toggleConfigPicker}
-        onCloseConfigPicker={modal.closeConfigPicker}
-        description={modal.description}
-        entries={launchableEntries}
-        error={modal.error}
-        flowNodes={modal.flowNodes}
-        workspacePicking={modal.workspacePicking}
-        onToggleWorkspacePicker={modal.toggleWorkspacePicker}
-        onCloseWorkspacePicker={modal.closeWorkspacePicker}
-        onTargetWorkspaceChange={modal.setSelectedTargetWorkspaceId}
-        onAliasChange={modal.setSelectedAlias}
-        onClose={onCloseModal}
-        onDescriptionChange={modal.setDescription}
-        onSubmit={() => void modal.submit()}
-        onToggleWorktree={modal.setUseWorktree}
-        open={modalOpen}
-        selectedTargetWorkspaceId={modal.selectedTargetWorkspaceId}
-        selectedAlias={modal.selectedAlias}
-        submitting={modal.submitting}
-        canSubmit={modal.canSubmit}
-        useWorktree={modal.useWorktree}
-        workspaceOptions={modal.workspaceOptions}
-        worktreeAvailable={modal.worktreeAvailable}
-      />
     </>
   );
 }

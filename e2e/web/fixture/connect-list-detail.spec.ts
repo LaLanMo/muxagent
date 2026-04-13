@@ -26,13 +26,13 @@ async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
       import("/src/state/task-snapshot-store.ts"),
     ]);
     const runtime = getRuntime();
-    await runtime.taskStart({
+    await runtime.backend.taskStart({
       workspace_id: workspaceId,
       description: "Trigger workspace refresh",
       config_alias: "default",
       config_path: "/tmp/muxagent-sync-workspace/.muxagent/configs/default.yaml",
     });
-    const result = await runtime.taskList(workspaceId);
+    const result = await runtime.backend.taskList(workspaceId);
     useTaskSnapshotStore.getState().setTasks(workspaceId, result.tasks);
   }, { workspaceId });
 }
@@ -198,6 +198,43 @@ test("offers run recovery when the selected active run has no session or transcr
   );
   await expect(page.getByTestId("transcript-modal")).toContainText("failed");
   await expect(page.getByTestId("detail-run-run-stale-implement")).toContainText("failed");
+});
+
+test("opens New Task from task detail without leaving the current screen", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-live-fixture");
+  await page.getByTestId("detail-run-run-live-implement").click();
+  await expect(page.getByTestId("live-modal")).toBeVisible();
+
+  const detailPath = new URL(page.url()).pathname;
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+
+  await page.evaluate(() => {
+    const button = document.querySelector<HTMLButtonElement>(
+      '[data-testid="open-new-task"]',
+    );
+    button?.click();
+  });
+  await expect(page.getByTestId("new-task-modal")).toBeVisible();
+  await expect(page.getByTestId("live-modal")).toHaveCount(0);
+
+  const modalUrl = new URL(page.url());
+  expect(modalUrl.pathname).toBe(detailPath);
+  expect(modalUrl.searchParams.get("newTask")).toBe("1");
+  expect(modalUrl.searchParams.get("modal")).toBeNull();
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+
+  await page.getByTestId("new-task-close").click();
+  await expect(page.getByTestId("new-task-modal")).toHaveCount(0);
+  await expect(page.getByTestId("live-modal")).toHaveCount(0);
+
+  const closedUrl = new URL(page.url());
+  expect(closedUrl.pathname).toBe(detailPath);
+  expect(closedUrl.searchParams.get("newTask")).toBeNull();
+  expect(closedUrl.searchParams.get("modal")).toBeNull();
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
 });
 
 test("keeps task detail aligned when a full workspace task-list reload lands after detail is open", async ({

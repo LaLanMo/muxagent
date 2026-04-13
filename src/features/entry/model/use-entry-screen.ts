@@ -1,4 +1,3 @@
-import { useSearchParams } from "react-router-dom";
 import { buildTaskDetailPath } from "@/domain/routes";
 import {
   buildBoardMetaSummary,
@@ -10,7 +9,6 @@ import {
   taskBucket,
 } from "@/domain/task-shell";
 import { useShellModel } from "@/features/app/model/use-shell-model";
-import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
 import type { TaskViewDto } from "@/rpc/types";
 import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
@@ -92,18 +90,6 @@ export function useEntryScreen() {
     scopedTasks.map((entry) => [entry.task, entry] as const),
   );
   const catalog = useWorkspaceStore((state) => state.catalog);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const modalOpen = searchParams.get("newTask") === "1";
-
-  function setModalOpen(nextOpen: boolean) {
-    const next = new URLSearchParams(searchParams);
-    if (nextOpen) {
-      next.set("newTask", "1");
-    } else {
-      next.delete("newTask");
-    }
-    setSearchParams(next, { replace: true });
-  }
 
   const columns = groupTasksIntoColumns(tasks, shell.boardFilter).map((column) => ({
     ...column,
@@ -133,10 +119,6 @@ export function useEntryScreen() {
       href: scope ? buildTaskDetailPath(scope.workspaceId, task.task.id) : "/",
     };
   });
-  const modal = useNewTaskModal({
-    open: modalOpen,
-    onClose: () => setModalOpen(false),
-  });
 
   return {
     shell,
@@ -144,9 +126,5 @@ export function useEntryScreen() {
     rows,
     hasTasks: tasks.length > 0,
     launchableEntries: (catalog?.entries ?? []).filter((entry) => entry.launchable),
-    modalOpen,
-    openModal: () => setModalOpen(true),
-    closeModal: () => setModalOpen(false),
-    modal,
   };
 }
