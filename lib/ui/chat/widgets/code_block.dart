@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../../config/theme.dart';
 import '../../../config/fonts.dart';
 import '../../../utils/app_toast.dart';
 
@@ -20,15 +21,12 @@ class CodeBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = backgroundColor ?? const Color(0xFF282C34);
-    final fgColor = textColor ?? const Color(0xFFE0E0E0);
+    final bgColor = backgroundColor ?? AppTheme.codeBg;
+    final fgColor = textColor ?? AppTheme.codeText;
 
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      color: bgColor,
       child: Stack(
         children: [
           Padding(
@@ -57,10 +55,7 @@ class CodeBlock extends StatelessWidget {
                 },
                 splashRadius: 16,
                 padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(
-                  minWidth: 28,
-                  minHeight: 28,
-                ),
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               ),
             ),
         ],

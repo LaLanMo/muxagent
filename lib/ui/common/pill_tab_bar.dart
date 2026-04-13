@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
@@ -27,78 +26,35 @@ class PillTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Pill tab bar — fixed width per design
           Container(
-            width: 210,
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            width: 200,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: AppTheme.chipBorder),
+              color: AppTheme.surface,
+              borderRadius: BorderRadius.circular(AppTheme.radiusXs),
+              border: Border.all(color: AppTheme.borderStrong),
+              boxShadow: const [
+                BoxShadow(
+                  color: Color(0x0F000000),
+                  blurRadius: 8,
+                  offset: Offset(0, 2),
+                ),
+              ],
             ),
             child: Row(
-              children: List.generate(_tabs.length, (i) {
-                final tab = _tabs[i];
-                final selected = i == currentIndex;
-                return Expanded(
-                  child: Semantics(
-                    label: tab.label,
-                    button: true,
-                    selected: selected,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () {
-                        HapticFeedback.lightImpact();
-                        onTap(i);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? AppTheme.selectedBg
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Center(child: _buildIcon(tab, i)),
-                      ),
-                    ),
-                  ),
-                );
-              }),
-            ),
-          ),
-          const SizedBox(width: 12),
-          // Create button
-          Semantics(
-            label: 'New Session',
-            button: true,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () {
-                HapticFeedback.lightImpact();
-                onCreateTap?.call();
-              },
-              child: Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: AppTheme.chipBorder),
+              children: [
+                ...List.generate(
+                  _tabs.length,
+                  (i) => _buildTabSlot(index: i, tab: _tabs[i]),
                 ),
-                child: const Center(
-                  child: Icon(
-                    LucideIcons.pencil,
-                    size: 22,
-                    color: AppTheme.primary,
-                  ),
-                ),
-              ),
+                _buildComposeSlot(),
+              ],
             ),
           ),
         ],
@@ -106,42 +62,102 @@ class PillTabBar extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon(_TabDef tab, int index) {
-    final icon = Icon(tab.icon, size: 22, color: AppTheme.primary);
-
-    // Show badge on Active tab (index 0)
-    if (index == 0 && activeBadgeCount > 0) {
-      return Stack(
-        clipBehavior: Clip.none,
-        children: [
-          icon,
-          Positioned(
-            right: -8,
-            top: -4,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: const BoxDecoration(
-                color: AppTheme.errorText,
-                shape: BoxShape.circle,
+  Widget _buildTabSlot({required int index, required _TabDef tab}) {
+    final selected = index == currentIndex;
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Semantics(
+        label: tab.label,
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onTap(index);
+          },
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Center(
+                child: _buildTabIcon(
+                  tab.icon,
+                  color: selected
+                      ? AppTheme.textPrimary
+                      : AppTheme.textTertiary,
+                  showBadge: index == 0 && activeBadgeCount > 0,
+                ),
               ),
-              child: Center(
-                child: Text(
-                  activeBadgeCount > 9 ? '9+' : '$activeBadgeCount',
-                  style: AppTypography.sans(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+              if (selected)
+                const Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 6,
+                  child: SizedBox(
+                    height: 2,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(color: AppTheme.accent),
+                    ),
                   ),
                 ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildComposeSlot() {
+    return SizedBox(
+      width: 44,
+      height: 44,
+      child: Semantics(
+        label: 'New Session',
+        button: true,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            onCreateTap?.call();
+          },
+          child: const Center(
+            child: Icon(LucideIcons.pencil, size: 20, color: AppTheme.accent),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabIcon(
+    IconData icon, {
+    required Color color,
+    required bool showBadge,
+  }) {
+    final baseIcon = Icon(icon, size: 20, color: color);
+    if (!showBadge) {
+      return baseIcon;
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        baseIcon,
+        const Positioned(
+          right: -4,
+          top: -2,
+          child: SizedBox(
+            width: 8,
+            height: 8,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: AppTheme.accent,
+                shape: BoxShape.circle,
               ),
             ),
           ),
-        ],
-      );
-    }
-
-    return icon;
+        ),
+      ],
+    );
   }
 }
 

@@ -3,85 +3,95 @@ import 'package:flutter/services.dart';
 import 'package:muxagent/config/app_typography.dart';
 
 class AppTheme {
-  // Brand colors
-  static const primary = Color(0xFF1D1D1F);
-  static const background = Color(0xFFFAFAFA);
-  static const surface = Color(0xFFFFFFFF);
-  static const textPrimary = Color(0xFF1D1D1F);
-  static const textSecondary = Color(0xFF6B6F76);
-  static const textTertiary = Color(0xFF808690);
-  static const border = Color(0xFFE5E7EB);
-  static const inputFill = Color(0xFFEDEEF1);
-  static const codeBg = Color(0xFF1D1D1F);
+  static const primary = Color(0xFF2F2825);
+  static const accent = Color(0xFFFF6A15);
+  static const background = Color(0xFFF7F2EE);
+  static const surface = Color(0xFFFBF8F6);
+  static const surfaceSubtle = Color(0xFFF4EFEB);
+  static const surfaceMuted = Color(0xFFEDE8E4);
+  static const textPrimary = Color(0xFF2A2421);
+  static const textSecondary = Color(0xFF5F5550);
+  static const textTertiary = Color(0xFF7A6F68);
+  static const textMuted = Color(0xFFB6AAA2);
+  static const textMetadata = Color(0xFF9B8E87);
+  static const border = Color(0xFFE2DCD8);
+  static const borderStrong = Color(0xFFD1C8C2);
+  static const chipBorder = Color(0xFFA79A91);
+  static const selectedBg = primary;
+  static const hoverBg = surfaceSubtle;
+  static const inputFill = surface;
+  static const codeBg = Color(0xFF2F2825);
+  static const codeHeaderBg = Color(0xFF3A3430);
+  static const codeText = Color(0xFFFBF8F6);
 
-  // Text variants
-  static const textMuted = Color(0xFFC8CBD0);
-  static const textMetadata = Color(0xFF9DA1A8);
+  static const statusNeutralText = textTertiary;
+  static const statusNeutralBg = surfaceMuted;
+  static const successText = Color(0xFF1A6B3A);
+  static const successBg = Color(0xFFD6EDDC);
+  static const warning = Color(0xFF8B6D24);
+  static const warningBg = Color(0xFFF2E7BE);
+  static const errorText = Color(0xFFA14C45);
+  static const errorBg = Color(0xFFF4DDDA);
+  static const idleBg = statusNeutralBg;
+  static const failedRed = errorText;
+  static const statusConnecting = warning;
+  static const statusDisconnected = errorText;
+  static const disconnectedBg = errorBg;
+  static const serverLostBg = errorBg;
+  static const serverLostText = errorText;
 
-  // Border / surface variants
-  static const chipBorder = Color(0xFFE0E2E6);
-  static const selectedBg = Color(0xFFEBEBEC);
-  static const hoverBg = Color(0xFFF0F1F4);
+  static const planAccent = Color(0xFF2563EB);
+  static const subagentAccent = Color(0xFF7A6F68);
+  static const unreadDot = accent;
+  static const modeSkipBg = errorBg;
+  static const modePlanBg = surfaceSubtle;
+  static const modeAcceptBg = successBg;
+  static const modePlanText = textSecondary;
+  static const modeAcceptText = successText;
+  static const modeSkipDot = errorText;
+  static const diffRemoved = errorText;
+  static const diffAdded = successText;
+  static const recordRed = Color(0xFFC94C40);
+  static const waveformGreen = successText;
 
-  // Status colors
-  static const warning = Color(0xFFE8B730);
-  static const warningBg = Color(0xFFFFF8E1);
-  static const successBg = Color(0xFFECFDF5);
-  static const successText = Color(0xFF4CB782);
-  static const idleBg = Color(0xFFF5F5F5);
-  static const errorText = Color(0xFFE5484D);
-  static const errorBg = Color(0xFFFDE8E8);
-  static const failedRed = Color(0xFFEF4444);
-  static const statusConnecting = Color(0xFFE07B54);
-  static const statusDisconnected = Color(0xFFCC4444);
-  static const disconnectedBg = Color(0xFFFFF0F0);
-  static const serverLostBg = Color(0xFFFEF2F2);
-  static const serverLostText = Color(0xFFDC2626);
+  static const radiusNone = 0.0;
+  static const radiusXs = 4.0;
+  static const radiusSm = 4.0;
+  static const radiusLg = 4.0;
+  static const radiusPill = 4.0;
 
-  // Feature accent
-  static const planAccent = Color(0xFF3B82F6);
-  static const subagentAccent = Color(0xFF7C6EF6);
-  static const unreadDot = Color(0xFF007AFF);
+  static const space4 = 4.0;
+  static const space8 = 8.0;
+  static const space12 = 12.0;
+  static const space16 = 16.0;
+  static const space20 = 20.0;
+  static const space24 = 24.0;
+  static const space32 = 32.0;
 
-  // Permission mode
-  static const modeSkipBg = Color(0xFFFEF2F2);
-  static const modePlanBg = Color(0xFFF3E8FF);
-  static const modeAcceptBg = Color(0xFFEFF6FF);
-  static const modePlanText = Color(0xFF7C3AED);
-  static const modeAcceptText = Color(0xFF2563EB);
-  static const modeSkipDot = Color(0xFFF87171);
-
-  // Code block
-  static const codeHeaderBg = Color(0xFF2A2A2A);
-  static const codeText = Color(0xFFE0E2E6);
-
-  // Diff
-  static const diffRemoved = Color(0xFFEF4444);
-  static const diffAdded = Color(0xFF22C55E);
-
-  // Voice / recording
-  static const recordRed = Color(0xFFFF3B30);
-  static const waveformGreen = Color(0xFF34C759);
+  static const durationFast = Duration(milliseconds: 140);
+  static const durationEnter = Duration(milliseconds: 200);
+  static const durationLayout = Duration(milliseconds: 300);
 
   static ThemeData light() {
     final textTheme = _textTheme();
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
-      colorScheme: ColorScheme.light(
+      colorScheme: const ColorScheme.light(
         primary: primary,
         onPrimary: Colors.white,
         surface: surface,
         onSurface: textPrimary,
-        secondary: primary,
+        secondary: accent,
         onSecondary: Colors.white,
         error: errorText,
         outline: border,
       ),
-      scaffoldBackgroundColor: surface,
+      scaffoldBackgroundColor: background,
+      canvasColor: background,
       textTheme: textTheme,
       appBarTheme: AppBarTheme(
-        backgroundColor: surface,
+        backgroundColor: background,
         foregroundColor: textPrimary,
         elevation: 0,
         scrolledUnderElevation: 0,
@@ -92,7 +102,7 @@ class AppTheme {
           statusBarBrightness: Brightness.light,
         ),
         titleTextStyle: AppTypography.sans(
-          fontSize: 22,
+          fontSize: 24,
           fontWeight: FontWeight.w600,
           color: textPrimary,
         ),
@@ -101,7 +111,7 @@ class AppTheme {
         color: surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(radiusXs),
           side: const BorderSide(color: border),
         ),
         margin: EdgeInsets.zero,
@@ -112,11 +122,11 @@ class AppTheme {
           foregroundColor: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(radiusNone),
           ),
-          minimumSize: const Size(double.infinity, 48),
+          minimumSize: const Size(double.infinity, 44),
           textStyle: AppTypography.sans(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -124,13 +134,13 @@ class AppTheme {
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: textPrimary,
-          side: const BorderSide(color: border),
+          side: const BorderSide(color: borderStrong),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(radiusNone),
           ),
-          minimumSize: const Size(0, 48),
+          minimumSize: const Size(0, 44),
           textStyle: AppTypography.sans(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -139,200 +149,96 @@ class AppTheme {
         filled: true,
         fillColor: inputFill,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(radiusNone),
+          borderSide: const BorderSide(color: borderStrong),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
+          borderRadius: BorderRadius.circular(radiusNone),
+          borderSide: const BorderSide(color: borderStrong),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(radiusNone),
           borderSide: const BorderSide(color: primary),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
-          vertical: 14,
+          vertical: 12,
         ),
-        hintStyle: AppTypography.sans(
-          fontSize: 14,
-          color: textTertiary,
-        ),
+        hintStyle: AppTypography.sans(fontSize: 14, color: textTertiary),
       ),
       dividerTheme: const DividerThemeData(
         color: border,
         thickness: 1,
         space: 0,
       ),
-      iconTheme: const IconThemeData(color: textSecondary, size: 20),
+      iconTheme: const IconThemeData(color: textTertiary, size: 20),
     );
   }
 
-  static ThemeData dark() {
-    final textTheme = _textTheme(dark: true);
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: ColorScheme.dark(
-        primary: primary,
-        onPrimary: Colors.white,
-        surface: const Color(0xFF1A1A1A),
-        onSurface: Colors.white,
-        secondary: primary,
-        onSecondary: Colors.white,
-        error: errorText,
-        outline: const Color(0xFF333333),
-      ),
-      scaffoldBackgroundColor: const Color(0xFF111111),
-      textTheme: textTheme,
-      appBarTheme: AppBarTheme(
-        backgroundColor: const Color(0xFF1A1A1A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light,
-          statusBarBrightness: Brightness.dark,
-        ),
-        titleTextStyle: AppTypography.sans(
-          fontSize: 22,
-          fontWeight: FontWeight.w600,
-          color: Colors.white,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: const Color(0xFF1A1A1A),
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: const BorderSide(color: Color(0xFF333333)),
-        ),
-        margin: EdgeInsets.zero,
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          minimumSize: const Size(double.infinity, 48),
-          textStyle: AppTypography.sans(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
-          side: const BorderSide(color: Color(0xFF333333)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          minimumSize: const Size(0, 48),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: const Color(0xFF2A2A2A),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(20),
-          borderSide: const BorderSide(color: primary),
-        ),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-        hintStyle: AppTypography.sans(
-          fontSize: 14,
-          color: const Color(0xFF666666),
-        ),
-      ),
-      dividerTheme: const DividerThemeData(
-        color: Color(0xFF333333),
-        thickness: 1,
-        space: 0,
-      ),
-      iconTheme: const IconThemeData(color: Color(0xFF888888), size: 20),
-    );
-  }
+  static ThemeData dark() => light();
 
-  static TextTheme _textTheme({bool dark = false}) {
-    final color = dark ? Colors.white : textPrimary;
-    final secondary = dark ? const Color(0xFF888888) : textSecondary;
+  static TextTheme _textTheme() {
     return TextTheme(
       headlineLarge: AppTypography.sans(
         fontSize: 32,
         fontWeight: FontWeight.w700,
-        color: color,
+        color: textPrimary,
       ),
       headlineMedium: AppTypography.sans(
-        fontSize: 22,
+        fontSize: 24,
         fontWeight: FontWeight.w600,
-        color: color,
+        color: textPrimary,
       ),
       headlineSmall: AppTypography.sans(
         fontSize: 20,
         fontWeight: FontWeight.w600,
-        color: color,
+        color: textPrimary,
       ),
       titleLarge: AppTypography.sans(
         fontSize: 18,
         fontWeight: FontWeight.w600,
-        color: color,
+        color: textPrimary,
       ),
       titleMedium: AppTypography.sans(
         fontSize: 16,
         fontWeight: FontWeight.w500,
-        color: color,
+        color: textPrimary,
       ),
       titleSmall: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w500,
-        color: color,
+        color: textPrimary,
       ),
       bodyLarge: AppTypography.sans(
         fontSize: 16,
         fontWeight: FontWeight.w400,
-        color: color,
+        color: textPrimary,
       ),
       bodyMedium: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w400,
-        color: color,
+        color: textPrimary,
       ),
       bodySmall: AppTypography.sans(
         fontSize: 12,
         fontWeight: FontWeight.w400,
-        color: secondary,
+        color: textSecondary,
       ),
       labelLarge: AppTypography.sans(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: color,
+        color: textPrimary,
       ),
-      labelMedium: AppTypography.sans(
+      labelMedium: AppTypography.mono(
         fontSize: 11,
         fontWeight: FontWeight.w600,
-        letterSpacing: 2,
-        color: secondary,
+        letterSpacing: 1,
+        color: textTertiary,
       ),
-      labelSmall: AppTypography.sans(
+      labelSmall: AppTypography.mono(
         fontSize: 10,
         fontWeight: FontWeight.w500,
-        color: secondary,
+        color: textTertiary,
       ),
     );
   }

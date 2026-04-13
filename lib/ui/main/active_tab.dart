@@ -19,7 +19,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Header: height 56, padding [0, 16], spaceBetween
         Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -30,8 +29,8 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               Text(
                 'Active',
                 style: AppTypography.sans(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
                 ),
               ),
@@ -39,10 +38,8 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             ],
           ),
         ),
-        // Content
         Expanded(
           child: Obx(() {
-            // Force reactivity tracking
             controller.activeSessions.length;
             shell.machines.length;
 
@@ -61,40 +58,35 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Check icon: lucide circle-check, 48x48, #C8CBD0
-            Icon(LucideIcons.checkCircle, size: 48, color: AppTheme.textMuted),
+            Icon(LucideIcons.checkCircle2, size: 40, color: AppTheme.textMuted),
             const SizedBox(height: 16),
-            // Title: "All clear", system sans 20px w500 #6B6F76
             Text(
               'All clear',
               style: AppTypography.sans(
                 fontSize: 20,
                 fontWeight: FontWeight.w500,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textPrimary,
               ),
             ),
-            const SizedBox(height: 16),
-            // Description: system sans 14px #808690, textAlign center, width 260
+            const SizedBox(height: 8),
             SizedBox(
-              width: 260,
+              width: 280,
               child: Text(
                 'No sessions need your attention right now.',
-                style: AppTypography.sans(
-                  fontSize: 14,
-                  color: AppTheme.textTertiary,
+                style: AppTypography.mono(
+                  fontSize: 12,
+                  color: AppTheme.textMetadata,
                 ),
                 textAlign: TextAlign.center,
               ),
             ),
-            const SizedBox(height: 16),
-            // Machine section card
+            const SizedBox(height: 20),
             Obx(() => _buildMachineCard()),
-            const SizedBox(height: 16),
-            // "Start New Session" text: system sans 15px w600 #1D1D1F (tappable text)
+            const SizedBox(height: 20),
             Semantics(
               label: 'Start New Session',
               button: true,
@@ -102,10 +94,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                 onTap: shell.navigateToNewSession,
                 child: Text(
                   'Start New Session',
-                  style: AppTypography.sans(
-                    fontSize: 15,
+                  style: AppTypography.mono(
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                    color: AppTheme.accent,
                   ),
                 ),
               ),
@@ -123,8 +115,8 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: AppTheme.inputFill,
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.surface,
+        border: Border.all(color: AppTheme.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -143,32 +135,27 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     final connected = shell.isMachineConnected(machine.machineId);
     return GestureDetector(
       onTap: connected ? null : () => shell.connectMachine(machine),
-      child: Padding(
-        // padding [14, 16], gap 10, alignItems center
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppTheme.border)),
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Monitor icon: lucide monitor, 18x18, #6B6F76
-            const Icon(
-              LucideIcons.monitor,
-              size: 18,
-              color: AppTheme.textSecondary,
-            ),
-            const SizedBox(width: 10),
-            // Machine name: system sans 14px normal #1D1D1F, fill_container
+            Icon(LucideIcons.monitor, size: 18, color: AppTheme.textTertiary),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
                 machine.hostname ?? machine.machineId,
                 style: AppTypography.sans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
                   color: AppTheme.textPrimary,
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            // Status pill
+            const SizedBox(width: 12),
             _buildStatusPill(connected),
           ],
         ),
@@ -177,36 +164,25 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   Widget _buildStatusPill(bool connected) {
-    final dotColor = connected ? AppTheme.successText : AppTheme.textTertiary;
     final bgColor = connected ? AppTheme.successBg : AppTheme.idleBg;
     final label = connected ? 'online' : 'offline';
+    final fgColor = connected
+        ? AppTheme.successText
+        : AppTheme.statusNeutralText;
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
       decoration: BoxDecoration(
         color: bgColor,
-        borderRadius: BorderRadius.circular(7),
+        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Dot 6x6
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          // Text: system sans 11px w500
-          Text(
-            label,
-            style: AppTypography.sans(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: dotColor,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: AppTypography.mono(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: fgColor,
+        ),
       ),
     );
   }
@@ -216,7 +192,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   Widget _buildSessionList() {
     final sessions = controller.activeSessions;
 
-    // Group sessions by status
     final approvalSessions = sessions
         .where((s) => s.status == SessionStatus.waitingApproval)
         .toList();
@@ -230,55 +205,43 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (approvalSessions.isNotEmpty)
-            _buildSection('Approval', AppTheme.warning, approvalSessions),
+            _buildSection('APPROVAL', approvalSessions),
           if (runningSessions.isNotEmpty)
-            _buildSection('Running', AppTheme.successText, runningSessions),
+            _buildSection('RUNNING', runningSessions),
         ],
       ),
     );
   }
 
-  Widget _buildSection(
-    String label,
-    Color statusColor,
-    List<AgentSession> sessions,
-  ) {
+  Widget _buildSection(String label, List<AgentSession> sessions) {
     return Padding(
-      // 32px top padding before each section
       padding: const EdgeInsets.only(top: 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section Header: padding [0, 0, 14, 0], justifyContent spaceBetween
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Label: system sans 15px w500, color = status color
-                Text(
-                  label,
-                  style: AppTypography.sans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: statusColor,
-                  ),
-                ),
-              ],
+            child: Text(
+              label,
+              style: AppTypography.mono(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1,
+                color: AppTheme.textTertiary,
+              ),
             ),
           ),
-          // Session rows
-          ...sessions.map((session) => _buildSessionRow(session, statusColor)),
+          ...sessions.map(_buildSessionRow),
         ],
       ),
     );
   }
 
-  Widget _buildSessionRow(AgentSession session, Color statusColor) {
+  Widget _buildSessionRow(AgentSession session) {
     final machineId = session.machineId;
     final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
-    final isIdle = session.status == SessionStatus.idle;
+    final style = _statusStyle(session);
 
     return GestureDetector(
       onTap: () {
@@ -294,15 +257,25 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Status Dot: 12x12 ellipse
-            _buildStatusDot(statusColor, isIdle),
+            Container(
+              width: 58,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              color: style.backgroundColor,
+              child: Text(
+                style.label,
+                style: AppTypography.mono(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: style.foregroundColor,
+                ),
+              ),
+            ),
             const SizedBox(width: 12),
-            // Text Stack: vertical layout, gap 2
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Session Name: system sans 15px w500 #1D1D1F
                   Text(
                     title,
                     style: AppTypography.sans(
@@ -315,12 +288,11 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                   ),
                   if (cwd.isNotEmpty) ...[
                     const SizedBox(height: 2),
-                    // Working Directory: system sans 13px normal #808690
                     Text(
                       cwd,
-                      style: AppTypography.sans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.normal,
+                      style: AppTypography.mono(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
                         color: AppTheme.textTertiary,
                       ),
                       maxLines: 1,
@@ -331,9 +303,9 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                   // Machine + Duration: system sans 12px normal #C8CBD0
                   Text(
                     _buildMachineDurationText(machineId, session),
-                    style: AppTypography.sans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.normal,
+                    style: AppTypography.mono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
                       color: AppTheme.textMuted,
                     ),
                     maxLines: 1,
@@ -348,24 +320,34 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  Widget _buildStatusDot(Color color, bool isIdle) {
-    if (isIdle) {
-      // Idle = stroke-only (hollow circle), #C8CBD0, thickness 1.5
-      return Container(
-        width: 12,
-        height: 12,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: AppTheme.textMuted, width: 1.5),
-        ),
-      );
+  _ActiveStatusStyle _statusStyle(AgentSession session) {
+    switch (session.status) {
+      case SessionStatus.waitingApproval:
+        return const _ActiveStatusStyle(
+          label: 'awaiting',
+          foregroundColor: AppTheme.warning,
+          backgroundColor: AppTheme.warningBg,
+        );
+      case SessionStatus.running:
+        return const _ActiveStatusStyle(
+          label: 'running',
+          foregroundColor: AppTheme.successText,
+          backgroundColor: AppTheme.successBg,
+        );
+      case SessionStatus.idle:
+      case SessionStatus.done:
+        return const _ActiveStatusStyle(
+          label: 'done',
+          foregroundColor: AppTheme.statusNeutralText,
+          backgroundColor: AppTheme.statusNeutralBg,
+        );
+      case SessionStatus.error:
+        return const _ActiveStatusStyle(
+          label: 'failed',
+          foregroundColor: AppTheme.errorText,
+          backgroundColor: AppTheme.errorBg,
+        );
     }
-    // Running/Approval = filled ellipse
-    return Container(
-      width: 12,
-      height: 12,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
   }
 
   String _buildMachineDurationText(String machineId, AgentSession session) {
@@ -395,4 +377,16 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     }
     return 'now';
   }
+}
+
+class _ActiveStatusStyle {
+  final String label;
+  final Color foregroundColor;
+  final Color backgroundColor;
+
+  const _ActiveStatusStyle({
+    required this.label,
+    required this.foregroundColor,
+    required this.backgroundColor,
+  });
 }

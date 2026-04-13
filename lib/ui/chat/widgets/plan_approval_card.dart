@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:muxagent/config/app_typography.dart';
-import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../../config/app_typography.dart';
 import '../../../config/theme.dart';
 import '../../../domain/approval.dart';
 import '../../../domain/enums.dart';
-import 'code_block.dart';
 
-class PlanApprovalCard extends StatefulWidget {
+class PlanApprovalCard extends StatelessWidget {
   final ApprovalRequest approval;
   final bool enabled;
   final void Function(String optionId) onReply;
@@ -21,270 +19,394 @@ class PlanApprovalCard extends StatefulWidget {
   });
 
   @override
-  State<PlanApprovalCard> createState() => _PlanApprovalCardState();
-}
-
-class _PlanApprovalCardState extends State<PlanApprovalCard> {
-  String? get _planText {
-    final plan = widget.approval.planMarkdown?.trim();
-    if (plan == null || plan.isEmpty) return null;
-    return plan;
-  }
-
-  List<String> get _allowedPrompts {
-    return widget.approval.allowedPrompts;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final resolved = widget.approval.resolved;
+    final accent = approval.resolved
+        ? AppTheme.chipBorder
+        : AppTheme.planAccent;
+    final plan = _PlanContent.fromApproval(approval);
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          left: BorderSide(
-            color: resolved ? AppTheme.textTertiary : AppTheme.planAccent,
-            width: 3,
-          ),
-        ),
-        borderRadius: BorderRadius.circular(12),
+        color: AppTheme.surface,
+        border: Border(left: BorderSide(color: accent, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             child: Row(
               children: [
-                Icon(
-                  LucideIcons.fileText,
-                  color: resolved ? AppTheme.textTertiary : AppTheme.planAccent,
-                  size: 16,
-                ),
+                Icon(LucideIcons.fileText, size: 14, color: accent),
                 const SizedBox(width: 8),
                 Text(
-                  widget.approval.resolved ? 'Plan (Rejected)' : 'Review Plan',
+                  approval.resolved ? 'Plan Review' : 'Review Plan',
                   style: AppTypography.sans(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: widget.approval.resolved
-                        ? AppTheme.textSecondary
-                        : AppTheme.textPrimary,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
               ],
             ),
           ),
-
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
-            child: Divider(height: 1, color: AppTheme.border),
+          const Divider(height: 1, color: AppTheme.border),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: _buildPlanBody(plan),
           ),
-
-          // Plan body
-          if (_planText != null)
+          if (!approval.resolved) ...[
+            const Divider(height: 1, color: AppTheme.border),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SelectionArea(
-                child: GptMarkdown(
-                  _planText!,
-                  style: AppTypography.sans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    color: AppTheme.textPrimary,
-                    height: 1.5,
-                  ),
-                  codeBuilder: (context, name, code, closed) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: CodeBlock(text: code),
-                  ),
-                ),
-              ),
-            ),
-
-          // Requested Permissions
-          if (_allowedPrompts.isNotEmpty) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Divider(height: 1, color: AppTheme.border),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Requested Permissions',
-                    style: AppTypography.sans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ..._allowedPrompts.map(
-                    (item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            LucideIcons.terminal,
-                            size: 13,
-                            color: AppTheme.textTertiary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              item,
-                              style: AppTypography.sans(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w400,
-                                color: AppTheme.textSecondary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+              child: _buildActionSection(),
             ),
           ],
-
-          // Action section (hidden after resolved)
-          if (!widget.approval.resolved) ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12),
-              child: Divider(height: 1, color: AppTheme.border),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _buildButtonsView(),
-            ),
-          ] else
-            const SizedBox(height: 12),
         ],
       ),
     );
   }
 
-  Widget _buildButtonsView() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
+  Widget _buildPlanBody(_PlanContent plan) {
+    final children = <Widget>[];
+
+    if (plan.title != null) {
+      children.add(
         Text(
-          'Ready to code?',
+          plan.title!,
           style: AppTypography.sans(
             fontSize: 14,
             fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
           ),
         ),
-        const SizedBox(height: 10),
-        ..._buildActionButtons(),
-      ],
-    );
-  }
-
-  List<Widget> _buildActionButtons() {
-    final widgets = <Widget>[];
-
-    for (final option in widget.approval.options) {
-      if (widgets.isNotEmpty) {
-        widgets.add(const SizedBox(height: 10));
-      }
-
-      switch (option.kind) {
-        case PermOptionKind.allowAlways:
-          widgets.add(_buildFilledButton(option));
-        case PermOptionKind.allowOnce:
-          widgets.add(_buildOutlinedButton(option));
-        case PermOptionKind.rejectOnce:
-        case PermOptionKind.rejectAlways:
-          widgets.add(_buildMutedButton(option));
-      }
+      );
     }
 
-    return widgets;
-  }
-
-  void _handleTap(PermOption option) {
-    if (!widget.enabled) return;
-    widget.onReply(option.optionId);
-  }
-
-  Widget _buildFilledButton(PermOption option) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _handleTap(option),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-        decoration: BoxDecoration(
-          color: AppTheme.primary,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          option.name,
+    if (plan.description != null) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 10));
+      }
+      children.add(
+        Text(
+          plan.description!,
           style: AppTypography.sans(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
-            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            color: AppTheme.textSecondary,
+            height: 1.5,
           ),
-          textAlign: TextAlign.center,
         ),
-      ),
-    );
-  }
+      );
+    }
 
-  Widget _buildOutlinedButton(PermOption option) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _handleTap(option),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border.all(color: const Color(0xFFD1D5DB), width: 1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          option.name,
+    if (plan.steps.isNotEmpty) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 10));
+      }
+      children.add(
+        Text(
+          'Steps:',
           style: AppTypography.sans(
-            fontSize: 13,
-            fontWeight: FontWeight.w500,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
           ),
-          textAlign: TextAlign.center,
         ),
-      ),
+      );
+      children.add(const SizedBox(height: 4));
+      children.addAll(
+        plan.steps.map(
+          (step) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              step,
+              style: AppTypography.mono(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ),
+      );
+    } else if (plan.permissions.isNotEmpty) {
+      if (children.isNotEmpty) {
+        children.add(const SizedBox(height: 10));
+      }
+      children.add(
+        Text(
+          'Requested Permissions',
+          style: AppTypography.sans(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppTheme.textPrimary,
+          ),
+        ),
+      );
+      children.add(const SizedBox(height: 4));
+      children.addAll(
+        plan.permissions.map(
+          (item) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              item,
+              style: AppTypography.mono(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textSecondary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (children.isEmpty) {
+      children.add(
+        Text(
+          'Review the proposed implementation before switching to coding.',
+          style: AppTypography.sans(
+            fontSize: 12,
+            fontWeight: FontWeight.w400,
+            color: AppTheme.textSecondary,
+            height: 1.5,
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
     );
   }
 
-  Widget _buildMutedButton(PermOption option) {
+  Widget _buildActionSection() {
+    final primary =
+        _firstOption(PermOptionKind.allowAlways) ??
+        _firstOption(PermOptionKind.allowOnce);
+    final secondary = primary?.kind == PermOptionKind.allowAlways
+        ? _firstOption(PermOptionKind.allowOnce)
+        : null;
+    final reject =
+        _firstOption(PermOptionKind.rejectOnce) ??
+        _firstOption(PermOptionKind.rejectAlways);
+
+    final children = <Widget>[
+      Text(
+        'Ready to code?',
+        style: AppTypography.sans(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.textPrimary,
+        ),
+      ),
+    ];
+
+    if (primary != null) {
+      children.add(const SizedBox(height: 12));
+      children.add(_buildPrimaryButton(primary));
+    }
+
+    if (secondary != null) {
+      children.add(const SizedBox(height: 12));
+      children.add(_buildSecondaryButton(secondary));
+    }
+
+    if (reject != null) {
+      children.add(const SizedBox(height: 12));
+      children.add(_buildTextAction(reject));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  PermOption? _firstOption(PermOptionKind kind) {
+    for (final option in approval.options) {
+      if (option.kind == kind) {
+        return option;
+      }
+    }
+    return null;
+  }
+
+  Widget _buildPrimaryButton(PermOption option) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => _handleTap(option),
+      onTap: enabled ? () => onReply(option.optionId) : null,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 11, horizontal: 16),
+        height: 44,
+        color: enabled ? AppTheme.primary : AppTheme.borderStrong,
         alignment: Alignment.center,
         child: Text(
           option.name,
           style: AppTypography.sans(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: AppTheme.textMetadata,
+            color: AppTheme.surface,
           ),
-          textAlign: TextAlign.center,
         ),
       ),
     );
+  }
+
+  Widget _buildSecondaryButton(PermOption option) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: enabled ? () => onReply(option.optionId) : null,
+      child: Container(
+        width: double.infinity,
+        height: 44,
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          border: Border.all(color: AppTheme.chipBorder),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          option.name,
+          style: AppTypography.sans(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextAction(PermOption option) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: enabled ? () => onReply(option.optionId) : null,
+      child: SizedBox(
+        width: double.infinity,
+        height: 44,
+        child: Center(
+          child: Text(
+            option.name,
+            style: AppTypography.sans(
+              fontSize: 13,
+              fontWeight: FontWeight.w400,
+              color: enabled ? AppTheme.textTertiary : AppTheme.textMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanContent {
+  final String? title;
+  final String? description;
+  final List<String> steps;
+  final List<String> permissions;
+
+  const _PlanContent({
+    this.title,
+    this.description,
+    this.steps = const [],
+    this.permissions = const [],
+  });
+
+  factory _PlanContent.fromApproval(ApprovalRequest approval) {
+    final prose = <String>[];
+    final steps = <String>[];
+
+    final lines = (approval.planMarkdown ?? '')
+        .split('\n')
+        .map(_cleanMarkdownLine)
+        .where((line) => line.isNotEmpty)
+        .toList();
+
+    for (final line in lines) {
+      if (_isStructuralLabel(line)) {
+        continue;
+      }
+
+      final numbered = RegExp(r'^\d+[.)]\s+(.+)$').firstMatch(line);
+      if (numbered != null) {
+        steps.add(numbered.group(1)!.trim());
+        continue;
+      }
+
+      final bullet = RegExp(r'^[-*]\s+(.+)$').firstMatch(line);
+      if (bullet != null) {
+        steps.add(bullet.group(1)!.trim());
+        continue;
+      }
+
+      prose.add(line);
+    }
+
+    final explicitTitle = _normalizeText(approval.title);
+    final hasSpecificTitle =
+        explicitTitle != null && !_isGenericPlanTitle(explicitTitle);
+    String? title = hasSpecificTitle ? explicitTitle : null;
+
+    final descriptionCandidate = _normalizeText(approval.descriptionText);
+    String? description =
+        descriptionCandidate != null && descriptionCandidate != title
+        ? descriptionCandidate
+        : null;
+
+    if (title == null && prose.isNotEmpty) {
+      title = prose.removeAt(0);
+    }
+
+    if (description == null && prose.isNotEmpty) {
+      description = prose.removeAt(0);
+    }
+
+    if (prose.isNotEmpty) {
+      final remainder = prose.join(' ');
+      description = description == null ? remainder : '$description $remainder';
+    }
+
+    return _PlanContent(
+      title: title,
+      description: description,
+      steps: steps,
+      permissions: approval.allowedPrompts,
+    );
+  }
+
+  static String _cleanMarkdownLine(String line) {
+    return line
+        .replaceFirst(RegExp(r'^#+\s*'), '')
+        .replaceFirst(RegExp(r'^>\s*'), '')
+        .replaceAll('**', '')
+        .replaceAll('__', '')
+        .replaceAll('`', '')
+        .trim();
+  }
+
+  static bool _isStructuralLabel(String line) {
+    final lower = line.toLowerCase();
+    return lower == 'steps:' || lower == 'step:' || lower == 'plan:';
+  }
+
+  static String? _normalizeText(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
+  }
+
+  static bool _isGenericPlanTitle(String value) {
+    final normalized = value.trim().toLowerCase();
+    return normalized == 'review plan' ||
+        normalized == 'plan review' ||
+        normalized == 'plan' ||
+        normalized == 'approve plan';
   }
 }

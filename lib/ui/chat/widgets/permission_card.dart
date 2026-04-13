@@ -21,32 +21,37 @@ class PermissionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = approval.title.trim().isNotEmpty
+        ? approval.title.trim()
+        : 'Permission Required';
+    final description =
+        approval.descriptionText != null && approval.descriptionText != title
+        ? approval.descriptionText
+        : null;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.surface,
         border: const Border(
-          left: BorderSide(color: AppTheme.warning, width: 3),
+          left: BorderSide(color: Color(0xFFC39229), width: 3),
         ),
-        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             children: [
               const Icon(
                 LucideIcons.shieldAlert,
-                color: AppTheme.warning,
+                color: Color(0xFFC39229),
                 size: 16,
               ),
               const SizedBox(width: 8),
               Text(
-                'Permission Required',
+                title,
                 style: AppTypography.sans(
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
                 ),
@@ -55,10 +60,9 @@ class PermissionCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Description
-          if (approval.descriptionText != null)
+          if (description != null)
             Text(
-              approval.descriptionText!,
+              description,
               style: AppTypography.sans(
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
@@ -66,20 +70,16 @@ class PermissionCard extends StatelessWidget {
               ),
             ),
 
-          // Command preview
           if (approval.commandText != null) ...[
             const SizedBox(height: 12),
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-              decoration: BoxDecoration(
-                color: AppTheme.codeBg,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: const BoxDecoration(color: AppTheme.codeBg),
               child: Text(
                 approval.commandText!,
                 style: AppFonts.code(
-                  fontSize: 13,
+                  fontSize: 12,
                   fontWeight: FontWeight.w400,
                   color: AppTheme.codeText,
                 ),
@@ -87,19 +87,6 @@ class PermissionCard extends StatelessWidget {
             ),
           ],
 
-          if (approval.cwd != null && approval.cwd!.isNotEmpty) ...[
-            const SizedBox(height: 10),
-            Text(
-              'cwd: ${approval.cwd!}',
-              style: AppTypography.sans(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textTertiary,
-              ),
-            ),
-          ],
-
-          // Action buttons: 3 equal columns
           const SizedBox(height: 12),
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -124,16 +111,13 @@ class PermissionCard extends StatelessWidget {
           alwaysButton = _buildTextButton(option, AppTheme.textTertiary);
         case PermOptionKind.rejectOnce:
         case PermOptionKind.rejectAlways:
-          denyButton = _buildTextButton(option, AppTheme.textSecondary);
+          denyButton = _buildTextButton(option, AppTheme.textTertiary);
       }
     }
 
-    // Fall back to showing all options as equal columns if no match
     if (allowButton == null && alwaysButton == null && denyButton == null) {
       return approval.options.map((option) {
-        return Expanded(
-          child: _buildTextButton(option, AppTheme.textSecondary),
-        );
+        return Expanded(child: _buildTextButton(option, AppTheme.textTertiary));
       }).toList();
     }
 
@@ -158,25 +142,23 @@ class PermissionCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () {
         if (!enabled) return;
-        debugPrint('[PermCard] tapped Allow: ${option.optionId}');
         onReply(option.optionId);
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppTheme.surfaceMuted,
           border: Border.all(
-            color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
-            width: 1.5,
+            color: enabled ? AppTheme.chipBorder : AppTheme.textMuted,
+            width: 1,
           ),
-          borderRadius: BorderRadius.circular(8),
         ),
         alignment: Alignment.center,
         child: Text(
           option.name,
           style: AppTypography.sans(
             fontSize: 13,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w500,
             color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
           ),
         ),
@@ -189,7 +171,6 @@ class PermissionCard extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: () {
         if (!enabled) return;
-        debugPrint('[PermCard] tapped ${option.name}: ${option.optionId}');
         onReply(option.optionId);
       },
       child: Container(
@@ -199,7 +180,7 @@ class PermissionCard extends StatelessWidget {
           option.name,
           style: AppTypography.sans(
             fontSize: 13,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w400,
             color: enabled ? color : AppTheme.textMuted,
           ),
           textAlign: TextAlign.center,

@@ -37,16 +37,19 @@ class _ToolGroupCardState extends State<ToolGroupCard>
   late bool _expanded;
 
   bool get _hasRunning => widget.tools.any(
-        (t) =>
-            t.status == ToolStatus.pending ||
-            t.status == ToolStatus.inProgress,
-      );
+    (t) => t.status == ToolStatus.pending || t.status == ToolStatus.inProgress,
+  );
 
-  bool get _hasFailed =>
-      widget.tools.any((t) => t.status == ToolStatus.failed);
+  bool get _hasFailed => widget.tools.any((t) => t.status == ToolStatus.failed);
 
   Color get _accentColor =>
       _hasFailed ? AppTheme.failedRed : AppTheme.successText;
+
+  static final _labelStyle = AppTypography.mono(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.8,
+  );
 
   @override
   void initState() {
@@ -121,8 +124,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+            color: AppTheme.surface,
             border: Border(
               left: BorderSide(
                 width: 3,
@@ -173,35 +175,13 @@ class _ToolGroupCardState extends State<ToolGroupCard>
             ),
           ),
           const Spacer(),
-          if (_hasRunning) ...[
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'running',
-                  style: AppTypography.sans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                    color: AppTheme.successText,
-                  ),
-                ),
-                SizedBox(
-                  width: 18,
-                  child: Text(
-                    '.' * _dotCount,
-                    style: AppTypography.sans(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                      color: AppTheme.successText,
-                    ),
-                  ),
-                ),
-              ],
+          Text(
+            _headerStatusLabel(),
+            style: _labelStyle.copyWith(
+              color: _hasFailed ? AppTheme.failedRed : AppTheme.successText,
             ),
-            const SizedBox(width: 8),
-          ],
+          ),
+          const SizedBox(width: 8),
           Icon(
             _expanded ? LucideIcons.chevronDown : LucideIcons.chevronRight,
             size: 14,
@@ -221,8 +201,8 @@ class _ToolGroupCardState extends State<ToolGroupCard>
       padding: const EdgeInsets.only(left: 26, top: 4),
       child: Text(
         _summaryText(),
-        style: AppTypography.sans(
-          fontSize: 12,
+        style: AppTypography.mono(
+          fontSize: 11,
           fontWeight: FontWeight.w500,
           color: AppTheme.textMetadata,
         ),
@@ -240,11 +220,19 @@ class _ToolGroupCardState extends State<ToolGroupCard>
       counts[k] = (counts[k] ?? 0) + 1;
       if (!seen.contains(k)) seen.add(k);
     }
-    return seen.map((k) {
-      final label = _kindLabel(k);
-      final count = counts[k]!;
-      return count > 1 ? '$label \u00D7$count' : label;
-    }).join(' \u00B7 ');
+    return seen
+        .map((k) {
+          final label = _kindLabel(k);
+          final count = counts[k]!;
+          return count > 1 ? '$label \u00D7$count' : label;
+        })
+        .join(' \u00B7 ');
+  }
+
+  String _headerStatusLabel() {
+    if (_hasFailed) return 'FAILED';
+    if (_hasRunning) return 'RUNNING${'.' * _dotCount}';
+    return 'TOOLS';
   }
 
   // ---------------------------------------------------------------------------
@@ -269,8 +257,8 @@ class _ToolGroupCardState extends State<ToolGroupCard>
           Expanded(
             child: Text(
               '$preview$suffix',
-              style: AppTypography.sans(
-                fontSize: 12,
+              style: AppTypography.mono(
+                fontSize: 11,
                 fontWeight: FontWeight.w500,
                 color: AppTheme.failedRed,
               ),
@@ -333,10 +321,10 @@ class _ToolGroupCardState extends State<ToolGroupCard>
             const SizedBox(width: 8),
             Text(
               _kindLabel(kind).toUpperCase(),
-              style: AppTypography.sans(
+              style: AppTypography.mono(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+                letterSpacing: 0.8,
                 color: AppTheme.textMetadata,
               ),
             ),
@@ -380,7 +368,8 @@ class _ToolGroupCardState extends State<ToolGroupCard>
         case ToolKind.switchMode:
           preview = input.mode;
         case ToolKind.other:
-          preview = input.description ??
+          preview =
+              input.description ??
               input.command?.display ??
               input.filePath ??
               input.pattern ??

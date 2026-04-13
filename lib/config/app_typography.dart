@@ -4,6 +4,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class AppTypography {
+  static const sansFamily = 'Geist';
+  static const monoFamily = 'GeistMono';
+  static const _sansFallback = [
+    'SF Pro Text',
+    'Roboto',
+    'Helvetica Neue',
+    'Arial',
+  ];
+
   static TextStyle sans({
     TextStyle? textStyle,
     Color? color,
@@ -26,7 +35,7 @@ class AppTypography {
     double? decorationThickness,
   }) {
     return _font(
-      null,
+      sansFamily,
       textStyle: textStyle,
       color: color,
       backgroundColor: backgroundColor,
@@ -46,6 +55,7 @@ class AppTypography {
       decorationColor: decorationColor,
       decorationStyle: decorationStyle,
       decorationThickness: decorationThickness,
+      fontFamilyFallback: _sansFallback,
     );
   }
 
@@ -71,7 +81,7 @@ class AppTypography {
     double? decorationThickness,
   }) {
     return _font(
-      _systemMonospaceFamily,
+      monoFamily,
       textStyle: textStyle,
       color: color,
       backgroundColor: backgroundColor,
@@ -149,24 +159,6 @@ class AppTypography {
       decorationStyle: decorationStyle,
       decorationThickness: decorationThickness,
     );
-  }
-
-  static String get _systemMonospaceFamily {
-    if (kIsWeb) {
-      return 'monospace';
-    }
-
-    switch (defaultTargetPlatform) {
-      case TargetPlatform.iOS:
-      case TargetPlatform.macOS:
-        return 'Menlo';
-      case TargetPlatform.windows:
-        return 'Consolas';
-      case TargetPlatform.android:
-      case TargetPlatform.fuchsia:
-      case TargetPlatform.linux:
-        return 'monospace';
-    }
   }
 
   static List<String> get _systemMonospaceFallback {

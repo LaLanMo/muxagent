@@ -20,28 +20,28 @@ class StatusIndicator extends StatelessWidget {
     switch (status) {
       case SessionStatus.running:
         return const StatusIndicator(
-          label: 'Running',
+          label: 'running',
           color: AppTheme.successText,
           backgroundColor: AppTheme.successBg,
         );
       case SessionStatus.waitingApproval:
         return const StatusIndicator(
-          label: 'Approval',
+          label: 'awaiting',
           color: AppTheme.warning,
           backgroundColor: AppTheme.warningBg,
         );
       case SessionStatus.error:
         return const StatusIndicator(
-          label: 'Error',
+          label: 'failed',
           color: AppTheme.errorText,
           backgroundColor: AppTheme.errorBg,
         );
       case SessionStatus.done:
       case SessionStatus.idle:
-        return StatusIndicator(
-          label: 'Idle',
-          color: AppTheme.textSecondary,
-          backgroundColor: AppTheme.idleBg,
+        return const StatusIndicator(
+          label: 'done',
+          color: AppTheme.statusNeutralText,
+          backgroundColor: AppTheme.statusNeutralBg,
         );
     }
   }
@@ -49,26 +49,26 @@ class StatusIndicator extends StatelessWidget {
   factory StatusIndicator.toolStatus(ToolStatus status) {
     switch (status) {
       case ToolStatus.pending:
-        return StatusIndicator(
-          label: 'Pending',
-          color: AppTheme.textSecondary,
-          backgroundColor: AppTheme.idleBg,
+        return const StatusIndicator(
+          label: 'pending',
+          color: AppTheme.statusNeutralText,
+          backgroundColor: AppTheme.statusNeutralBg,
         );
       case ToolStatus.inProgress:
         return const StatusIndicator(
-          label: 'Running',
+          label: 'running',
           color: AppTheme.successText,
           backgroundColor: AppTheme.successBg,
         );
       case ToolStatus.completed:
         return const StatusIndicator(
-          label: 'Done',
-          color: AppTheme.successText,
-          backgroundColor: AppTheme.successBg,
+          label: 'done',
+          color: AppTheme.statusNeutralText,
+          backgroundColor: AppTheme.statusNeutralBg,
         );
       case ToolStatus.failed:
         return const StatusIndicator(
-          label: 'Failed',
+          label: 'failed',
           color: AppTheme.warning,
           backgroundColor: AppTheme.warningBg,
         );
@@ -78,29 +78,18 @@ class StatusIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: backgroundColor ?? color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTypography.sans(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-          ),
-        ],
+      child: Text(
+        label,
+        style: AppTypography.mono(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
       ),
     );
   }

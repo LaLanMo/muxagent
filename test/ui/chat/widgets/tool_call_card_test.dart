@@ -70,4 +70,25 @@ void main() {
     expect(find.text('Previewing 1 of 2 file changes'), findsOneWidget);
     expect(find.text('+1 more file change in details'), findsOneWidget);
   });
+
+  testWidgets('completed read tool uses status badge and compact home path', (
+    tester,
+  ) async {
+    final tool = ToolActivity(
+      id: 'tool-3',
+      name: 'Read',
+      kind: ToolKind.read.value,
+      status: ToolStatus.completed,
+      input: const ToolInputInfo(filePath: '/Users/by/project/lib/file.dart'),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ToolCallCard(tool: tool)),
+      ),
+    );
+
+    expect(find.text('DONE'), findsOneWidget);
+    expect(find.text('~/project/lib/file.dart'), findsOneWidget);
+  });
 }

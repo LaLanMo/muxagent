@@ -18,7 +18,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
       effects: controller.uiEffect,
       child: Column(
         children: [
-          // Header – height 56, padding [0, 16], alignItems center
           Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -29,8 +28,8 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                 Text(
                   'Settings',
                   style: AppTypography.sans(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w600,
                     color: AppTheme.textPrimary,
                   ),
                 ),
@@ -38,7 +37,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               ],
             ),
           ),
-          // Body – vertical, clip, fill_container height
           Expanded(
             child: ClipRect(
               child: SingleChildScrollView(
@@ -55,14 +53,13 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                       _buildSectionLabel('PAIRING'),
                       _buildSettingsRow(
                         icon: LucideIcons.qrCode,
-                        label: 'Scan QR',
+                        label: 'Scan QR Code',
                         trailing: Icon(
                           LucideIcons.chevronRight,
                           size: 16,
                           color: AppTheme.textMuted,
                         ),
                         onTap: controller.navigateToScan,
-                        hasBorder: true,
                       ),
                       _buildSettingsRow(
                         icon: LucideIcons.link,
@@ -74,7 +71,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         ),
                         onTap: controller.showPasteUrlDialog,
                       ),
-                      _buildSectionLabel('VOICE'),
+                      _buildSectionLabel('CONFIGURATION'),
                       _buildSettingsRow(
                         icon: LucideIcons.mic,
                         label: 'Speech to Text',
@@ -98,7 +95,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                             color: AppTheme.textTertiary,
                           ),
                         ),
-                        hasBorder: true,
                       ),
                       _buildSettingsRow(
                         icon: LucideIcons.shield,
@@ -109,7 +105,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                           color: AppTheme.textMuted,
                         ),
                         onTap: controller.openPrivacyPolicy,
-                        hasBorder: true,
                       ),
                       _buildSettingsRow(
                         icon: LucideIcons.fileText,
@@ -121,12 +116,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         ),
                         onTap: controller.openTermsOfUse,
                       ),
-                      // _buildSettingsRow(
-                      //   icon: LucideIcons.zap,
-                      //   label: "What's New",
-                      //   trailing: Icon(LucideIcons.chevronRight,
-                      //       size: 16, color: AppTheme.textMuted),
-                      // ),
                       const SizedBox(height: 24),
                     ],
                   );
@@ -139,15 +128,14 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     );
   }
 
-  // Section label: padding [20, 16, 8, 16], system sans 13 w500 #808690 letterSpacing 1
   Widget _buildSectionLabel(String text) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Text(
         text,
-        style: AppTypography.sans(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
+        style: AppTypography.mono(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
           letterSpacing: 1,
           color: AppTheme.textTertiary,
         ),
@@ -155,22 +143,20 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     );
   }
 
-  // Build all machine rows from controller.machines
   List<Widget> _buildMachineRows() {
     final machines = controller.machines;
-    // Force reactivity
     machines.length;
     if (machines.isEmpty) return const [];
 
     return machines.map((machine) => _buildMachineRow(machine)).toList();
   }
 
-  // Machine row: padding [14, 16], gap 12, alignItems center, bottom border #E5E7EB
   Widget _buildMachineRow(PairedMachine machine) {
     final status = controller.machineConnectionState(machine.machineId);
     final connected = status == MachineConnectionDisplayState.online;
     final connecting = status == MachineConnectionDisplayState.connecting;
     final hostname = machine.hostname ?? 'Unknown host';
+    final helperText = !connected && !connecting ? 'Tap to reconnect' : null;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -178,17 +164,15 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           ? null
           : () => controller.connectMachine(machine),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppTheme.border)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Monitor icon 20x20 #6B6F76
-            Icon(LucideIcons.monitor, size: 20, color: AppTheme.textSecondary),
+            Icon(LucideIcons.monitor, size: 20, color: AppTheme.textTertiary),
             const SizedBox(width: 12),
-            // Machine name: system sans 15 normal #1D1D1F, fill_container
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,16 +181,16 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                     hostname,
                     style: AppTypography.sans(
                       fontSize: 15,
-                      fontWeight: FontWeight.normal,
+                      fontWeight: FontWeight.w400,
                       color: AppTheme.textPrimary,
                     ),
                   ),
-                  if (!connected && !connecting)
+                  if (helperText != null)
                     Text(
-                      'Tap to reconnect',
-                      style: AppTypography.sans(
+                      helperText,
+                      style: AppTypography.mono(
                         fontSize: 12,
-                        color: AppTheme.textTertiary,
+                        color: AppTheme.textMetadata,
                       ),
                     ),
                 ],
@@ -220,28 +204,27 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     );
   }
 
-  // Status pill: cornerRadius 8, gap 5, padding [3, 8]
   Widget _buildStatusPill(MachineConnectionDisplayState status) {
     final Color pillColor;
-    final Color dotColor;
+    final Color textColor;
     final String textStr;
 
     switch (status) {
       case MachineConnectionDisplayState.online:
         pillColor = AppTheme.successBg;
-        dotColor = AppTheme.successText;
+        textColor = AppTheme.successText;
         textStr = 'online';
       case MachineConnectionDisplayState.connecting:
         pillColor = AppTheme.warningBg;
-        dotColor = AppTheme.statusConnecting;
+        textColor = AppTheme.statusConnecting;
         textStr = 'connecting';
       case MachineConnectionDisplayState.serverLost:
         pillColor = AppTheme.serverLostBg;
-        dotColor = AppTheme.serverLostText;
-        textStr = 'server lost';
+        textColor = AppTheme.serverLostText;
+        textStr = 'offline';
       case MachineConnectionDisplayState.offline:
         pillColor = AppTheme.idleBg;
-        dotColor = AppTheme.textTertiary;
+        textColor = AppTheme.statusNeutralText;
         textStr = 'offline';
     }
 
@@ -249,74 +232,44 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
         color: pillColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (status == MachineConnectionDisplayState.connecting)
-            const SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.5,
-                color: AppTheme.statusConnecting,
-              ),
-            )
-          else
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: dotColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-          const SizedBox(width: 5),
-          Text(
-            textStr,
-            style: AppTypography.sans(
-              fontSize: 12,
-              fontWeight: FontWeight.normal,
-              color: dotColor,
-            ),
-          ),
-        ],
+      child: Text(
+        textStr,
+        style: AppTypography.mono(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: textColor,
+        ),
       ),
     );
   }
 
-  // Settings row: padding [14, 16], gap 12, alignItems center, bottom border #E5E7EB
   Widget _buildSettingsRow({
     required IconData icon,
     required String label,
     required Widget trailing,
     VoidCallback? onTap,
-    bool hasBorder = false,
   }) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: hasBorder
-            ? const BoxDecoration(
-                border: Border(bottom: BorderSide(color: AppTheme.border)),
-              )
-            : null,
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: AppTheme.border)),
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Left icon 20x20 #6B6F76
-            Icon(icon, size: 20, color: AppTheme.textSecondary),
+            Icon(icon, size: 20, color: AppTheme.textTertiary),
             const SizedBox(width: 12),
-            // Label: system sans 15 normal #1D1D1F, fill_container
             Expanded(
               child: Text(
                 label,
                 style: AppTypography.sans(
                   fontSize: 15,
-                  fontWeight: FontWeight.normal,
+                  fontWeight: FontWeight.w400,
                   color: AppTheme.textPrimary,
                 ),
               ),

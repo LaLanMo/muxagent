@@ -3,7 +3,6 @@ import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
-import '../../config/fonts.dart';
 import '../../routing/routes.dart';
 import '../../config/theme.dart';
 import '../../domain/approval.dart';
@@ -189,15 +188,7 @@ class ChatScreen extends GetView<ChatViewModel> {
                         messageWidgets.length + unlinkedApprovals.length;
 
                     if (itemCount == 0) {
-                      return Center(
-                        child: Text(
-                          'Send a message to get started',
-                          style: AppTypography.sans(
-                            fontSize: 14,
-                            color: AppTheme.textTertiary,
-                          ),
-                        ),
-                      );
+                      return const SizedBox.expand();
                     }
 
                     return ListView.builder(
@@ -311,23 +302,31 @@ class ChatScreen extends GetView<ChatViewModel> {
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppTheme.border)),
+            border: Border(bottom: BorderSide(color: AppTheme.borderStrong)),
           ),
           child: Row(
             children: [
-              GestureDetector(
-                onTap: () async {
-                  if (await controller.prepareForClose()) {
-                    Get.back();
-                  }
-                },
-                child: const Icon(
-                  LucideIcons.chevronLeft,
-                  size: 22,
-                  color: AppTheme.textSecondary,
+              SizedBox(
+                width: 44,
+                height: 44,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () async {
+                    if (await controller.prepareForClose()) {
+                      Get.back();
+                    }
+                  },
+                  child: const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Icon(
+                      LucideIcons.chevronLeft,
+                      size: 20,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: Obx(
                   () => Column(
@@ -336,22 +335,24 @@ class ChatScreen extends GetView<ChatViewModel> {
                     children: [
                       if (controller.cwd.isNotEmpty)
                         Text(
-                          controller.cwd,
-                          style: AppFonts.code(
+                          _formatHeaderPath(controller.cwd),
+                          style: AppTypography.mono(
                             fontSize: 13,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.w600,
                             color: AppTheme.textPrimary,
+                            height: 1,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      const SizedBox(height: 3),
-                      Row(
+                      if (controller.cwd.isNotEmpty) const SizedBox(height: 3),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
                           _buildStatusPill(controller.sessionStatus.value),
                           if (controller.hasModeOptions &&
-                              controller.currentMode.value != null) ...[
-                            const SizedBox(width: 6),
+                              controller.currentMode.value != null)
                             GestureDetector(
                               onTap: controller.canOpenModeDropdown
                                   ? controller.toggleModeDropdown
@@ -363,14 +364,18 @@ class ChatScreen extends GetView<ChatViewModel> {
                                 isLoading: controller.isChangingMode.value,
                               ),
                             ),
-                          ],
+                          if (!controller.showModeDropdown.value &&
+                              controller.currentModel.value
+                                      ?.trim()
+                                      .isNotEmpty ==
+                                  true)
+                            _buildModelPill(controller.currentModel.value!),
                         ],
                       ),
                     ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
               SizedBox(
                 width: 44,
                 height: 44,
@@ -381,8 +386,8 @@ class ChatScreen extends GetView<ChatViewModel> {
                     alignment: Alignment.centerRight,
                     child: Icon(
                       LucideIcons.settings,
-                      size: 20,
-                      color: AppTheme.textSecondary,
+                      size: 18,
+                      color: AppTheme.textTertiary,
                     ),
                   ),
                 ),
@@ -395,55 +400,26 @@ class ChatScreen extends GetView<ChatViewModel> {
   }
 
   Widget _buildStatusPill(SessionStatus status) {
-    final Color dotColor;
-    final Color bgColor;
-    final String label;
-
-    switch (status) {
-      case SessionStatus.running:
-        dotColor = AppTheme.successText;
-        bgColor = AppTheme.successBg;
-        label = 'running';
-      case SessionStatus.waitingApproval:
-        dotColor = AppTheme.warning;
-        bgColor = AppTheme.warningBg;
-        label = 'approval';
-      case SessionStatus.error:
-        dotColor = AppTheme.errorText;
-        bgColor = AppTheme.errorBg;
-        label = 'error';
-      case SessionStatus.done:
-      case SessionStatus.idle:
-        dotColor = AppTheme.textSecondary;
-        bgColor = AppTheme.idleBg;
-        label = 'idle';
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+    final (dotColor, bgColor, label) = switch (status) {
+      SessionStatus.running => (
+        AppTheme.successText,
+        AppTheme.successBg,
+        'running',
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: AppTypography.sans(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: dotColor,
-            ),
-          ),
-        ],
+      SessionStatus.waitingApproval => (
+        const Color(0xFF8B6D24),
+        AppTheme.warningBg,
+        'approval',
       ),
+      SessionStatus.error => (AppTheme.errorText, AppTheme.errorBg, 'error'),
+      SessionStatus.done ||
+      SessionStatus.idle => (AppTheme.textSecondary, AppTheme.idleBg, 'idle'),
+    };
+
+    return _buildInfoPill(
+      label: label,
+      dotColor: dotColor,
+      background: bgColor,
     );
   }
 
@@ -472,16 +448,22 @@ class ChatScreen extends GetView<ChatViewModel> {
       ChatUiMode.normal => (Colors.transparent, Colors.transparent, ''),
     };
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: background,
-      child: Text(
-        text,
-        style: AppTypography.sans(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: foreground,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        color: background,
+        child: Text(
+          text,
+          style: AppTypography.sans(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: foreground,
+            height: 1.35,
+          ),
         ),
       ),
     );
@@ -493,52 +475,26 @@ class ChatScreen extends GetView<ChatViewModel> {
     bool isOpen = false,
     bool isLoading = false,
   }) {
-    final dotColor = _modeColor(mode);
-    final bgColor = _modeBgColor(mode);
+    return _buildModeTagPill(
+      label: mode.label,
+      dotColor: _modeTagColor(mode),
+      foreground: _modeTagColor(mode),
+      background: _modeBgColor(mode),
+      showChevron: showChevron,
+      isOpen: isOpen,
+      isLoading: isLoading,
+    );
+  }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            mode.label,
-            style: AppTypography.sans(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: dotColor,
-            ),
-          ),
-          if (isLoading) ...[
-            const SizedBox(width: 6),
-            SizedBox.square(
-              dimension: 11,
-              child: CircularProgressIndicator(
-                strokeWidth: 1.6,
-                valueColor: AlwaysStoppedAnimation<Color>(dotColor),
-              ),
-            ),
-          ],
-          if (showChevron) ...[
-            const SizedBox(width: 4),
-            Icon(
-              isOpen ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-              size: 12,
-              color: dotColor,
-            ),
-          ],
-        ],
-      ),
+  Widget _buildModelPill(String value) {
+    final label = _resolveModelLabel(value);
+    if (label.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return _buildTextPill(
+      label: label,
+      foreground: AppTheme.accent,
+      background: const Color(0xFFFEE8D6),
     );
   }
 
@@ -555,97 +511,151 @@ class ChatScreen extends GetView<ChatViewModel> {
       width: double.infinity,
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        border: const Border(bottom: BorderSide(color: AppTheme.border)),
+        border: const Border(
+          left: BorderSide(color: AppTheme.borderStrong),
+          right: BorderSide(color: AppTheme.borderStrong),
+          bottom: BorderSide(color: AppTheme.borderStrong),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: const Color(0xFF000000).withValues(alpha: 0.1),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: Column(
-        children: modes
-            .map((m) => _buildModeRow(m, m.id == current.id))
-            .toList(),
+        children: [
+          for (var i = 0; i < modes.length; i++)
+            _buildModeRow(modes[i], modes[i].id == current.id, isFirst: i == 0),
+        ],
       ),
     );
   }
 
-  Widget _buildModeRow(ModeOption mode, bool isSelected) {
+  Widget _buildModeRow(
+    ModeOption mode,
+    bool isSelected, {
+    bool isFirst = false,
+  }) {
     final isBusy = controller.isChangingMode.value;
-    final bgColor = isSelected ? _modeBgColor(mode) : Colors.transparent;
-    final accentColor = _modeColor(mode);
-    final textColor = isSelected ? accentColor : AppTheme.textPrimary;
+    final dotColor = _modeDropdownDotColor(mode);
 
     return GestureDetector(
       onTap: isBusy ? null : () => controller.changeMode(mode),
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: isBusy ? bgColor.withValues(alpha: 0.7) : bgColor,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 6,
-              height: 6,
-              decoration: BoxDecoration(
-                color: accentColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              mode.label,
-              style: AppTypography.sans(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: textColor,
-              ),
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Icon(LucideIcons.check, size: 14, color: accentColor),
-            ],
-            const Spacer(),
-            Flexible(
-              child: Text(
-                _modeDescription(mode),
-                style: AppTypography.sans(
-                  fontSize: 12,
-                  color: isSelected
-                      ? accentColor.withValues(alpha: 0.7)
-                      : AppTheme.textTertiary,
+      child: Opacity(
+        opacity: isBusy && !isSelected ? 0.65 : 1,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: isFirst
+                ? null
+                : const Border(top: BorderSide(color: AppTheme.border)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: dotColor,
+                  shape: BoxShape.circle,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      mode.label,
+                      style: AppTypography.sans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppTheme.textPrimary,
+                        height: 1.1,
+                      ),
+                    ),
+                    if ((mode.description?.trim() ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        mode.description!.trim(),
+                        style: AppTypography.sans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                          color: AppTheme.textTertiary,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (isBusy && isSelected)
+                SizedBox.square(
+                  dimension: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.8,
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      AppTheme.textPrimary,
+                    ),
+                  ),
+                )
+              else if (isSelected)
+                const Icon(
+                  LucideIcons.check,
+                  size: 14,
+                  color: AppTheme.textPrimary,
+                ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  static Color _modeColor(ModeOption mode) {
+  static Color _modeTagColor(ModeOption mode) {
     switch (mode.id) {
       case 'bypassPermissions':
       case 'full-access':
-        return AppTheme.errorText;
+        return AppTheme.accent;
       case 'acceptEdits':
       case 'autoEdit':
-        return AppTheme.primary;
+        return AppTheme.successText;
       case 'yolo':
-        return AppTheme.errorText;
+      case 'dontAsk':
+        return AppTheme.accent;
       case 'plan':
         return const Color(0xFF7C3AED);
-      case 'dontAsk':
-        return AppTheme.warning;
       case 'read-only':
         return AppTheme.textSecondary;
+      default:
+        return AppTheme.textSecondary;
+    }
+  }
+
+  static Color _modeDropdownDotColor(ModeOption mode) {
+    switch (mode.id) {
+      case 'bypassPermissions':
+      case 'full-access':
+        return const Color(0xFFD46F61);
+      case 'default':
+      case 'auto':
+        return AppTheme.textPrimary;
+      case 'acceptEdits':
+        return const Color(0xFF2563EB);
+      case 'autoEdit':
+        return AppTheme.successText;
+      case 'plan':
+        return const Color(0xFF7C3AED);
+      case 'read-only':
+        return AppTheme.textSecondary;
+      case 'yolo':
+      case 'dontAsk':
+        return AppTheme.accent;
       default:
         return AppTheme.textSecondary;
     }
@@ -655,44 +665,19 @@ class ChatScreen extends GetView<ChatViewModel> {
     switch (mode.id) {
       case 'bypassPermissions':
       case 'full-access':
-        return AppTheme.modeSkipBg;
+        return const Color(0xFFFEE8D6);
       case 'plan':
-        return AppTheme.modePlanBg;
+        return const Color(0xFFEDE0FA);
       case 'acceptEdits':
       case 'autoEdit':
         return AppTheme.modeAcceptBg;
       case 'yolo':
+      case 'dontAsk':
         return AppTheme.modeSkipBg;
       case 'read-only':
         return AppTheme.inputFill;
       default:
         return AppTheme.idleBg;
-    }
-  }
-
-  static String _modeDescription(ModeOption mode) {
-    if (mode.description?.isNotEmpty == true) {
-      return mode.description!;
-    }
-    switch (mode.id) {
-      case 'bypassPermissions':
-      case 'full-access':
-        return 'No safety checks';
-      case 'default':
-      case 'auto':
-        return 'Ask for each action';
-      case 'acceptEdits':
-        return 'Auto-approve edits';
-      case 'autoEdit':
-        return 'Auto-approve workspace edits';
-      case 'yolo':
-        return 'Minimal approval checks';
-      case 'plan':
-        return 'Plan before coding';
-      case 'read-only':
-        return 'Read only until approved';
-      default:
-        return '';
     }
   }
 
@@ -908,26 +893,194 @@ class ChatScreen extends GetView<ChatViewModel> {
         : LucideIcons.loader;
     final String label = isDisconnected ? 'Connection lost' : 'Reconnecting...';
 
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        color: bg,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: AppTypography.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoPill({
+    required String label,
+    required Color dotColor,
+    required Color background,
+  }) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: bg,
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      color: background,
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 8),
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
           Text(
             label,
-            style: AppTypography.sans(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: color,
+            style: AppTypography.mono(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+              color: dotColor,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildTextPill({
+    required String label,
+    required Color foreground,
+    required Color background,
+    bool showChevron = false,
+    bool isOpen = false,
+    bool isLoading = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      color: background,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: AppTypography.mono(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+              color: foreground,
+            ),
+          ),
+          if (isLoading) ...[
+            const SizedBox(width: 6),
+            SizedBox.square(
+              dimension: 11,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.6,
+                valueColor: AlwaysStoppedAnimation<Color>(foreground),
+              ),
+            ),
+          ],
+          if (showChevron) ...[
+            const SizedBox(width: 4),
+            Icon(
+              isOpen ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+              size: 11,
+              color: foreground,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModeTagPill({
+    required String label,
+    required Color dotColor,
+    required Color foreground,
+    required Color background,
+    bool showChevron = false,
+    bool isOpen = false,
+    bool isLoading = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      color: background,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 5,
+            height: 5,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: AppTypography.mono(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+              color: foreground,
+            ),
+          ),
+          if (isLoading) ...[
+            const SizedBox(width: 6),
+            SizedBox.square(
+              dimension: 11,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.6,
+                valueColor: AlwaysStoppedAnimation<Color>(foreground),
+              ),
+            ),
+          ],
+          if (showChevron) ...[
+            const SizedBox(width: 4),
+            Icon(
+              isOpen ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+              size: 10,
+              color: foreground,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _formatHeaderPath(String cwd) {
+    final trimmed = cwd.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    final homeMatch = RegExp(r'^/(Users|home)/[^/]+').firstMatch(trimmed);
+    final replaced = homeMatch == null
+        ? trimmed
+        : trimmed.replaceRange(0, homeMatch.group(0)!.length, '~');
+    final segments = replaced.split('/').where((segment) => segment.isNotEmpty);
+    final segmentList = segments.toList();
+    if (!replaced.startsWith('~/') && segmentList.length > 4) {
+      return '\u2026/${segmentList.sublist(segmentList.length - 3).join('/')}';
+    }
+    return replaced;
+  }
+
+  String _resolveModelLabel(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    for (final model in controller.availableModels) {
+      if (model.value == trimmed) {
+        final name = model.name.trim();
+        if (name.isNotEmpty) {
+          return name;
+        }
+      }
+    }
+    return trimmed;
   }
 }
 
@@ -946,7 +1099,7 @@ class _ScrollToBottomButton extends StatelessWidget {
         child: Ink(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.surface,
             borderRadius: BorderRadius.circular(999),
             border: Border.all(color: AppTheme.border),
             boxShadow: const [
@@ -1000,8 +1153,8 @@ class _PlanPanelState extends State<_PlanPanel> {
 
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: AppTheme.border)),
+        color: AppTheme.surface,
+        border: Border(bottom: BorderSide(color: AppTheme.borderStrong)),
       ),
       child: Column(
         children: [

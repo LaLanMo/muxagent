@@ -112,7 +112,6 @@ class _EditDiffViewState extends State<EditDiffView> {
         Container(
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(8),
             border: widget.dark
                 ? null
                 : Border.all(color: _kSeparatorColor, width: 1),

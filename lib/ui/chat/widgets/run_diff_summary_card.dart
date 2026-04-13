@@ -25,8 +25,7 @@ class RunDiffSummaryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: AppTheme.surface,
         boxShadow: const [
           BoxShadow(
             color: Color(0x26000000),
@@ -168,10 +167,7 @@ class _StatPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(10),
-      ),
+      color: bgColor,
       child: Text(
         label,
         style: AppFonts.code(

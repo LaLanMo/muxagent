@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:muxagent/config/app_typography.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
 import '../../domain/enums.dart';
 import '../main/main_shell_viewmodel.dart';
+import 'status_indicator.dart';
 
 class RelayStatusPill extends StatelessWidget {
   const RelayStatusPill({super.key});
@@ -23,43 +22,19 @@ class RelayStatusPill extends StatelessWidget {
 
       final Color bg;
       final Color fg;
-      final IconData icon;
       final String label;
 
       if (isReconnecting) {
         bg = AppTheme.warningBg;
         fg = AppTheme.statusConnecting;
-        icon = LucideIcons.refreshCw;
-        label = 'Reconnecting\u2026';
+        label = 'reconnecting';
       } else {
         bg = AppTheme.disconnectedBg;
         fg = AppTheme.statusDisconnected;
-        icon = LucideIcons.cloudOff;
-        label = 'Server unreachable';
+        label = 'offline';
       }
 
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 10),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 12, color: fg),
-            const SizedBox(width: 5),
-            Text(
-              label,
-              style: AppTypography.sans(
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-                color: fg,
-              ),
-            ),
-          ],
-        ),
-      );
+      return StatusIndicator(label: label, color: fg, backgroundColor: bg);
     });
   }
 }

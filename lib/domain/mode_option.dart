@@ -75,16 +75,14 @@ class ModeOption {
     return true;
   }
 
-  // Keep app copy consistent even when runtimes use different labels
-  // for the same known permission mode.
   static String _displayLabel(String id, String? upstreamLabel) {
+    if (upstreamLabel != null && upstreamLabel.isNotEmpty) {
+      return upstreamLabel;
+    }
     switch (id) {
       case 'default':
         return 'Default';
       case 'auto':
-        if (upstreamLabel != null && upstreamLabel.isNotEmpty) {
-          return _fallbackLabel(upstreamLabel);
-        }
         return 'Default';
       case 'acceptEdits':
         return 'Accept Edits';
@@ -111,7 +109,7 @@ class ModeOption {
       case _copilotModeAutopilotId:
         return 'Autopilot';
       default:
-        return upstreamLabel ?? _fallbackLabel(id);
+        return _fallbackLabel(id);
     }
   }
 

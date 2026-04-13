@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
@@ -11,7 +9,7 @@ import '../../../domain/tool_activity.dart';
 import '../../../routing/routes.dart';
 import 'edit_diff_view.dart';
 
-class ToolCallCard extends StatefulWidget {
+class ToolCallCard extends StatelessWidget {
   final ToolActivity tool;
   final List<ToolActivity> childTools;
   final bool foldDiff;
@@ -23,117 +21,57 @@ class ToolCallCard extends StatefulWidget {
     this.foldDiff = false,
   });
 
-  @override
-  State<ToolCallCard> createState() => _ToolCallCardState();
-}
-
-class _ToolCallCardState extends State<ToolCallCard>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _breathController;
-  late Animation<double> _breathAnimation;
-  Timer? _dotTimer;
-  int _dotCount = 3;
-
   bool get _isRunning =>
-      widget.tool.status == ToolStatus.pending ||
-      widget.tool.status == ToolStatus.inProgress;
+      tool.status == ToolStatus.pending || tool.status == ToolStatus.inProgress;
 
-  bool get _isFailed => widget.tool.status == ToolStatus.failed;
+  bool get _isFailed => tool.status == ToolStatus.failed;
 
-  bool get _isCompleted => widget.tool.status == ToolStatus.completed;
+  bool get _isCompleted => tool.status == ToolStatus.completed;
 
   bool get _isEditWithDiff {
-    if (widget.tool.effectiveKind != ToolKind.edit) return false;
-    final diffs = widget.tool.diffs;
+    if (tool.effectiveKind != ToolKind.edit) return false;
+    final diffs = tool.diffs;
     return diffs != null && diffs.isNotEmpty;
   }
 
-  bool get _shouldShowDiff => _isEditWithDiff && !widget.foldDiff;
+  bool get _shouldShowDiff => _isEditWithDiff && !foldDiff;
 
-  @override
-  void initState() {
-    super.initState();
-    _breathController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-    _breathAnimation = Tween<double>(begin: 1.0, end: 0.3).animate(
-      CurvedAnimation(parent: _breathController, curve: Curves.easeInOut),
-    );
-    _syncAnimations();
-  }
+  static const _accentSuccess = Color(0xFF4CB782);
+  static const _accentFailure = Color(0xFFC65B52);
 
-  @override
-  void didUpdateWidget(covariant ToolCallCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.tool.status != widget.tool.status) {
-      _syncAnimations();
-    }
-  }
+  static final _previewStyle = AppTypography.mono(
+    fontSize: 13,
+    fontWeight: FontWeight.w400,
+  );
 
-  void _syncAnimations() {
-    if (_isRunning) {
-      _breathController.repeat(reverse: true);
-      _dotTimer ??= Timer.periodic(const Duration(milliseconds: 500), (_) {
-        setState(() => _dotCount = _dotCount % 3 + 1);
-      });
-    } else {
-      _breathController.stop();
-      _breathController.value = 0.0;
-      _dotTimer?.cancel();
-      _dotTimer = null;
-    }
-  }
-
-  @override
-  void dispose() {
-    _breathController.dispose();
-    _dotTimer?.cancel();
-    super.dispose();
-  }
+  static final _labelStyle = AppTypography.mono(
+    fontSize: 9,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.2,
+  );
 
   @override
   Widget build(BuildContext context) {
-    final kind = widget.tool.effectiveKind;
-    final accentColor = _isFailed ? AppTheme.failedRed : AppTheme.successText;
+    final kind = tool.effectiveKind;
+    final accentColor = _isFailed ? _accentFailure : _accentSuccess;
 
-    return AnimatedBuilder(
-      animation: _breathAnimation,
-      builder: (context, child) {
-        return Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border(
-              left: BorderSide(
-                width: 3,
-                color: accentColor.withValues(
-                  alpha: _isRunning ? _breathAnimation.value : 1.0,
-                ),
-              ),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: child,
-        );
-      },
-      child: _shouldShowDiff
-          ? _buildEditLayout(kind)
-          : _buildDefaultLayout(kind),
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        border: Border(left: BorderSide(width: 3, color: accentColor)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      child: _shouldShowDiff ? _buildEditLayout(kind) : _buildDefaultLayout(kind),
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Default layout (all non-edit tools, or edit without diff data)
-  // -------------------------------------------------------------------------
-
   Widget _buildDefaultLayout(ToolKind kind) {
-    final hasChildren = widget.childTools.isNotEmpty;
+    final hasChildren = childTools.isNotEmpty;
     return GestureDetector(
       onTap: () => Get.toNamed(
         Routes.toolDetail,
-        arguments: {'tool': widget.tool, 'childTools': widget.childTools},
+        arguments: {'tool': tool, 'childTools': childTools},
       ),
       child: hasChildren
           ? Column(
@@ -145,20 +83,24 @@ class _ToolCallCardState extends State<ToolCallCard>
   }
 
   Widget _buildChildSummary() {
-    final count = widget.childTools.length;
+    final count = childTools.length;
     final noun = count == 1 ? 'tool call' : 'tool calls';
     return Padding(
-      padding: const EdgeInsets.only(left: 26, top: 4),
+      padding: const EdgeInsets.only(left: 26, top: 6),
       child: Row(
         children: [
-          const Icon(LucideIcons.wrench, size: 12, color: Color(0xFF9CA3AF)),
+          const Icon(
+            LucideIcons.wrench,
+            size: 12,
+            color: AppTheme.textMetadata,
+          ),
           const SizedBox(width: 6),
           Text(
             '$count $noun',
-            style: AppTypography.sans(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: const Color(0xFF9CA3AF),
+            style: AppTypography.mono(
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+              color: AppTheme.textMetadata,
             ),
           ),
         ],
@@ -166,12 +108,8 @@ class _ToolCallCardState extends State<ToolCallCard>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Edit layout: header + collapsible diff
-  // -------------------------------------------------------------------------
-
   Widget _buildEditLayout(ToolKind kind) {
-    final diffs = widget.tool.diffs!;
+    final diffs = tool.diffs!;
     final previewDiff = diffs.first;
     final extraDiffCount = diffs.length - 1;
 
@@ -188,10 +126,10 @@ class _ToolCallCardState extends State<ToolCallCard>
                 if (extraDiffCount > 0) ...[
                   Text(
                     'Previewing 1 of ${diffs.length} file changes',
-                    style: AppTypography.sans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
+                    style: AppTypography.mono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w400,
+                      color: AppTheme.textMetadata,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -206,10 +144,10 @@ class _ToolCallCardState extends State<ToolCallCard>
                   const SizedBox(height: 6),
                   Text(
                     '+$extraDiffCount more file ${extraDiffCount == 1 ? 'change' : 'changes'} in details',
-                    style: AppTypography.sans(
+                    style: AppTypography.mono(
                       fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
+                      fontWeight: FontWeight.w400,
+                      color: AppTheme.textMetadata,
                     ),
                   ),
                 ],
@@ -220,14 +158,9 @@ class _ToolCallCardState extends State<ToolCallCard>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Shared header row
-  // -------------------------------------------------------------------------
-
   Widget _buildHeaderRow(ToolKind kind) {
-    final iconColor = _isFailed ? AppTheme.failedRed : AppTheme.textSecondary;
-
-    final hasChildren = widget.childTools.isNotEmpty;
+    final iconColor = _isFailed ? _accentFailure : AppTheme.textTertiary;
+    final hasChildren = childTools.isNotEmpty;
     final icon = hasChildren ? LucideIcons.layers : _iconForKind(kind);
 
     return Row(
@@ -235,48 +168,19 @@ class _ToolCallCardState extends State<ToolCallCard>
         Icon(icon, size: 16, color: iconColor),
         const SizedBox(width: 10),
         Expanded(child: _buildPreviewContent(kind)),
-        // Running status label + animated dots
-        if (_isRunning) ...[
-          const SizedBox(width: 8),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                _runningLabel(kind),
-                style: AppTypography.sans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 0.5,
-                  color: AppTheme.successText,
-                ),
-              ),
-              SizedBox(
-                width: 18,
-                child: Text(
-                  '.' * _dotCount,
-                  style: AppTypography.sans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
-                    color: AppTheme.successText,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-        // Navigate to tool detail (edit tools only)
+        const SizedBox(width: 10),
+        _buildKindBadge(kind),
         if (_shouldShowDiff) ...[
           const SizedBox(width: 6),
           GestureDetector(
             onTap: () => Get.toNamed(
               Routes.toolDetail,
-              arguments: {'tool': widget.tool, 'childTools': widget.childTools},
+              arguments: {'tool': tool, 'childTools': childTools},
             ),
-            child: Icon(
+            child: const Icon(
               LucideIcons.arrowUpRight,
               size: 14,
-              color: AppTheme.textSecondary,
+              color: AppTheme.textTertiary,
             ),
           ),
         ],
@@ -284,62 +188,54 @@ class _ToolCallCardState extends State<ToolCallCard>
     );
   }
 
-  // -------------------------------------------------------------------------
-  // Icon / preview helpers
-  // -------------------------------------------------------------------------
+  Widget _buildPreviewContent(ToolKind kind) {
+    final text = _displayPreviewText(kind);
+    final style = _previewStyle.copyWith(color: AppTheme.textPrimary);
 
-  String _runningLabel(ToolKind kind) {
-    switch (kind) {
-      case ToolKind.read:
-        return 'reading';
-      case ToolKind.search:
-        return 'searching';
-      case ToolKind.edit:
-        return 'editing';
-      case ToolKind.execute:
-        return 'running';
-      case ToolKind.fetch:
-        return 'fetching';
-      case ToolKind.delete:
-        return 'deleting';
-      case ToolKind.move:
-        return 'moving';
-      case ToolKind.think:
-        return 'thinking';
-      case ToolKind.switchMode:
-        return 'switching';
-      case ToolKind.other:
-        return 'running';
-    }
+    return Text(
+      text,
+      style: style,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
   }
 
-  IconData _iconForKind(ToolKind kind) {
-    switch (kind) {
-      case ToolKind.execute:
-        return LucideIcons.terminal;
-      case ToolKind.read:
-        return LucideIcons.eye;
-      case ToolKind.edit:
-        return LucideIcons.pencil;
-      case ToolKind.search:
-        return LucideIcons.search;
-      case ToolKind.fetch:
-        return LucideIcons.globe;
-      case ToolKind.delete:
-        return LucideIcons.trash2;
-      case ToolKind.move:
-        return LucideIcons.folderInput;
-      case ToolKind.think:
-        return LucideIcons.brain;
-      case ToolKind.switchMode:
-        return LucideIcons.repeat2;
-      case ToolKind.other:
-        return LucideIcons.wrench;
+  Widget _buildKindBadge(ToolKind kind) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      color: _badgeBackground(kind),
+      child: Text(
+        _badgeLabel(kind),
+        style: _labelStyle.copyWith(color: _badgeForeground(kind)),
+      ),
+    );
+  }
+
+  String _badgeLabel(ToolKind kind) {
+    if (_isFailed) return 'FAILED';
+    if (_isRunning) return 'RUNNING';
+    if (_isCompleted) return 'DONE';
+    return _kindLabel(kind);
+  }
+
+  Color _badgeBackground(ToolKind kind) {
+    if (_isFailed) return AppTheme.errorBg;
+    if (_isRunning || _isCompleted) {
+      return const Color(0xFFD6EDDC);
     }
+    return AppTheme.surfaceMuted;
+  }
+
+  Color _badgeForeground(ToolKind kind) {
+    if (_isFailed) return AppTheme.errorText;
+    if (_isRunning || _isCompleted) {
+      return const Color(0xFF1A6B3A);
+    }
+    return AppTheme.textSecondary;
   }
 
   String _headerText(ToolKind kind) {
-    final t = widget.tool.title ?? widget.tool.name;
+    final t = tool.title ?? tool.name;
     if (t.isNotEmpty) return t;
     switch (kind) {
       case ToolKind.execute:
@@ -365,43 +261,8 @@ class _ToolCallCardState extends State<ToolCallCard>
     }
   }
 
-  static final _previewStyle = AppTypography.sans(
-    fontSize: 13,
-    fontWeight: FontWeight.w500,
-  );
-
-  /// Builds the preview content widget for the header row.
-  /// For file-path based tools (read/edit/delete), uses Finder-style
-  /// middle truncation: keeps the last two path segments visible.
-  Widget _buildPreviewContent(ToolKind kind) {
-    final text = _bodyPreview(kind) ?? _headerText(kind);
-    final style = _previewStyle.copyWith(color: AppTheme.textPrimary);
-
-    const pathKinds = {ToolKind.read, ToolKind.edit, ToolKind.delete};
-    if (pathKinds.contains(kind)) {
-      final segments = text.split('/');
-      if (segments.length > 3) {
-        final display =
-            '\u2026/${segments.sublist(segments.length - 2).join('/')}';
-        return Text(
-          display,
-          style: style,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        );
-      }
-    }
-
-    return Text(
-      text,
-      style: style,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    );
-  }
-
   String? _bodyPreview(ToolKind kind) {
-    final input = widget.tool.input;
+    final input = tool.input;
     if (input == null) return null;
 
     switch (kind) {
@@ -415,7 +276,7 @@ class _ToolCallCardState extends State<ToolCallCard>
       case ToolKind.read:
         return input.filePath;
       case ToolKind.edit:
-        final diffs = widget.tool.diffs;
+        final diffs = tool.diffs;
         if (diffs != null && diffs.isNotEmpty) return diffs.first.path;
         return input.filePath;
       case ToolKind.search:
@@ -439,6 +300,75 @@ class _ToolCallCardState extends State<ToolCallCard>
             input.pattern ??
             input.url ??
             input.mode;
+    }
+  }
+
+  String _displayPreviewText(ToolKind kind) {
+    final raw = (_bodyPreview(kind) ?? _headerText(kind)).trim();
+    if (raw.isEmpty) {
+      return _headerText(kind);
+    }
+    return _formatPathPreview(raw);
+  }
+
+  String _formatPathPreview(String value) {
+    final normalized = value
+        .replaceFirst(RegExp(r'^/(Users|home)/[^/]+'), '~')
+        .trim();
+    final segments = normalized.split('/');
+    if (segments.length > 4) {
+      return '\u2026/${segments.sublist(segments.length - 2).join('/')}';
+    }
+    return normalized;
+  }
+
+  IconData _iconForKind(ToolKind kind) {
+    switch (kind) {
+      case ToolKind.execute:
+        return LucideIcons.terminal;
+      case ToolKind.read:
+        return LucideIcons.fileText;
+      case ToolKind.edit:
+        return LucideIcons.pencil;
+      case ToolKind.search:
+        return LucideIcons.search;
+      case ToolKind.fetch:
+        return LucideIcons.globe;
+      case ToolKind.delete:
+        return LucideIcons.trash2;
+      case ToolKind.move:
+        return LucideIcons.folderInput;
+      case ToolKind.think:
+        return LucideIcons.brain;
+      case ToolKind.switchMode:
+        return LucideIcons.repeat2;
+      case ToolKind.other:
+        return LucideIcons.wrench;
+    }
+  }
+
+  String _kindLabel(ToolKind kind) {
+    switch (kind) {
+      case ToolKind.execute:
+        return 'RUN';
+      case ToolKind.read:
+        return 'READ';
+      case ToolKind.edit:
+        return 'EDIT';
+      case ToolKind.search:
+        return 'SEARCH';
+      case ToolKind.fetch:
+        return 'FETCH';
+      case ToolKind.delete:
+        return 'DELETE';
+      case ToolKind.move:
+        return 'MOVE';
+      case ToolKind.think:
+        return 'THINK';
+      case ToolKind.switchMode:
+        return 'MODE';
+      case ToolKind.other:
+        return 'TOOL';
     }
   }
 }

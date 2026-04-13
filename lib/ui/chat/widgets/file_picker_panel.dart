@@ -28,8 +28,8 @@ class FilePickerPanel extends StatelessWidget {
       constraints: const BoxConstraints(maxHeight: 220),
       clipBehavior: Clip.hardEdge,
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        color: AppTheme.surface,
+        border: const Border(top: BorderSide(color: AppTheme.borderStrong)),
         boxShadow: [
           BoxShadow(
             offset: const Offset(0, -4),
@@ -53,34 +53,35 @@ class FilePickerPanel extends StatelessWidget {
               ),
             )
           : entries.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Center(
-                    child: Text(
-                      'No files found',
-                      style: AppTypography.sans(
-                        fontSize: 13,
-                        color: AppTheme.textTertiary,
-                      ),
-                    ),
+          ? Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No files found',
+                  style: AppTypography.sans(
+                    fontSize: 13,
+                    color: AppTheme.textTertiary,
                   ),
-                )
-              : ListView.builder(
-                  padding: EdgeInsets.zero,
-                  shrinkWrap: true,
-                  itemCount: entries.length,
-                  itemBuilder: (context, index) {
-                    final entry = entries[index];
-                    return _FileEntryTile(
-                      entry: entry,
-                      isSearchMode: isSearchMode,
-                      onTap: () => onTap(entry),
-                      onDrillDown: entry.isDir && !isSearchMode && onDrillDown != null
-                          ? () => onDrillDown!(entry)
-                          : null,
-                    );
-                  },
                 ),
+              ),
+            )
+          : ListView.builder(
+              padding: EdgeInsets.zero,
+              shrinkWrap: true,
+              itemCount: entries.length,
+              itemBuilder: (context, index) {
+                final entry = entries[index];
+                return _FileEntryTile(
+                  entry: entry,
+                  isSearchMode: isSearchMode,
+                  onTap: () => onTap(entry),
+                  onDrillDown:
+                      entry.isDir && !isSearchMode && onDrillDown != null
+                      ? () => onDrillDown!(entry)
+                      : null,
+                );
+              },
+            ),
     );
   }
 }
@@ -109,24 +110,18 @@ class _FileEntryTile extends StatelessWidget {
           children: [
             Icon(
               entry.isDir ? LucideIcons.folder : LucideIcons.file,
-              size: 18,
-              color: entry.isDir
-                  ? const Color(0xFF3B82F6)
-                  : const Color(0xFF9CA3AF),
+              size: 16,
+              color: entry.isDir ? AppTheme.accent : AppTheme.textTertiary,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 isSearchMode ? entry.path : entry.name,
-                style: isSearchMode
-                    ? AppFonts.code(
-                        fontSize: 13,
-                        color: AppTheme.textPrimary,
-                      )
-                    : AppTypography.sans(
-                        fontSize: 14,
-                        color: AppTheme.textPrimary,
-                      ),
+                style: AppFonts.code(
+                  fontSize: 13,
+                  fontWeight: entry.isDir ? FontWeight.w500 : FontWeight.w400,
+                  color: AppTheme.textPrimary,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),

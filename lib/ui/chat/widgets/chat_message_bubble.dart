@@ -48,8 +48,8 @@ class ChatMessageBubble extends StatelessWidget {
         constraints: const BoxConstraints(maxWidth: 300),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(16),
+          color: AppTheme.surfaceMuted,
+          borderRadius: BorderRadius.circular(2),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.end,
@@ -96,7 +96,7 @@ class ChatMessageBubble extends StatelessWidget {
     final bytes = media.decodedBytes;
     if (bytes != null && bytes.isNotEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(2),
         child: Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
       );
     }
@@ -104,8 +104,8 @@ class ChatMessageBubble extends StatelessWidget {
     return Container(
       height: 60,
       decoration: BoxDecoration(
-        color: AppTheme.inputFill,
-        borderRadius: BorderRadius.circular(10),
+        color: AppTheme.surfaceMuted,
+        borderRadius: BorderRadius.circular(2),
         border: Border.all(color: AppTheme.border),
       ),
       child: const Center(

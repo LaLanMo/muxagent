@@ -5,13 +5,12 @@ import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../config/fonts.dart';
 import '../../config/theme.dart';
+import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/tool_activity.dart';
-import '../../ui/chat/widgets/code_block.dart';
 import '../../ui/chat/widgets/edit_diff_view.dart';
-import '../../ui/chat/widgets/tool_call_card.dart';
-import '../../ui/common/status_indicator.dart';
 import 'tool_detail_viewmodel.dart';
 
 class ToolDetailScreen extends GetView<ToolDetailViewModel> {
@@ -22,140 +21,223 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   @override
   Widget build(BuildContext context) {
     return Obx(() {
-      // Touch version to subscribe to chat state updates.
       controller.version.value;
       final tool = controller.tool;
+      final isSubagent = controller.childTools.isNotEmpty;
 
       return Scaffold(
-        appBar: AppBar(
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18),
-            onPressed: () => Get.back(),
-          ),
-          title: Text(
-            tool.title ?? tool.name,
-            style: AppTypography.mono(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.textPrimary,
-            ),
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: StatusIndicator.toolStatus(tool.status),
+        backgroundColor: AppTheme.background,
+        body: Column(
+          children: [
+            _buildHeader(tool, isSubagent),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (tool.locations != null &&
+                        tool.locations!.isNotEmpty) ...[
+                      _buildSectionLabel('LOCATIONS'),
+                      const SizedBox(height: 8),
+                      _buildLocationsSection(tool.locations!),
+                      const SizedBox(height: 20),
+                    ],
+                    if (tool.input != null) ...[
+                      _buildSectionLabel('INPUT'),
+                      const SizedBox(height: 8),
+                      _buildInputSection(tool),
+                      const SizedBox(height: 20),
+                    ],
+                    if (tool.output != null && tool.output!.isNotEmpty) ...[
+                      _buildSectionLabel('OUTPUT'),
+                      const SizedBox(height: 8),
+                      _buildOutputSection(tool),
+                      const SizedBox(height: 20),
+                    ],
+                    if (tool.diffs != null && tool.diffs!.isNotEmpty) ...[
+                      _buildSectionLabel('DIFFS'),
+                      const SizedBox(height: 8),
+                      _buildDiffsSection(tool.diffs!),
+                      const SizedBox(height: 20),
+                    ],
+                    if (tool.error != null && tool.error!.isNotEmpty) ...[
+                      _buildSectionLabel('ERROR'),
+                      const SizedBox(height: 8),
+                      _buildErrorSection(tool.error!),
+                      const SizedBox(height: 20),
+                    ],
+                    if (controller.childTools.isNotEmpty)
+                      _buildChildToolsSection(controller.childTools),
+                  ],
+                ),
+              ),
             ),
           ],
-        ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Title
-              if (tool.title != null && tool.title!.isNotEmpty) ...[
-                Text(
-                  tool.title!,
-                  style: AppTypography.sans(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // Locations
-              if (tool.locations != null && tool.locations!.isNotEmpty) ...[
-                _buildSectionLabel('LOCATIONS'),
-                const SizedBox(height: 8),
-                _buildLocationsSection(tool.locations!),
-                const SizedBox(height: 20),
-              ],
-
-              // Input: show the raw/normalized ACP input. ACP diffs render below.
-              if (tool.input != null) ...[
-                _buildSectionLabel('INPUT'),
-                const SizedBox(height: 8),
-                _buildInputSection(tool),
-                const SizedBox(height: 20),
-              ],
-
-              // Diffs from ACP content[]
-              if (tool.diffs != null && tool.diffs!.isNotEmpty) ...[
-                _buildSectionLabel('DIFFS'),
-                const SizedBox(height: 8),
-                _buildDiffsSection(tool.diffs!),
-                const SizedBox(height: 20),
-              ],
-
-              // Output
-              if (tool.output != null && tool.output!.isNotEmpty) ...[
-                _buildSectionLabel('OUTPUT'),
-                const SizedBox(height: 8),
-                CodeBlock(text: tool.output!),
-                const SizedBox(height: 20),
-              ],
-
-              // Error
-              if (tool.error != null && tool.error!.isNotEmpty) ...[
-                _buildSectionLabel('ERROR'),
-                const SizedBox(height: 8),
-                CodeBlock(
-                  text: tool.error!,
-                  backgroundColor: const Color(0xFF2A1A10),
-                  textColor: AppTheme.warning,
-                ),
-                const SizedBox(height: 20),
-              ],
-
-              // Child tool calls
-              if (controller.childTools.isNotEmpty) ...[
-                _buildChildToolsSection(controller.childTools),
-              ],
-            ],
-          ),
         ),
       );
     });
   }
 
+  Widget _buildHeader(ToolActivity tool, bool isSubagent) {
+    final primary = isSubagent ? 'Task' : _toolPrimaryTitle(tool);
+    final secondary = isSubagent
+        ? _subagentSubtitle(tool)
+        : _toolKindSubtitle(tool.effectiveKind);
+
+    return Container(
+      color: AppTheme.surface,
+      child: SafeArea(
+        bottom: false,
+        child: Container(
+          height: 56,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppTheme.borderStrong)),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 32,
+                height: 32,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: Get.back,
+                  child: const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Icon(
+                      LucideIcons.chevronLeft,
+                      size: 20,
+                      color: AppTheme.textTertiary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      primary,
+                      style: isSubagent
+                          ? AppTypography.sans(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.textPrimary,
+                              height: 1,
+                            )
+                          : AppTypography.mono(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: AppTheme.textPrimary,
+                              height: 1,
+                            ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      secondary,
+                      style: AppTypography.sans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: AppTheme.textTertiary,
+                        height: 1,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildInputSection(ToolActivity tool) {
-    final input = tool.input!;
+    return _CodeShell(
+      header: Text(
+        _inputHeaderLabel(tool),
+        style: AppTypography.mono(
+          fontSize: 11,
+          fontWeight: FontWeight.w400,
+          color: AppTheme.textMetadata,
+        ),
+      ),
+      body: _inputBody(tool),
+      bodyFontSize: 13,
+    );
+  }
 
-    final rawInputJson = input.rawInputJson;
-    if (rawInputJson != null && rawInputJson.isNotEmpty) {
-      try {
-        return CodeBlock(text: _jsonEncoder.convert(jsonDecode(rawInputJson)));
-      } catch (_) {
-        return CodeBlock(text: rawInputJson);
-      }
-    }
+  Widget _buildOutputSection(ToolActivity tool) {
+    final (statusColor, statusLabel) = switch (tool.status) {
+      ToolStatus.failed => (AppTheme.errorText, 'failed'),
+      ToolStatus.pending => (AppTheme.textTertiary, 'pending'),
+      ToolStatus.inProgress => (const Color(0xFF4CB782), 'running'),
+      ToolStatus.completed => (const Color(0xFF4CB782), 'success'),
+    };
 
-    return CodeBlock(
-      text: _jsonEncoder.convert({
-        if (input.description != null) 'description': input.description,
-        if (input.command != null)
-          'command': {
-            if (input.command!.argv.isNotEmpty) 'argv': input.command!.argv,
-            if (input.command!.display != null)
-              'display': input.command!.display,
-          },
-        if (input.filePath != null) 'filePath': input.filePath,
-        if (input.sourcePath != null) 'sourcePath': input.sourcePath,
-        if (input.targetPath != null) 'targetPath': input.targetPath,
-        if (input.pattern != null) 'pattern': input.pattern,
-        if (input.url != null) 'url': input.url,
-        if (input.mode != null) 'mode': input.mode,
-        if (input.edit != null)
-          'edit': {
-            if (input.edit!.filePath != null) 'filePath': input.edit!.filePath,
-            if (input.edit!.oldString != null)
-              'oldString': input.edit!.oldString,
-            if (input.edit!.newString != null)
-              'newString': input.edit!.newString,
-          },
-      }),
+    return _CodeShell(
+      header: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: statusColor,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            statusLabel,
+            style: AppTypography.mono(
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+              color: statusColor,
+            ),
+          ),
+        ],
+      ),
+      body: tool.output!,
+      bodyFontSize: 12,
+    );
+  }
+
+  Widget _buildErrorSection(String error) {
+    return _CodeShell(
+      header: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(
+              color: AppTheme.errorText,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'error',
+            style: AppTypography.mono(
+              fontSize: 11,
+              fontWeight: FontWeight.w400,
+              color: AppTheme.errorText,
+            ),
+          ),
+        ],
+      ),
+      body: error,
+      bodyFontSize: 12,
+      bodyColor: const Color(0xFFF4DDDA),
+      bodyTextColor: AppTheme.textPrimary,
     );
   }
 
@@ -167,14 +249,21 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           padding: const EdgeInsets.only(bottom: 6),
           child: Row(
             children: [
-              Icon(LucideIcons.mapPin, size: 13, color: AppTheme.textSecondary),
-              const SizedBox(width: 6),
+              const Icon(
+                LucideIcons.mapPin,
+                size: 14,
+                color: AppTheme.textTertiary,
+              ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  loc.line != null ? '${loc.path}:${loc.line}' : loc.path,
+                  _formatPath(
+                    loc.line != null ? '${loc.path}:${loc.line}' : loc.path,
+                  ),
                   style: AppTypography.mono(
                     fontSize: 12,
-                    color: AppTheme.textPrimary,
+                    fontWeight: FontWeight.w400,
+                    color: AppTheme.textSecondary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -190,26 +279,28 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: diffs.map((diff) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              diff.path,
-              style: AppTypography.mono(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textSecondary,
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _formatPath(diff.path),
+                style: AppTypography.mono(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textTertiary,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            EditDiffView(
-              oldString: diff.oldText ?? '',
-              newString: diff.newText,
-              contextLines: 3,
-              maxCollapsedLines: 999,
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 6),
+              EditDiffView(
+                oldString: diff.oldText ?? '',
+                newString: diff.newText,
+                contextLines: 3,
+                maxCollapsedLines: 999,
+              ),
+            ],
+          ),
         );
       }).toList(),
     );
@@ -218,56 +309,355 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   Widget _buildChildToolsSection(List<ToolActivity> children) {
     final count = children.length;
     final noun = count == 1 ? 'tool call' : 'tool calls';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Summary row
         Row(
           children: [
-            const Icon(
-              LucideIcons.layers,
-              size: 16,
-              color: AppTheme.subagentAccent,
-            ),
+            const Icon(LucideIcons.layers, size: 16, color: Color(0xFF7C3AED)),
             const SizedBox(width: 8),
             Text(
               '$count $noun completed',
               style: AppTypography.sans(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
-                color: AppTheme.textSecondary,
+                color: AppTheme.textTertiary,
               ),
             ),
           ],
         ),
         const SizedBox(height: 12),
-        const Divider(color: AppTheme.border, height: 1),
-        const SizedBox(height: 16),
-
-        // Section label
+        const Divider(color: AppTheme.borderStrong, height: 1),
+        const SizedBox(height: 20),
         _buildSectionLabel('TOOL CALLS'),
-        const SizedBox(height: 12),
-
-        // Child tool cards
-        ...children.map(
-          (child) => Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: ToolCallCard(tool: child),
-          ),
+        const SizedBox(height: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: children.map((child) => _buildChildToolRow(child)).toList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildChildToolRow(ToolActivity child) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Icon(
+            _iconForKind(child.effectiveKind),
+            size: 14,
+            color: const Color(0xFF4CB782),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _toolRowText(child),
+              style: AppTypography.mono(
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textSecondary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildSectionLabel(String label) {
     return Text(
       label,
-      style: AppTypography.sans(
+      style: AppTypography.mono(
         fontSize: 11,
         fontWeight: FontWeight.w600,
-        letterSpacing: 2,
-        color: AppTheme.textSecondary,
+        letterSpacing: 1,
+        color: AppTheme.textTertiary,
       ),
+    );
+  }
+
+  String _toolPrimaryTitle(ToolActivity tool) {
+    final name = tool.name.trim();
+    if (name.isNotEmpty) {
+      return name;
+    }
+    final title = tool.title?.trim();
+    if (title != null && title.isNotEmpty) {
+      return title;
+    }
+    return 'tool';
+  }
+
+  String _subagentSubtitle(ToolActivity tool) {
+    final title = tool.title?.trim();
+    if (title != null && title.isNotEmpty) {
+      return title;
+    }
+    final preview = _toolPreview(tool);
+    if (preview.isNotEmpty) {
+      return preview;
+    }
+    return 'Subagent trace';
+  }
+
+  String _toolKindSubtitle(ToolKind kind) {
+    switch (kind) {
+      case ToolKind.execute:
+        return 'Tool Execution';
+      case ToolKind.read:
+        return 'File Read';
+      case ToolKind.edit:
+        return 'File Edit';
+      case ToolKind.search:
+        return 'Search';
+      case ToolKind.fetch:
+        return 'Fetch';
+      case ToolKind.delete:
+        return 'Delete';
+      case ToolKind.move:
+        return 'Move';
+      case ToolKind.think:
+        return 'Reasoning';
+      case ToolKind.switchMode:
+        return 'Mode Change';
+      case ToolKind.other:
+        return 'Tool Detail';
+    }
+  }
+
+  String _inputHeaderLabel(ToolActivity tool) {
+    final input = tool.input;
+    if (input?.command != null) {
+      return 'command';
+    }
+    if (input?.filePath != null || input?.edit?.filePath != null) {
+      return 'path';
+    }
+    if (input?.pattern != null) {
+      return 'pattern';
+    }
+    if (input?.url != null) {
+      return 'url';
+    }
+    if (input?.mode != null) {
+      return 'mode';
+    }
+    return 'input';
+  }
+
+  String _inputBody(ToolActivity tool) {
+    final input = tool.input!;
+    if (input.command?.display?.trim().isNotEmpty == true) {
+      return input.command!.display!.trim();
+    }
+
+    if (input.filePath?.trim().isNotEmpty == true) {
+      return _formatPath(input.filePath!.trim());
+    }
+
+    if (input.edit?.filePath?.trim().isNotEmpty == true) {
+      return _formatPath(input.edit!.filePath!.trim());
+    }
+
+    if (input.sourcePath?.trim().isNotEmpty == true ||
+        input.targetPath?.trim().isNotEmpty == true) {
+      final source = input.sourcePath?.trim();
+      final target = input.targetPath?.trim();
+      if (source != null &&
+          source.isNotEmpty &&
+          target != null &&
+          target.isNotEmpty) {
+        return '${_formatPath(source)} -> ${_formatPath(target)}';
+      }
+      return _formatPath((source ?? target)!.trim());
+    }
+
+    if (input.pattern?.trim().isNotEmpty == true) {
+      return input.pattern!.trim();
+    }
+
+    if (input.url?.trim().isNotEmpty == true) {
+      return input.url!.trim();
+    }
+
+    if (input.mode?.trim().isNotEmpty == true) {
+      return input.mode!.trim();
+    }
+
+    if (input.description?.trim().isNotEmpty == true) {
+      return input.description!.trim();
+    }
+
+    final rawInputJson = input.rawInputJson;
+    if (rawInputJson != null && rawInputJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(rawInputJson);
+        if (decoded is Map<String, dynamic>) {
+          final command = decoded['command'];
+          if (command is String && command.trim().isNotEmpty) {
+            return command.trim();
+          }
+          final filePath = decoded['filePath'];
+          if (filePath is String && filePath.trim().isNotEmpty) {
+            return _formatPath(filePath.trim());
+          }
+        }
+        return _jsonEncoder.convert(decoded);
+      } catch (_) {
+        return rawInputJson;
+      }
+    }
+
+    return _jsonEncoder.convert({
+      if (input.description != null) 'description': input.description,
+      if (input.command != null)
+        'command': {
+          if (input.command!.argv.isNotEmpty) 'argv': input.command!.argv,
+          if (input.command!.display != null) 'display': input.command!.display,
+        },
+      if (input.filePath != null) 'filePath': input.filePath,
+      if (input.sourcePath != null) 'sourcePath': input.sourcePath,
+      if (input.targetPath != null) 'targetPath': input.targetPath,
+      if (input.pattern != null) 'pattern': input.pattern,
+      if (input.url != null) 'url': input.url,
+      if (input.mode != null) 'mode': input.mode,
+      if (input.edit != null)
+        'edit': {
+          if (input.edit!.filePath != null) 'filePath': input.edit!.filePath,
+          if (input.edit!.oldString != null) 'oldString': input.edit!.oldString,
+          if (input.edit!.newString != null) 'newString': input.edit!.newString,
+        },
+    });
+  }
+
+  String _toolRowText(ToolActivity tool) {
+    final preview = _toolPreview(tool);
+    if (preview.isNotEmpty) {
+      return preview;
+    }
+    return _toolPrimaryTitle(tool);
+  }
+
+  String _toolPreview(ToolActivity tool) {
+    final input = tool.input;
+    if (input == null) {
+      return _toolPrimaryTitle(tool);
+    }
+
+    final raw = switch (tool.effectiveKind) {
+      ToolKind.execute => input.description ?? input.command?.display,
+      ToolKind.read => input.filePath,
+      ToolKind.edit =>
+        tool.diffs?.firstOrNull?.path ?? input.edit?.filePath ?? input.filePath,
+      ToolKind.search => input.pattern ?? input.filePath,
+      ToolKind.fetch => input.url,
+      ToolKind.delete => input.filePath,
+      ToolKind.move => input.sourcePath ?? input.targetPath,
+      ToolKind.think => input.description,
+      ToolKind.switchMode => input.mode,
+      ToolKind.other =>
+        input.description ??
+            input.command?.display ??
+            input.filePath ??
+            input.sourcePath ??
+            input.targetPath ??
+            input.pattern ??
+            input.url ??
+            input.mode,
+    };
+
+    final normalized = (raw ?? '').trim();
+    if (normalized.isEmpty) {
+      return _toolPrimaryTitle(tool);
+    }
+    return _formatPath(normalized);
+  }
+
+  String _formatPath(String value) {
+    final normalized = value
+        .replaceFirst(RegExp(r'^/(Users|home)/[^/]+'), '~')
+        .trim();
+    final segments = normalized.split('/');
+    if (segments.length > 5) {
+      return '\u2026/${segments.sublist(segments.length - 3).join('/')}';
+    }
+    return normalized;
+  }
+
+  IconData _iconForKind(ToolKind kind) {
+    switch (kind) {
+      case ToolKind.execute:
+        return LucideIcons.terminal;
+      case ToolKind.read:
+        return LucideIcons.fileText;
+      case ToolKind.edit:
+        return LucideIcons.pencil;
+      case ToolKind.search:
+        return LucideIcons.search;
+      case ToolKind.fetch:
+        return LucideIcons.globe;
+      case ToolKind.delete:
+        return LucideIcons.trash2;
+      case ToolKind.move:
+        return LucideIcons.folderInput;
+      case ToolKind.think:
+        return LucideIcons.brain;
+      case ToolKind.switchMode:
+        return LucideIcons.repeat2;
+      case ToolKind.other:
+        return LucideIcons.wrench;
+    }
+  }
+}
+
+class _CodeShell extends StatelessWidget {
+  final Widget header;
+  final String body;
+  final double bodyFontSize;
+  final Color bodyColor;
+  final Color bodyTextColor;
+
+  const _CodeShell({
+    required this.header,
+    required this.body,
+    required this.bodyFontSize,
+    this.bodyColor = AppTheme.codeBg,
+    this.bodyTextColor = AppTheme.codeText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: double.infinity,
+          color: AppTheme.codeHeaderBg,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: header,
+        ),
+        Container(
+          width: double.infinity,
+          color: bodyColor,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SelectableText(
+              body,
+              style: AppFonts.code(
+                fontSize: bodyFontSize,
+                fontWeight: FontWeight.w400,
+                color: bodyTextColor,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

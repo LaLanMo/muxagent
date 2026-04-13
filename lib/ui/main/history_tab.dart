@@ -19,7 +19,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Header — height 56, padding [0, 16], alignItems center
         Container(
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -30,8 +29,8 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
               Text(
                 'History',
                 style: AppTypography.sans(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 24,
+                  fontWeight: FontWeight.w600,
                   color: AppTheme.textPrimary,
                 ),
               ),
@@ -39,9 +38,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             ],
           ),
         ),
-        // Filter chips
         Obx(() => _buildFilterChips()),
-        // Session list — fill_container height, clip true
         Expanded(child: Obx(() => _buildBody())),
       ],
     );
@@ -51,7 +48,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     final machines = shell.machines;
     final selected = controller.selectedMachineFilter.value;
 
-    // padding [0, 16, 8, 16] = top:0, right:16, bottom:8, left:16
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: SingleChildScrollView(
@@ -79,23 +75,20 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   }
 
   Widget _buildChip(String label, bool selected, VoidCallback onTap) {
-    // Selected: cornerRadius 16, fill #1D1D1F, padding [6,14], text system sans 13px w500 #FFFFFF
-    // Unselected: cornerRadius 16, fill transparent, padding [6,14], border 1px #E0E2E6, text system sans 13px w500 #6B6F76
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: selected ? AppTheme.textPrimary : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
+          color: selected ? AppTheme.selectedBg : Colors.transparent,
           border: selected ? null : Border.all(color: AppTheme.chipBorder),
         ),
         child: Text(
           label,
-          style: AppTypography.sans(
-            fontSize: 13,
+          style: AppTypography.mono(
+            fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: selected ? Colors.white : AppTheme.textSecondary,
+            color: selected ? AppTheme.surface : AppTheme.textTertiary,
           ),
         ),
       ),
@@ -103,8 +96,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   }
 
   Widget _buildBody() {
-    // Access reactive machine state so Obx tracks changes
-    // (ListView.builder's itemBuilder runs outside Obx context)
     shell.machines.length;
     final groups = controller.sessionGroups;
 
@@ -118,6 +109,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
               hasFilter ? 'No sessions found' : 'No completed sessions yet',
               style: AppTypography.sans(
                 fontSize: 15,
+                fontWeight: FontWeight.w500,
                 color: AppTheme.textSecondary,
               ),
             ),
@@ -125,9 +117,9 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
               const SizedBox(height: 4),
               Text(
                 'Try selecting a different machine',
-                style: AppTypography.sans(
-                  fontSize: 13,
-                  color: AppTheme.textTertiary,
+                style: AppTypography.mono(
+                  fontSize: 12,
+                  color: AppTheme.textMetadata,
                 ),
               ),
             ],
@@ -136,7 +128,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
       );
     }
 
-    // Flatten groups into a list of items (headers + rows)
     final items = <_ListItem>[];
     for (final group in groups) {
       items.add(_ListItem.header(group.label));
@@ -151,14 +142,14 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
       itemBuilder: (_, i) {
         final item = items[i];
         if (item.isHeader) {
-          // Date Label: padding [12, 16, 4, 16], text system sans 13px w500 #808690
           return Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
             child: Text(
-              item.headerLabel!,
-              style: AppTypography.sans(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+              item.headerLabel!.toUpperCase(),
+              style: AppTypography.mono(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1,
                 color: AppTheme.textTertiary,
               ),
             ),
@@ -170,83 +161,64 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   }
 
   Widget _buildSessionRow(AgentSession session) {
-    final machineId = session.machineId;
-    final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
+    final isEmphasized =
+        session.status == SessionStatus.waitingApproval ||
+        session.status == SessionStatus.running ||
+        !session.isRead;
+    final statusStyle = _statusStyle(session);
 
     return GestureDetector(
       onTap: () {
         Get.find<EventRepository>().markAsRead(session.id);
-        shell.navigateToChat(session.id, machineId, cwd, title);
+        shell.navigateToChat(session.id, session.machineId, session.cwd, title);
       },
       child: Container(
-        // Session Row: padding [14, 16], bottom border inside #E5E7EB thickness 1
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: const BoxDecoration(
           border: Border(bottom: BorderSide(color: AppTheme.border)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Priority dot: 8x8
-            _buildStatusDot(session),
-            // gap 12
+            Container(
+              width: 58,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              color: statusStyle.backgroundColor,
+              child: Text(
+                statusStyle.label,
+                style: AppTypography.mono(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: statusStyle.foregroundColor,
+                ),
+              ),
+            ),
             const SizedBox(width: 12),
-            // Text Stack: vertical layout, gap 2, fill_container width
             Expanded(
-              child: Builder(
-                builder: (_) {
-                  final hasIndicator =
-                      session.status == SessionStatus.waitingApproval ||
-                      session.status == SessionStatus.running ||
-                      !session.isRead;
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: AppTypography.sans(
-                          fontSize: 15,
-                          fontWeight: hasIndicator
-                              ? FontWeight.w600
-                              : FontWeight.w400,
-                          color: hasIndicator
-                              ? AppTheme.textPrimary
-                              : AppTheme.textTertiary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        cwd.isNotEmpty ? cwd : '~',
-                        style: AppTypography.sans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
-                          color: hasIndicator
-                              ? AppTheme.textTertiary
-                              : const Color(0xFFAEB3BB),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      if (machineId.isNotEmpty)
-                        Text(
-                          shell.machineDisplayName(machineId),
-                          style: AppTypography.sans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w400,
-                            color: hasIndicator
-                                ? AppTheme.textMuted
-                                : const Color(0xFFD1D5DB),
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  );
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTypography.sans(
+                      fontSize: 15,
+                      fontWeight: isEmphasized
+                          ? FontWeight.w500
+                          : FontWeight.w400,
+                      color: AppTheme.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 2),
+                  Text.rich(
+                    TextSpan(children: _buildMetaSpans(session)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
           ],
@@ -255,32 +227,107 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     );
   }
 
-  /// Priority dot: approval (orange) > running (green) > unread (blue) > read (hidden).
-  Widget _buildStatusDot(AgentSession session) {
-    Color? dotColor;
-    switch (session.status) {
-      case SessionStatus.waitingApproval:
-        dotColor = AppTheme.warning;
-      case SessionStatus.running:
-        dotColor = AppTheme.successText;
-      case SessionStatus.error:
-      case SessionStatus.idle:
-      case SessionStatus.done:
-        dotColor = session.isRead ? null : AppTheme.unreadDot;
+  List<InlineSpan> _buildMetaSpans(AgentSession session) {
+    final spans = <InlineSpan>[
+      TextSpan(
+        text: session.cwd.isNotEmpty ? session.cwd : '~',
+        style: AppTypography.mono(
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+          color: AppTheme.textTertiary,
+        ),
+      ),
+    ];
+
+    final machineName = session.machineId.isNotEmpty
+        ? shell.machineDisplayName(session.machineId)
+        : null;
+    if (machineName != null && machineName.isNotEmpty) {
+      spans.addAll([
+        _separatorSpan(),
+        TextSpan(
+          text: machineName,
+          style: AppTypography.mono(
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+            color: AppTheme.textMuted,
+          ),
+        ),
+      ]);
     }
 
-    return SizedBox(
-      width: 8,
-      height: 8,
-      child: dotColor != null
-          ? DecoratedBox(
-              decoration: BoxDecoration(
-                color: dotColor,
-                shape: BoxShape.circle,
-              ),
-            )
-          : null,
+    final relativeAge = _relativeAge(session.createdAt);
+    if (relativeAge != null) {
+      spans.addAll([
+        _separatorSpan(),
+        TextSpan(
+          text: relativeAge,
+          style: AppTypography.mono(
+            fontSize: 11,
+            fontWeight: FontWeight.w400,
+            color: AppTheme.textMuted,
+          ),
+        ),
+      ]);
+    }
+
+    return spans;
+  }
+
+  InlineSpan _separatorSpan() {
+    return TextSpan(
+      text: ' · ',
+      style: AppTypography.sans(
+        fontSize: 12,
+        fontWeight: FontWeight.w400,
+        color: AppTheme.textMuted,
+      ),
     );
+  }
+
+  String? _relativeAge(DateTime createdAt) {
+    final diff = DateTime.now().difference(createdAt);
+    if (diff.inDays == 0) {
+      return null;
+    }
+    if (diff.inDays > 0) {
+      return '${diff.inDays}d';
+    }
+    if (diff.inHours > 0) {
+      return '${diff.inHours}h';
+    }
+    final minutes = diff.inMinutes.clamp(1, 59);
+    return '${minutes}m';
+  }
+
+  _HistoryStatusStyle _statusStyle(AgentSession session) {
+    switch (session.status) {
+      case SessionStatus.waitingApproval:
+        return const _HistoryStatusStyle(
+          label: 'awaiting',
+          foregroundColor: AppTheme.warning,
+          backgroundColor: AppTheme.warningBg,
+        );
+      case SessionStatus.running:
+        return const _HistoryStatusStyle(
+          label: 'running',
+          foregroundColor: AppTheme.successText,
+          backgroundColor: AppTheme.successBg,
+        );
+      case SessionStatus.error:
+        return const _HistoryStatusStyle(
+          label: 'failed',
+          foregroundColor: AppTheme.errorText,
+          backgroundColor: AppTheme.errorBg,
+        );
+      case SessionStatus.idle:
+      case SessionStatus.done:
+        return const _HistoryStatusStyle(
+          label: 'done',
+          foregroundColor: AppTheme.statusNeutralText,
+          backgroundColor: AppTheme.statusNeutralBg,
+        );
+    }
   }
 }
 
@@ -292,4 +339,16 @@ class _ListItem {
   _ListItem.header(this.headerLabel) : isHeader = true, session = null;
 
   _ListItem.session(this.session) : isHeader = false, headerLabel = null;
+}
+
+class _HistoryStatusStyle {
+  final String label;
+  final Color foregroundColor;
+  final Color backgroundColor;
+
+  const _HistoryStatusStyle({
+    required this.label,
+    required this.foregroundColor,
+    required this.backgroundColor,
+  });
 }

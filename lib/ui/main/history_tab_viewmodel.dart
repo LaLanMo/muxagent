@@ -69,6 +69,8 @@ class HistoryTabViewModel extends GetxController {
         label = 'Today';
       } else if (dt == yesterday) {
         label = 'Yesterday';
+      } else if (today.difference(dt).inDays <= 7) {
+        label = 'Last Week';
       } else if (dt.year == now.year) {
         label = _formatDate(session.createdAt);
       } else {
