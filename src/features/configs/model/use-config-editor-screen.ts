@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   createEditableDraft,
   loadConfigDetail,
@@ -25,6 +25,7 @@ const EMPTY_GRAPH: ConfigGraphLayout = {
 };
 
 export function useConfigEditorScreen() {
+  const navigate = useNavigate();
   const { alias = "" } = useParams();
   const shell = useShellModel();
 
@@ -132,6 +133,10 @@ export function useConfigEditorScreen() {
     };
   }, [draft]);
 
+  function goBackToConfigs() {
+    navigate("/configs");
+  }
+
   return {
     shell,
     loading,
@@ -142,6 +147,7 @@ export function useConfigEditorScreen() {
     graph,
     validation,
     validating,
+    goBackToConfigs,
     selectNode: setSelectedNodeName,
   };
 }

@@ -28,7 +28,8 @@ test("shows a built-in config as a read-only file inspector", async ({
 
   await expect(page.getByTestId("config-editor-screen")).toBeVisible();
   await expect(page.getByLabel("Config graph")).toBeVisible();
-  await expect(page.getByTestId("config-editor-graph-header")).toHaveCount(0);
+  await expect(page.getByTestId("config-editor-graph-header")).toBeVisible();
+  await expect(page.getByTestId("config-editor-back")).toHaveText("‹  Configs");
   await expect(page.getByTestId("config-editor-config-header")).toContainText(
     "Config File",
   );
@@ -63,6 +64,10 @@ test("shows a built-in config as a read-only file inspector", async ({
   expect(doneNodeBox).not.toBeNull();
   expect(entryChipBox!.y + entryChipBox!.height).toBeLessThanOrEqual(entryNameBox!.y - 2);
   expect(reviewNodeBox!.width).toBeGreaterThan(doneNodeBox!.width);
+
+  await page.getByTestId("config-editor-back").click();
+  await expect(page).toHaveURL(/\/configs$/);
+  await expect(page.getByTestId("configs-screen")).toBeVisible();
 });
 
 test("deletes a customized config from the config list", async ({ page }) => {

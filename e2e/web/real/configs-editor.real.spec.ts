@@ -30,7 +30,8 @@ test("shows a built-in config as a read-only file inspector through the real bac
     await expect(page.getByLabel("Config graph")).toBeVisible({
       timeout: 30_000,
     });
-    await expect(page.getByTestId("config-editor-graph-header")).toHaveCount(0);
+    await expect(page.getByTestId("config-editor-graph-header")).toBeVisible();
+    await expect(page.getByTestId("config-editor-back")).toHaveText("‹  Configs");
     await expect(page.getByTestId("config-editor-config-header")).toContainText(
       "Config File",
     );
@@ -47,5 +48,13 @@ test("shows a built-in config as a read-only file inspector through the real bac
       path.join(taskConfigRootDir, "taskconfigs", "default", "config.yaml"),
     );
     await expect(page.getByTestId("config-editor-stats")).toContainText("nodes ·");
+
+    await page.getByTestId("config-editor-back").click();
+    await expect(page).toHaveURL(/\/configs$/, {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("configs-screen")).toBeVisible({
+      timeout: 30_000,
+    });
   });
 });

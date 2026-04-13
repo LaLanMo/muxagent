@@ -277,10 +277,30 @@
   background: var(--color-surface-0);
 }
 
-.config-editor-canvas__top-divider {
+.config-editor-canvas__header {
+  display: flex;
+  align-items: center;
   min-height: var(--config-editor-top-row-height);
+  padding: var(--space-4) var(--space-5);
   background: var(--color-surface-0);
   border-bottom: 1px solid var(--color-border);
+}
+
+.config-editor-canvas__back {
+  width: fit-content;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.config-editor-canvas__back:hover {
+  color: var(--color-text-primary);
 }
 
 .config-editor-canvas__stage {

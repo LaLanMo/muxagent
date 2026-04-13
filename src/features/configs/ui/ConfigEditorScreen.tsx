@@ -39,6 +39,7 @@ export function ConfigEditorScreen({
   graph,
   validation,
   validating,
+  goBackToConfigs,
   selectNode,
 }: ConfigEditorScreenProps) {
   const [fileActionError, setFileActionError] = useState<string>();
@@ -110,13 +111,23 @@ export function ConfigEditorScreen({
 
             <div className="config-editor-layout">
               <section className="config-editor-canvas" aria-label="Config graph">
-                <div
-                  aria-hidden="true"
-                  className="config-editor-canvas__top-divider"
+                <header
+                  className="config-editor-canvas__header"
+                  data-testid="config-editor-graph-header"
                   onMouseDown={(event) => {
                     void startWindowDrag(event);
                   }}
-                />
+                >
+                  <button
+                    aria-label="Back to configs"
+                    className="config-editor-canvas__back"
+                    data-testid="config-editor-back"
+                    onClick={goBackToConfigs}
+                    type="button"
+                  >
+                    <span>‹  Configs</span>
+                  </button>
+                </header>
                 <div className="config-editor-canvas__stage">
                   <div className="config-editor-canvas__surface">
                     <ConfigGraphCanvas
