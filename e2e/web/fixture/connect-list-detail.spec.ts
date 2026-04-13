@@ -640,7 +640,7 @@ test("renders failed and complete task surfaces", async ({ page }) => {
     };
   });
   expect(retryStepStyles.backgroundColor).toBe("rgb(251, 248, 246)");
-  expect(retryStepStyles.borderRadius).toBe("4px");
+  expect(retryStepStyles.borderRadius).toBe("0px");
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
@@ -756,7 +756,7 @@ test("renders the blocked task surface", async ({ page }) => {
     };
   });
   expect(continueButtonStyles.backgroundColor).toBe("rgb(47, 40, 37)");
-  expect(continueButtonStyles.borderRadius).toBe("4px");
+  expect(continueButtonStyles.borderRadius).toBe("0px");
 });
 
 test("adds a new blocked activity row when the next iteration is blocked by max iterations", async ({

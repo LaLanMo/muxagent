@@ -196,7 +196,7 @@ ul {
   justify-content: center;
   gap: var(--button-gap);
   min-height: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 0;
   padding: var(--button-padding-block) var(--button-padding-inline);
   background: var(--button-bg);
   color: var(--button-fg);
