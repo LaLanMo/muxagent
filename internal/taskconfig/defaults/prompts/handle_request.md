@@ -21,7 +21,16 @@ Do the work the user asked for.
 
 Use the workflow history and clarifications above when they are relevant.
 
-Always write at least one result artifact under {{ARTIFACT_DIR}}. The artifact can be a short implementation summary, review note, analysis memo, or other result that matches the request.
+`summary` is the primary human-facing result for this node. Make it directly answer the user's request and surface the important result first.
 
-Return only artifact paths under {{ARTIFACT_DIR}} in `file_paths`.
-Before returning `kind="result"`, make sure `result.file_paths` lists every artifact you wrote as absolute paths.
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Only write artifacts under {{ARTIFACT_DIR}} when extra detail, supporting notes, or logs would help beyond the TL;DR. If `summary` is sufficient on its own, return `file_paths: []`.
+
+When you do write extra detail, keep it supplemental to `summary`, not a duplicate of it.
+
+## Output
+
+Return JSON matching the provided schema.
+`summary`: the primary human-facing result for this request.
+`file_paths`: optional extra-detail artifacts under {{ARTIFACT_DIR}} as absolute paths. Use an empty array when no extra artifact is needed.

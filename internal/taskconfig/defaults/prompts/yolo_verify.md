@@ -33,6 +33,14 @@ Read operations and side-effect-free commands are always allowed. Running tests 
 
 Do not require literal adherence to implementation details. A credible deviation may still pass if the wave goal is achieved, the done definition is satisfied, required checks pass, and the wave constraints are respected.
 
+## Human TL;DR
+
+Return `summary` as the human TL;DR. State whether verification passed, the strongest evidence you checked, and any remaining concern or follow-up a human should notice.
+
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Do not restate the full verification artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+
 ## Verification checklist
 
 **1. Wave goal** — Did the implementation make the approved wave goal true?
@@ -58,5 +66,5 @@ Write verification artifacts under {{ARTIFACT_DIR}}.
 
 Return JSON matching the provided schema.
 `passed`: whether the current approved planning-wave contract is satisfied.
-`summary`: a concise explanation of what you verified, any accepted deviations, and anything the evaluator should know.
+`summary`: the concise human TL;DR for this verification decision, including any accepted deviations or evaluator-relevant follow-up.
 `file_paths`: every verification artifact you wrote as absolute paths.

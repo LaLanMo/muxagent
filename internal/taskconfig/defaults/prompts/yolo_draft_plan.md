@@ -40,6 +40,14 @@ Plan a full wave, not a micro-step. The wave should be large enough to make real
 
 Optimize for outcome clarity, not implementation micromanagement. Define what must be true at the end of the wave and how the verifier can prove it. Only include implementation detail when it materially affects correctness, safety, or architectural compatibility.
 
+## Human TL;DR
+
+Return `summary` as the human TL;DR. State the wave goal, the main scope boundary, and the biggest risk or assumption a human should notice first.
+
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Do not restate the full planning artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+
 ## Plan artifacts
 
 Write plan artifacts under {{ARTIFACT_DIR}}.
@@ -69,4 +77,5 @@ Every plan must cover:
 ## Output
 
 Return JSON matching the provided schema.
+`summary`: the concise human TL;DR for this planning wave.
 `file_paths`: every artifact you wrote as absolute paths.

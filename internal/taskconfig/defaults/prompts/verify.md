@@ -58,10 +58,19 @@ Ask for clarification when your pass/fail decision genuinely depends on informat
 - "the approved plan required X but the implementation does Y in `file.go:123`"
 - "the original task required X, but the approved plan never covered it; implementation matches the plan, so the plan is incomplete"
 
+## Human TL;DR
+
+Return `summary` as the human TL;DR. State whether verification passed, the strongest evidence you checked, and any remaining concern or follow-up a human should notice.
+
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Do not restate the full verification artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+
 Write verification artifacts under {{ARTIFACT_DIR}}.
 
 ## Output
 
 Return JSON matching the provided schema.
 `passed`: whether the task is fully satisfied.
+`summary`: the concise human TL;DR for this verification decision.
 `file_paths`: every verification artifact you wrote as absolute paths.

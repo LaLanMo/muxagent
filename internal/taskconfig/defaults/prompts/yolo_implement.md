@@ -45,6 +45,14 @@ You may deviate from the plan's suggested implementation details when the altern
 - Do not expand scope into later-wave work.
 - Do not redesign the wave goal mid-flight. Adapt the implementation path if needed, but preserve the wave contract.
 
+## Human TL;DR
+
+Return `summary` as the human TL;DR. State what changed, any meaningful deviation from the approved wave contract, and the main risk or verifier focus.
+
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Do not repeat the full implementation summary artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+
 ## Summary artifact
 
 Write a brief implementation summary under {{ARTIFACT_DIR}} containing:
@@ -59,4 +67,5 @@ Write a brief implementation summary under {{ARTIFACT_DIR}} containing:
 ## Output
 
 Return JSON matching the provided schema.
+`summary`: the concise human TL;DR for this implementation pass.
 `file_paths`: the summary artifacts you wrote under {{ARTIFACT_DIR}} as absolute paths. Do not include project files you modified during implementation.

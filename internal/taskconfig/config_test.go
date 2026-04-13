@@ -465,8 +465,10 @@ func TestEmbeddedSingleRunPromptUsesMinimalDirectExecutionContract(t *testing.T)
 		"Clarifications so far:",
 		"Do the work the user asked for.",
 		"Use the workflow history and clarifications above when they are relevant.",
-		"Always write at least one result artifact under {{ARTIFACT_DIR}}.",
-		"Return only artifact paths under {{ARTIFACT_DIR}} in `file_paths`.",
+		"`summary` is the primary human-facing result for this node.",
+		"If `summary` is sufficient on its own, return `file_paths: []`.",
+		"`summary`: the primary human-facing result for this request.",
+		"`file_paths`: optional extra-detail artifacts under {{ARTIFACT_DIR}} as absolute paths.",
 	}
 	excludes := []string{
 		"Task: {{TASK_DESCRIPTION}}",

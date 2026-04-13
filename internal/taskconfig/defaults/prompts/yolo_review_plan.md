@@ -45,6 +45,14 @@ If rejecting, be specific and actionable. Point at the exact missing or incorrec
 
 Write review artifacts under {{ARTIFACT_DIR}}.
 
+## Human TL;DR
+
+Return `summary` as the human TL;DR. Say whether the wave plan passes review, and identify the highest-signal approval reason or blocker.
+
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Do not restate the full review artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+
 ## Discipline
 
 - Do not ask for clarification.
@@ -58,4 +66,5 @@ Set `passed: true` only if the implementing agent could execute this wave autono
 
 Return JSON matching the provided schema.
 `passed`: whether the plan is ready for implementation.
+`summary`: the concise human TL;DR for this review decision.
 `file_paths`: every review artifact you wrote as absolute paths.

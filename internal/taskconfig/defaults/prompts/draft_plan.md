@@ -25,6 +25,14 @@ Before writing a new plan, identify and read the newest relevant workflow artifa
 
 If this is iteration 2+, previous plans were rejected. Read the review/approval feedback in the workflow history. Address every point raised. Do not repeat rejected approaches.
 
+## Human TL;DR
+
+Return `summary` as the human TL;DR. Surface the chosen approach, the scope of the plan, and the biggest risk or assumption a human reviewer should notice first.
+
+Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+
+Do not restate the full plan structure. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+
 ## Plan artifacts
 
 Write plan artifacts under {{ARTIFACT_DIR}}.
@@ -52,4 +60,5 @@ Every plan — whether one file or many — must cover:
 ## Output
 
 Return JSON matching the provided schema.
+`summary`: the concise human TL;DR for this planning pass.
 `file_paths`: every artifact you wrote as absolute paths.

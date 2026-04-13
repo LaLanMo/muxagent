@@ -24,8 +24,11 @@ node_definitions:
       type: object
       additionalProperties: false
       required:
+        - summary
         - file_paths
       properties:
+        summary:
+          type: string
         file_paths:
           type: array
           items:

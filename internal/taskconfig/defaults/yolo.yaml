@@ -59,8 +59,11 @@ node_definitions:
       type: object
       additionalProperties: false
       required:
+        - summary
         - file_paths
       properties:
+        summary:
+          type: string
         file_paths:
           type: array
           items:
@@ -72,10 +75,13 @@ node_definitions:
       additionalProperties: false
       required:
         - passed
+        - summary
         - file_paths
       properties:
         passed:
           type: boolean
+        summary:
+          type: string
         file_paths:
           type: array
           items:
@@ -86,8 +92,11 @@ node_definitions:
       type: object
       additionalProperties: false
       required:
+        - summary
         - file_paths
       properties:
+        summary:
+          type: string
         file_paths:
           type: array
           items:
