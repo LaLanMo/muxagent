@@ -774,3 +774,56 @@ test("keeps dense completed-column cards at their natural height instead of shri
     (cardBox?.y ?? 0) + (cardBox?.height ?? 0) + 1,
   );
 });
+
+test("keeps board lane headers aligned when neighboring columns overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1200, height: 540 });
+  await connectFixtureWorkspace(page);
+
+  const lanes = await page.getByTestId("task-board").evaluate((board) => {
+    const counts = board.querySelectorAll<HTMLElement>(".board-column__count");
+    if (counts[0]) counts[0].textContent = "14";
+    if (counts[1]) counts[1].textContent = "2";
+    if (counts[2]) counts[2].textContent = "71";
+
+    const stacks = board.querySelectorAll<HTMLElement>(".board-column__stack");
+    stacks.forEach((stack, index) => {
+      const seed = stack.firstElementChild;
+      if (!seed) {
+        return;
+      }
+      const clones = index === 0 ? 12 : index === 2 ? 40 : 0;
+      for (let i = 0; i < clones; i += 1) {
+        stack.appendChild(seed.cloneNode(true));
+      }
+    });
+
+    return Array.from(board.querySelectorAll<HTMLElement>(".board-column")).map((column) => {
+      const header = column.querySelector<HTMLElement>(".board-column__header");
+      const stack = column.querySelector<HTMLElement>(".board-column__stack");
+      const label = column.querySelector<HTMLElement>(".board-column__label");
+      const headerRect = header?.getBoundingClientRect();
+      const stackRect = stack?.getBoundingClientRect();
+      return {
+        label: label?.textContent ?? "",
+        headerHeight: headerRect?.height ?? 0,
+        stackY: stackRect?.y ?? 0,
+        stackClientHeight: stack?.clientHeight ?? 0,
+        stackScrollHeight: stack?.scrollHeight ?? 0,
+      };
+    });
+  });
+
+  expect(lanes).toHaveLength(3);
+
+  const headerHeights = lanes.map((lane) => lane.headerHeight);
+  const stackYs = lanes.map((lane) => lane.stackY);
+  const overflowingLanes = lanes.filter(
+    (lane) => lane.stackScrollHeight > lane.stackClientHeight + 1,
+  );
+
+  expect(overflowingLanes).toHaveLength(2);
+  expect(Math.max(...headerHeights) - Math.min(...headerHeights)).toBeLessThanOrEqual(1);
+  expect(Math.max(...stackYs) - Math.min(...stackYs)).toBeLessThanOrEqual(1);
+});
