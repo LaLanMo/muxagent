@@ -541,9 +541,10 @@ function describeTranscriptAvailability(
   }
   if (recoveryAction) {
     return {
-      title: "No live output recorded yet",
-      detail:
-        "This run is still marked active, but no session or transcript was attached. If the previous executor was interrupted, recover this run to refresh its state.",
+      title: run.session_id ? "Run may be stale" : "No live output recorded yet",
+      detail: run.session_id
+        ? "This run is still marked active, but only recovered transcript history is available. If the previous executor was interrupted, recover this run to refresh its state."
+        : "This run is still marked active, but no session or transcript was attached. If the previous executor was interrupted, recover this run to refresh its state.",
     };
   }
   if (isCurrentRun) {

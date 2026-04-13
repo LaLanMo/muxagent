@@ -26,6 +26,8 @@ import type {
   WorkspaceAddParams,
   WorkspaceAddResult,
   WorkspaceGetResult,
+  WorkspaceReconcileParams,
+  WorkspaceReconcileResult,
   WorkspaceListResult,
   WorkspaceRemoveParams,
   WorkspaceRemoveResult,
@@ -42,6 +44,7 @@ export interface TaskBackendClient {
   workspaceList(): Promise<WorkspaceListResult>;
   workspaceAdd(params: WorkspaceAddParams): Promise<WorkspaceAddResult>;
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult>;
+  workspaceReconcileStale(params: WorkspaceReconcileParams): Promise<WorkspaceReconcileResult>;
   workspaceUpdate(params: WorkspaceUpdateParams): Promise<WorkspaceUpdateResult>;
   workspaceRemove(params: WorkspaceRemoveParams): Promise<WorkspaceRemoveResult>;
   configCatalog(): Promise<ConfigCatalogResult>;

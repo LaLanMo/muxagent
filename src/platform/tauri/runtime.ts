@@ -29,6 +29,8 @@ import type {
   WorkspaceAddParams,
   WorkspaceAddResult,
   WorkspaceGetResult,
+  WorkspaceReconcileParams,
+  WorkspaceReconcileResult,
   WorkspaceListResult,
   WorkspaceRemoveParams,
   WorkspaceRemoveResult,
@@ -78,6 +80,12 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult> {
     return this.request("workspace.get", { workspace_id: workspaceId });
+  }
+
+  workspaceReconcileStale(
+    params: WorkspaceReconcileParams,
+  ): Promise<WorkspaceReconcileResult> {
+    return this.request("workspace.reconcile_stale", params);
   }
 
   workspaceUpdate(params: WorkspaceUpdateParams): Promise<WorkspaceUpdateResult> {

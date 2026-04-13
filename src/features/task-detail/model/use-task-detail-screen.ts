@@ -148,6 +148,9 @@ export function useTaskDetailScreen() {
       state.workspaces.find((workspace) => workspace.workspace_id === workspaceId)?.actor
         .state ?? "cold",
   );
+  const workspaceReconcilePending = useWorkspaceStore(
+    (state) => (state.workspaceReconcileCounts[workspaceId] ?? 0) > 0,
+  );
   const taskSurfaceReturnContext = useWorkspaceStore(
     (state) => state.taskSurfaceReturnContext,
   );
@@ -329,6 +332,11 @@ export function useTaskDetailScreen() {
     liveEventsRunId,
     selectedRunHistory,
     workspaceActorState,
+    staleReconcilePending: resolvedTask
+      ? workspaceReconcilePending &&
+        detailStatusLabel(resolvedTask.status) === "running" &&
+        workspaceActorState !== "active"
+      : false,
     supportsRunRecovery: serverMethods.includes("task.recover_stale"),
     feedback,
     setFeedback,

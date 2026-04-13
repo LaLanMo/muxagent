@@ -90,6 +90,16 @@ export interface WorkspaceGetResult {
   workspace: WorkspaceSummaryDto;
 }
 
+export interface WorkspaceReconcileParams {
+  workspace_id: string;
+}
+
+export type WorkspaceReconcileOutcome = "busy" | "noop" | "reconciled";
+
+export interface WorkspaceReconcileResult {
+  outcome: WorkspaceReconcileOutcome;
+}
+
 export interface WorkspaceAddParams {
   path: string;
   display_name?: string;

@@ -299,28 +299,84 @@ test("shows submitted clarification input even when no raw transcript was persis
   );
 });
 
-test("offers run recovery when the selected active run has no session or transcript", async ({
+test("automatically reconciles stale runs when opening a cold workspace", async ({
   page,
 }) => {
   await connectFixtureWorkspace(page, "/tmp/muxagent-stale-workspace");
+  await expect(page.getByTestId("board-card-task-stale-fixture")).toHaveClass(
+    /task-board-card--failed/,
+  );
   await openTaskFromBoard(page, "task-stale-fixture");
 
-  await page.getByTestId("detail-run-run-stale-implement").click();
-  await expect(page).toHaveURL(/[\?&]modal=transcript/);
-  await expect(page.getByTestId("transcript-modal")).toBeVisible();
-  await expect(page.getByTestId("detail-output-surface")).toContainText(
-    "No live output recorded yet",
-  );
-  await expect(page.getByTestId("recover-run")).toBeVisible();
-
-  await page.getByTestId("recover-run").click();
-
-  await expect(page.getByTestId("recover-run")).toHaveCount(0);
-  await expect(page.getByTestId("transcript-modal")).toContainText(
-    "No persisted stream for this run",
-  );
-  await expect(page.getByTestId("transcript-modal")).toContainText("failed");
+  const statusBlock = page.getByTestId("detail-task-status");
+  await expect(statusBlock).toContainText("Failed");
   await expect(page.getByTestId("detail-run-run-stale-implement")).toContainText("failed");
+  await expect(page.getByTestId("failed-pane")).toBeVisible();
+  await expect(page.getByTestId("retry-step")).toBeVisible();
+  await expect(page.getByTestId("recover-run")).toHaveCount(0);
+  await expect(page.getByText("orphaned_after_restart")).toBeVisible();
+
+  await page.getByTestId("detail-run-run-stale-implement").click();
+  await expect(page).not.toHaveURL(/[\?&]modal=transcript/);
+  await expect(page.getByTestId("transcript-modal")).toHaveCount(0);
+});
+
+test("shows a transient toast while stale-run reconciliation is in flight", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-live-fixture");
+
+  await page.evaluate(async () => {
+    const [{ useWorkspaceStore }] = await Promise.all([
+      import("/src/state/workspace-store.ts"),
+    ]);
+    const workspaceId = window.location.pathname.match(/\/workspaces\/([^/]+)\//)?.[1];
+    if (!workspaceId) {
+      throw new Error("Missing workspace id");
+    }
+    const store = useWorkspaceStore.getState();
+    const workspace = store.workspaces.find((entry) => entry.workspace_id === workspaceId);
+    if (!workspace) {
+      throw new Error("Missing workspace in store");
+    }
+    store.upsertWorkspace({
+      ...workspace,
+      actor: {
+        ...workspace.actor,
+        state: "cold",
+      },
+    });
+    store.beginWorkspaceReconcile(workspaceId);
+  });
+
+  const toast = page.getByTestId("detail-stale-reconcile-toast");
+  await expect(toast).toBeVisible();
+  await expect(toast).toContainText("Checking stale run state");
+
+  await page.evaluate(async () => {
+    const [{ useWorkspaceStore }] = await Promise.all([
+      import("/src/state/workspace-store.ts"),
+    ]);
+    const workspaceId = window.location.pathname.match(/\/workspaces\/([^/]+)\//)?.[1];
+    if (!workspaceId) {
+      throw new Error("Missing workspace id");
+    }
+    const store = useWorkspaceStore.getState();
+    const workspace = store.workspaces.find((entry) => entry.workspace_id === workspaceId);
+    if (workspace) {
+      store.upsertWorkspace({
+        ...workspace,
+        actor: {
+          ...workspace.actor,
+          state: "active",
+        },
+      });
+    }
+    store.finishWorkspaceReconcile(workspaceId);
+  });
+
+  await expect(toast).toHaveCount(0);
 });
 
 test("opens New Task from task detail without leaving the current screen", async ({

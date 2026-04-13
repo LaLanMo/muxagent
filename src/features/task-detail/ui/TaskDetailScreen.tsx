@@ -501,6 +501,7 @@ type TaskDetailScreenProps = {
   liveEventsRunId?: string;
   selectedRunHistory?: RunHistoryCacheEntry;
   workspaceActorState: string;
+  staleReconcilePending: boolean;
   supportsRunRecovery: boolean;
   actionSurface: TaskDetailActionSurface;
   inputRequest?: InputRequestDto;
@@ -561,6 +562,7 @@ export function TaskDetailScreen({
   liveEventsRunId,
   selectedRunHistory,
   workspaceActorState,
+  staleReconcilePending,
   supportsRunRecovery,
   actionSurface,
   inputRequest,
@@ -625,12 +627,11 @@ export function TaskDetailScreen({
     selectedRun &&
       selectedRun.id === currentRunId &&
       detailStatusLabel(selectedRun.status) === "running" &&
-      selectedRunStreamSource === "none" &&
+      selectedRunStreamSource !== "live" &&
+      selectedRunStreamSource !== "loading" &&
       selectedRunHistory &&
       !selectedRunHistory.loading &&
       !selectedRunHistory.error &&
-      !selectedRun.session_id?.trim() &&
-      !selectedRunHistory.result?.sessionId?.trim() &&
       !selectedRun.result &&
       supportsRunRecovery &&
       workspaceActorState !== "active",
@@ -822,9 +823,21 @@ export function TaskDetailScreen({
       onAddWorkspace={() => void shell.addWorkspace()}
     >
       <section className="detail-screen" data-testid="task-detail-screen">
-        {detailError ? (
+        {detailError || staleReconcilePending ? (
           <div className="toast-container">
-            <Toast message={detailError} tone="error" onDismiss={() => {}} />
+            {detailError ? (
+              <Toast message={detailError} tone="error" onDismiss={() => {}} />
+            ) : null}
+            {staleReconcilePending ? (
+              <Toast
+                duration={0}
+                dismissible={false}
+                message="Checking stale run state. If the previous executor was interrupted, this task will update automatically when reconciliation finishes."
+                onDismiss={() => {}}
+                testId="detail-stale-reconcile-toast"
+                tone="warning"
+              />
+            ) : null}
           </div>
         ) : null}
 

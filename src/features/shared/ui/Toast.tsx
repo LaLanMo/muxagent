@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
-import { CircleCheckBig, CircleX, X } from "lucide-react";
+import { CircleAlert, CircleCheckBig, CircleX, X } from "lucide-react";
 
-type ToastTone = "success" | "error";
+type ToastTone = "success" | "error" | "warning";
 
 type ToastProps = {
   message: string;
   tone: ToastTone;
   duration?: number;
+  dismissible?: boolean;
   onDismiss: () => void;
+  testId?: string;
 };
 
 function ToastIcon({ tone }: { tone: ToastTone }) {
@@ -16,6 +18,16 @@ function ToastIcon({ tone }: { tone: ToastTone }) {
       <CircleCheckBig
         aria-hidden="true"
         className="toast__icon toast__icon--success"
+        size={16}
+        strokeWidth={2}
+      />
+    );
+  }
+  if (tone === "warning") {
+    return (
+      <CircleAlert
+        aria-hidden="true"
+        className="toast__icon toast__icon--warning"
         size={16}
         strokeWidth={2}
       />
@@ -31,10 +43,20 @@ function ToastIcon({ tone }: { tone: ToastTone }) {
   );
 }
 
-export function Toast({ message, tone, duration = 4000, onDismiss }: ToastProps) {
+export function Toast({
+  message,
+  tone,
+  duration = 4000,
+  dismissible = true,
+  onDismiss,
+  testId,
+}: ToastProps) {
   const [exiting, setExiting] = useState(false);
 
   useEffect(() => {
+    if (duration <= 0) {
+      return;
+    }
     const timer = setTimeout(() => {
       setExiting(true);
       setTimeout(onDismiss, 200);
@@ -46,20 +68,23 @@ export function Toast({ message, tone, duration = 4000, onDismiss }: ToastProps)
     <div
       className={`toast toast--${tone}${exiting ? " toast--exiting" : ""}`}
       role="alert"
+      data-testid={testId}
     >
       <ToastIcon tone={tone} />
       <span className="toast__message">{message}</span>
-      <button
-        aria-label="Dismiss"
-        className="toast__dismiss"
-        onClick={() => {
-          setExiting(true);
-          setTimeout(onDismiss, 200);
-        }}
-        type="button"
-      >
-        <X aria-hidden="true" size={14} strokeWidth={2} />
-      </button>
+      {dismissible ? (
+        <button
+          aria-label="Dismiss"
+          className="toast__dismiss"
+          onClick={() => {
+            setExiting(true);
+            setTimeout(onDismiss, 200);
+          }}
+          type="button"
+        >
+          <X aria-hidden="true" size={14} strokeWidth={2} />
+        </button>
+      ) : null}
     </div>
   );
 }

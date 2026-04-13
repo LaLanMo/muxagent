@@ -374,6 +374,7 @@ export class FixtureRuntime {
               "workspace.list",
               "workspace.add",
               "workspace.get",
+              "workspace.reconcile_stale",
               "workspace.update",
               "workspace.remove",
               "config.catalog",
@@ -448,6 +449,50 @@ export class FixtureRuntime {
           return this.fail(id, -32010, "workspace not found");
         }
         return this.respond(id, { workspace });
+      }
+      case "workspace.reconcile_stale": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        if (workspace.actor.state === "active") {
+          return this.respond(id, { outcome: "busy" });
+        }
+        const tasks = this.fixtureTasks(state, workspace.workspace_id);
+        const runningRuns = tasks.flatMap((task) =>
+          task.node_runs.filter((run) => run.status === "running"),
+        );
+        if (runningRuns.length === 0) {
+          return this.respond(id, { outcome: "noop" });
+        }
+        const recoveredAt = new Date().toISOString();
+        for (const task of tasks) {
+          for (const run of task.node_runs) {
+            if (run.status !== "running") {
+              continue;
+            }
+            run.status = "failed";
+            run.failure_reason = "orphaned_after_restart";
+            run.completed_at = recoveredAt;
+            task.status = "failed";
+            task.current_issue = {
+              kind: "failed_run",
+              node_name: run.node_name,
+              iteration: 1,
+              reason: "orphaned_after_restart",
+              occurred_at: recoveredAt,
+            };
+            task.task.updated_at = recoveredAt;
+            task.live_events = [];
+            task.live_output_run_id = undefined;
+          }
+        }
+        workspace.task_counts = this.taskCounts(tasks);
+        workspace.actor = this.workspaceActor(tasks);
+        return this.respond(id, { outcome: "reconciled" });
       }
       case "workspace.update": {
         const workspace = this.requireWorkspace(
@@ -1678,6 +1723,7 @@ export class FixtureRuntime {
               node_name: "implement",
               status: "running",
               started_at: makeTime(5),
+              session_id: "session-sync-implement",
             },
           ],
           runHistoryByRunId: {

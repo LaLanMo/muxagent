@@ -30,6 +30,12 @@ export function useWorkspaceSelection() {
   const setSelectedWorkspace = useWorkspaceStore(
     (state) => state.setSelectedWorkspace,
   );
+  const beginWorkspaceReconcile = useWorkspaceStore(
+    (state) => state.beginWorkspaceReconcile,
+  );
+  const finishWorkspaceReconcile = useWorkspaceStore(
+    (state) => state.finishWorkspaceReconcile,
+  );
   const upsertWorkspace = useWorkspaceStore((state) => state.upsertWorkspace);
   const removeWorkspaceFromStore = useWorkspaceStore(
     (state) => state.removeWorkspace,
@@ -44,15 +50,27 @@ export function useWorkspaceSelection() {
       mode: "default" | "route",
     ): Promise<boolean> => {
       const taskRoute = parseTaskDetailPath(location.pathname);
-      const selected = await selectWorkspaceIntoState({
-        runtime: getRuntime(),
-        workspace,
-        setTasks,
-        resetWorkspace: resetWorkspaceTasks,
-        setSelectedWorkspace,
-        setError,
-        rememberSelection: mode === "default",
-      });
+      const shouldTrackReconcile =
+        workspace.reachable && workspace.actor.state !== "active";
+      if (shouldTrackReconcile) {
+        beginWorkspaceReconcile(workspace.workspace_id);
+      }
+      let selected = false;
+      try {
+        selected = await selectWorkspaceIntoState({
+          runtime: getRuntime(),
+          workspace,
+          setTasks,
+          resetWorkspace: resetWorkspaceTasks,
+          setSelectedWorkspace,
+          setError,
+          rememberSelection: mode === "default",
+        });
+      } finally {
+        if (shouldTrackReconcile) {
+          finishWorkspaceReconcile(workspace.workspace_id);
+        }
+      }
       if (
         selected &&
         mode === "default" &&
@@ -184,8 +202,18 @@ export function useWorkspaceSelection() {
       const workspace = await addWorkspace(getRuntime(), picked);
       upsertWorkspace(workspace);
       if (workspace.reachable) {
-        const bootstrap = await loadWorkspaceTasks(getRuntime(), workspace);
-        setTasks(workspace.workspace_id, bootstrap.tasks);
+        const shouldTrackReconcile = workspace.actor.state !== "active";
+        if (shouldTrackReconcile) {
+          beginWorkspaceReconcile(workspace.workspace_id);
+        }
+        try {
+          const bootstrap = await loadWorkspaceTasks(getRuntime(), workspace);
+          setTasks(workspace.workspace_id, bootstrap.tasks);
+        } finally {
+          if (shouldTrackReconcile) {
+            finishWorkspaceReconcile(workspace.workspace_id);
+          }
+        }
       } else {
         resetWorkspaceTasks(workspace.workspace_id);
       }

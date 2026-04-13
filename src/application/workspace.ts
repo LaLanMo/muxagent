@@ -110,6 +110,7 @@ export async function loadWorkspaceTasks(
   if (!workspace.reachable) {
     throw new Error("Workspace is unreachable");
   }
+  await reconcileWorkspaceStale(runtime, workspace);
   const taskList = await runtime.backend.taskList(workspace.workspace_id);
   return {
     workspace,
@@ -128,6 +129,7 @@ export async function loadAllWorkspaceTasks(
       }
 
       try {
+        await reconcileWorkspaceStale(runtime, workspace);
         const taskList = await runtime.backend.taskList(workspace.workspace_id);
         return [workspace.workspace_id, taskList.tasks] as const;
       } catch {
@@ -141,4 +143,16 @@ export async function loadAllWorkspaceTasks(
 
 export async function disconnectServer(runtime: DesktopRuntime): Promise<void> {
   await runtime.backend.disconnect();
+}
+
+async function reconcileWorkspaceStale(
+  runtime: DesktopRuntime,
+  workspace: WorkspaceSummaryDto,
+): Promise<void> {
+  if (!workspace.reachable || workspace.actor.state === "active") {
+    return;
+  }
+  await runtime.backend
+    .workspaceReconcileStale({ workspace_id: workspace.workspace_id })
+    .catch(() => undefined);
 }

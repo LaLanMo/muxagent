@@ -14,6 +14,7 @@ interface WorkspaceState {
   status?: ServiceStatusResult;
   catalog?: ConfigCatalogResult;
   workspaces: WorkspaceSummaryDto[];
+  workspaceReconcileCounts: Record<string, number>;
   selectedWorkspaceId?: string;
   taskSurfaceReturnContext?: TaskSurfaceReturnState;
   error?: string;
@@ -27,6 +28,8 @@ interface WorkspaceState {
   ) => void;
   setDisconnected: () => void;
   setSelectedWorkspace: (workspaceId?: string) => void;
+  beginWorkspaceReconcile: (workspaceId: string) => void;
+  finishWorkspaceReconcile: (workspaceId: string) => void;
   captureTaskSurfaceReturnContext: (context: TaskSurfaceReturnState) => void;
   clearTaskSurfaceReturnContext: () => void;
   setCatalog: (catalog?: ConfigCatalogResult) => void;
@@ -49,6 +52,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   phase: "idle",
   bootstrapPending: true,
   workspaces: [],
+  workspaceReconcileCounts: {},
   setConnecting: () =>
     set((state) => ({
       phase: "connecting",
@@ -56,6 +60,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       server: state.server,
       status: state.status,
       catalog: state.catalog,
+      workspaceReconcileCounts: state.workspaceReconcileCounts,
       error: undefined,
     })),
   requestBootstrap: () =>
@@ -66,6 +71,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       status: undefined,
       catalog: undefined,
       workspaces: [],
+      workspaceReconcileCounts: {},
       selectedWorkspaceId: undefined,
       taskSurfaceReturnContext: undefined,
       error: undefined,
@@ -78,6 +84,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       status,
       catalog,
       workspaces: sortWorkspaces(workspaces),
+      workspaceReconcileCounts: state.workspaceReconcileCounts,
       selectedWorkspaceId:
         state.selectedWorkspaceId &&
         workspaces.some(
@@ -95,6 +102,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       status: undefined,
       catalog: undefined,
       workspaces: [],
+      workspaceReconcileCounts: {},
       selectedWorkspaceId: undefined,
       taskSurfaceReturnContext: undefined,
       error: undefined,
@@ -102,6 +110,40 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setSelectedWorkspace: (workspaceId) =>
     set({
       selectedWorkspaceId: workspaceId,
+    }),
+  beginWorkspaceReconcile: (workspaceId) =>
+    set((state) => {
+      const trimmedWorkspaceId = workspaceId.trim();
+      if (!trimmedWorkspaceId) {
+        return {};
+      }
+      return {
+        workspaceReconcileCounts: {
+          ...state.workspaceReconcileCounts,
+          [trimmedWorkspaceId]:
+            (state.workspaceReconcileCounts[trimmedWorkspaceId] ?? 0) + 1,
+        },
+      };
+    }),
+  finishWorkspaceReconcile: (workspaceId) =>
+    set((state) => {
+      const trimmedWorkspaceId = workspaceId.trim();
+      if (!trimmedWorkspaceId) {
+        return {};
+      }
+      const currentCount = state.workspaceReconcileCounts[trimmedWorkspaceId] ?? 0;
+      if (currentCount <= 0) {
+        return {};
+      }
+      const nextCounts = { ...state.workspaceReconcileCounts };
+      if (currentCount === 1) {
+        delete nextCounts[trimmedWorkspaceId];
+      } else {
+        nextCounts[trimmedWorkspaceId] = currentCount - 1;
+      }
+      return {
+        workspaceReconcileCounts: nextCounts,
+      };
     }),
   captureTaskSurfaceReturnContext: (context) =>
     set({
@@ -133,8 +175,11 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       const workspaces = state.workspaces.filter(
         (workspace) => workspace.workspace_id !== workspaceId,
       );
+      const workspaceReconcileCounts = { ...state.workspaceReconcileCounts };
+      delete workspaceReconcileCounts[workspaceId];
       return {
         workspaces,
+        workspaceReconcileCounts,
       };
     }),
   setError: (message) =>
@@ -149,6 +194,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       status: undefined,
       catalog: undefined,
       workspaces: [],
+      workspaceReconcileCounts: {},
       selectedWorkspaceId: undefined,
       taskSurfaceReturnContext: undefined,
       error: message,
@@ -161,6 +207,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       status: undefined,
       catalog: undefined,
       workspaces: [],
+      workspaceReconcileCounts: {},
       selectedWorkspaceId: undefined,
       taskSurfaceReturnContext: undefined,
       error: undefined,

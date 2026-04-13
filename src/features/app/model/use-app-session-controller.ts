@@ -27,6 +27,12 @@ export function useAppSessionController() {
   const setSelectedWorkspace = useWorkspaceStore(
     (state) => state.setSelectedWorkspace,
   );
+  const beginWorkspaceReconcile = useWorkspaceStore(
+    (state) => state.beginWorkspaceReconcile,
+  );
+  const finishWorkspaceReconcile = useWorkspaceStore(
+    (state) => state.finishWorkspaceReconcile,
+  );
   const requestBootstrap = useWorkspaceStore((state) => state.requestBootstrap);
   const { selectPreferredWorkspaceForPath } = useWorkspaceSelection();
 
@@ -35,7 +41,20 @@ export function useAppSessionController() {
     resetTasks();
     try {
       const bootstrap = await connectServer(getRuntime());
-      const taskMap = await loadAllWorkspaceTasks(getRuntime(), bootstrap.workspaces);
+      const reconciledWorkspaceIds = bootstrap.workspaces
+        .filter((workspace) => workspace.reachable && workspace.actor.state !== "active")
+        .map((workspace) => workspace.workspace_id);
+      for (const workspaceId of reconciledWorkspaceIds) {
+        beginWorkspaceReconcile(workspaceId);
+      }
+      let taskMap;
+      try {
+        taskMap = await loadAllWorkspaceTasks(getRuntime(), bootstrap.workspaces);
+      } finally {
+        for (const workspaceId of reconciledWorkspaceIds) {
+          finishWorkspaceReconcile(workspaceId);
+        }
+      }
       setConnected(
         bootstrap.server,
         bootstrap.status,

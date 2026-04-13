@@ -30,6 +30,8 @@ import {
   type WorkspaceAddParams,
   type WorkspaceAddResult,
   type WorkspaceGetResult,
+  type WorkspaceReconcileParams,
+  type WorkspaceReconcileResult,
   type WorkspaceListResult,
   type WorkspaceRemoveParams,
   type WorkspaceRemoveResult,
@@ -131,6 +133,12 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult> {
     return this.request("workspace.get", { workspace_id: workspaceId });
+  }
+
+  workspaceReconcileStale(
+    params: WorkspaceReconcileParams,
+  ): Promise<WorkspaceReconcileResult> {
+    return this.request("workspace.reconcile_stale", params);
   }
 
   workspaceUpdate(params: WorkspaceUpdateParams): Promise<WorkspaceUpdateResult> {
