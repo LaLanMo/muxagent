@@ -2,8 +2,10 @@ import {
   useEffect,
   useEffectEvent,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import {
@@ -1810,7 +1812,7 @@ export function TaskFollowUpDock({
   const pickerId = useId();
   const rootRef = useRef<HTMLElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const closePicker = useEffectEvent((focusTarget?: "trigger" | "input") => {
@@ -1853,6 +1855,34 @@ export function TaskFollowUpDock({
     };
   }, [closePicker, pickerOpen]);
 
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    if (!input) {
+      return;
+    }
+    input.style.height = "0px";
+    input.style.height = `${input.scrollHeight}px`;
+  }, [followUpDescription]);
+
+  function handleDescriptionKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if (
+      event.key !== "Enter" ||
+      event.shiftKey ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey
+    ) {
+      return;
+    }
+    if (event.nativeEvent.isComposing || event.keyCode === 229) {
+      return;
+    }
+    event.preventDefault();
+    if (!submittingFollowUp) {
+      void onStartFollowUp();
+    }
+  }
+
   const selectedAlias = selectedEntry?.alias ?? followUpConfigAlias ?? defaultConfigAlias ?? "";
 
   return (
@@ -1864,15 +1894,16 @@ export function TaskFollowUpDock({
           void onStartFollowUp();
         }}
       >
-        <input
+        <textarea
           aria-label="Follow-up description"
           className="detail-follow-up-rail__input"
           data-testid="follow-up-description"
           disabled={submittingFollowUp}
           onChange={(event) => setFollowUpDescription(event.target.value)}
+          onKeyDown={handleDescriptionKeyDown}
           placeholder="Send a follow-up request..."
           ref={inputRef}
-          type="text"
+          rows={1}
           value={followUpDescription}
         />
 

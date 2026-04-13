@@ -581,6 +581,8 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
   await openTaskFromBoard(page, "task-done-login");
 
   const description = `Fixture follow-up ${Date.now()}`;
+  const secondLine = "Carry the rollout note into a second line.";
+  const multilineDescription = `${description}\n${secondLine}`;
   const completePane = page.getByTestId("complete-pane");
   const configTrigger = page.getByTestId("follow-up-config-trigger");
   const configPicker = page.getByTestId("follow-up-config-picker");
@@ -604,15 +606,26 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
   await page.getByTestId("follow-up-config-option-quick").click();
   await expect(configPicker).toHaveCount(0);
   await expect(configTrigger).toContainText("quick");
+  await expect(descriptionInput).toHaveJSProperty("tagName", "TEXTAREA");
 
   const previousPath = new URL(page.url()).pathname;
   await descriptionInput.fill(description);
+  const initialHeight = await descriptionInput.evaluate((element) => element.clientHeight);
+  await descriptionInput.press("Shift+Enter");
+  await descriptionInput.type(secondLine);
+  await expect(descriptionInput).toHaveValue(multilineDescription);
+  await expect
+    .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+    .toBe(previousPath);
+  const expandedHeight = await descriptionInput.evaluate((element) => element.clientHeight);
+  expect(expandedHeight).toBeGreaterThan(initialHeight);
   await descriptionInput.press("Enter");
 
   await expect
     .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
     .not.toBe(previousPath);
-  await expect(page.locator(".detail-main-header__prompt-text")).toHaveText(description);
+  await expect(page.locator(".detail-main-header__prompt-text")).toContainText(description);
+  await expect(page.locator(".detail-main-header__prompt-text")).toContainText(secondLine);
   await expect(
     page.locator(".detail-properties__block").filter({ hasText: /^Config/ }),
   ).toContainText("quick");

@@ -99,6 +99,10 @@ test("starts a real follow-up task from a seeded completed task with a switched 
     await expect(page.getByTestId("follow-up-config-picker")).toBeVisible();
     await page.getByTestId("follow-up-config-option-default").click();
     await expect(page.getByTestId("follow-up-config-trigger")).toContainText("default");
+    await expect(page.getByTestId("follow-up-description")).toHaveJSProperty(
+      "tagName",
+      "TEXTAREA",
+    );
     await page.getByTestId("follow-up-description").fill(description);
     const previousPath = new URL(page.url()).pathname;
     await page.getByTestId("follow-up-description").press("Enter");

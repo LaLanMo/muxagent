@@ -2707,14 +2707,18 @@
   min-height: 80px;
 }
 
-.detail-follow-up-rail,
+.detail-follow-up-rail {
+  position: relative;
+}
+
 .detail-follow-up-rail__config-anchor {
   position: relative;
+  align-self: flex-end;
 }
 
 .detail-follow-up-rail__box {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
   width: 100%;
   min-height: 42px;
@@ -2729,13 +2733,19 @@
 }
 
 .detail-follow-up-rail__input {
+  display: block;
   min-width: 0;
   flex: 1 1 auto;
+  resize: none;
+  overflow-y: hidden;
   border: 0;
+  border-radius: 0;
   padding: 0;
   background: transparent;
   color: #2a2421;
+  font-family: inherit;
   font-size: 14px;
+  font-weight: inherit;
   line-height: 1.35;
 }
 
