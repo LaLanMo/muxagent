@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { ShellIcon, type ShellIconName } from "@/features/layout/ui/ShellIcon";
+import { startWindowDrag } from "@/features/layout/ui/window-drag";
 
 export type ShellNavItem = {
   label: string;
@@ -119,7 +120,14 @@ export function DesktopShellFrame({
 }: DesktopShellFrameProps) {
   return (
     <main className="desktop-shell">
-      <aside className="desktop-shell__sidebar" data-tauri-drag-region="">
+      <aside className="desktop-shell__sidebar">
+        <div
+          aria-hidden="true"
+          className="desktop-shell__sidebar-drag-strip"
+          onMouseDown={(event) => {
+            void startWindowDrag(event);
+          }}
+        />
         <div className="desktop-shell__sidebar-top">
           {onPrimaryAction ? (
             <button
@@ -185,7 +193,9 @@ export function DesktopShellFrame({
               ? `desktop-shell__topbar ${topBarClassName}`
               : "desktop-shell__topbar"
           }
-          data-tauri-drag-region=""
+          onMouseDown={(event) => {
+            void startWindowDrag(event);
+          }}
         >
           <div className="desktop-shell__topbar-left">{topBarLeft}</div>
           {topBarRight ? (

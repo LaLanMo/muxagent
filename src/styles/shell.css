@@ -15,10 +15,22 @@
   overflow: hidden;
   background: var(--color-surface-1);
   padding: var(--space-4);
+  position: relative;
 }
 
 body.platform-tauri-macos .desktop-shell__sidebar {
   padding-top: calc(var(--space-4) + var(--window-controls-safe-top));
+}
+
+.desktop-shell__sidebar-drag-strip {
+  display: none;
+}
+
+body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
+  display: block;
+  position: absolute;
+  inset: 0 0 auto;
+  height: var(--window-controls-safe-top);
 }
 
 .desktop-shell__sidebar-top {
@@ -302,11 +314,6 @@ body.platform-tauri-macos .desktop-shell__sidebar {
 
 .desktop-shell__topbar--detail {
   display: none;
-}
-
-.desktop-shell__topbar--detail .desktop-shell__topbar-left {
-  width: 100%;
-  gap: 0;
 }
 
 .desktop-shell__topbar--detail + .desktop-shell__topbar-divider {

@@ -16,6 +16,7 @@ import {
 } from "@/features/task-history/model/timeline";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
+import { startWindowDrag } from "@/features/layout/ui/window-drag";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { Toast } from "@/features/shared/ui/Toast";
 import type {
@@ -794,7 +795,12 @@ export function TaskDetailScreen({
 
         <div className="detail-layout">
           <div className="detail-main-column">
-            <header className="detail-main-header">
+            <header
+              className="detail-main-header"
+              onMouseDown={(event) => {
+                void startWindowDrag(event);
+              }}
+            >
               <button
                 aria-label="Back to tasks"
                 className="detail-main-header__back"
@@ -1008,7 +1014,12 @@ export function TaskDetailScreen({
           </div>
 
           <aside className="detail-properties">
-            <div className="detail-properties__header">
+            <div
+              className="detail-properties__header"
+              onMouseDown={(event) => {
+                void startWindowDrag(event);
+              }}
+            >
               <span className="detail-properties__eyebrow">Properties</span>
             </div>
             <div className="detail-properties__divider" />

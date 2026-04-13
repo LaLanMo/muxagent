@@ -2,6 +2,7 @@ import { FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import { useState } from "react";
 import { getRuntime } from "@/app/runtime";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
+import { startWindowDrag } from "@/features/layout/ui/window-drag";
 import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
 import { ConfigGraphCanvas } from "@/features/configs/ui/ConfigGraphCanvas";
 
@@ -108,7 +109,13 @@ export function ConfigEditorScreen({
 
             <div className="config-editor-layout">
               <section className="config-editor-canvas" aria-label="Config graph">
-                <div className="config-editor-canvas__top-divider" aria-hidden="true" />
+                <div
+                  aria-hidden="true"
+                  className="config-editor-canvas__top-divider"
+                  onMouseDown={(event) => {
+                    void startWindowDrag(event);
+                  }}
+                />
                 <div className="config-editor-canvas__stage">
                   <div className="config-editor-canvas__surface">
                     <ConfigGraphCanvas
@@ -124,6 +131,9 @@ export function ConfigEditorScreen({
                 <header
                   className="config-editor-panel__header"
                   data-testid="config-editor-config-header"
+                  onMouseDown={(event) => {
+                    void startWindowDrag(event);
+                  }}
                 >
                   <span className="config-editor-panel__eyebrow">Config File</span>
                 </header>
