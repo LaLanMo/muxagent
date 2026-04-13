@@ -1765,6 +1765,10 @@ export class FixtureRuntime {
             status: "done",
             started_at: makeTime(0),
             completed_at: makeTime(2),
+            result: {
+              summary:
+                "Scope the middleware refactor around the anonymous bypass first, and verify the redirect ordering before widening the rollout. See `plan.md` for the full breakdown.",
+            },
             artifact_paths: ["plan.md", "deps.json", "analysis.txt"],
           },
           {
@@ -2445,6 +2449,11 @@ export class FixtureRuntime {
             started_at: makeTime(-88),
             completed_at: makeTime(-79),
             session_id: "session-login-implement",
+            result: {
+              summary:
+                "Patched the login guard to preserve the authenticated session cookie and captured the rollout notes in `login-fix.md`.",
+            },
+            artifact_paths: ["login-fix.md"],
           },
         ],
         runHistoryByRunId: {

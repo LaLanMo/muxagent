@@ -71,6 +71,10 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await expect(page.getByText("Refactor auth middleware")).toBeVisible();
   await expect(page.getByTestId("detail-run-run-live-plan")).toBeVisible();
+  await expect(page.getByTestId("detail-run-summary-run-live-plan")).toContainText(
+    "Scope the middleware refactor around the anonymous bypass first",
+  );
+  await expect(page.getByTestId("detail-run-summary-run-live-plan")).toContainText("plan.md");
   const activityScroll = await page.getByTestId("detail-activity").evaluate((element) => ({
     scrollTop: element.scrollTop,
     scrollHeight: element.scrollHeight,
@@ -694,6 +698,12 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   );
   await expect(page.getByTestId("follow-up-description")).toBeVisible();
   await expect(page.getByTestId("follow-up-config-trigger")).toContainText("default");
+  await expect(page.getByTestId("detail-run-summary-run-login-implement")).toContainText(
+    "Patched the login guard to preserve the authenticated session cookie",
+  );
+  await expect(page.getByTestId("detail-run-summary-run-login-implement")).toContainText(
+    "login-fix.md",
+  );
   await page.getByTestId("detail-run-run-login-implement").click();
   await expect(page.getByTestId("transcript-modal")).toBeVisible();
   await expect(page.getByTestId("detail-run-history-source")).toContainText(

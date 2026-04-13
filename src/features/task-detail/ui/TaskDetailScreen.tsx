@@ -28,6 +28,7 @@ import {
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
+import { DocumentContent } from "@/features/shared/ui/DocumentContent";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { Toast } from "@/features/shared/ui/Toast";
 import type {
@@ -464,6 +465,14 @@ function activityMeta(run: NodeRunViewDto, artifactCount: number) {
   return undefined;
 }
 
+function completedRunSummary(run: NodeRunViewDto) {
+  if (detailStatusLabel(run.status) !== "done") {
+    return "";
+  }
+  const summary = run.result?.summary;
+  return typeof summary === "string" ? summary.trim() : "";
+}
+
 type TaskDetailScreenProps = {
   shell: ShellChromeModel;
   goBackToTaskSurface: () => void;
@@ -888,6 +897,7 @@ export function TaskDetailScreen({
                     !showRunningPreview &&
                     runArtifacts.length === 1 &&
                     selectedArtifact?.node_run_id !== run.id;
+                  const summaryMarkdown = isRealRun ? completedRunSummary(run) : "";
                   const timing = formatRunTiming(run);
                   const runMeta =
                     actionKindForRun === "approval" ||
@@ -1022,6 +1032,20 @@ export function TaskDetailScreen({
                         </div>
                       ) : runArtifacts.length > 0 ? (
                         null
+                      ) : null}
+
+                      {summaryMarkdown ? (
+                        <div
+                          className="detail-activity-card__result-summary"
+                          data-testid={`detail-run-summary-${run.id}`}
+                        >
+                          <DocumentContent
+                            className="detail-activity-card__result-summary-document"
+                            content={summaryMarkdown}
+                            format="markdown"
+                            variant="compact"
+                          />
+                        </div>
                       ) : null}
 
                       {showActionPanel ? (
