@@ -198,6 +198,8 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   void _replaceActiveSessionIds(Iterable<String> ids) {
-    activeSessionIds.assignAll(ids);
+    activeSessionIds
+      ..clear()
+      ..addAll(ids);
   }
 }

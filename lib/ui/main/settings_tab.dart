@@ -41,15 +41,21 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
             child: ClipRect(
               child: SingleChildScrollView(
                 child: Obx(() {
-                  controller.machines.length;
-                  controller.activeSessionIds.toSet();
-                  controller.connectingMachines.length;
+                  final machines = controller.machines.toList(growable: false);
+                  final activeSessionIds = controller.activeSessionIds.toSet();
+                  final connectingMachines = controller.connectingMachines
+                      .toSet();
                   controller.relayConnected.value;
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildSectionLabel('MACHINES'),
-                      ..._buildMachineRows(),
+                      ..._buildMachineRows(
+                        machines: machines,
+                        activeSessionIds: activeSessionIds,
+                        connectingMachines: connectingMachines,
+                        relayConnected: controller.relayConnected.value,
+                      ),
                       _buildSectionLabel('PAIRING'),
                       _buildSettingsRow(
                         icon: LucideIcons.qrCode,
@@ -143,16 +149,51 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     );
   }
 
-  List<Widget> _buildMachineRows() {
-    final machines = controller.machines;
-    machines.length;
+  List<Widget> _buildMachineRows({
+    required List<PairedMachine> machines,
+    required Set<String> activeSessionIds,
+    required Set<String> connectingMachines,
+    required bool relayConnected,
+  }) {
     if (machines.isEmpty) return const [];
 
-    return machines.map((machine) => _buildMachineRow(machine)).toList();
+    return machines
+        .map(
+          (machine) => _buildMachineRow(
+            machine,
+            status: _machineConnectionState(
+              machineId: machine.machineId,
+              activeSessionIds: activeSessionIds,
+              connectingMachines: connectingMachines,
+              relayConnected: relayConnected,
+            ),
+          ),
+        )
+        .toList();
   }
 
-  Widget _buildMachineRow(PairedMachine machine) {
-    final status = controller.machineConnectionState(machine.machineId);
+  MachineConnectionDisplayState _machineConnectionState({
+    required String machineId,
+    required Set<String> activeSessionIds,
+    required Set<String> connectingMachines,
+    required bool relayConnected,
+  }) {
+    if (activeSessionIds.contains(machineId)) {
+      return MachineConnectionDisplayState.online;
+    }
+    if (connectingMachines.contains(machineId)) {
+      return MachineConnectionDisplayState.connecting;
+    }
+    if (!relayConnected) {
+      return MachineConnectionDisplayState.serverLost;
+    }
+    return MachineConnectionDisplayState.offline;
+  }
+
+  Widget _buildMachineRow(
+    PairedMachine machine, {
+    required MachineConnectionDisplayState status,
+  }) {
     final connected = status == MachineConnectionDisplayState.online;
     final connecting = status == MachineConnectionDisplayState.connecting;
     final hostname = machine.hostname ?? 'Unknown host';

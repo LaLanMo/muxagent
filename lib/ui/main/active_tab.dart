@@ -85,7 +85,14 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               ),
             ),
             const SizedBox(height: 20),
-            Obx(() => _buildMachineCard()),
+            Obx(() {
+              final machines = shell.machines.toList(growable: false);
+              final activeSessionIds = shell.activeSessionIds.toSet();
+              return _buildMachineCard(
+                machines: machines,
+                activeSessionIds: activeSessionIds,
+              );
+            }),
             const SizedBox(height: 20),
             Semantics(
               label: 'Start New Session',
@@ -108,8 +115,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  Widget _buildMachineCard() {
-    final machines = shell.machines;
+  Widget _buildMachineCard({
+    required List<dynamic> machines,
+    required Set<String> activeSessionIds,
+  }) {
     if (machines.isEmpty) return const SizedBox.shrink();
 
     return Container(
@@ -122,7 +131,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
       child: Column(
         children: [
           for (int i = 0; i < machines.length; i++) ...[
-            _buildMachineRow(machines[i]),
+            _buildMachineRow(
+              machines[i],
+              connected: activeSessionIds.contains(machines[i].machineId),
+            ),
             if (i < machines.length - 1)
               const Divider(height: 0, thickness: 1, color: Color(0xFFEBEBEB)),
           ],
@@ -131,8 +143,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  Widget _buildMachineRow(dynamic machine) {
-    final connected = shell.isMachineConnected(machine.machineId);
+  Widget _buildMachineRow(dynamic machine, {required bool connected}) {
     return GestureDetector(
       onTap: connected ? null : () => shell.connectMachine(machine),
       child: Container(
