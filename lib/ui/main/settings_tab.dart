@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -77,6 +78,17 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         ),
                         onTap: controller.showPasteUrlDialog,
                       ),
+                      if (kDebugMode)
+                        _buildSettingsRow(
+                          icon: LucideIcons.monitor,
+                          label: 'Preview Pairing',
+                          trailing: Icon(
+                            LucideIcons.chevronRight,
+                            size: 16,
+                            color: AppTheme.textMuted,
+                          ),
+                          onTap: controller.navigateToMockPairingPreview,
+                        ),
                       _buildSectionLabel('CONFIGURATION'),
                       _buildSettingsRow(
                         icon: LucideIcons.mic,

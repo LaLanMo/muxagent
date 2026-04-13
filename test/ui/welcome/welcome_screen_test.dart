@@ -32,6 +32,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('MuxAgent'), findsOneWidget);
+    final heroImage = tester.widget<Image>(find.byType(Image).first);
+    expect(
+      (heroImage.image as AssetImage).assetName,
+      'assets/images/app_icon.png',
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -40,9 +45,7 @@ void main() {
   ) async {
     Get.put(WelcomeViewModel());
 
-    await tester.pumpWidget(
-      const GetMaterialApp(home: WelcomeScreen()),
-    );
+    await tester.pumpWidget(const GetMaterialApp(home: WelcomeScreen()));
     await tester.pumpAndSettle();
 
     final textField = find.byType(TextField);

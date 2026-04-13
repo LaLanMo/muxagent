@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
@@ -148,5 +149,24 @@ void main() {
         expect(viewModel.connectingMachines, isEmpty);
       },
     );
+
+    test('buildPasteUrlTextField disables IME helpers for auth URLs', () {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+
+      final field = SettingsTabViewModel.buildPasteUrlTextField(
+        controller: controller,
+      );
+
+      expect(field.autocorrect, isFalse);
+      expect(field.enableSuggestions, isFalse);
+      expect(field.enableIMEPersonalizedLearning, isFalse);
+      expect(field.keyboardType, TextInputType.url);
+      expect(field.textInputAction, TextInputAction.done);
+      expect(field.textCapitalization, TextCapitalization.none);
+      expect(field.smartDashesType, SmartDashesType.disabled);
+      expect(field.smartQuotesType, SmartQuotesType.disabled);
+      expect(field.spellCheckConfiguration, isNotNull);
+    });
   });
 }

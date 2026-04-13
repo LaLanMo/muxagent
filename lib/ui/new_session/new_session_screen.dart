@@ -14,8 +14,19 @@ import 'new_session_viewmodel.dart';
 class NewSessionScreen extends GetView<NewSessionViewModel> {
   const NewSessionScreen({super.key});
 
+  static const _fieldFill = Color(0xFFF0EAE5);
+  static const _dropdownFill = AppTheme.surface;
+  static const _modeSkipBg = Color(0xFFF5E2DF);
+  static const _modeSkipBorder = Color(0xFFE0B2AA);
+  static const _modeAcceptBg = Color(0xFFE0ECFA);
+  static const _modeAcceptBorder = Color(0xFFB3CFF0);
+  static const _modePlanBg = Color(0xFFEDE0FA);
+  static const _modePlanBorder = Color(0xFFC9AFF0);
+
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: GestureDetector(
@@ -24,20 +35,20 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         child: UiEffectListener(
           effects: controller.uiEffect,
           child: SafeArea(
+            bottom: false,
             child: Column(
               children: [
-                // Header: height 56, padding [0, 16], gap 12, alignItems center,
-                // bottom border #E5E7EB
                 Container(
-                  height: 56,
+                  height: 52,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   decoration: const BoxDecoration(
-                    border: Border(bottom: BorderSide(color: AppTheme.border)),
+                    border: Border(
+                      bottom: BorderSide(color: AppTheme.borderStrong),
+                    ),
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      // X icon 24x24 #6B6F76
                       GestureDetector(
                         onTap: () {
                           controller.dismissTransientInputs();
@@ -45,16 +56,15 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                         },
                         child: const Icon(
                           LucideIcons.x,
-                          size: 24,
-                          color: AppTheme.textSecondary,
+                          size: 20,
+                          color: AppTheme.textTertiary,
                         ),
                       ),
                       const SizedBox(width: 12),
-                      // Title: system sans 17 w600 #1D1D1F
                       Text(
                         'New Session',
                         style: AppTypography.sans(
-                          fontSize: 17,
+                          fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.textPrimary,
                         ),
@@ -68,74 +78,46 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     state: controller.relayConnectionState.value,
                   ),
                 ),
-                // Body: padding [24, 16], gap 24, vertical, fill_container
                 Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.fromLTRB(16, 24, 16, bottomInset + 34),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.only(top: 24),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Runtime Section
-                                _buildFieldLabel('Runtime'),
-                                const SizedBox(height: 8),
-                                Obx(() => _buildRuntimeSelector()),
-                                const SizedBox(height: 24),
+                        _buildFieldLabel('Runtime'),
+                        const SizedBox(height: 8),
+                        Obx(() => _buildRuntimeSelector()),
+                        const SizedBox(height: 24),
 
-                                // Machine Section: gap 8, vertical
-                                _buildFieldLabel('Machine'),
-                                const SizedBox(height: 8),
-                                Obx(() => _buildMachineSelector()),
-                                const SizedBox(height: 24),
+                        _buildFieldLabel('Machine'),
+                        const SizedBox(height: 8),
+                        Obx(() => _buildMachineSelector()),
+                        const SizedBox(height: 24),
 
-                                // Directory Section: gap 8, vertical
-                                _buildFieldLabel('Working Directory'),
-                                const SizedBox(height: 8),
-                                _buildDirectorySection(),
-                                const SizedBox(height: 24),
+                        _buildFieldLabel('Working Directory'),
+                        const SizedBox(height: 8),
+                        _buildDirectorySection(),
+                        const SizedBox(height: 24),
 
-                                // Prompt Section: gap 8, vertical
-                                _buildFieldLabel('Initial Prompt'),
-                                const SizedBox(height: 8),
-                                _buildPromptInput(),
-                                const SizedBox(height: 24),
+                        _buildFieldLabel('Initial Prompt'),
+                        const SizedBox(height: 8),
+                        _buildPromptInput(),
+                        const SizedBox(height: 24),
 
-                                // Mode Section
-                                Obx(
-                                  () => _buildFieldLabel(
-                                    _modeSectionLabel(
-                                      controller.selectedRuntime.value?.id,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Obx(() => _buildModeSelector()),
-                                const SizedBox(height: 24),
-
-                                // Git Worktree Section
-                                _buildFieldLabel('Git Worktree'),
-                                const SizedBox(height: 8),
-                                Obx(() => _buildWorktreeToggle()),
-                              ],
-                            ),
+                        Obx(
+                          () => _buildFieldLabel(
+                            _modeSectionLabel(controller.selectedRuntime.value?.id),
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        Obx(() => _buildModeSelector()),
+                        const SizedBox(height: 24),
 
-                        // Create Button: pinned at bottom
-                        Padding(
-                          padding: EdgeInsets.only(
-                            top: 16,
-                            bottom:
-                                MediaQuery.of(Get.context!).padding.bottom > 0
-                                ? 16
-                                : 24,
-                          ),
-                          child: _buildCreateButton(),
-                        ),
+                        _buildFieldLabel('Git Worktree'),
+                        const SizedBox(height: 8),
+                        Obx(() => _buildWorktreeToggle()),
+                        const SizedBox(height: 24),
+                        _buildCreateButton(),
                       ],
                     ),
                   ),
@@ -148,14 +130,14 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  // Label: system sans 13 w500 #6B6F76
   Widget _buildFieldLabel(String text) {
     return Text(
-      text,
-      style: AppTypography.sans(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: AppTheme.textSecondary,
+      text.toUpperCase(),
+      style: AppTypography.mono(
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 1,
+        color: AppTheme.textTertiary,
       ),
     );
   }
@@ -219,20 +201,18 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
+          color: _fieldFill,
+          border: Border.all(color: AppTheme.chipBorder),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Monitor icon 16x16 #808690
             const Icon(
               LucideIcons.monitor,
               size: 16,
               color: AppTheme.textTertiary,
             ),
             const SizedBox(width: 8),
-            // Machine name: system sans 14 normal #1D1D1F
             Expanded(
               child: Text(
                 hostname,
@@ -263,8 +243,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
+          color: _fieldFill,
+          border: Border.all(color: AppTheme.borderStrong),
         ),
         child: Row(
           children: [
@@ -295,8 +275,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
+          color: _fieldFill,
+          border: Border.all(color: AppTheme.borderStrong),
         ),
         child: Text(
           'No runtimes available',
@@ -311,8 +291,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     final selectionEnabled = options.length > 1;
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.inputFill,
-        borderRadius: BorderRadius.circular(8),
+        color: _fieldFill,
+        border: Border.all(color: AppTheme.borderStrong),
       ),
       child: Column(
         children: [
@@ -337,13 +317,14 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
+          color: _fieldFill,
+          border: Border.all(color: AppTheme.chipBorder),
         ),
         child: Text(
           'Use runtime default mode',
-          style: AppTypography.sans(
-            fontSize: 14,
+          style: AppTypography.mono(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
             color: AppTheme.textSecondary,
           ),
         ),
@@ -399,21 +380,24 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             : null,
         behavior: HitTestBehavior.opaque,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           child: Row(
             children: [
-              _buildRuntimeIcon(runtime.id),
+              _buildRuntimeLeadingIcon(runtime.id, enabled: canTap),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   runtime.label,
                   style: AppTypography.sans(
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: isSelected
+                        ? FontWeight.w500
+                        : FontWeight.w400,
                     color: labelColor,
                   ),
                 ),
               ),
+              const SizedBox(width: 12),
               _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
             ],
           ),
@@ -422,46 +406,46 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  Widget _buildRuntimeIcon(String runtimeId) {
-    switch (runtimeId) {
-      case 'claude-code':
-        return _buildRuntimeAssetIcon('assets/anthropic-icon.png');
-      case 'codex':
-        return _buildRuntimeAssetIcon('assets/openai-icon.png');
-      case 'copilot':
-        return _buildRuntimeAssetIcon('assets/github-copilot-icon.png');
-      case 'gemini':
-        return _buildRuntimeAssetIcon('assets/gemini-icon.png');
-      case 'goose':
-        return _buildRuntimeAssetIcon('assets/goose-icon.png');
-      case 'opencode':
-        return _buildRuntimeAssetIcon('assets/opencode-icon.png');
-      default:
-        return _buildDefaultRuntimeIcon();
+  Widget _buildRuntimeLeadingIcon(String runtimeId, {required bool enabled}) {
+    final assetPath = _runtimeAssetPath(runtimeId);
+    if (assetPath == null) {
+      return Icon(
+        LucideIcons.cpu,
+        size: 18,
+        color: enabled ? AppTheme.textTertiary : AppTheme.textMuted,
+      );
     }
-  }
 
-  Widget _buildRuntimeAssetIcon(String assetPath) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(5),
-      child: Image.asset(assetPath, width: 20, height: 20, fit: BoxFit.cover),
-    );
-  }
-
-  Widget _buildDefaultRuntimeIcon() {
-    return Container(
+    final image = Image.asset(
+      assetPath,
       width: 20,
       height: 20,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(5),
-      ),
-      child: const Icon(
-        LucideIcons.cpu,
-        size: 14,
-        color: AppTheme.textSecondary,
-      ),
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
     );
+    if (enabled) {
+      return image;
+    }
+    return Opacity(opacity: 0.45, child: image);
+  }
+
+  String? _runtimeAssetPath(String runtimeId) {
+    switch (runtimeId) {
+      case 'claude-code':
+        return 'assets/anthropic-icon.png';
+      case 'codex':
+        return 'assets/openai-icon.png';
+      case 'copilot':
+        return 'assets/github-copilot-icon.png';
+      case 'gemini':
+        return 'assets/gemini-icon.png';
+      case 'goose':
+        return 'assets/goose-icon.png';
+      case 'opencode':
+        return 'assets/opencode-icon.png';
+      default:
+        return null;
+    }
   }
 
   String _modeSectionLabel(String? runtimeId) {
@@ -471,31 +455,23 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   Widget _buildRuntimeRadio({required bool isSelected, required bool enabled}) {
     if (isSelected) {
       return Container(
-        width: 20,
-        height: 20,
+        width: 16,
+        height: 16,
         decoration: BoxDecoration(
           color: AppTheme.primary,
-          borderRadius: BorderRadius.circular(999),
-        ),
-        alignment: Alignment.center,
-        child: Container(
-          width: 8,
-          height: 8,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-          ),
+          shape: BoxShape.circle,
+          border: Border.all(color: AppTheme.primary, width: 2),
         ),
       );
     }
 
     return Container(
-      width: 20,
-      height: 20,
+      width: 16,
+      height: 16,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: enabled ? AppTheme.textMuted : AppTheme.border,
+          color: enabled ? AppTheme.chipBorder : AppTheme.border,
           width: 1.5,
         ),
       ),
@@ -503,7 +479,6 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   Widget _buildModeCard({required ModeOption mode, required bool isSelected}) {
-    final accent = _modeAccent(mode.id);
     return Semantics(
       label: mode.label,
       button: true,
@@ -517,62 +492,84 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         },
         behavior: HitTestBehavior.opaque,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primary : AppTheme.inputFill,
-            borderRadius: BorderRadius.circular(10),
+            color: _modeFill(mode.id),
+            border: Border.all(
+              color: _modeBorder(mode.id, isSelected),
+              width: isSelected ? 2 : 1,
+            ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 6,
-                height: 6,
-                decoration: BoxDecoration(
-                  color: accent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  mode.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.sans(
-                    fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                    color: isSelected ? Colors.white : AppTheme.textSecondary,
-                  ),
-                ),
-              ),
-            ],
+          alignment: Alignment.center,
+          child: Text(
+            mode.label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.mono(
+              fontSize: 12,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+              color: _modeText(mode.id),
+            ),
           ),
         ),
       ),
     );
   }
 
-  Color _modeAccent(String modeId) {
+  Color _modeFill(String modeId) {
     switch (modeId) {
       case 'bypassPermissions':
       case 'dontAsk':
       case 'full-access':
-        return const Color(0xFFF87171);
+        return _modeSkipBg;
       case 'acceptEdits':
-        return const Color(0xFF2563EB);
       case 'https://agentclientprotocol.com/protocol/session-modes#agent':
-        return const Color(0xFF2563EB);
+        return _modeAcceptBg;
       case 'https://agentclientprotocol.com/protocol/session-modes#autopilot':
-        return const Color(0xFFFB923C);
+        return _fieldFill;
       case 'plan':
       case 'https://agentclientprotocol.com/protocol/session-modes#plan':
-        return const Color(0xFF7C3AED);
+        return _modePlanBg;
       case 'default':
       case 'auto':
       case 'read-only':
       default:
-        return const Color(0xFF9DA1A8);
+        return AppTheme.surfaceMuted;
+    }
+  }
+
+  Color _modeBorder(String modeId, bool isSelected) {
+    if (isSelected) return AppTheme.textPrimary;
+    switch (modeId) {
+      case 'bypassPermissions':
+      case 'dontAsk':
+      case 'full-access':
+        return _modeSkipBorder;
+      case 'acceptEdits':
+      case 'https://agentclientprotocol.com/protocol/session-modes#agent':
+        return _modeAcceptBorder;
+      case 'plan':
+      case 'https://agentclientprotocol.com/protocol/session-modes#plan':
+        return _modePlanBorder;
+      default:
+        return AppTheme.chipBorder;
+    }
+  }
+
+  Color _modeText(String modeId) {
+    switch (modeId) {
+      case 'bypassPermissions':
+      case 'dontAsk':
+      case 'full-access':
+        return AppTheme.errorText;
+      case 'acceptEdits':
+      case 'https://agentclientprotocol.com/protocol/session-modes#agent':
+        return const Color(0xFF2563EB);
+      case 'plan':
+      case 'https://agentclientprotocol.com/protocol/session-modes#plan':
+        return const Color(0xFF7C3AED);
+      default:
+        return AppTheme.textPrimary;
     }
   }
 
@@ -582,10 +579,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     Get.bottomSheet(
       Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        ),
+        color: AppTheme.surface,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -656,15 +650,23 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
       return Container(
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
-          border: isOpen ? Border.all(color: AppTheme.primary, width: 2) : null,
+          color: _fieldFill,
+          border: Border(
+            top: const BorderSide(color: AppTheme.textPrimary, width: 2),
+            left: isOpen
+                ? BorderSide.none
+                : const BorderSide(color: AppTheme.chipBorder),
+            right: isOpen
+                ? BorderSide.none
+                : const BorderSide(color: AppTheme.chipBorder),
+            bottom: isOpen
+                ? BorderSide.none
+                : const BorderSide(color: AppTheme.chipBorder),
+          ),
         ),
-        clipBehavior: Clip.antiAlias,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Input row — always at index 0 to preserve focus
             GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: controller.openCwdDropdown,
@@ -705,6 +707,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                           ),
                           decoration: InputDecoration(
                             isDense: true,
+                            filled: false,
+                            fillColor: Colors.transparent,
                             contentPadding: EdgeInsets.zero,
                             border: InputBorder.none,
                             enabledBorder: InputBorder.none,
@@ -723,29 +727,45 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 ),
               ),
             ),
-            // Dropdown — conditionally shown below the input
             if (isOpen) ...[
-              const Divider(height: 1, thickness: 1, color: AppTheme.border),
-              // Nested Obx: only this rebuilds when filteredCwds changes,
-              // keeping the TextField above stable.
+              Container(
+                height: 1,
+                color: AppTheme.borderStrong,
+              ),
               Obx(() {
                 final filtered = controller.filteredCwds;
+                final highlightFirstMatch =
+                    controller.cwdController.text.trim().isNotEmpty;
                 if (filtered.isEmpty) {
                   return Container(
                     width: double.infinity,
-                    color: Colors.white,
+                    decoration: const BoxDecoration(
+                      color: _dropdownFill,
+                      border: Border(
+                        left: BorderSide(color: AppTheme.borderStrong),
+                        right: BorderSide(color: AppTheme.borderStrong),
+                        bottom: BorderSide(color: AppTheme.borderStrong),
+                      ),
+                    ),
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                     child: Text(
                       'No recent directories',
-                      style: AppTypography.sans(
-                        fontSize: 12,
-                        color: const Color(0xFF9CA0A8),
+                      style: AppTypography.mono(
+                        fontSize: 10,
+                        color: AppTheme.textMetadata,
                       ),
                     ),
                   );
                 }
                 return Container(
-                  color: Colors.white,
+                  decoration: const BoxDecoration(
+                    color: _dropdownFill,
+                    border: Border(
+                      left: BorderSide(color: AppTheme.borderStrong),
+                      right: BorderSide(color: AppTheme.borderStrong),
+                      bottom: BorderSide(color: AppTheme.borderStrong),
+                    ),
+                  ),
                   constraints: const BoxConstraints(maxHeight: 220),
                   child: ListView.builder(
                     shrinkWrap: true,
@@ -757,59 +777,58 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
                           child: Text(
                             'RECENT',
-                            style: AppTypography.sans(
-                              fontSize: 11,
+                            style: AppTypography.mono(
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
-                              color: const Color(0xFF9CA0A8),
-                              letterSpacing: 0.5,
+                              color: AppTheme.textMetadata,
+                              letterSpacing: 1,
                             ),
                           ),
                         );
                       }
                       final cwd = filtered[index - 1];
-                      final isFirst = index == 1;
+                      final isHighlighted = highlightFirstMatch && index == 1;
+                      final displayPath = _formatCwdDisplayPath(cwd.path);
                       return GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTap: () => controller.selectCwd(cwd),
                         child: Container(
-                          color: isFirst
-                              ? AppTheme.hoverBg
-                              : Colors.transparent,
+                          color: isHighlighted
+                              ? AppTheme.surfaceMuted
+                              : _dropdownFill,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
-                            vertical: 8,
+                            vertical: 10,
                           ),
                           child: Row(
                             children: [
                               const Icon(
                                 LucideIcons.folder,
                                 size: 14,
-                                color: Color(0xFF9CA0A8),
+                                color: AppTheme.textTertiary,
                               ),
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 10),
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      cwd.path,
-                                      style: AppFonts.code(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w500,
-                                        color: AppTheme.textPrimary,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _relativeTime(cwd.lastUsed),
-                                      style: AppTypography.sans(
-                                        fontSize: 11,
-                                        color: const Color(0xFF9CA0A8),
-                                      ),
-                                    ),
-                                  ],
+                                child: Text(
+                                  displayPath,
+                                  style: AppFonts.code(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                    color: isHighlighted
+                                        ? AppTheme.textPrimary
+                                        : AppTheme.textSecondary,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                _relativeTime(cwd.lastUsed).toLowerCase(),
+                                style: AppFonts.code(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w400,
+                                  color: AppTheme.textMuted,
                                 ),
                               ),
                             ],
@@ -843,6 +862,18 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     return 'Last month';
   }
 
+  String _formatCwdDisplayPath(String path) {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      return '';
+    }
+    final homeMatch = RegExp(r'^/(Users|home)/[^/]+').firstMatch(trimmed);
+    if (homeMatch == null) {
+      return trimmed;
+    }
+    return trimmed.replaceRange(0, homeMatch.group(0)!.length, '~');
+  }
+
   Widget _buildWorktreeToggle() {
     final isOn = controller.useWorktree.value;
     return GestureDetector(
@@ -853,11 +884,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         decoration: BoxDecoration(
-          color: isOn ? AppTheme.selectedBg : AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(10),
+          color: AppTheme.surfaceMuted,
           border: Border.all(
-            color: isOn ? AppTheme.primary : Colors.transparent,
-            width: 1.5,
+            color: isOn ? AppTheme.textPrimary : AppTheme.chipBorder,
+            width: isOn ? 1.5 : 1,
           ),
         ),
         child: Row(
@@ -876,10 +906,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     'Use Worktree',
                     style: AppTypography.sans(
                       fontSize: 13,
-                      fontWeight: isOn ? FontWeight.w600 : FontWeight.w500,
-                      color: isOn
-                          ? AppTheme.textPrimary
-                          : AppTheme.textSecondary,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -887,9 +915,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     'Agent works on an isolated branch',
                     style: AppTypography.sans(
                       fontSize: 11,
-                      color: isOn
-                          ? AppTheme.textSecondary
-                          : AppTheme.textTertiary,
+                      color: AppTheme.textTertiary,
                     ),
                   ),
                 ],
@@ -901,15 +927,14 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  // Prompt input: cornerRadius 8, fill #EDEEF1, height 80 (108 with mic)
   Widget _buildPromptInput() {
     return Obx(() {
       final showMic = controller.hasSttConfig.value;
       return Container(
-        height: showMic ? 108 : 80,
+        height: showMic ? 88 : 72,
         decoration: BoxDecoration(
-          color: AppTheme.inputFill,
-          borderRadius: BorderRadius.circular(8),
+          color: _fieldFill,
+          border: Border.all(color: AppTheme.chipBorder),
         ),
         child: Column(
           children: [
@@ -938,6 +963,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     ),
                     decoration: InputDecoration(
                       isDense: true,
+                      filled: false,
+                      fillColor: Colors.transparent,
                       contentPadding: EdgeInsets.zero,
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
@@ -974,10 +1001,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
       if (transcribing) {
         return const SizedBox(
-          width: 32,
-          height: 32,
+          width: 18,
+          height: 18,
           child: Padding(
-            padding: EdgeInsets.all(4),
+            padding: EdgeInsets.all(1),
             child: CircularProgressIndicator(
               strokeWidth: 2,
               valueColor: AlwaysStoppedAnimation<Color>(AppTheme.textSecondary),
@@ -992,23 +1019,10 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
             controller.dismissTransientInputs();
             controller.stopVoiceInput();
           },
-          child: Container(
-            width: 32,
-            height: 32,
-            decoration: const BoxDecoration(
-              color: AppTheme.recordRed,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(2.5),
-                ),
-              ),
-            ),
+          child: const Icon(
+            LucideIcons.stopCircle,
+            size: 18,
+            color: AppTheme.recordRed,
           ),
         );
       }
@@ -1018,21 +1032,15 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           controller.dismissTransientInputs();
           controller.startVoiceInput();
         },
-        child: Container(
-          width: 32,
-          height: 32,
-          decoration: const BoxDecoration(
-            color: AppTheme.primary,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(LucideIcons.mic, size: 16, color: Colors.white),
+        child: const Icon(
+          LucideIcons.mic,
+          size: 18,
+          color: AppTheme.textTertiary,
         ),
       );
     });
   }
 
-  // Create Button: cornerRadius 8, fill #1D1D1F, height 48, center
-  // Text: "Start Session", system sans 15 w600 #FFFFFF
   Widget _buildCreateButton() {
     return Obx(() {
       final hasMachine = controller.selectedMachine.value != null;
@@ -1055,8 +1063,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           width: double.infinity,
           height: 48,
           decoration: BoxDecoration(
-            color: canCreate ? AppTheme.primary : AppTheme.border,
-            borderRadius: BorderRadius.circular(8),
+            color: canCreate ? AppTheme.primary : AppTheme.borderStrong,
           ),
           alignment: Alignment.center,
           child: controller.isLoading.value

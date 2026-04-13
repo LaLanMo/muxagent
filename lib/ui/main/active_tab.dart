@@ -136,7 +136,11 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               connected: activeSessionIds.contains(machines[i].machineId),
             ),
             if (i < machines.length - 1)
-              const Divider(height: 0, thickness: 1, color: Color(0xFFEBEBEB)),
+              const Divider(
+                height: 0,
+                thickness: 1,
+                color: AppTheme.border,
+              ),
           ],
         ],
       ),

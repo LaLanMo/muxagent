@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/fonts.dart';
 import '../../../config/theme.dart';
@@ -11,10 +10,8 @@ import '../../../domain/run_diff_summary.dart';
 import '../../../domain/tool_activity.dart';
 import '../../../routing/routes.dart';
 
-const _kGreenText = Color(0xFF2E7D32);
-const _kGreenBg = Color(0xFFE8F5E9);
-const _kRedText = Color(0xFFCC4444);
-const _kRedBg = Color(0xFFFFEBEE);
+const _kAddedText = Color(0xFF4CB782);
+const _kRemovedText = Color(0xFFD46F61);
 
 class RunDiffSummaryCard extends StatelessWidget {
   final RunDiffSummary summary;
@@ -26,19 +23,12 @@ class RunDiffSummaryCard extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.surface,
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x26000000),
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: AppTheme.borderStrong),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Row(
@@ -47,74 +37,87 @@ class RunDiffSummaryCard extends StatelessWidget {
                   '${summary.fileCount} file${summary.fileCount == 1 ? '' : 's'} changed',
                   style: AppTypography.sans(
                     fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFF1A1A1A),
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimary,
                   ),
                 ),
                 const SizedBox(width: 8),
-                _StatPill(
-                  label: '+${summary.totalAdditions}',
-                  textColor: _kGreenText,
-                  bgColor: _kGreenBg,
+                Text(
+                  '+${summary.totalAdditions}',
+                  style: AppFonts.code(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: _kAddedText,
+                  ),
                 ),
                 const SizedBox(width: 6),
-                _StatPill(
-                  label: '-${summary.totalDeletions}',
-                  textColor: _kRedText,
-                  bgColor: _kRedBg,
+                Text(
+                  '-${summary.totalDeletions}',
+                  style: AppFonts.code(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: _kRemovedText,
+                  ),
                 ),
               ],
             ),
           ),
-
-          // Divider
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E5E5)),
-
-          // File list
-          for (final file in summary.files)
+          for (var i = 0; i < summary.files.length; i++)
             GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => _openFileDiff(file),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 10, 12, 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _displayPath(file.path),
+              onTap: () => _openFileDiff(summary.files[i]),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: i == 0
+                      ? const Border(top: BorderSide(color: AppTheme.border))
+                      : null,
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: i < summary.files.length - 1
+                        ? const Border(
+                            bottom: BorderSide(color: AppTheme.border),
+                          )
+                        : null,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _displayPath(summary.files[i].path),
+                          style: AppFonts.code(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w400,
+                            color: AppTheme.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        '+${summary.files[i].additions}',
                         style: AppFonts.code(
                           fontSize: 11,
-                          color: const Color(0xFF1A1A1A),
+                          fontWeight: FontWeight.w400,
+                          color: _kAddedText,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '+${file.additions}',
-                      style: AppFonts.code(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _kGreenText,
+                      const SizedBox(width: 8),
+                      Text(
+                        '-${summary.files[i].deletions}',
+                        style: AppFonts.code(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w400,
+                          color: _kRemovedText,
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      '-${file.deletions}',
-                      style: AppFonts.code(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: _kRedText,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Icon(
-                      LucideIcons.chevronRight,
-                      size: 14,
-                      color: AppTheme.textTertiary,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -124,7 +127,6 @@ class RunDiffSummaryCard extends StatelessWidget {
   }
 
   static void _openFileDiff(FileDiffStat file) {
-    // Construct a synthetic ToolActivity so we can reuse ToolDetailScreen.
     final tool = ToolActivity(
       id: 'run-diff-${file.path.hashCode}',
       name: 'Edit',
@@ -145,37 +147,15 @@ class RunDiffSummaryCard extends StatelessWidget {
     );
   }
 
-  /// Show only the filename from a full path for brevity.
   static String _displayPath(String path) {
-    final idx = path.lastIndexOf('/');
-    return idx >= 0 ? path.substring(idx + 1) : path;
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  final String label;
-  final Color textColor;
-  final Color bgColor;
-
-  const _StatPill({
-    required this.label,
-    required this.textColor,
-    required this.bgColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      color: bgColor,
-      child: Text(
-        label,
-        style: AppFonts.code(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    final homeMatch = RegExp(r'^/(Users|home)/[^/]+').firstMatch(trimmed);
+    if (homeMatch == null) {
+      return trimmed;
+    }
+    return trimmed.replaceRange(0, homeMatch.group(0)!.length, '~');
   }
 }

@@ -148,5 +148,6 @@ void main() {
       expect(find.text('offline'), findsNothing);
       expect(find.text('Tap to reconnect'), findsNothing);
     });
+
   });
 }

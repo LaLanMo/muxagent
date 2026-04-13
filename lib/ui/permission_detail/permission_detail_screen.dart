@@ -15,60 +15,42 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
   @override
   Widget build(BuildContext context) {
     final approval = controller.approval;
-    final title = approval.title.trim().isNotEmpty
-        ? approval.title.trim()
-        : 'Permission Required';
     final description =
-        approval.descriptionText != null && approval.descriptionText != title
-        ? approval.descriptionText
-        : null;
+        approval.commandText == null ? approval.descriptionText?.trim() : null;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: Column(
         children: [
-          _buildHeader(title),
+          _buildHeader(),
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (description != null) ...[
+                  if (approval.commandText != null)
+                    _buildCodeBlock(approval.commandText!)
+                  else if (description != null && description.isNotEmpty) ...[
                     Text(
                       description,
                       style: AppTypography.sans(
-                        fontSize: 12,
+                        fontSize: 13,
                         fontWeight: FontWeight.w400,
                         color: AppTheme.textSecondary,
                         height: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 12),
                   ],
-                  if (approval.commandText != null)
-                    Container(
-                      width: double.infinity,
-                      color: AppTheme.codeBg,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 10,
-                      ),
-                      child: Text(
-                        approval.commandText!,
-                        style: AppFonts.code(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: AppTheme.codeText,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
                   const Spacer(),
-                  Obx(
-                    () => _buildActions(
-                      approval,
-                      disabled: controller.isReplying.value,
+                  SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.only(bottom: 20),
+                    child: Obx(
+                      () => _buildActions(
+                        approval,
+                        disabled: controller.isReplying.value,
+                      ),
                     ),
                   ),
                 ],
@@ -80,7 +62,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
     );
   }
 
-  Widget _buildHeader(String title) {
+  Widget _buildHeader() {
     return Container(
       color: AppTheme.surface,
       child: SafeArea(
@@ -111,36 +93,39 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: AppTypography.sans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                        height: 1,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Permission Request',
+                    style: AppTypography.sans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Permission Request',
-                      style: AppTypography.sans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w400,
-                        color: AppTheme.textTertiary,
-                        height: 1,
-                      ),
-                    ),
-                  ],
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCodeBlock(String command) {
+    return Container(
+      width: double.infinity,
+      color: AppTheme.codeBg,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: SelectableText(
+        command,
+        style: AppFonts.code(
+          fontSize: 13,
+          fontWeight: FontWeight.w400,
+          color: AppTheme.codeText,
+          height: 1.4,
         ),
       ),
     );
@@ -158,17 +143,28 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
       PermOptionKind.rejectOnce,
       PermOptionKind.rejectAlways,
     ]);
+    final actions = <Widget>[];
 
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        if (allow != null) _buildAllowButton(allow, disabled),
-        if (secondary != null && secondary.optionId != allow?.optionId)
-          _buildTextAction(secondary, disabled),
-        if (deny != null) _buildTextAction(deny, disabled),
-      ],
+    void pushAction(Widget action) {
+      if (actions.isNotEmpty) {
+        actions.add(const SizedBox(height: 12));
+      }
+      actions.add(action);
+    }
+
+    if (allow != null) {
+      pushAction(_buildAllowButton(allow, disabled));
+    }
+    if (secondary != null && secondary.optionId != allow?.optionId) {
+      pushAction(_buildTextAction(secondary, disabled));
+    }
+    if (deny != null) {
+      pushAction(_buildTextAction(deny, disabled));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: actions,
     );
   }
 
@@ -191,17 +187,19 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
       behavior: HitTestBehavior.opaque,
       onTap: disabled ? null : () => controller.replyApproval(option.optionId),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: 48,
         decoration: BoxDecoration(
-          color: AppTheme.surfaceMuted,
+          color: AppTheme.surface,
           border: Border.all(
-            color: disabled ? AppTheme.textMuted : AppTheme.chipBorder,
+            color: disabled ? AppTheme.textMuted : AppTheme.textPrimary,
+            width: 1.5,
           ),
         ),
+        alignment: Alignment.center,
         child: Text(
           option.name,
           style: AppTypography.sans(
-            fontSize: 13,
+            fontSize: 15,
             fontWeight: FontWeight.w500,
             color: disabled ? AppTheme.textMuted : AppTheme.textPrimary,
           ),
@@ -214,12 +212,13 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: disabled ? null : () => controller.replyApproval(option.optionId),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Container(
+        height: 44,
+        alignment: Alignment.center,
         child: Text(
           option.name,
           style: AppTypography.sans(
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: FontWeight.w400,
             color: disabled ? AppTheme.textMuted : AppTheme.textTertiary,
           ),

@@ -17,13 +17,14 @@ class SttSettingsViewModel extends GetxController {
   SttSettingsViewModel({
     required SttRepository repo,
     required TranscribeAudioUseCase transcribe,
-  })  : _repo = repo,
-        _transcribe = transcribe;
+  }) : _repo = repo,
+       _transcribe = transcribe;
 
   final endpointController = TextEditingController();
   final apiKeyController = TextEditingController();
   final modelController = TextEditingController();
 
+  final canTest = false.obs;
   final isTesting = false.obs;
   final isRecording = false.obs;
   final testResult = Rxn<SttResult>();
@@ -36,6 +37,8 @@ class SttSettingsViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    endpointController.addListener(_syncFormState);
+    apiKeyController.addListener(_syncFormState);
     _loadConfig();
   }
 
@@ -48,6 +51,13 @@ class SttSettingsViewModel extends GetxController {
     } else {
       modelController.text = 'whisper-1';
     }
+    _syncFormState();
+  }
+
+  void _syncFormState() {
+    canTest.value =
+        endpointController.text.trim().isNotEmpty &&
+        apiKeyController.text.trim().isNotEmpty;
   }
 
   Future<void> saveConfig() async {
@@ -60,15 +70,23 @@ class SttSettingsViewModel extends GetxController {
       return;
     }
 
-    await _repo.saveConfig(SttConfig(
-      endpoint: endpoint,
-      apiKey: apiKey,
-      model: model.isEmpty ? 'whisper-1' : model,
-    ));
+    await _repo.saveConfig(
+      SttConfig(
+        endpoint: endpoint,
+        apiKey: apiKey,
+        model: model.isEmpty ? 'whisper-1' : model,
+      ),
+    );
     uiEffect.value = ShowToast('Settings saved');
   }
 
   Future<void> startTestRecording() async {
+    if (!canTest.value) {
+      testResult.value = null;
+      testError.value = 'Add endpoint and API key to enable testing';
+      return;
+    }
+
     testResult.value = null;
     testError.value = null;
 
@@ -98,7 +116,8 @@ class SttSettingsViewModel extends GetxController {
     }
 
     if (!await _recorder!.isRecording()) {
-      testError.value = 'Microphone unavailable. Check microphone permission in Settings.';
+      testError.value =
+          'Microphone unavailable. Check microphone permission in Settings.';
       await _recorder!.dispose();
       _recorder = null;
       return;

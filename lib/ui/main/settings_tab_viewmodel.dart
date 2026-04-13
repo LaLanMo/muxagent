@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -79,6 +80,17 @@ class SettingsTabViewModel extends GetxController {
     Get.toNamed(Routes.scan);
   }
 
+  void navigateToMockPairingPreview() {
+    if (!kDebugMode) return;
+    Get.toNamed(
+      Routes.auth,
+      arguments: AuthRequest(
+        id: 'mock-pending',
+        relayUrl: 'https://relay.mock',
+      ),
+    );
+  }
+
   void navigateToSttSettings() {
     Get.toNamed(Routes.sttSettings);
   }
@@ -125,16 +137,7 @@ class SettingsTabViewModel extends GetxController {
     Get.dialog(
       AlertDialog(
         title: const Text('Paste Connection URL'),
-        content: TextField(
-          controller: textController,
-          decoration: const InputDecoration(
-            hintText: 'muxagent://auth?id=...&relay=...',
-          ),
-          maxLines: 3,
-          autofocus: true,
-          autocorrect: false,
-          textCapitalization: TextCapitalization.none,
-        ),
+        content: buildPasteUrlTextField(controller: textController),
         actions: [
           TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
           TextButton(
@@ -157,6 +160,28 @@ class SettingsTabViewModel extends GetxController {
           ),
         ],
       ),
+    );
+  }
+
+  static TextField buildPasteUrlTextField({
+    required TextEditingController controller,
+  }) {
+    return TextField(
+      controller: controller,
+      decoration: const InputDecoration(
+        hintText: 'muxagent://auth?id=...&relay=...',
+      ),
+      maxLines: 3,
+      autofocus: true,
+      autocorrect: false,
+      enableSuggestions: false,
+      enableIMEPersonalizedLearning: false,
+      keyboardType: TextInputType.url,
+      textInputAction: TextInputAction.done,
+      textCapitalization: TextCapitalization.none,
+      smartDashesType: SmartDashesType.disabled,
+      smartQuotesType: SmartQuotesType.disabled,
+      spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
     );
   }
 }

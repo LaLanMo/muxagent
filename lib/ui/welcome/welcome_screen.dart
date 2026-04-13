@@ -10,11 +10,12 @@ import 'welcome_viewmodel.dart';
 class WelcomeScreen extends GetView<WelcomeViewModel> {
   const WelcomeScreen({super.key});
 
+  static const _fieldFill = Color(0xFFF0EAE5);
+
   @override
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     final keyboardInset = mediaQuery.viewInsets.bottom;
-    final compactHero = keyboardInset > 0 || mediaQuery.size.height < 720;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -31,37 +32,28 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 40),
+                    padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Padding(
-                          padding: EdgeInsets.only(
-                            top: compactHero ? 24 : 40,
-                            bottom: 24,
-                          ),
-                          child: _buildHero(compactHero),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.only(
-                            bottom: compactHero ? 24 : 32,
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _buildScanButton(),
-                              const SizedBox(height: 16),
-                              _buildInstallCard(),
-                              const SizedBox(height: 8),
-                              _buildDivider(),
-                              const SizedBox(height: 16),
-                              _buildManualConnectInput(),
-                              const SizedBox(height: 24),
-                              _buildFooter(),
-                              SizedBox(height: compactHero ? 0 : 16),
-                            ],
+                        SizedBox(height: constraints.maxHeight * 0.14),
+                        _buildHero(),
+                        const SizedBox(height: 24),
+                        _buildScanButton(),
+                        const SizedBox(height: 24),
+                        _buildInstallSection(),
+                        const SizedBox(height: 12),
+                        Text(
+                          'or',
+                          style: AppTypography.sans(
+                            fontSize: 13,
+                            color: AppTheme.textMuted,
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        _buildManualConnectInput(),
+                        const SizedBox(height: 24),
+                        _buildFooter(),
+                        const SizedBox(height: 40),
                       ],
                     ),
                   ),
@@ -74,47 +66,37 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
     );
   }
 
-  Widget _buildHero(bool compact) {
-    final logoSize = compact ? 64.0 : 80.0;
-
+  Widget _buildHero() {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: logoSize,
-          height: logoSize,
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: AppTheme.primary,
-            borderRadius: BorderRadius.circular(compact ? 16 : 18),
-          ),
-          alignment: Alignment.center,
-          child: Image.asset(
-            'assets/images/app_icon.png',
-            width: logoSize,
-            height: logoSize,
-            fit: BoxFit.cover,
-          ),
+        Image.asset(
+          'assets/images/app_icon.png',
+          width: 72,
+          height: 72,
+          filterQuality: FilterQuality.high,
         ),
-        SizedBox(height: compact ? 16 : 24),
+        const SizedBox(height: 24),
         Text(
           'MuxAgent',
           textAlign: TextAlign.center,
           style: AppTypography.sans(
-            fontSize: compact ? 28 : 32,
-            fontWeight: FontWeight.bold,
+            fontSize: 32,
+            fontWeight: FontWeight.w600,
             color: AppTheme.textPrimary,
           ),
         ),
-        SizedBox(height: compact ? 12 : 24),
-        Text(
-          'Control your coding agents\nfrom anywhere',
-          textAlign: TextAlign.center,
-          style: AppTypography.sans(
-            fontSize: compact ? 15 : 16,
-            fontWeight: FontWeight.normal,
-            color: AppTheme.textSecondary,
-            height: 1.5,
+        const SizedBox(height: 16),
+        SizedBox(
+          width: 260,
+          child: Text(
+            'Control your coding agents\nfrom anywhere',
+            textAlign: TextAlign.center,
+            style: AppTypography.sans(
+              fontSize: 16,
+              color: AppTheme.textTertiary,
+              height: 1.5,
+            ),
           ),
         ),
       ],
@@ -124,29 +106,23 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
   Widget _buildScanButton() {
     return GestureDetector(
       onTap: controller.onScanPressed,
+      behavior: HitTestBehavior.opaque,
       child: Container(
         width: double.infinity,
-        height: 52,
-        decoration: BoxDecoration(
-          color: AppTheme.primary,
-          borderRadius: BorderRadius.circular(8),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        color: AppTheme.primary,
         alignment: Alignment.center,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              LucideIcons.qrCode,
-              size: 20,
-              color: Colors.white,
-            ),
-            const SizedBox(width: 8),
+            const Icon(LucideIcons.qrCode, size: 18, color: AppTheme.surface),
+            const SizedBox(width: 10),
             Text(
               'Scan QR Code',
               style: AppTypography.sans(
                 fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.surface,
               ),
             ),
           ],
@@ -155,159 +131,45 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
     );
   }
 
-  Widget _buildInstallCard() {
+  Widget _buildInstallSection() {
     return GestureDetector(
       onTap: controller.onCopyCommand,
       behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.symmetric(vertical: 8),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppTheme.border),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: AppTheme.inputFill,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    LucideIcons.monitor,
-                    size: 16,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Install Command',
-                        style: AppTypography.sans(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Run in terminal',
-                        style: AppTypography.sans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w400,
-                          color: AppTheme.textTertiary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 7,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.hoverBg,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        LucideIcons.copy,
-                        size: 13,
-                        color: AppTheme.textSecondary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Copy',
-                        style: AppTypography.sans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-              decoration: BoxDecoration(
-                color: AppTheme.inputFill,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: RichText(
-                  text: TextSpan(
-                    style: AppFonts.code(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
-                    ),
-                    children: const [
-                      TextSpan(
-                        text: r'$ ',
-                        style: TextStyle(color: AppTheme.textTertiary),
-                      ),
-                      TextSpan(text: welcomeInstallCommand),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
+      child: Column(
         children: [
-          const Expanded(
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: Color(0xFFF0F0F0),
-            ),
-          ),
-          const SizedBox(width: 12),
           Text(
-            'or',
+            'Run daemon on your machine:',
+            textAlign: TextAlign.center,
             style: AppTypography.sans(
-              fontSize: 13,
-              fontWeight: FontWeight.normal,
-              color: AppTheme.textTertiary,
+              fontSize: 12,
+              color: AppTheme.textMetadata,
             ),
           ),
-          const SizedBox(width: 12),
-          const Expanded(
-            child: Divider(
-              height: 1,
-              thickness: 1,
-              color: Color(0xFFF0F0F0),
-            ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  welcomeInstallCommand,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppFonts.code(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w400,
+                    color: AppTheme.textPrimary,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                LucideIcons.copy,
+                size: 14,
+                color: AppTheme.textTertiary,
+              ),
+            ],
           ),
         ],
       ),
@@ -322,65 +184,53 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            height: 48,
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             decoration: BoxDecoration(
-              color: AppTheme.inputFill,
-              borderRadius: BorderRadius.circular(8),
+              color: _fieldFill,
+              border: Border.all(color: AppTheme.chipBorder),
             ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Icon(
-                  LucideIcons.link,
-                  size: 18,
-                  color: AppTheme.textTertiary,
+            child: TextField(
+              controller: controller.urlController,
+              onChanged: (_) => controller.clearUrlError(),
+              onSubmitted: (_) => controller.onManualConnect(),
+              onTapOutside: (_) => controller.dismissKeyboard(),
+              autocorrect: false,
+              enableSuggestions: false,
+              enableIMEPersonalizedLearning: false,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              textCapitalization: TextCapitalization.none,
+              smartDashesType: SmartDashesType.disabled,
+              smartQuotesType: SmartQuotesType.disabled,
+              spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
+              scrollPadding: const EdgeInsets.only(bottom: 120),
+              style: AppTypography.sans(
+                fontSize: 14,
+                color: AppTheme.textPrimary,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: false,
+                fillColor: Colors.transparent,
+                contentPadding: EdgeInsets.zero,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                hintText: 'Enter server URL...',
+                hintStyle: AppTypography.sans(
+                  fontSize: 14,
+                  color: AppTheme.textMuted,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: controller.urlController,
-                    onChanged: (_) => controller.clearUrlError(),
-                    onSubmitted: (_) => controller.onManualConnect(),
-                    onTapOutside: (_) => controller.dismissKeyboard(),
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.done,
-                    scrollPadding: const EdgeInsets.only(bottom: 120),
-                    style: AppTypography.sans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.normal,
-                      color: AppTheme.textPrimary,
-                    ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      hintText: 'Enter server URL...',
-                      hintStyle: AppTypography.sans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.normal,
-                        color: AppTheme.textMuted,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
           if (urlError != null) ...[
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: Text(
-                urlError,
-                style: AppTypography.sans(
-                  fontSize: 11,
-                  color: AppTheme.errorText,
-                ),
+            Text(
+              urlError,
+              style: AppTypography.sans(
+                fontSize: 11,
+                color: AppTheme.errorText,
               ),
             ),
           ],
@@ -395,20 +245,18 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
       behavior: HitTestBehavior.opaque,
       child: Row(
         mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           const Icon(
             LucideIcons.github,
-            size: 18,
-            color: AppTheme.textTertiary,
+            size: 14,
+            color: AppTheme.textMetadata,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
           Text(
             'View on GitHub',
             style: AppTypography.sans(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textTertiary,
+              fontSize: 12,
+              color: AppTheme.textMetadata,
             ),
           ),
         ],

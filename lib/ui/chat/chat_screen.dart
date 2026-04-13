@@ -307,7 +307,7 @@ class ChatScreen extends GetView<ChatViewModel> {
           child: Row(
             children: [
               SizedBox(
-                width: 44,
+                width: 28,
                 height: 44,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -326,7 +326,6 @@ class ChatScreen extends GetView<ChatViewModel> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
               Expanded(
                 child: Obx(
                   () => Column(
@@ -345,31 +344,37 @@ class ChatScreen extends GetView<ChatViewModel> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      if (controller.cwd.isNotEmpty) const SizedBox(height: 3),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 6,
+                      if (controller.cwd.isNotEmpty) const SizedBox(height: 2),
+                      Row(
                         children: [
                           _buildStatusPill(controller.sessionStatus.value),
                           if (controller.hasModeOptions &&
-                              controller.currentMode.value != null)
-                            GestureDetector(
-                              onTap: controller.canOpenModeDropdown
-                                  ? controller.toggleModeDropdown
-                                  : null,
-                              child: _buildModePill(
-                                controller.currentMode.value!,
-                                showChevron: controller.canOpenModeDropdown,
-                                isOpen: controller.showModeDropdown.value,
-                                isLoading: controller.isChangingMode.value,
+                              controller.currentMode.value != null) ...[
+                            const SizedBox(width: 6),
+                            _buildHeaderTagSlot(
+                              GestureDetector(
+                                onTap: controller.canOpenModeDropdown
+                                    ? controller.toggleModeDropdown
+                                    : null,
+                                child: _buildModePill(
+                                  controller.currentMode.value!,
+                                  showChevron: controller.canOpenModeDropdown,
+                                  isOpen: controller.showModeDropdown.value,
+                                  isLoading: controller.isChangingMode.value,
+                                ),
                               ),
                             ),
+                          ],
                           if (!controller.showModeDropdown.value &&
                               controller.currentModel.value
                                       ?.trim()
                                       .isNotEmpty ==
-                                  true)
-                            _buildModelPill(controller.currentModel.value!),
+                                  true) ...[
+                            const SizedBox(width: 6),
+                            _buildHeaderTagSlot(
+                              _buildModelPill(controller.currentModel.value!),
+                            ),
+                          ],
                         ],
                       ),
                     ],
@@ -926,7 +931,7 @@ class ChatScreen extends GetView<ChatViewModel> {
     required Color background,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       color: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -965,13 +970,19 @@ class ChatScreen extends GetView<ChatViewModel> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: AppTypography.mono(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-              color: foreground,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: AppTypography.mono(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+                color: foreground,
+                height: 1,
+              ),
             ),
           ),
           if (isLoading) ...[
@@ -1007,7 +1018,7 @@ class ChatScreen extends GetView<ChatViewModel> {
     bool isLoading = false,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
       color: background,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1018,13 +1029,19 @@ class ChatScreen extends GetView<ChatViewModel> {
             decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
           ),
           const SizedBox(width: 4),
-          Text(
-            label,
-            style: AppTypography.mono(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.2,
-              color: foreground,
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: AppTypography.mono(
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.2,
+                color: foreground,
+                height: 1,
+              ),
             ),
           ),
           if (isLoading) ...[
@@ -1046,6 +1063,20 @@ class ChatScreen extends GetView<ChatViewModel> {
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderTagSlot(Widget child) {
+    return Flexible(
+      fit: FlexFit.loose,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+            child: child,
+          );
+        },
       ),
     );
   }
@@ -1097,7 +1128,7 @@ class _ScrollToBottomButton extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(999),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
             color: AppTheme.surface,
             borderRadius: BorderRadius.circular(999),
@@ -1110,24 +1141,10 @@ class _ScrollToBottomButton extends StatelessWidget {
               ),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                LucideIcons.chevronsDown,
-                size: 16,
-                color: AppTheme.textSecondary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'Jump to latest',
-                style: AppTypography.sans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ],
+          child: const Icon(
+            LucideIcons.chevronsDown,
+            size: 16,
+            color: AppTheme.textSecondary,
           ),
         ),
       ),

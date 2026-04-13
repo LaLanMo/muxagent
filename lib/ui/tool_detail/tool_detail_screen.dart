@@ -33,50 +33,54 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (tool.locations != null &&
-                        tool.locations!.isNotEmpty) ...[
-                      _buildSectionLabel('LOCATIONS'),
-                      const SizedBox(height: 8),
-                      _buildLocationsSection(tool.locations!),
-                      const SizedBox(height: 20),
-                    ],
-                    if (tool.input != null) ...[
-                      _buildSectionLabel('INPUT'),
-                      const SizedBox(height: 8),
-                      _buildInputSection(tool),
-                      const SizedBox(height: 20),
-                    ],
-                    if (tool.output != null && tool.output!.isNotEmpty) ...[
-                      _buildSectionLabel('OUTPUT'),
-                      const SizedBox(height: 8),
-                      _buildOutputSection(tool),
-                      const SizedBox(height: 20),
-                    ],
-                    if (tool.diffs != null && tool.diffs!.isNotEmpty) ...[
-                      _buildSectionLabel('DIFFS'),
-                      const SizedBox(height: 8),
-                      _buildDiffsSection(tool.diffs!),
-                      const SizedBox(height: 20),
-                    ],
-                    if (tool.error != null && tool.error!.isNotEmpty) ...[
-                      _buildSectionLabel('ERROR'),
-                      const SizedBox(height: 8),
-                      _buildErrorSection(tool.error!),
-                      const SizedBox(height: 20),
-                    ],
-                    if (controller.childTools.isNotEmpty)
-                      _buildChildToolsSection(controller.childTools),
-                  ],
-                ),
+                child: _buildBody(tool, isSubagent),
               ),
             ),
           ],
         ),
       );
     });
+  }
+
+  Widget _buildBody(ToolActivity tool, bool isSubagent) {
+    final sections = <Widget>[];
+
+    void pushSection(String label, Widget child) {
+      if (sections.isNotEmpty) {
+        sections.add(const SizedBox(height: 20));
+      }
+      sections.add(_buildSectionLabel(label));
+      sections.add(const SizedBox(height: 8));
+      sections.add(child);
+    }
+
+    if (tool.input != null) {
+      pushSection('INPUT', _buildInputSection(tool));
+    }
+
+    if (_hasOutput(tool)) {
+      pushSection('OUTPUT', _buildOutputSection(tool));
+    }
+
+    if (!isSubagent && tool.locations != null && tool.locations!.isNotEmpty) {
+      pushSection('LOCATIONS', _buildLocationsSection(tool.locations!));
+    }
+
+    if (!isSubagent && tool.diffs != null && tool.diffs!.isNotEmpty) {
+      pushSection('DIFFS', _buildDiffsSection(tool.diffs!));
+    }
+
+    if (isSubagent && controller.childTools.isNotEmpty) {
+      if (sections.isNotEmpty) {
+        sections.add(const SizedBox(height: 20));
+      }
+      sections.add(_buildChildToolsSection(controller.childTools));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: sections,
+    );
   }
 
   Widget _buildHeader(ToolActivity tool, bool isSubagent) {
@@ -175,6 +179,10 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   }
 
   Widget _buildOutputSection(ToolActivity tool) {
+    final body = _outputBody(tool);
+    final isErrorBody =
+        tool.output?.trim().isNotEmpty != true &&
+        tool.error?.trim().isNotEmpty == true;
     final (statusColor, statusLabel) = switch (tool.status) {
       ToolStatus.failed => (AppTheme.errorText, 'failed'),
       ToolStatus.pending => (AppTheme.textTertiary, 'pending'),
@@ -205,39 +213,10 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           ),
         ],
       ),
-      body: tool.output!,
+      body: body,
       bodyFontSize: 12,
-    );
-  }
-
-  Widget _buildErrorSection(String error) {
-    return _CodeShell(
-      header: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: AppTheme.errorText,
-              shape: BoxShape.circle,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            'error',
-            style: AppTypography.mono(
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-              color: AppTheme.errorText,
-            ),
-          ),
-        ],
-      ),
-      body: error,
-      bodyFontSize: 12,
-      bodyColor: const Color(0xFFF4DDDA),
-      bodyTextColor: AppTheme.textPrimary,
+      bodyColor: isErrorBody ? AppTheme.errorBg : AppTheme.codeBg,
+      bodyTextColor: isErrorBody ? AppTheme.textPrimary : AppTheme.codeText,
     );
   }
 
@@ -309,13 +288,14 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   Widget _buildChildToolsSection(List<ToolActivity> children) {
     final count = children.length;
     final noun = count == 1 ? 'tool call' : 'tool calls';
+    const summaryColor = Color(0xFF7C3AED);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Icon(LucideIcons.layers, size: 16, color: Color(0xFF7C3AED)),
+            const Icon(LucideIcons.layers, size: 16, color: summaryColor),
             const SizedBox(width: 8),
             Text(
               '$count $noun completed',
@@ -348,7 +328,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           Icon(
             _iconForKind(child.effectiveKind),
             size: 14,
-            color: const Color(0xFF4CB782),
+            color: AppTheme.textTertiary,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -535,11 +515,31 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   }
 
   String _toolRowText(ToolActivity tool) {
+    if (tool.title?.trim().isNotEmpty == true) {
+      return tool.title!.trim();
+    }
     final preview = _toolPreview(tool);
     if (preview.isNotEmpty) {
       return preview;
     }
     return _toolPrimaryTitle(tool);
+  }
+
+  bool _hasOutput(ToolActivity tool) {
+    final output = tool.output?.trim();
+    if (output != null && output.isNotEmpty) {
+      return true;
+    }
+    final error = tool.error?.trim();
+    return error != null && error.isNotEmpty;
+  }
+
+  String _outputBody(ToolActivity tool) {
+    final output = tool.output?.trim();
+    if (output != null && output.isNotEmpty) {
+      return output;
+    }
+    return tool.error!.trim();
   }
 
   String _toolPreview(ToolActivity tool) {
@@ -631,33 +631,35 @@ class _CodeShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          color: AppTheme.codeHeaderBg,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: header,
-        ),
-        Container(
-          width: double.infinity,
-          color: bodyColor,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SelectableText(
-              body,
-              style: AppFonts.code(
-                fontSize: bodyFontSize,
-                fontWeight: FontWeight.w400,
-                color: bodyTextColor,
-                height: 1.4,
+    return ClipRect(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            color: AppTheme.codeHeaderBg,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            child: header,
+          ),
+          Container(
+            width: double.infinity,
+            color: bodyColor,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SelectableText(
+                body,
+                style: AppFonts.code(
+                  fontSize: bodyFontSize,
+                  fontWeight: FontWeight.w400,
+                  color: bodyTextColor,
+                  height: 1.4,
+                ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
