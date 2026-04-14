@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,7 +9,37 @@ import { expect, type Page } from "@playwright/test";
 
 const currentFile = fileURLToPath(import.meta.url);
 const desktopRoot = path.resolve(path.dirname(currentFile), "../../..");
-const cliRoot = path.resolve(desktopRoot, "../muxagent-cli");
+
+function isCliSourceRoot(candidate: string): boolean {
+  return (
+    existsSync(path.join(candidate, "go.mod")) &&
+    existsSync(path.join(candidate, "cmd", "muxagent"))
+  );
+}
+
+function resolveCliRoot(): string {
+  const cliRootOverride = process.env.MUXAGENT_CLI_ROOT?.trim();
+  const candidates = [
+    cliRootOverride,
+    path.resolve(desktopRoot, "../cli"),
+    path.resolve(desktopRoot, "../muxagent/cli"),
+    path.resolve(desktopRoot, "../muxagent-cli"),
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    if (isCliSourceRoot(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    `Unable to locate muxagent CLI source from ${desktopRoot}. ` +
+      "Set MUXAGENT_CLI_ROOT or use either the monorepo layout (`../cli`) " +
+      "or the legacy sibling checkout layout (`../muxagent-cli`).",
+  );
+}
+
+const cliRoot = resolveCliRoot();
 
 async function runCommand(
   command: string,
