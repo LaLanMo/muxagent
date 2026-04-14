@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -7,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../config/theme.dart';
 import '../../domain/paired_machine.dart';
 import '../common/relay_status_pill.dart';
+import '../common/status_indicator.dart';
 import '../common/ui_effect_listener.dart';
 import 'settings_tab_viewmodel.dart';
 
@@ -78,17 +78,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         ),
                         onTap: controller.showPasteUrlDialog,
                       ),
-                      if (kDebugMode)
-                        _buildSettingsRow(
-                          icon: LucideIcons.monitor,
-                          label: 'Preview Pairing',
-                          trailing: Icon(
-                            LucideIcons.chevronRight,
-                            size: 16,
-                            color: AppTheme.textMuted,
-                          ),
-                          onTap: controller.navigateToMockPairingPreview,
-                        ),
                       _buildSectionLabel('CONFIGURATION'),
                       _buildSettingsRow(
                         icon: LucideIcons.mic,
@@ -249,7 +238,6 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                 ],
               ),
             ),
-            // Status pill
             _buildStatusPill(status),
           ],
         ),
@@ -258,44 +246,16 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   }
 
   Widget _buildStatusPill(MachineConnectionDisplayState status) {
-    final Color pillColor;
-    final Color textColor;
-    final String textStr;
-
     switch (status) {
       case MachineConnectionDisplayState.online:
-        pillColor = AppTheme.successBg;
-        textColor = AppTheme.successText;
-        textStr = 'online';
+        return const StatusIndicator.online();
       case MachineConnectionDisplayState.connecting:
-        pillColor = AppTheme.warningBg;
-        textColor = AppTheme.statusConnecting;
-        textStr = 'connecting';
+        return const StatusIndicator.connecting();
       case MachineConnectionDisplayState.serverLost:
-        pillColor = AppTheme.serverLostBg;
-        textColor = AppTheme.serverLostText;
-        textStr = 'offline';
+        return const StatusIndicator.serverLost();
       case MachineConnectionDisplayState.offline:
-        pillColor = AppTheme.idleBg;
-        textColor = AppTheme.statusNeutralText;
-        textStr = 'offline';
+        return const StatusIndicator.offline();
     }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: pillColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
-      ),
-      child: Text(
-        textStr,
-        style: AppTypography.mono(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: textColor,
-        ),
-      ),
-    );
   }
 
   Widget _buildSettingsRow({

@@ -7,6 +7,7 @@ import '../../data/repositories/event_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
+import '../common/status_indicator.dart';
 import 'history_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
 
@@ -48,27 +49,36 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     final machines = shell.machines;
     final selected = controller.selectedMachineFilter.value;
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildChip('All', selected == null, () {
-              controller.setMachineFilter(null);
-            }),
-            const SizedBox(width: 8),
-            ...machines.map((m) {
-              final name = m.hostname ?? m.machineId;
-              final isSelected = selected == m.machineId;
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _buildChip(name, isSelected, () {
-                  controller.setMachineFilter(m.machineId);
-                }),
-              );
-            }),
-          ],
+    return LayoutBuilder(
+      builder: (context, constraints) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth - 32),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildChip('All', selected == null, () {
+                    controller.setMachineFilter(null);
+                  }),
+                  const SizedBox(width: 8),
+                  ...machines.map((m) {
+                    final name = m.hostname ?? m.machineId;
+                    final isSelected = selected == m.machineId;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildChip(name, isSelected, () {
+                        controller.setMachineFilter(m.machineId);
+                      }),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -166,7 +176,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         session.status == SessionStatus.waitingApproval ||
         session.status == SessionStatus.running ||
         !session.isRead;
-    final statusStyle = _statusStyle(session);
 
     return GestureDetector(
       onTap: () {
@@ -181,20 +190,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 58,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              color: statusStyle.backgroundColor,
-              child: Text(
-                statusStyle.label,
-                style: AppTypography.mono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: statusStyle.foregroundColor,
-                ),
-              ),
-            ),
+            StatusIndicator.sessionStatus(session.status),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -299,36 +295,6 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     final minutes = diff.inMinutes.clamp(1, 59);
     return '${minutes}m';
   }
-
-  _HistoryStatusStyle _statusStyle(AgentSession session) {
-    switch (session.status) {
-      case SessionStatus.waitingApproval:
-        return const _HistoryStatusStyle(
-          label: 'awaiting',
-          foregroundColor: AppTheme.warning,
-          backgroundColor: AppTheme.warningBg,
-        );
-      case SessionStatus.running:
-        return const _HistoryStatusStyle(
-          label: 'running',
-          foregroundColor: AppTheme.successText,
-          backgroundColor: AppTheme.successBg,
-        );
-      case SessionStatus.error:
-        return const _HistoryStatusStyle(
-          label: 'failed',
-          foregroundColor: AppTheme.errorText,
-          backgroundColor: AppTheme.errorBg,
-        );
-      case SessionStatus.idle:
-      case SessionStatus.done:
-        return const _HistoryStatusStyle(
-          label: 'done',
-          foregroundColor: AppTheme.statusNeutralText,
-          backgroundColor: AppTheme.statusNeutralBg,
-        );
-    }
-  }
 }
 
 class _ListItem {
@@ -339,16 +305,4 @@ class _ListItem {
   _ListItem.header(this.headerLabel) : isHeader = true, session = null;
 
   _ListItem.session(this.session) : isHeader = false, headerLabel = null;
-}
-
-class _HistoryStatusStyle {
-  final String label;
-  final Color foregroundColor;
-  final Color backgroundColor;
-
-  const _HistoryStatusStyle({
-    required this.label,
-    required this.foregroundColor,
-    required this.backgroundColor,
-  });
 }

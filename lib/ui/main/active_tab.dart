@@ -7,6 +7,7 @@ import '../../domain/enums.dart';
 import '../../config/theme.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
+import '../common/status_indicator.dart';
 import 'active_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
 
@@ -179,27 +180,8 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   Widget _buildStatusPill(bool connected) {
-    final bgColor = connected ? AppTheme.successBg : AppTheme.idleBg;
-    final label = connected ? 'online' : 'offline';
-    final fgColor = connected
-        ? AppTheme.successText
-        : AppTheme.statusNeutralText;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 3, horizontal: 8),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(AppTheme.radiusXs),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.mono(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: fgColor,
-        ),
-      ),
-    );
+    if (connected) return const StatusIndicator.online();
+    return const StatusIndicator.offline();
   }
 
   // --- Session List (grouped by status sections) ---
@@ -256,7 +238,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     final machineId = session.machineId;
     final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
-    final style = _statusStyle(session);
 
     return GestureDetector(
       onTap: () {
@@ -272,20 +253,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 58,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              color: style.backgroundColor,
-              child: Text(
-                style.label,
-                style: AppTypography.mono(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: style.foregroundColor,
-                ),
-              ),
-            ),
+            StatusIndicator.sessionStatus(session.status),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
@@ -335,36 +303,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  _ActiveStatusStyle _statusStyle(AgentSession session) {
-    switch (session.status) {
-      case SessionStatus.waitingApproval:
-        return const _ActiveStatusStyle(
-          label: 'awaiting',
-          foregroundColor: AppTheme.warning,
-          backgroundColor: AppTheme.warningBg,
-        );
-      case SessionStatus.running:
-        return const _ActiveStatusStyle(
-          label: 'running',
-          foregroundColor: AppTheme.successText,
-          backgroundColor: AppTheme.successBg,
-        );
-      case SessionStatus.idle:
-      case SessionStatus.done:
-        return const _ActiveStatusStyle(
-          label: 'done',
-          foregroundColor: AppTheme.statusNeutralText,
-          backgroundColor: AppTheme.statusNeutralBg,
-        );
-      case SessionStatus.error:
-        return const _ActiveStatusStyle(
-          label: 'failed',
-          foregroundColor: AppTheme.errorText,
-          backgroundColor: AppTheme.errorBg,
-        );
-    }
-  }
-
   String _buildMachineDurationText(String machineId, AgentSession session) {
     final machineName = machineId.isNotEmpty
         ? shell.machineDisplayName(machineId)
@@ -392,16 +330,4 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     }
     return 'now';
   }
-}
-
-class _ActiveStatusStyle {
-  final String label;
-  final Color foregroundColor;
-  final Color backgroundColor;
-
-  const _ActiveStatusStyle({
-    required this.label,
-    required this.foregroundColor,
-    required this.backgroundColor,
-  });
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/app_typography.dart';
 import '../../../config/theme.dart';
 import '../../../domain/approval.dart';
 import '../../../domain/enums.dart';
+import 'code_block.dart';
 
 class PlanApprovalCard extends StatelessWidget {
   final ApprovalRequest approval;
@@ -23,7 +25,6 @@ class PlanApprovalCard extends StatelessWidget {
     final accent = approval.resolved
         ? AppTheme.chipBorder
         : AppTheme.planAccent;
-    final plan = _PlanContent.fromApproval(approval);
 
     return Container(
       width: double.infinity,
@@ -54,7 +55,7 @@ class PlanApprovalCard extends StatelessWidget {
           const Divider(height: 1, color: AppTheme.border),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: _buildPlanBody(plan),
+            child: _buildPlanBody(),
           ),
           if (!approval.resolved) ...[
             const Divider(height: 1, color: AppTheme.border),
@@ -68,121 +69,74 @@ class PlanApprovalCard extends StatelessWidget {
     );
   }
 
-  Widget _buildPlanBody(_PlanContent plan) {
-    final children = <Widget>[];
-
-    if (plan.title != null) {
-      children.add(
-        Text(
-          plan.title!,
-          style: AppTypography.sans(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
-          ),
+  Widget _buildPlanBody() {
+    final markdown = _planMarkdown;
+    if (markdown == null) {
+      return Text(
+        'Review the proposed implementation before switching to coding.',
+        style: AppTypography.sans(
+          fontSize: 12,
+          fontWeight: FontWeight.w400,
+          color: AppTheme.textSecondary,
+          height: 1.5,
         ),
       );
     }
 
-    if (plan.description != null) {
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(height: 10));
-      }
-      children.add(
-        Text(
-          plan.description!,
+    return SizedBox(
+      width: double.infinity,
+      child: SelectionArea(
+        child: GptMarkdown(
+          markdown,
           style: AppTypography.sans(
             fontSize: 12,
             fontWeight: FontWeight.w400,
             color: AppTheme.textSecondary,
             height: 1.5,
           ),
-        ),
-      );
-    }
-
-    if (plan.steps.isNotEmpty) {
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(height: 10));
-      }
-      children.add(
-        Text(
-          'Steps:',
-          style: AppTypography.sans(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
+          codeBuilder: (context, name, code, closed) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: CodeBlock(text: code),
           ),
         ),
-      );
-      children.add(const SizedBox(height: 4));
-      children.addAll(
-        plan.steps.map(
-          (step) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              step,
-              style: AppTypography.mono(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: AppTheme.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ),
-      );
-    } else if (plan.permissions.isNotEmpty) {
-      if (children.isNotEmpty) {
-        children.add(const SizedBox(height: 10));
-      }
-      children.add(
-        Text(
-          'Requested Permissions',
-          style: AppTypography.sans(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: AppTheme.textPrimary,
-          ),
-        ),
-      );
-      children.add(const SizedBox(height: 4));
-      children.addAll(
-        plan.permissions.map(
-          (item) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Text(
-              item,
-              style: AppTypography.mono(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                color: AppTheme.textSecondary,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (children.isEmpty) {
-      children.add(
-        Text(
-          'Review the proposed implementation before switching to coding.',
-          style: AppTypography.sans(
-            fontSize: 12,
-            fontWeight: FontWeight.w400,
-            color: AppTheme.textSecondary,
-            height: 1.5,
-          ),
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: children,
+      ),
     );
+  }
+
+  String? get _planMarkdown {
+    final markdown = approval.planMarkdown?.trim();
+    if (markdown != null && markdown.isNotEmpty) {
+      return markdown;
+    }
+
+    final sections = <String>[];
+    final description = _normalizeText(approval.reason) ??
+        _normalizeText(approval.bodyText);
+    if (description != null) {
+      sections.add(description);
+    }
+
+    if (approval.allowedPrompts.isNotEmpty) {
+      if (sections.isNotEmpty) {
+        sections.add('');
+      }
+      sections.add('**Requested Permissions**');
+      sections.add('');
+      sections.addAll(approval.allowedPrompts.map((item) => '- $item'));
+    }
+
+    if (sections.isEmpty) {
+      return null;
+    }
+    return sections.join('\n');
+  }
+
+  String? _normalizeText(String? value) {
+    final trimmed = value?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    return trimmed;
   }
 
   Widget _buildActionSection() {
@@ -301,112 +255,5 @@ class PlanApprovalCard extends StatelessWidget {
         ),
       ),
     );
-  }
-}
-
-class _PlanContent {
-  final String? title;
-  final String? description;
-  final List<String> steps;
-  final List<String> permissions;
-
-  const _PlanContent({
-    this.title,
-    this.description,
-    this.steps = const [],
-    this.permissions = const [],
-  });
-
-  factory _PlanContent.fromApproval(ApprovalRequest approval) {
-    final prose = <String>[];
-    final steps = <String>[];
-
-    final lines = (approval.planMarkdown ?? '')
-        .split('\n')
-        .map(_cleanMarkdownLine)
-        .where((line) => line.isNotEmpty)
-        .toList();
-
-    for (final line in lines) {
-      if (_isStructuralLabel(line)) {
-        continue;
-      }
-
-      final numbered = RegExp(r'^\d+[.)]\s+(.+)$').firstMatch(line);
-      if (numbered != null) {
-        steps.add(numbered.group(1)!.trim());
-        continue;
-      }
-
-      final bullet = RegExp(r'^[-*]\s+(.+)$').firstMatch(line);
-      if (bullet != null) {
-        steps.add(bullet.group(1)!.trim());
-        continue;
-      }
-
-      prose.add(line);
-    }
-
-    final explicitTitle = _normalizeText(approval.title);
-    final hasSpecificTitle =
-        explicitTitle != null && !_isGenericPlanTitle(explicitTitle);
-    String? title = hasSpecificTitle ? explicitTitle : null;
-
-    final descriptionCandidate = _normalizeText(approval.descriptionText);
-    String? description =
-        descriptionCandidate != null && descriptionCandidate != title
-        ? descriptionCandidate
-        : null;
-
-    if (title == null && prose.isNotEmpty) {
-      title = prose.removeAt(0);
-    }
-
-    if (description == null && prose.isNotEmpty) {
-      description = prose.removeAt(0);
-    }
-
-    if (prose.isNotEmpty) {
-      final remainder = prose.join(' ');
-      description = description == null ? remainder : '$description $remainder';
-    }
-
-    return _PlanContent(
-      title: title,
-      description: description,
-      steps: steps,
-      permissions: approval.allowedPrompts,
-    );
-  }
-
-  static String _cleanMarkdownLine(String line) {
-    return line
-        .replaceFirst(RegExp(r'^#+\s*'), '')
-        .replaceFirst(RegExp(r'^>\s*'), '')
-        .replaceAll('**', '')
-        .replaceAll('__', '')
-        .replaceAll('`', '')
-        .trim();
-  }
-
-  static bool _isStructuralLabel(String line) {
-    final lower = line.toLowerCase();
-    return lower == 'steps:' || lower == 'step:' || lower == 'plan:';
-  }
-
-  static String? _normalizeText(String? value) {
-    final trimmed = value?.trim();
-    if (trimmed == null || trimmed.isEmpty) {
-      return null;
-    }
-    return trimmed;
-  }
-
-  static bool _isGenericPlanTitle(String value) {
-    final normalized = value.trim().toLowerCase();
-    return normalized == 'review plan' ||
-        normalized == 'plan review' ||
-        normalized == 'plan' ||
-        normalized == 'approve plan';
   }
 }
