@@ -8,6 +8,7 @@ import '../../domain/paired_machine.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
 import '../common/ui_effect_listener.dart';
+import '../common/pill_tab_bar.dart';
 import 'settings_tab_viewmodel.dart';
 
 class SettingsTab extends GetView<SettingsTabViewModel> {
@@ -15,6 +16,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
 
   @override
   Widget build(BuildContext context) {
+    final bottomClearance = PillTabBar.reservedHeightFor(context);
     return UiEffectListener(
       effects: controller.uiEffect,
       child: Column(
@@ -123,7 +125,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                         ),
                         onTap: controller.openTermsOfUse,
                       ),
-                      const SizedBox(height: 24),
+                      SizedBox(height: bottomClearance),
                     ],
                   );
                 }),

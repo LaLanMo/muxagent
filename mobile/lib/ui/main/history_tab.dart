@@ -8,6 +8,7 @@ import '../../domain/enums.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
+import '../common/pill_tab_bar.dart';
 import 'history_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
 
@@ -40,7 +41,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
           ),
         ),
         Obx(() => _buildFilterChips()),
-        Expanded(child: Obx(() => _buildBody())),
+        Expanded(child: Obx(() => _buildBody(context))),
       ],
     );
   }
@@ -105,7 +106,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     );
   }
 
-  Widget _buildBody() {
+  Widget _buildBody(BuildContext context) {
     shell.machines.length;
     final groups = controller.sessionGroups;
 
@@ -147,6 +148,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     }
 
     return ListView.builder(
+      padding: EdgeInsets.only(bottom: PillTabBar.reservedHeightFor(context)),
       clipBehavior: Clip.hardEdge,
       itemCount: items.length,
       itemBuilder: (_, i) {

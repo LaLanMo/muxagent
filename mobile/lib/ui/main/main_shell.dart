@@ -15,31 +15,33 @@ class MainShell extends GetView<MainShellViewModel> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.background,
-      body: SafeArea(
-        bottom: false,
-        child: ColoredBox(
-          color: AppTheme.background,
-          child: Obx(
-            () => IndexedStack(
-              index: controller.tabIndex.value,
-              children: const [
-                ActiveTab(),
-                HistoryTab(),
-                SettingsTab(),
-              ],
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          SafeArea(
+            bottom: false,
+            child: ColoredBox(
+              color: AppTheme.background,
+              child: Obx(
+                () => IndexedStack(
+                  index: controller.tabIndex.value,
+                  children: const [ActiveTab(), HistoryTab(), SettingsTab()],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Obx(
-          () => PillTabBar(
-            currentIndex: controller.tabIndex.value,
-            activeBadgeCount: controller.pendingApprovalCount,
-            onTap: controller.switchTab,
-            onCreateTap: controller.navigateToNewSession,
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Obx(
+              () => PillTabBar(
+                currentIndex: controller.tabIndex.value,
+                activeBadgeCount: controller.pendingApprovalCount,
+                onTap: controller.switchTab,
+                onCreateTap: controller.navigateToNewSession,
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

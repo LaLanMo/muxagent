@@ -8,6 +8,7 @@ import '../../config/theme.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
+import '../common/pill_tab_bar.dart';
 import 'active_tab_viewmodel.dart';
 import 'main_shell_viewmodel.dart';
 
@@ -47,7 +48,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             if (controller.activeSessions.isEmpty) {
               return _buildEmptyState();
             }
-            return _buildSessionList();
+            return _buildSessionList(context);
           }),
         ),
       ],
@@ -137,11 +138,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               connected: activeSessionIds.contains(machines[i].machineId),
             ),
             if (i < machines.length - 1)
-              const Divider(
-                height: 0,
-                thickness: 1,
-                color: AppTheme.border,
-              ),
+              const Divider(height: 0, thickness: 1, color: AppTheme.border),
           ],
         ],
       ),
@@ -186,7 +183,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
 
   // --- Session List (grouped by status sections) ---
 
-  Widget _buildSessionList() {
+  Widget _buildSessionList(BuildContext context) {
     final sessions = controller.activeSessions;
 
     final approvalSessions = sessions
@@ -196,7 +193,12 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         .where((s) => s.status == SessionStatus.running)
         .toList();
     return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.fromLTRB(
+        16,
+        0,
+        16,
+        PillTabBar.reservedHeightFor(context),
+      ),
       clipBehavior: Clip.hardEdge,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -5,6 +5,11 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../config/theme.dart';
 
 class PillTabBar extends StatelessWidget {
+  static const double shellHeight = 44;
+  static const double topSpacing = 12;
+  static const double bottomSpacing = 16;
+  static const double horizontalSpacing = 16;
+
   final int currentIndex;
   final ValueChanged<int> onTap;
   final VoidCallback? onCreateTap;
@@ -26,14 +31,20 @@ class PillTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
+      padding: EdgeInsets.fromLTRB(
+        horizontalSpacing,
+        topSpacing,
+        horizontalSpacing,
+        bottomInset + bottomSpacing,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             width: 200,
-            height: 44,
+            height: shellHeight,
             padding: const EdgeInsets.symmetric(horizontal: 8),
             decoration: BoxDecoration(
               color: AppTheme.surface,
@@ -158,6 +169,13 @@ class PillTabBar extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  static double reservedHeightFor(BuildContext context) {
+    return MediaQuery.viewPaddingOf(context).bottom +
+        shellHeight +
+        topSpacing +
+        bottomSpacing;
   }
 }
 
