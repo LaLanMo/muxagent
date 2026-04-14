@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	internalappserver "github.com/LaLanMo/muxagent-cli/internal/appserver"
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
+	internalappserver "github.com/LaLanMo/muxagent/cli/internal/appserver"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 func TestResolveLiveEndpointKeepsStateWhenPIDIsAlive(t *testing.T) {

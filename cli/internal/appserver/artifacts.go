@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
-	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
 )
 
 func loadTaskArtifactRefs(ctx context.Context, readModel *taskReadModel, taskID string) ([]artifactRefDTO, error) {

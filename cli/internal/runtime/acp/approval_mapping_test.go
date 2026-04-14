@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
 	"github.com/stretchr/testify/require"
 )
 

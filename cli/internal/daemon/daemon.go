@@ -14,14 +14,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/control"
-	"github.com/LaLanMo/muxagent-cli/internal/crypto"
-	"github.com/LaLanMo/muxagent-cli/internal/keyring"
-	"github.com/LaLanMo/muxagent-cli/internal/relayws"
-	runtimemanager "github.com/LaLanMo/muxagent-cli/internal/runtime/manager"
-	"github.com/LaLanMo/muxagent-cli/internal/worktree"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/control"
+	"github.com/LaLanMo/muxagent/cli/internal/crypto"
+	"github.com/LaLanMo/muxagent/cli/internal/keyring"
+	"github.com/LaLanMo/muxagent/cli/internal/relayws"
+	runtimemanager "github.com/LaLanMo/muxagent/cli/internal/runtime/manager"
+	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 )
 
 const (

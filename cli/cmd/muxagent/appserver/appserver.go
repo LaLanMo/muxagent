@@ -3,9 +3,9 @@ package appserver
 import (
 	"context"
 
-	internalappserver "github.com/LaLanMo/muxagent-cli/internal/appserver"
-	cliversion "github.com/LaLanMo/muxagent-cli/internal/version"
-	"github.com/LaLanMo/muxagent-cli/internal/worktree"
+	internalappserver "github.com/LaLanMo/muxagent/cli/internal/appserver"
+	cliversion "github.com/LaLanMo/muxagent/cli/internal/version"
+	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

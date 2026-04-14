@@ -3,9 +3,9 @@ package appserver
 import (
 	"testing"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codex"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codexappserver"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codexexec"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codex"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codexappserver"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codexexec"
 	"github.com/stretchr/testify/assert"
 )
 

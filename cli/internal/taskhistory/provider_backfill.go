@@ -11,10 +11,10 @@ import (
 	"strings"
 	"time"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/claudeexec"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/claudeexec"
 )
 
 type jsonlLine struct {

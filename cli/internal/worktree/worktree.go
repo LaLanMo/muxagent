@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 func canonicalExistingPath(path string) (string, error) {

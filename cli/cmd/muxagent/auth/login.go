@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

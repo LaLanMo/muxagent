@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"testing"
 
-	cryptoutil "github.com/LaLanMo/muxagent-cli/internal/crypto"
+	cryptoutil "github.com/LaLanMo/muxagent/cli/internal/crypto"
 )
 
 func TestProcessApproval_VerifiesPinnedRelaySignature(t *testing.T) {

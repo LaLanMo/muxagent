@@ -8,10 +8,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

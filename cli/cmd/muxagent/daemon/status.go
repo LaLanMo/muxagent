@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

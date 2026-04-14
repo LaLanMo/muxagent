@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 func completedArtifactPaths(runs []taskdomain.NodeRun) []string {

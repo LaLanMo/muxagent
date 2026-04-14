@@ -12,9 +12,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 	"github.com/stretchr/testify/require"
 )
 

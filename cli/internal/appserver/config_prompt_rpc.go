@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 )
 
 type configPromptLookup struct {

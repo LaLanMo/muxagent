@@ -6,9 +6,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 )
 
 type RuntimeService interface {

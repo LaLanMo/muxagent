@@ -70,12 +70,12 @@ func TestIntegrationE2EUpdateFlow(t *testing.T) {
 		switch r.URL.Path {
 		case "/latest":
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"tag_name":"v0.0.2"}`))
-		case "/download/v0.0.2/" + releaseManifestName:
+			_, _ = w.Write([]byte(`{"tag_name":"cli/v0.0.2"}`))
+		case "/download/cli/v0.0.2/" + releaseManifestName:
 			_, _ = w.Write(manifest)
-		case "/download/v0.0.2/" + releaseManifestSigName:
+		case "/download/cli/v0.0.2/" + releaseManifestSigName:
 			_, _ = w.Write(sigBase64)
-		case "/download/v0.0.2/" + bundleAssetName:
+		case "/download/cli/v0.0.2/" + bundleAssetName:
 			_, _ = w.Write(bundleBytes)
 		default:
 			http.NotFound(w, r)
@@ -126,9 +126,9 @@ func TestIntegrationE2EUpdateFlow(t *testing.T) {
 	assert.Empty(t, execPath)
 
 	// All expected URLs should have been hit
-	assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+releaseManifestName))
-	assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+releaseManifestSigName))
-	assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+bundleAssetName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+releaseManifestName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+releaseManifestSigName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+bundleAssetName))
 
 	// --- Test 2: Tampered binary is rejected ---
 	// Reset: put old binary back
@@ -138,11 +138,11 @@ func TestIntegrationE2EUpdateFlow(t *testing.T) {
 	tamperedBundle := createTarGzBundle(t, "muxagent", []byte("#!/bin/sh\necho EVIL\n"), "claude-agent-acp", runtimeBinary)
 	tamperedServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/download/v0.0.2/" + releaseManifestName:
+		case "/download/cli/v0.0.2/" + releaseManifestName:
 			_, _ = w.Write(manifest) // same signed manifest (expects newBinary hash)
-		case "/download/v0.0.2/" + releaseManifestSigName:
+		case "/download/cli/v0.0.2/" + releaseManifestSigName:
 			_, _ = w.Write(sigBase64)
-		case "/download/v0.0.2/" + bundleAssetName:
+		case "/download/cli/v0.0.2/" + bundleAssetName:
 			_, _ = w.Write(tamperedBundle) // DIFFERENT bundle!
 		default:
 			http.NotFound(w, r)
@@ -184,9 +184,9 @@ func TestIntegrationE2EUpdateFlow(t *testing.T) {
 	wrongKeyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		wrongKeyReqs.add(r.URL.Path)
 		switch r.URL.Path {
-		case "/download/v0.0.2/" + releaseManifestName:
+		case "/download/cli/v0.0.2/" + releaseManifestName:
 			_, _ = w.Write(manifest)
-		case "/download/v0.0.2/" + releaseManifestSigName:
+		case "/download/cli/v0.0.2/" + releaseManifestSigName:
 			_, _ = w.Write(wrongSigBase64) // signed with wrong key
 		default:
 			http.NotFound(w, r)
@@ -215,7 +215,7 @@ func TestIntegrationE2EUpdateFlow(t *testing.T) {
 	assert.Contains(t, err.Error(), "signature verification failed")
 
 	// Binary download should never have been attempted
-	assert.Zero(t, wrongKeyReqs.count("/download/v0.0.2/"+bundleAssetName))
+	assert.Zero(t, wrongKeyReqs.count("/download/cli/v0.0.2/"+bundleAssetName))
 
 	// --- Test 4: Signing tool round-trip ---
 	// Build a release dir, sign it, verify the outputs match what the updater expects
@@ -365,8 +365,8 @@ func TestIntegrationStartupUpdateReexecsBareMuxagent(t *testing.T) {
 	assert.Equal(t, []string{exePath}, resumedArgs)
 	assert.Equal(t, startupOutcomeSuccess, envValue(resumedEnv, startupOutcomeEnvVar))
 	assert.Equal(t, "v0.0.2", envValue(resumedEnv, startupOutcomeVersionEnvVar))
-	assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+releaseManifestName))
-	assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+bundleAssetName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+releaseManifestName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+bundleAssetName))
 }
 
 func findRepoRoot(t *testing.T) string {

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
-	runtimemanager "github.com/LaLanMo/muxagent-cli/internal/runtime/manager"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
+	runtimemanager "github.com/LaLanMo/muxagent/cli/internal/runtime/manager"
 	"github.com/stretchr/testify/require"
 )
 

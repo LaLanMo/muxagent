@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/LaLanMo/muxagent-cli/internal/crypto"
+	"github.com/LaLanMo/muxagent/cli/internal/crypto"
 )
 
 const (

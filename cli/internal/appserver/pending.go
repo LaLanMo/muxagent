@@ -3,7 +3,7 @@ package appserver
 import (
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 )
 
 type pendingClientCommand struct {

@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
 )
 
 const (

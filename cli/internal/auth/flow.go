@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/crypto"
+	"github.com/LaLanMo/muxagent/cli/internal/crypto"
 	"github.com/google/uuid"
 )
 

@@ -20,7 +20,7 @@ with Codex or Claude Code.
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LaLanMo/muxagent-cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/LaLanMo/muxagent/main/install.sh | sh
 ```
 
 The install script puts `muxagent` in `/usr/local/bin` when writable, otherwise
@@ -29,7 +29,7 @@ it falls back to `~/.local/bin`.
 ### Windows
 
 Download the latest `muxagent-windows-*.zip` bundle from
-[GitHub Releases](https://github.com/LaLanMo/muxagent-cli/releases), unzip it,
+[GitHub Releases](https://github.com/LaLanMo/muxagent/releases), unzip it,
 and run `muxagent.exe`.
 
 Official installs include everything needed to run MuxAgent with Claude Code.

@@ -1,6 +1,6 @@
 package tasktui
 
-import "github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+import "github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 
 func (m Model) activeEditorSlot() string {
 	return m.currentEditorBindingSpec().Slot

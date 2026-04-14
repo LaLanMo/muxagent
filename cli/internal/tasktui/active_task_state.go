@@ -1,9 +1,9 @@
 package tasktui
 
 import (
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 )
 
 func (m *Model) activateTask(view taskdomain.TaskView, cfg *taskconfig.Config, input *taskruntime.InputRequest) {

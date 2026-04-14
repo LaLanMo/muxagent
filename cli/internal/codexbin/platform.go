@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 var currentExecutablePath = func() (string, error) {

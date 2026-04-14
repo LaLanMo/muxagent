@@ -3,9 +3,9 @@ package runtime
 import (
 	"context"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
 )
 
 // Client is the interface for interacting with an ACP-compatible agent runtime.

@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/claudeexec"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codex"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/opencodehttp"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/claudeexec"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codex"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/opencodehttp"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 	"golang.org/x/sync/singleflight"
 )
 

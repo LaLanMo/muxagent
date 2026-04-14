@@ -6,9 +6,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/daemon"
-	"github.com/LaLanMo/muxagent-cli/internal/version"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/daemon"
+	"github.com/LaLanMo/muxagent/cli/internal/version"
 )
 
 // daemonStartResult holds the result of starting a daemon.

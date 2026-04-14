@@ -1,6 +1,6 @@
 package tasktui
 
-import appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
+import appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 
 type taskConfigSummary struct {
 	Alias       string

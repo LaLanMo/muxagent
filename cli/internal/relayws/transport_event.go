@@ -1,6 +1,6 @@
 package relayws
 
-import "github.com/LaLanMo/muxagent-cli/internal/appwire"
+import "github.com/LaLanMo/muxagent/cli/internal/appwire"
 
 const (
 	defaultEventBufferByteBudget = 2 * 1024 * 1024

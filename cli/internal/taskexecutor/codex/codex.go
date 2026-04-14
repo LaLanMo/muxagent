@@ -4,9 +4,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codexappserver"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codexexec"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codexappserver"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codexexec"
 )
 
 const (

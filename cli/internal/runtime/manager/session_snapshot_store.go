@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 type sessionSnapshot struct {

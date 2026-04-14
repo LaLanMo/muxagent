@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 // Mapping holds the worktree metadata for a session.

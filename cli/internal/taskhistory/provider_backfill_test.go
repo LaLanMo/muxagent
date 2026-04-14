@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
 )
 
 func TestLoadFallsBackToClaudeTranscript(t *testing.T) {
@@ -20,7 +20,7 @@ func TestLoadFallsBackToClaudeTranscript(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-claude",
 		WorkDir:      t.TempDir(),
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeClaudeCode}
 	run := taskdomain.NodeRun{
@@ -70,7 +70,7 @@ func TestLoadBackfillsClaudeProgressFramesAndCamelCaseToolResult(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-claude-progress",
 		WorkDir:      t.TempDir(),
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeClaudeCode}
 	run := taskdomain.NodeRun{
@@ -120,7 +120,7 @@ func TestLoadFallsBackToCodexTranscript(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-codex",
 		WorkDir:      t.TempDir(),
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{
@@ -136,7 +136,7 @@ func TestLoadFallsBackToCodexTranscript(t *testing.T) {
 		t.Fatalf("mkdir transcript dir: %v", err)
 	}
 	content := "" +
-		"{\"timestamp\":\"2026-04-08T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d-test-session\",\"cwd\":\"/Users/by/Projects/cmdr/muxagent-cli\"}}\n" +
+		"{\"timestamp\":\"2026-04-08T10:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d-test-session\",\"cwd\":\"/Users/by/Projects/cmdr/muxagent/cli\"}}\n" +
 		"{\"timestamp\":\"2026-04-08T10:00:01Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"function_call\",\"call_id\":\"call-1\",\"name\":\"shell_command\",\"arguments\":\"{\\\"command\\\":[\\\"bash\\\",\\\"-lc\\\",\\\"pwd\\\"],\\\"workdir\\\":\\\"/tmp/project\\\"}\"}}\n" +
 		"{\"timestamp\":\"2026-04-08T10:00:02Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"function_call_output\",\"call_id\":\"call-1\",\"output\":\"/tmp/project\"}}\n" +
 		"{\"timestamp\":\"2026-04-08T10:00:03Z\",\"type\":\"response_item\",\"payload\":{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"done\"}]}}\n" +
@@ -176,7 +176,7 @@ func TestLoadBackfillsCodexShellFailures(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-codex-shell-failure",
 		WorkDir:      t.TempDir(),
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{
@@ -225,7 +225,7 @@ func TestLoadMergesPersistedHistoryWithProviderTail(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-merged",
 		WorkDir:      workDir,
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{
@@ -302,7 +302,7 @@ func TestLoadToleratesTornProviderTranscriptTail(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-codex-torn",
 		WorkDir:      t.TempDir(),
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{
@@ -345,7 +345,7 @@ func TestLoadPrefersPersistedHistoryWithoutProviderFallback(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-persisted",
 		WorkDir:      workDir,
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{
@@ -382,7 +382,7 @@ func TestLoadBackfillsProviderMCPReplayFromEndEventWithoutBegin(t *testing.T) {
 	task := taskdomain.Task{
 		ID:           "task-codex-mcp",
 		WorkDir:      t.TempDir(),
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{
@@ -449,7 +449,7 @@ func TestLoadKeepsExecutorAndProviderMCPNamespacesSeparateWhenIDsDiffer(t *testi
 	task := taskdomain.Task{
 		ID:           "task-codex-mcp-mixed",
 		WorkDir:      workDir,
-		ExecutionDir: "/Users/by/Projects/cmdr/muxagent-cli",
+		ExecutionDir: "/Users/by/Projects/cmdr/muxagent/cli",
 	}
 	cfg := &taskconfig.Config{Runtime: appconfig.RuntimeCodex}
 	run := taskdomain.NodeRun{

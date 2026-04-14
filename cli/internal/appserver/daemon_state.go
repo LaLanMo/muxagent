@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 type DaemonEndpoint struct {

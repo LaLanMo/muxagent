@@ -3,7 +3,7 @@ package codexbin
 import (
 	"os"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 // Resolve determines the path to the codex-acp binary using this decision tree:

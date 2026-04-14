@@ -12,7 +12,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 type RuntimeID string

@@ -14,7 +14,7 @@ import (
 	"sort"
 	"strings"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"gopkg.in/yaml.v3"
 )
 

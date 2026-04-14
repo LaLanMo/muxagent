@@ -11,14 +11,14 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpbin"
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
-	"github.com/LaLanMo/muxagent-cli/internal/codexbin"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
-	"github.com/LaLanMo/muxagent-cli/internal/runtime"
-	"github.com/LaLanMo/muxagent-cli/internal/runtime/acp"
+	"github.com/LaLanMo/muxagent/cli/internal/acpbin"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/codexbin"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
+	"github.com/LaLanMo/muxagent/cli/internal/runtime"
+	"github.com/LaLanMo/muxagent/cli/internal/runtime/acp"
 )
 
 const (

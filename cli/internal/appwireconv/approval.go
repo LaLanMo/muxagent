@@ -1,8 +1,8 @@
 package appwireconv
 
 import (
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
 )
 
 func ApprovalRequestFromDomain(request domain.ApprovalRequest) appwire.ApprovalRequest {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 type Router struct {

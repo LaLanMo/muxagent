@@ -5,7 +5,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 type detailTimelineEntry struct {

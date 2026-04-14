@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
 )
 
 func (m *Model) handleFocusNavigationKey(msg tea.KeyPressMsg) (tea.Cmd, bool) {

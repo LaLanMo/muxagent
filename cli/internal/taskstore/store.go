@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 	_ "modernc.org/sqlite"
 )
 

@@ -5,7 +5,7 @@ package instancelock
 import (
 	"path/filepath"
 
-	"github.com/LaLanMo/muxagent-cli/internal/filelock"
+	"github.com/LaLanMo/muxagent/cli/internal/filelock"
 )
 
 const lockFileName = "instance.lock"

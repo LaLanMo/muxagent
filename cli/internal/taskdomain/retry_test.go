@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

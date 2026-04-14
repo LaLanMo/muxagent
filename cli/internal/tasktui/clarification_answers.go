@@ -3,7 +3,7 @@ package tasktui
 import (
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 func appendOrReplaceAnswer(answers []taskdomain.ClarificationAnswer, index int, selected interface{}) []taskdomain.ClarificationAnswer {

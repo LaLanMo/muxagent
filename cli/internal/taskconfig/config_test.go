@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

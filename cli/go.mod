@@ -1,4 +1,4 @@
-module github.com/LaLanMo/muxagent-cli
+module github.com/LaLanMo/muxagent/cli
 
 go 1.25.8
 

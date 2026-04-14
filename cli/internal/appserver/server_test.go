@@ -15,14 +15,14 @@ import (
 	"testing"
 	"time"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor/codex"
-	"github.com/LaLanMo/muxagent-cli/internal/taskhistory"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
-	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codex"
+	"github.com/LaLanMo/muxagent/cli/internal/taskhistory"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
 )
 
 func TestServerRejectsCallsBeforeInitialize(t *testing.T) {

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
 )
 
 const (

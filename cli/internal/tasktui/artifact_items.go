@@ -9,9 +9,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskruntime"
-	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
+	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
 )
 
 const artifactPreviewMaxBytes = 64 * 1024

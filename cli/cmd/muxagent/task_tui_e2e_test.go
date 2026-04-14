@@ -27,12 +27,12 @@ import (
 	"testing"
 	"time"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
-	"github.com/LaLanMo/muxagent-cli/internal/taskengine"
-	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
-	"github.com/LaLanMo/muxagent-cli/internal/worktree"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskengine"
+	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty"
 	"github.com/stretchr/testify/assert"
@@ -2490,7 +2490,7 @@ func buildMuxagentBinaryWithVersion(t *testing.T, moduleRoot, version string) st
 	binaryPath := filepath.Join(t.TempDir(), "muxagent")
 	args := []string{"build"}
 	if version != "" {
-		args = append(args, "-ldflags", "-X github.com/LaLanMo/muxagent-cli/internal/version.Version="+version)
+		args = append(args, "-ldflags", "-X github.com/LaLanMo/muxagent/cli/internal/version.Version="+version)
 	}
 	args = append(args, "-o", binaryPath, "./cmd/muxagent")
 	cmd := exec.Command("go", args...)

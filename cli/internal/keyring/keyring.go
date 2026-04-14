@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
-	"github.com/LaLanMo/muxagent-cli/internal/crypto"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/crypto"
 )
 
 var (

@@ -3,8 +3,8 @@ package acp
 import (
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 )
 
 func planEvent(sessionID string, update *acpprotocol.PlanUpdate) *appwire.Event {

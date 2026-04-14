@@ -3,7 +3,7 @@ package acpbin
 import (
 	"os"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 // Resolve determines the path to the ACP binary using this decision tree:

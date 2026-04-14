@@ -3,7 +3,7 @@ package config
 import (
 	"fmt"
 
-	cfg "github.com/LaLanMo/muxagent-cli/internal/config"
+	cfg "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

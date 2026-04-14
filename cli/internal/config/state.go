@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/crypto"
-	"github.com/LaLanMo/muxagent-cli/internal/localkey"
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/crypto"
+	"github.com/LaLanMo/muxagent/cli/internal/localkey"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 const localKeyInfo = "muxagent-daemon-state-v1"

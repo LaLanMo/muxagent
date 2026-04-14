@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 func TestResolve_EnvOverride(t *testing.T) {

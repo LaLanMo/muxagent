@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
-	"github.com/LaLanMo/muxagent-cli/internal/relayws"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/relayws"
 	"github.com/spf13/cobra"
 )
 

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskexecutor"
-	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
+	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
 )
 
 func TestReadAllIgnoresPartialTrailingChunk(t *testing.T) {

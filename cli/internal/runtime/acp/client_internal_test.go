@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 )
 
 func toolStatusPtr(status acpprotocol.ToolCallStatus) *acpprotocol.ToolCallStatus {

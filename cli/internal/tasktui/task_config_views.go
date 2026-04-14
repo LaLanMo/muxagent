@@ -6,7 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 )
 
 func (m Model) renderTaskConfigListHeader(width int) string {

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 func TestInjectClaudeCodeExecutable(t *testing.T) {

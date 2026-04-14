@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

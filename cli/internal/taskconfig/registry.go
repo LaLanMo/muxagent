@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
 const builtinDefaultAlias = "default"

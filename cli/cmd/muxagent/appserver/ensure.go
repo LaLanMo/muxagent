@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	internalappserver "github.com/LaLanMo/muxagent-cli/internal/appserver"
-	"github.com/LaLanMo/muxagent-cli/internal/filelock"
-	cliversion "github.com/LaLanMo/muxagent-cli/internal/version"
+	internalappserver "github.com/LaLanMo/muxagent/cli/internal/appserver"
+	"github.com/LaLanMo/muxagent/cli/internal/filelock"
+	cliversion "github.com/LaLanMo/muxagent/cli/internal/version"
 	"github.com/spf13/cobra"
 )
 

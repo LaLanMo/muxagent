@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 const claudeCodeExecutableEnv = "CLAUDE_CODE_EXECUTABLE"

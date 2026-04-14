@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 )
 
 func configCatalogOrDefault(catalog *taskconfig.Catalog) *taskconfig.Catalog {

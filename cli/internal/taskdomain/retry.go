@@ -1,6 +1,6 @@
 package taskdomain
 
-import "github.com/LaLanMo/muxagent-cli/internal/taskconfig"
+import "github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 
 const (
 	TriggerReasonManualRetry         = "manual_retry"

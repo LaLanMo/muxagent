@@ -8,8 +8,8 @@ import (
 
 	"charm.land/bubbles/v2/list"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 func trimTrailingBlank(lines []string) []string {

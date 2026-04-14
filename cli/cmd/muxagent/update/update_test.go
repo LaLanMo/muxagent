@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/codexbin"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/codexbin"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,6 +74,30 @@ func TestParseReleaseManifest(t *testing.T) {
 	}
 }
 
+func TestNormalizeVersionAcceptsReleaseTags(t *testing.T) {
+	t.Parallel()
+
+	version, err := normalizeVersion("cli/v1.2.3")
+	require.NoError(t, err)
+	assert.Equal(t, "v1.2.3", version)
+
+	version, err = normalizeVersion("1.2.3")
+	require.NoError(t, err)
+	assert.Equal(t, "v1.2.3", version)
+}
+
+func TestReleaseTagForVersionAddsCLIPrefix(t *testing.T) {
+	t.Parallel()
+
+	tag, err := releaseTagForVersion("v1.2.3")
+	require.NoError(t, err)
+	assert.Equal(t, "cli/v1.2.3", tag)
+
+	tag, err = releaseTagForVersion("cli/v1.2.3")
+	require.NoError(t, err)
+	assert.Equal(t, "cli/v1.2.3", tag)
+}
+
 func TestRunWithUpdaterRejectsWindows(t *testing.T) {
 	t.Parallel()
 
@@ -88,7 +112,7 @@ func TestLatestReleaseRejectsNonHTTPSRedirect(t *testing.T) {
 
 	httpSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"tag_name":"v1.2.3"}`))
+		_, _ = w.Write([]byte(`{"tag_name":"cli/v1.2.3"}`))
 	}))
 	defer httpSrv.Close()
 
@@ -116,7 +140,7 @@ func TestLatestReleaseTimesOut(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(200 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"tag_name":"v1.2.3"}`))
+		_, _ = w.Write([]byte(`{"tag_name":"cli/v1.2.3"}`))
 	}))
 	defer srv.Close()
 
@@ -185,10 +209,10 @@ func TestLatestReleaseUsesLatestPrereleaseFromReleaseList(t *testing.T) {
 		case "/releases":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[
-				{"tag_name":"v1.2.3","draft":false,"prerelease":false},
-				{"tag_name":"v1.3.0-rc1","draft":false,"prerelease":true},
-				{"tag_name":"v1.3.0-rc2","draft":false,"prerelease":true},
-				{"tag_name":"v1.4.0-rc1","draft":true,"prerelease":true},
+				{"tag_name":"cli/v1.2.3","draft":false,"prerelease":false},
+				{"tag_name":"cli/v1.3.0-rc1","draft":false,"prerelease":true},
+				{"tag_name":"cli/v1.3.0-rc2","draft":false,"prerelease":true},
+				{"tag_name":"cli/v1.4.0-rc1","draft":true,"prerelease":true},
 				{"tag_name":"not-a-version","draft":false,"prerelease":true}
 			]`))
 		default:
@@ -219,8 +243,8 @@ func TestLatestReleasePrereleaseErrorsWhenNoPrereleaseFound(t *testing.T) {
 		case "/releases":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[
-				{"tag_name":"v1.2.3","draft":false,"prerelease":false},
-				{"tag_name":"v1.3.0-rc1","draft":true,"prerelease":true}
+				{"tag_name":"cli/v1.2.3","draft":false,"prerelease":false},
+				{"tag_name":"cli/v1.3.0-rc1","draft":true,"prerelease":true}
 			]`))
 		default:
 			http.NotFound(w, r)
@@ -276,7 +300,7 @@ func TestInstallSuccessReplacesBinary(t *testing.T) {
 	assert.ErrorIs(t, err, os.ErrNotExist)
 	_, err = os.Stat(exePath + ".lock")
 	assert.ErrorIs(t, err, os.ErrNotExist)
-	assert.Equal(t, 1, reqs.count("/download/v1.2.3/"+bundleAssetName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v1.2.3/"+bundleAssetName))
 	assert.NotEqual(t, newContent, oldContent)
 }
 
@@ -346,7 +370,7 @@ func TestInstallRejectsManifestVersionMismatchWithoutDownloadingBinary(t *testin
 	err := u.install(context.Background(), "v1.2.3")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "does not match latest release")
-	assert.Zero(t, reqs.count("/download/v1.2.3/muxagent-darwin-arm64.tar.gz"))
+	assert.Zero(t, reqs.count("/download/cli/v1.2.3/muxagent-darwin-arm64.tar.gz"))
 }
 
 func TestInstallRejectsInvalidSignatureBeforeBinaryDownload(t *testing.T) {
@@ -362,7 +386,7 @@ func TestInstallRejectsInvalidSignatureBeforeBinaryDownload(t *testing.T) {
 	err := u.install(context.Background(), "v1.2.3")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "signature verification failed")
-	assert.Zero(t, reqs.count("/download/v1.2.3/muxagent-darwin-arm64.tar.gz"))
+	assert.Zero(t, reqs.count("/download/cli/v1.2.3/muxagent-darwin-arm64.tar.gz"))
 }
 
 func TestInstallRejectsBinaryHashMismatch(t *testing.T) {
@@ -382,11 +406,11 @@ func TestInstallRejectsBinaryHashMismatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		reqs.add(r.URL.Path)
 		switch r.URL.Path {
-		case "/download/v1.2.3/" + releaseManifestName:
+		case "/download/cli/v1.2.3/" + releaseManifestName:
 			_, _ = w.Write(manifest)
-		case "/download/v1.2.3/" + releaseManifestSigName:
+		case "/download/cli/v1.2.3/" + releaseManifestSigName:
 			_, _ = w.Write([]byte(base64.StdEncoding.EncodeToString(signature)))
-		case "/download/v1.2.3/muxagent-darwin-arm64.tar.gz":
+		case "/download/cli/v1.2.3/muxagent-darwin-arm64.tar.gz":
 			_, _ = w.Write(actualBundle)
 		default:
 			http.NotFound(w, r)
@@ -398,7 +422,7 @@ func TestInstallRejectsBinaryHashMismatch(t *testing.T) {
 	err := u.install(context.Background(), "v1.2.3")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "checksum mismatch")
-	assert.Equal(t, 1, reqs.count("/download/v1.2.3/muxagent-darwin-arm64.tar.gz"))
+	assert.Equal(t, 1, reqs.count("/download/cli/v1.2.3/muxagent-darwin-arm64.tar.gz"))
 
 	got, readErr := os.ReadFile(exePath)
 	require.NoError(t, readErr)
@@ -427,7 +451,7 @@ func TestEnsureBundledRuntimeInstallsCompanionAsset(t *testing.T) {
 	got, err := os.ReadFile(runtimePath)
 	require.NoError(t, err)
 	assert.Equal(t, runtimeBinary, got)
-	assert.Equal(t, 1, reqs.count("/download/v1.2.3/"+bundleAssetName))
+	assert.Equal(t, 1, reqs.count("/download/cli/v1.2.3/"+bundleAssetName))
 }
 
 func TestEnsureBundledRuntimeSkipsDownloadWhenCompanionMatches(t *testing.T) {
@@ -451,7 +475,7 @@ func TestEnsureBundledRuntimeSkipsDownloadWhenCompanionMatches(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, runtimePath, gotPath)
-	assert.Zero(t, reqs.count("/download/v1.2.3/"+bundleAssetName))
+	assert.Zero(t, reqs.count("/download/cli/v1.2.3/"+bundleAssetName))
 }
 
 func TestEnsureRuntimeUsesManagedCodexRuntimeWithoutDownload(t *testing.T) {
@@ -792,6 +816,11 @@ func startReleaseServer(t *testing.T, latestTag, manifestTag, assetName string, 
 func startReleaseServerWithAssets(t *testing.T, latestTag, manifestTag string, assets map[string][]byte, signer ed25519.PrivateKey, corruptSignature bool, latestDelay func(http.ResponseWriter, *http.Request)) (*httptest.Server, *releaseRequests) {
 	t.Helper()
 
+	latestReleaseTag, err := releaseTagForVersion(latestTag)
+	require.NoError(t, err)
+	manifestVersion, err := normalizeVersion(manifestTag)
+	require.NoError(t, err)
+
 	names := make([]string, 0, len(assets))
 	for name := range assets {
 		names = append(names, name)
@@ -800,7 +829,7 @@ func startReleaseServerWithAssets(t *testing.T, latestTag, manifestTag string, a
 
 	var builder strings.Builder
 	builder.WriteString(releaseManifestHeaderBase)
-	builder.WriteString(manifestTag)
+	builder.WriteString(manifestVersion)
 	builder.WriteByte('\n')
 	for _, name := range names {
 		hash := sha256.Sum256(assets[name])
@@ -827,23 +856,23 @@ func startReleaseServerWithAssets(t *testing.T, latestTag, manifestTag string, a
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(fmt.Sprintf(`{"tag_name":%q}`, latestTag)))
+			_, _ = w.Write([]byte(fmt.Sprintf(`{"tag_name":%q}`, latestReleaseTag)))
 		case "/releases":
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(fmt.Sprintf(`[
 				{"tag_name":%q,"draft":false,"prerelease":false},
 				{"tag_name":%q,"draft":false,"prerelease":true}
-			]`, latestTag, latestTag+"-rc1")))
+			]`, latestReleaseTag, latestReleaseTag+"-rc1")))
 		case "/latest/download/" + releaseManifestName:
 			_, _ = w.Write(manifest)
 		case "/latest/download/" + releaseManifestSigName:
 			_, _ = w.Write(signatureBody)
-		case "/download/" + latestTag + "/" + releaseManifestName:
+		case "/download/" + latestReleaseTag + "/" + releaseManifestName:
 			_, _ = w.Write(manifest)
-		case "/download/" + latestTag + "/" + releaseManifestSigName:
+		case "/download/" + latestReleaseTag + "/" + releaseManifestSigName:
 			_, _ = w.Write(signatureBody)
 		default:
-			assetName := strings.TrimPrefix(r.URL.Path, "/download/"+latestTag+"/")
+			assetName := strings.TrimPrefix(r.URL.Path, "/download/"+latestReleaseTag+"/")
 			if body, ok := assets[assetName]; ok {
 				_, _ = w.Write(body)
 				return

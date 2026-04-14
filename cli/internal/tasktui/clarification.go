@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 func (m Model) handleClarificationKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

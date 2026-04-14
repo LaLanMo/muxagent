@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 func parseClarificationResponse(request taskdomain.ClarificationRequest, payload map[string]interface{}) (*taskdomain.ClarificationResponse, error) {

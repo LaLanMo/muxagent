@@ -2,7 +2,8 @@
 
 # local binaries
 /muxagent
-cmd/muxagent/muxagent
+/cli/muxagent
+/cli/cmd/muxagent/muxagent
 /workspaceseed
 
 # local notes

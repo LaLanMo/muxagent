@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 )
 
 type Task struct {

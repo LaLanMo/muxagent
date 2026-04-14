@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
-	"github.com/LaLanMo/muxagent-cli/internal/appwireconv"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/appwireconv"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
 	"github.com/google/uuid"
 )
 

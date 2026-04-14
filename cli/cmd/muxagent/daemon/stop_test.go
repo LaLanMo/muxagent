@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/LaLanMo/muxagent-cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 func TestHandleStopTransportFailure_RetainsStateForLiveProcess(t *testing.T) {

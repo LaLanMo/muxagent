@@ -3,7 +3,7 @@ package appwire
 import (
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
 )
 
 type ApprovalRequest struct {

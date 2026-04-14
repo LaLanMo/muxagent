@@ -4,7 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 

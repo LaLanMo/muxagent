@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
 )
 
 func buildApprovalRequest(

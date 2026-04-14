@@ -3,7 +3,7 @@ package auth
 import (
 	"fmt"
 
-	"github.com/LaLanMo/muxagent-cli/internal/auth"
+	"github.com/LaLanMo/muxagent/cli/internal/auth"
 	"github.com/spf13/cobra"
 )
 

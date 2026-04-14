@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpbin"
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
-	"github.com/LaLanMo/muxagent-cli/internal/appwire"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/domain"
-	runtimeacp "github.com/LaLanMo/muxagent-cli/internal/runtime/acp"
+	"github.com/LaLanMo/muxagent/cli/internal/acpbin"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/domain"
+	runtimeacp "github.com/LaLanMo/muxagent/cli/internal/runtime/acp"
 )
 
 func TestResolveSettings_ClaudeInjectsWrapper(t *testing.T) {

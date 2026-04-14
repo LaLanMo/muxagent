@@ -19,16 +19,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpbin"
-	"github.com/LaLanMo/muxagent-cli/internal/codexbin"
-	"github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/version"
+	"github.com/LaLanMo/muxagent/cli/internal/acpbin"
+	"github.com/LaLanMo/muxagent/cli/internal/codexbin"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/version"
 	"github.com/spf13/cobra"
 	"golang.org/x/mod/semver"
 )
 
 const (
-	cliRepo                     = "LaLanMo/muxagent-cli"
+	cliRepo                     = "LaLanMo/muxagent"
+	cliReleaseTagPrefix         = "cli/"
 	releaseManifestName         = "SHA256SUMS"
 	releaseManifestSigName      = "SHA256SUMS.sig"
 	releaseLatestMaxBytes       = 1 << 20
@@ -527,7 +528,8 @@ func normalizeVersion(raw string) (string, error) {
 	if raw == "" {
 		return "", fmt.Errorf("empty version")
 	}
-	normalized := raw
+	normalized := strings.TrimSpace(raw)
+	normalized = strings.TrimPrefix(normalized, cliReleaseTagPrefix)
 	if !strings.HasPrefix(normalized, "v") {
 		normalized = "v" + normalized
 	}
@@ -535,6 +537,14 @@ func normalizeVersion(raw string) (string, error) {
 		return "", fmt.Errorf("invalid semver %q", raw)
 	}
 	return normalized, nil
+}
+
+func releaseTagForVersion(raw string) (string, error) {
+	normalized, err := normalizeVersion(raw)
+	if err != nil {
+		return "", err
+	}
+	return cliReleaseTagPrefix + normalized, nil
 }
 
 func displayVersion(v string) string {
@@ -622,6 +632,11 @@ func (u *updater) installWithMode(ctx context.Context, latest string, startupMod
 		return fmt.Errorf("resolve executable path: %w", err)
 	}
 
+	releaseTag, err := releaseTagForVersion(latest)
+	if err != nil {
+		return fmt.Errorf("invalid release version: %w", err)
+	}
+
 	lock, err := acquireUpdateLock(exePath + ".lock")
 	if err != nil {
 		return err
@@ -657,7 +672,7 @@ func (u *updater) installWithMode(ctx context.Context, latest string, startupMod
 	_ = os.Remove(archivePath)
 	defer os.Remove(archivePath)
 
-	if err := u.downloadVerifiedAsset(ctx, u.releaseAssetURL(latest, assetName), archivePath, expectedHash, releaseBundleMaxBytes, "release bundle"); err != nil {
+	if err := u.downloadVerifiedAsset(ctx, u.releaseAssetURL(releaseTag, assetName), archivePath, expectedHash, releaseBundleMaxBytes, "release bundle"); err != nil {
 		return err
 	}
 
@@ -735,18 +750,27 @@ func (u *updater) installWithMode(ctx context.Context, latest string, startupMod
 }
 
 func (u *updater) fetchAndVerifyManifest(ctx context.Context, latest string) (*releaseManifest, error) {
+	normalizedVersion, err := normalizeVersion(latest)
+	if err != nil {
+		return nil, fmt.Errorf("invalid release version: %w", err)
+	}
+	releaseTag, err := releaseTagForVersion(normalizedVersion)
+	if err != nil {
+		return nil, fmt.Errorf("invalid release version: %w", err)
+	}
+
 	manifest, err := u.fetchAndVerifyManifestFromURLs(
 		ctx,
-		u.releaseAssetURL(latest, releaseManifestName),
-		u.releaseAssetURL(latest, releaseManifestSigName),
+		u.releaseAssetURL(releaseTag, releaseManifestName),
+		u.releaseAssetURL(releaseTag, releaseManifestSigName),
 		"release manifest",
 		"release manifest signature",
 	)
 	if err != nil {
 		return nil, err
 	}
-	if manifest.Version != latest {
-		return nil, fmt.Errorf("release manifest version %q does not match latest release %q", manifest.Version, latest)
+	if manifest.Version != normalizedVersion {
+		return nil, fmt.Errorf("release manifest version %q does not match latest release %q", manifest.Version, normalizedVersion)
 	}
 	return manifest, nil
 }
@@ -926,6 +950,10 @@ func (u *updater) ensureBundledRuntime(ctx context.Context, tag string, forceIns
 	if err != nil {
 		return "", fmt.Errorf("resolve executable path: %w", err)
 	}
+	releaseTag, err := releaseTagForVersion(tag)
+	if err != nil {
+		return "", fmt.Errorf("invalid release version: %w", err)
+	}
 	destPath := u.runtimeInstallPath(runtimeID, exePath)
 	if !forceInstall {
 		if _, err := os.Stat(destPath); err == nil {
@@ -958,7 +986,7 @@ func (u *updater) ensureBundledRuntime(ctx context.Context, tag string, forceIns
 	_ = os.Remove(archivePath)
 	defer os.Remove(archivePath)
 
-	if err := u.downloadVerifiedAsset(ctx, u.releaseAssetURL(tag, assetName), archivePath, expectedHash, releaseBundleMaxBytes, "release bundle"); err != nil {
+	if err := u.downloadVerifiedAsset(ctx, u.releaseAssetURL(releaseTag, assetName), archivePath, expectedHash, releaseBundleMaxBytes, "release bundle"); err != nil {
 		return "", err
 	}
 

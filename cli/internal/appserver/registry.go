@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/privdir"
-	"github.com/LaLanMo/muxagent-cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/privdir"
+	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
 	"github.com/google/uuid"
 )
 

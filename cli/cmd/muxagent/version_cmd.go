@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	cliversion "github.com/LaLanMo/muxagent-cli/internal/version"
+	cliversion "github.com/LaLanMo/muxagent/cli/internal/version"
 	"github.com/spf13/cobra"
 )
 

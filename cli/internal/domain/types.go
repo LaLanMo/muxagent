@@ -3,7 +3,7 @@ package domain
 import (
 	"time"
 
-	"github.com/LaLanMo/muxagent-cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
 )
 
 // --- Session ---

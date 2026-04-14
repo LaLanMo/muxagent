@@ -3,7 +3,7 @@ package tasktui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/LaLanMo/muxagent-cli/internal/taskdomain"
+	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 )
 
 type failureAction int

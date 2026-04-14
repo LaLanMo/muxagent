@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "cli/v*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example v0.1.0)"
+        description: "Release version (for example 0.1.0 or v0.1.0)"
         required: true
       ref:
         description: "Git ref to release from"
@@ -36,30 +36,33 @@ jobs:
           set -euo pipefail
 
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            version="${{ inputs.version }}"
+            raw_version="${{ inputs.version }}"
             ref_name="${{ inputs.ref }}"
           else
-            version="${GITHUB_REF_NAME}"
+            raw_version="${GITHUB_REF_NAME}"
             ref_name="${GITHUB_REF}"
           fi
 
-          case "$version" in
-            v*) ;;
-            *) version="v$version" ;;
+          case "$raw_version" in
+            cli/v*) version="${raw_version#cli/}" ;;
+            cli/*) version="v${raw_version#cli/}" ;;
+            v*) version="$raw_version" ;;
+            *) version="v$raw_version" ;;
           esac
 
+          release_tag="cli/$version"
+
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
 
-      - name: Check out muxagent-cli
+      - name: Check out repository
         uses: actions/checkout@v4
         with:
-          path: muxagent-cli
           ref: ${{ steps.meta.outputs.ref_name }}
 
       - name: Resolve release target SHA
         id: target
-        working-directory: muxagent-cli
         shell: bash
         run: |
           set -euo pipefail
@@ -68,14 +71,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: muxagent-cli/go.mod
+          go-version-file: cli/go.mod
 
       - name: Run tests
-        working-directory: muxagent-cli
+        working-directory: cli
         run: go test ./...
 
       - name: Build muxagent binaries
-        working-directory: muxagent-cli
+        working-directory: cli
         shell: bash
         run: |
           set -euo pipefail
@@ -86,7 +89,7 @@ jobs:
             local goarch="$2"
             local output="$3"
             CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-              go build -trimpath -ldflags="-s -w -X github.com/LaLanMo/muxagent-cli/internal/version.Version=${{ steps.meta.outputs.version }}" \
+              go build -trimpath -ldflags="-s -w -X github.com/LaLanMo/muxagent/cli/internal/version.Version=${{ steps.meta.outputs.version }}" \
               -o "$BUILD_DIR/$output" ./cmd/muxagent
           }
 
@@ -98,15 +101,15 @@ jobs:
           build windows arm64 muxagent-windows-arm64.exe
 
       - name: Fetch claude-agent-acp binaries
-        working-directory: muxagent-cli
+        working-directory: cli
         run: bash ./scripts/build_claude_agent_acp.sh "$BUILD_DIR"
 
       - name: Fetch codex-acp binaries
-        working-directory: muxagent-cli
+        working-directory: cli
         run: bash ./scripts/build_codex_acp.sh "$BUILD_DIR"
 
       - name: Package release bundles
-        working-directory: muxagent-cli
+        working-directory: cli
         run: bash ./scripts/package_release_bundles.sh "$BUILD_DIR" "$RELEASE_DIR"
 
       - name: Verify signing key is configured
@@ -121,7 +124,7 @@ jobs:
           MUXAGENT_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.MUXAGENT_RELEASE_SIGNING_PRIVATE_KEY }}
 
       - name: Verify embedded signing key matches secret
-        working-directory: muxagent-cli
+        working-directory: cli
         shell: bash
         run: |
           set -euo pipefail
@@ -169,7 +172,7 @@ jobs:
           MUXAGENT_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.MUXAGENT_RELEASE_SIGNING_PRIVATE_KEY }}
 
       - name: Sign release manifest
-        working-directory: muxagent-cli
+        working-directory: cli
         env:
           MUXAGENT_RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.MUXAGENT_RELEASE_SIGNING_PRIVATE_KEY }}
         run: go run ./scripts/sign_release -dir "$RELEASE_DIR" -version "${{ steps.meta.outputs.version }}"
@@ -180,15 +183,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${{ steps.meta.outputs.version }}"
+          release_tag="${{ steps.meta.outputs.release_tag }}"
           target="${{ steps.target.outputs.sha }}"
 
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$version" >/dev/null 2>&1; then
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$release_tag" >/dev/null 2>&1; then
             exit 0
           fi
 
           gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/tags/$version" \
+            -f ref="refs/tags/$release_tag" \
             -f sha="$target"
 
       - name: Create or update draft release
@@ -198,12 +201,13 @@ jobs:
         run: |
           set -euo pipefail
           version="${{ steps.meta.outputs.version }}"
+          release_tag="${{ steps.meta.outputs.release_tag }}"
           assets=("$RELEASE_DIR"/*)
 
-          if gh release view "$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$version" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          if gh release view "$release_tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$release_tag" "${assets[@]}" --clobber --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$version" "${assets[@]}" \
+            gh release create "$release_tag" "${assets[@]}" \
               --draft \
               --repo "$GITHUB_REPOSITORY" \
               --verify-tag \

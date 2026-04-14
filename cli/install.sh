@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-REPO="${MUXAGENT_REPO:-LaLanMo/muxagent-cli}"
+REPO="${MUXAGENT_REPO:-LaLanMo/muxagent}"
 BASE_URL="${MUXAGENT_RELEASE_BASE_URL:-https://github.com/$REPO/releases/download}"
 LATEST_BASE_URL="${MUXAGENT_RELEASE_LATEST_BASE_URL:-https://github.com/$REPO/releases/latest/download}"
 VERSION="${MUXAGENT_VERSION:-latest}"
@@ -58,8 +58,10 @@ normalize_version() {
   raw="$1"
   case "$raw" in
     latest) echo "latest" ;;
-    v*) echo "$raw" ;;
-    *) echo "v$raw" ;;
+    cli/v*) echo "$raw" ;;
+    cli/*) echo "cli/v${raw#cli/}" ;;
+    v*) echo "cli/$raw" ;;
+    *) echo "cli/v$raw" ;;
   esac
 }
 
@@ -109,6 +111,8 @@ DISPLAY_VERSION="$TAG"
 if [ "$TAG" = "latest" ]; then
   DOWNLOAD_BASE="$LATEST_BASE_URL"
   DISPLAY_VERSION="latest"
+else
+  DISPLAY_VERSION="${TAG#cli/}"
 fi
 
 cleanup() {

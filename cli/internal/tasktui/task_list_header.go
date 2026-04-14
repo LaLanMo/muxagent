@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 )
 
 type versionMeta struct {

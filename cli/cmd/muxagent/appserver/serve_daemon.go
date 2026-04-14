@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	internalappserver "github.com/LaLanMo/muxagent-cli/internal/appserver"
-	appconfig "github.com/LaLanMo/muxagent-cli/internal/config"
-	"github.com/LaLanMo/muxagent-cli/internal/filelock"
-	cliversion "github.com/LaLanMo/muxagent-cli/internal/version"
+	internalappserver "github.com/LaLanMo/muxagent/cli/internal/appserver"
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/filelock"
+	cliversion "github.com/LaLanMo/muxagent/cli/internal/version"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
