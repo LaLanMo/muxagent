@@ -57,6 +57,26 @@ export interface ServiceStatusResult {
   connected_clients: number;
 }
 
+export interface RuntimeStatusAutomaticDto {
+  runtime_id: string;
+  runtime_name: string;
+  launcher?: string;
+  available: boolean;
+  detected: boolean;
+}
+
+export interface RuntimeStatusEntryDto {
+  runtime_id: string;
+  runtime_name: string;
+  launcher?: string;
+  available: boolean;
+}
+
+export interface RuntimeStatusResult {
+  automatic: RuntimeStatusAutomaticDto;
+  runtimes: RuntimeStatusEntryDto[];
+}
+
 export interface TaskCountsDto {
   running: number;
   awaiting: number;

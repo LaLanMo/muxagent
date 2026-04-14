@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
 	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/claudeexec"
 	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor/codex"
@@ -24,6 +25,12 @@ type runtimeService interface {
 }
 
 type runtimeServiceFactory func(workDir string) (runtimeService, error)
+
+type appServerTaskRuntimeDefinition struct {
+	RuntimeID   appconfig.RuntimeID
+	Launcher    string
+	NewExecutor func() taskexecutor.Executor
+}
 
 type runtimeManager struct {
 	factory runtimeServiceFactory
@@ -46,10 +53,99 @@ type workspaceActor struct {
 }
 
 func defaultRuntimeServiceFactory(workDir string) (runtimeService, error) {
-	return taskruntime.NewService(
-		workDir,
-		taskexecutor.NewRouter(newCodexExecutorForAppServer(), claudeexec.New(""), opencodehttp.New("")),
-	)
+	return taskruntime.NewService(workDir, newAppServerTaskRouter())
+}
+
+func appServerTaskRuntimeDefinitions() []appServerTaskRuntimeDefinition {
+	return []appServerTaskRuntimeDefinition{
+		{
+			RuntimeID: appconfig.RuntimeCodex,
+			Launcher:  "codex",
+			NewExecutor: func() taskexecutor.Executor {
+				return newCodexExecutorForAppServer()
+			},
+		},
+		{
+			RuntimeID: appconfig.RuntimeClaudeCode,
+			Launcher:  "claude",
+			NewExecutor: func() taskexecutor.Executor {
+				return claudeexec.New("")
+			},
+		},
+		{
+			RuntimeID: appconfig.RuntimeOpenCode,
+			Launcher:  "opencode",
+			NewExecutor: func() taskexecutor.Executor {
+				return opencodehttp.New("")
+			},
+		},
+	}
+}
+
+func newAppServerTaskRouter() *taskexecutor.Router {
+	var codexExecutor taskexecutor.Executor
+	var claudeExecutor taskexecutor.Executor
+	var opencodeExecutor taskexecutor.Executor
+
+	for _, runtime := range appServerTaskRuntimeDefinitions() {
+		executor := runtime.NewExecutor()
+		switch runtime.RuntimeID {
+		case appconfig.RuntimeCodex:
+			codexExecutor = executor
+		case appconfig.RuntimeClaudeCode:
+			claudeExecutor = executor
+		case appconfig.RuntimeOpenCode:
+			opencodeExecutor = executor
+		}
+	}
+
+	return taskexecutor.NewRouter(codexExecutor, claudeExecutor, opencodeExecutor)
+}
+
+func probeAppServerRuntimeStatus(lookPath func(string) (string, error)) runtimeStatusResult {
+	definitions := appServerTaskRuntimeDefinitions()
+	runtimes := make([]runtimeStatusEntryDTO, 0, len(definitions))
+	availabilityByID := make(map[appconfig.RuntimeID]bool, len(definitions))
+
+	for _, runtime := range definitions {
+		available := appServerRuntimeAvailable(runtime.Launcher, lookPath)
+		availabilityByID[runtime.RuntimeID] = available
+		runtimes = append(runtimes, runtimeStatusEntryDTO{
+			RuntimeID:   runtime.RuntimeID,
+			RuntimeName: runtimeDisplayName(runtime.RuntimeID),
+			Launcher:    runtime.Launcher,
+			Available:   available,
+		})
+	}
+
+	automaticRuntimeID, detected := appconfig.DetectPreferredRuntime(lookPath)
+	return runtimeStatusResult{
+		Automatic: runtimeStatusAutomaticDTO{
+			RuntimeID:   automaticRuntimeID,
+			RuntimeName: runtimeDisplayName(automaticRuntimeID),
+			Launcher:    appServerTaskRuntimeLauncher(automaticRuntimeID),
+			Available:   availabilityByID[automaticRuntimeID],
+			Detected:    detected,
+		},
+		Runtimes: runtimes,
+	}
+}
+
+func appServerTaskRuntimeLauncher(runtimeID appconfig.RuntimeID) string {
+	for _, runtime := range appServerTaskRuntimeDefinitions() {
+		if runtime.RuntimeID == runtimeID {
+			return runtime.Launcher
+		}
+	}
+	return ""
+}
+
+func appServerRuntimeAvailable(launcher string, lookPath func(string) (string, error)) bool {
+	if lookPath == nil || strings.TrimSpace(launcher) == "" {
+		return false
+	}
+	_, err := lookPath(launcher)
+	return err == nil
 }
 
 func newCodexExecutorForAppServer() taskexecutor.Executor {

@@ -234,6 +234,21 @@ type runtimeEntryDTO struct {
 	EnvKeys     []string            `json:"env_keys,omitempty"`
 }
 
+type runtimeStatusAutomaticDTO struct {
+	RuntimeID   appconfig.RuntimeID `json:"runtime_id"`
+	RuntimeName string              `json:"runtime_name"`
+	Launcher    string              `json:"launcher,omitempty"`
+	Available   bool                `json:"available"`
+	Detected    bool                `json:"detected"`
+}
+
+type runtimeStatusEntryDTO struct {
+	RuntimeID   appconfig.RuntimeID `json:"runtime_id"`
+	RuntimeName string              `json:"runtime_name"`
+	Launcher    string              `json:"launcher,omitempty"`
+	Available   bool                `json:"available"`
+}
+
 type configPromptDTO struct {
 	Alias        string `json:"alias"`
 	NodeName     string `json:"node_name"`

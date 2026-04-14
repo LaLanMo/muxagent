@@ -393,6 +393,126 @@ func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
 	if !slices.Contains(result.Capabilities.Methods, methodTaskGetAncestry) {
 		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskGetAncestry, result.Capabilities.Methods)
 	}
+	if !slices.Contains(result.Capabilities.Methods, methodRuntimeStatus) {
+		t.Fatalf("initialize capabilities missing %q: %#v", methodRuntimeStatus, result.Capabilities.Methods)
+	}
+}
+
+func TestServerRuntimeStatusReflectsAppServerTaskRuntimes(t *testing.T) {
+	t.Parallel()
+
+	wantLaunchers := map[appconfig.RuntimeID]string{
+		appconfig.RuntimeCodex:      "codex",
+		appconfig.RuntimeClaudeCode: "claude",
+		appconfig.RuntimeOpenCode:   "opencode",
+	}
+
+	tests := []struct {
+		name               string
+		availableLaunchers map[string]bool
+		wantAutomatic      appconfig.RuntimeID
+		wantDetected       bool
+		wantAvailability   map[appconfig.RuntimeID]bool
+	}{
+		{
+			name:               "codex detected first",
+			availableLaunchers: map[string]bool{"codex": true, "claude": true},
+			wantAutomatic:      appconfig.RuntimeCodex,
+			wantDetected:       true,
+			wantAvailability: map[appconfig.RuntimeID]bool{
+				appconfig.RuntimeCodex:      true,
+				appconfig.RuntimeClaudeCode: true,
+				appconfig.RuntimeOpenCode:   false,
+			},
+		},
+		{
+			name:               "claude detected when codex missing",
+			availableLaunchers: map[string]bool{"claude": true},
+			wantAutomatic:      appconfig.RuntimeClaudeCode,
+			wantDetected:       true,
+			wantAvailability: map[appconfig.RuntimeID]bool{
+				appconfig.RuntimeCodex:      false,
+				appconfig.RuntimeClaudeCode: true,
+				appconfig.RuntimeOpenCode:   false,
+			},
+		},
+		{
+			name:               "codex fallback when preferred runtimes missing",
+			availableLaunchers: map[string]bool{"opencode": true},
+			wantAutomatic:      appconfig.RuntimeCodex,
+			wantDetected:       false,
+			wantAvailability: map[appconfig.RuntimeID]bool{
+				appconfig.RuntimeCodex:      false,
+				appconfig.RuntimeClaudeCode: false,
+				appconfig.RuntimeOpenCode:   true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+				lookPath: func(binary string) (string, error) {
+					if tt.availableLaunchers[binary] {
+						return filepath.Join("/tmp/fake-bin", binary), nil
+					}
+					return "", os.ErrNotExist
+				},
+			})
+			server.markInitialized()
+
+			resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+				Method: methodRuntimeStatus,
+				Params: mustRawParams(t, map[string]any{}),
+			})
+			if rpcErr != nil {
+				t.Fatalf("runtime.status rpc error: %+v", rpcErr)
+			}
+
+			result := resultAny.(runtimeStatusResult)
+			if result.Automatic.RuntimeID != tt.wantAutomatic {
+				t.Fatalf("automatic runtime_id = %q, want %q", result.Automatic.RuntimeID, tt.wantAutomatic)
+			}
+			if result.Automatic.RuntimeName != runtimeDisplayName(tt.wantAutomatic) {
+				t.Fatalf("automatic runtime_name = %q, want %q", result.Automatic.RuntimeName, runtimeDisplayName(tt.wantAutomatic))
+			}
+			if result.Automatic.Launcher != wantLaunchers[tt.wantAutomatic] {
+				t.Fatalf("automatic launcher = %q, want %q", result.Automatic.Launcher, wantLaunchers[tt.wantAutomatic])
+			}
+			if result.Automatic.Detected != tt.wantDetected {
+				t.Fatalf("automatic detected = %v, want %v", result.Automatic.Detected, tt.wantDetected)
+			}
+			if result.Automatic.Available != tt.wantAvailability[tt.wantAutomatic] {
+				t.Fatalf("automatic available = %v, want %v", result.Automatic.Available, tt.wantAvailability[tt.wantAutomatic])
+			}
+
+			runtimeIDs := make([]appconfig.RuntimeID, 0, len(result.Runtimes))
+			for _, runtime := range result.Runtimes {
+				runtimeIDs = append(runtimeIDs, runtime.RuntimeID)
+				wantAvailable, ok := tt.wantAvailability[runtime.RuntimeID]
+				if !ok {
+					t.Fatalf("unexpected runtime %q in runtime.status", runtime.RuntimeID)
+				}
+				if runtime.Available != wantAvailable {
+					t.Fatalf("runtime %q available = %v, want %v", runtime.RuntimeID, runtime.Available, wantAvailable)
+				}
+				if runtime.RuntimeName != runtimeDisplayName(runtime.RuntimeID) {
+					t.Fatalf("runtime %q runtime_name = %q, want %q", runtime.RuntimeID, runtime.RuntimeName, runtimeDisplayName(runtime.RuntimeID))
+				}
+				if runtime.Launcher != wantLaunchers[runtime.RuntimeID] {
+					t.Fatalf("runtime %q launcher = %q, want %q", runtime.RuntimeID, runtime.Launcher, wantLaunchers[runtime.RuntimeID])
+				}
+			}
+			if !slices.Equal(runtimeIDs, []appconfig.RuntimeID{
+				appconfig.RuntimeCodex,
+				appconfig.RuntimeClaudeCode,
+				appconfig.RuntimeOpenCode,
+			}) {
+				t.Fatalf("runtime.status runtimes = %#v, want codex/claude-code/opencode", runtimeIDs)
+			}
+		})
+	}
 }
 
 func TestServerTaskGetAncestryReturnsRootToParentChain(t *testing.T) {
@@ -2155,6 +2275,7 @@ type testServerOptions struct {
 	loadCatalog               func() (*taskconfig.Catalog, error)
 	loadRegistry              func() (taskconfig.Registry, error)
 	loadTaskLaunchPreferences func() appconfig.TaskLaunchPreferences
+	lookPath                  func(string) (string, error)
 }
 
 func newTestServerWithOptions(t *testing.T, stateDir string, opts testServerOptions) *Server {
@@ -2166,6 +2287,7 @@ func newTestServerWithOptions(t *testing.T, stateDir string, opts testServerOpti
 		LoadCatalog:               opts.loadCatalog,
 		LoadRegistry:              opts.loadRegistry,
 		LoadTaskLaunchPreferences: opts.loadTaskLaunchPreferences,
+		LookPath:                  opts.lookPath,
 		RuntimeFactory:            opts.runtimeFactory,
 		WorktreeAvailable:         func(string) bool { return true },
 	})

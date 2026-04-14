@@ -14,6 +14,7 @@ import type {
   InitializeResult,
   JsonRpcNotification,
   NotificationEnvelopeParams,
+  RuntimeStatusResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
   TaskGetAncestryResult,
@@ -69,6 +70,10 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   status(): Promise<ServiceStatusResult> {
     return this.request("service.status");
+  }
+
+  runtimeStatus(): Promise<RuntimeStatusResult> {
+    return this.request("runtime.status");
   }
 
   workspaceList(): Promise<WorkspaceListResult> {

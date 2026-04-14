@@ -161,7 +161,14 @@ function ConfigEditorRoute() {
 
 function SettingsRoute() {
   const model = useSettingsScreen();
-  return <SettingsScreen server={model.server} shell={model.shell} status={model.status} />;
+  return (
+    <SettingsScreen
+      appServerRows={model.appServerRows}
+      automaticRuntime={model.automaticRuntime}
+      runtimeRows={model.runtimeRows}
+      shell={model.shell}
+    />
+  );
 }
 
 export function App() {

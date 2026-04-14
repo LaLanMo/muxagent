@@ -11,6 +11,7 @@ import type {
   ConfigValidateResult,
   InitializeResult,
   NotificationEnvelopeParams,
+  RuntimeStatusResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
   TaskGetAncestryResult,
@@ -42,6 +43,7 @@ export interface TaskBackendClient {
   connect(): Promise<InitializeResult>;
   disconnect(): Promise<void>;
   status(): Promise<ServiceStatusResult>;
+  runtimeStatus(): Promise<RuntimeStatusResult>;
   workspaceList(): Promise<WorkspaceListResult>;
   workspaceAdd(params: WorkspaceAddParams): Promise<WorkspaceAddResult>;
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult>;

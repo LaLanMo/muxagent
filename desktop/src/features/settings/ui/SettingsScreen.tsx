@@ -1,22 +1,59 @@
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
+import {
+  type SettingsRowModel,
+  type SettingsStatusTone,
+} from "@/features/settings/model/use-settings-screen";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
-import type { InitializeResult, ServiceStatusResult } from "@/rpc/types";
 
 type SettingsScreenProps = {
   shell: ShellChromeModel;
-  status?: ServiceStatusResult;
-  server?: InitializeResult;
+  appServerRows: SettingsRowModel[];
+  automaticRuntime: SettingsRowModel;
+  runtimeRows: SettingsRowModel[];
 };
+
+function statusToneClass(tone: SettingsStatusTone | undefined): string {
+  switch (tone) {
+    case "available":
+      return " settings-status--available";
+    case "warning":
+      return " settings-status--warning";
+    default:
+      return "";
+  }
+}
+
+function SettingsRow({
+  row,
+  testId,
+}: {
+  row: SettingsRowModel;
+  testId?: string;
+}) {
+  return (
+    <div className="settings-row" data-testid={testId}>
+      <div className="settings-row__copy">
+        <span className="settings-row__hint">{row.label}</span>
+        <strong className={row.monospace ? "settings-row__value" : undefined}>
+          {row.value}
+        </strong>
+        {row.detail ? <p>{row.detail}</p> : null}
+      </div>
+      {row.statusLabel ? (
+        <span className={`settings-status${statusToneClass(row.statusTone)}`}>
+          {row.statusLabel}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 export function SettingsScreen({
   shell,
-  status,
-  server,
+  appServerRows,
+  automaticRuntime,
+  runtimeRows,
 }: SettingsScreenProps) {
-  const serverAvailable = Boolean(status || server);
-  const serverLabel = server?.server_name ?? "muxagent app-server";
-  const stateDirectory = status?.state_dir ?? "No state directory available";
-
   return (
     <DesktopShellFrame
       addWorkspaceDisabled={shell.phase !== "connected"}
@@ -31,21 +68,31 @@ export function SettingsScreen({
     >
       <section className="stack-screen" data-testid="settings-screen">
         <article className="settings-panel">
-          <div className="settings-section">
+          <div className="settings-section" data-testid="settings-app-server-section">
             <div className="settings-section__header">
-              <span className="settings-section__eyebrow">Runtime</span>
+              <span className="settings-section__eyebrow">App Server</span>
+              <p className="settings-section__body-copy">
+                Read-only connection details from the muxagent app-server backing
+                this desktop session.
+              </p>
             </div>
-            <div className="settings-row">
-              <div className="settings-row__copy">
-                <strong>{serverLabel}</strong>
-                <p>{stateDirectory}</p>
-              </div>
-              <span
-                className={`settings-status${serverAvailable ? " settings-status--available" : ""}`}
-              >
-                {serverAvailable ? "Available" : "Not found"}
-              </span>
+            {appServerRows.map((row) => (
+              <SettingsRow key={row.id} row={row} />
+            ))}
+          </div>
+
+          <div className="settings-section" data-testid="settings-runtime-section">
+            <div className="settings-section__header">
+              <span className="settings-section__eyebrow">Task Runtime</span>
+              <p className="settings-section__body-copy">
+                Automatic runtime selection and launcher availability for the
+                task runtimes this app-server can actually start.
+              </p>
             </div>
+            <SettingsRow row={automaticRuntime} testId="settings-runtime-automatic" />
+            {runtimeRows.map((row) => (
+              <SettingsRow key={row.id} row={row} testId="settings-runtime-row" />
+            ))}
           </div>
         </article>
       </section>

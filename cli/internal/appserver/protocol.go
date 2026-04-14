@@ -48,6 +48,7 @@ const (
 	methodConfigPromptGet     = "config.prompt.get"
 	methodConfigPromptSave    = "config.prompt.save"
 	methodRuntimeList         = "runtime.list"
+	methodRuntimeStatus       = "runtime.status"
 )
 
 const (
@@ -438,6 +439,11 @@ type configPromptSaveResult struct {
 
 type runtimeListResult struct {
 	Runtimes []runtimeEntryDTO `json:"runtimes"`
+}
+
+type runtimeStatusResult struct {
+	Automatic runtimeStatusAutomaticDTO `json:"automatic"`
+	Runtimes  []runtimeStatusEntryDTO   `json:"runtimes"`
 }
 
 type artifactListResult struct {

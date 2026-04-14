@@ -74,9 +74,7 @@ test("returns to the connect screen when the backend dies after connect", async 
   });
 });
 
-test("adds and persists multiple workspaces through the real app-server", async ({
-  page,
-}) => {
+test("adds and persists multiple workspaces through the real app-server", async ({ page }) => {
   test.slow();
 
   await withSpawnedDesktopServer(async ({ url, workDir, altWorkDir }) => {
@@ -120,6 +118,29 @@ test("removes workspaces through the real app-server sidebar", async ({ page }) 
     await expect(
       page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
     ).toContainText("workspace");
+  });
+});
+
+test("renders runtime status in settings through the real app-server", async ({ page }) => {
+  test.slow();
+
+  await withSpawnedDesktopServer(async ({ url, workDir }) => {
+    await page.goto(`${url}/`);
+    await addWorkspace(page, workDir);
+
+    await page.getByRole("link", { name: /^Settings$/i }).click();
+    await expect(page.getByTestId("settings-screen")).toBeVisible();
+    await expect(page.getByTestId("settings-app-server-section")).toContainText(
+      "App Server",
+    );
+    await expect(page.getByTestId("settings-runtime-section")).toContainText(
+      "Task Runtime",
+    );
+    await expect(page.getByTestId("settings-runtime-automatic")).toBeVisible();
+    await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
+    await expect(page.getByTestId("settings-workspace-row")).toHaveCount(0);
+    await expect(page.getByTestId("workspace-rename-button")).toHaveCount(0);
+    await expect(page.getByTestId("workspace-remove-button")).toHaveCount(0);
   });
 });
 

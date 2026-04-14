@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ type Options struct {
 	LoadRegistry              func() (taskconfig.Registry, error)
 	LoadTaskLaunchPreferences func() appconfig.TaskLaunchPreferences
 	WorktreeAvailable         func(string) bool
+	LookPath                  func(string) (string, error)
 	RuntimeFactory            runtimeServiceFactory
 	Now                       func() time.Time
 }
@@ -46,6 +48,7 @@ type Server struct {
 	loadRegistry              func() (taskconfig.Registry, error)
 	loadTaskLaunchPreferences func() appconfig.TaskLaunchPreferences
 	worktreeAvailable         func(string) bool
+	lookPath                  func(string) (string, error)
 	now                       func() time.Time
 	lockPath                  string
 	registry                  *workspaceRegistry
@@ -116,6 +119,9 @@ func New(opts Options) (*Server, error) {
 			return err == nil
 		}
 	}
+	if opts.LookPath == nil {
+		opts.LookPath = exec.LookPath
+	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
@@ -148,6 +154,7 @@ func New(opts Options) (*Server, error) {
 		loadRegistry:              opts.LoadRegistry,
 		loadTaskLaunchPreferences: opts.LoadTaskLaunchPreferences,
 		worktreeAvailable:         opts.WorktreeAvailable,
+		lookPath:                  opts.LookPath,
 		now:                       opts.Now,
 		lockPath:                  singletonLockPath(stateDir),
 		registry:                  registry,
@@ -411,6 +418,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodConfigPromptGet,
 					methodConfigPromptSave,
 					methodRuntimeList,
+					methodRuntimeStatus,
 				},
 				Notifications: []string{methodNotification},
 			},
@@ -1107,6 +1115,9 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
 		}
 		return runtimeListResult{Runtimes: runtimeListDTOs(runtimeCfg)}, nil, stopModeContinue, nil
+
+	case methodRuntimeStatus:
+		return probeAppServerRuntimeStatus(s.lookPath), nil, stopModeContinue, nil
 
 	default:
 		return nil, nil, stopModeContinue, &rpcError{Code: errorCodeMethodNotFound, Message: fmt.Sprintf("method %q not found", req.Method)}

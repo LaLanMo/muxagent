@@ -58,6 +58,7 @@ export function useAppSessionController() {
       setConnected(
         bootstrap.server,
         bootstrap.status,
+        bootstrap.runtimeStatus,
         bootstrap.catalog,
         bootstrap.workspaces,
       );

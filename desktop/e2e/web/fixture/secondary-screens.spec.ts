@@ -239,8 +239,10 @@ test("renders configs and settings from the desktop shell", async ({ page }) => 
 
   await page.getByRole("link", { name: /^Settings$/i }).click();
   await expect(page.getByTestId("settings-screen")).toBeVisible();
-  await expect(page.getByText("muxagent app-server")).toBeVisible();
-  await expect(page.getByText("Available")).toBeVisible();
+  await expect(page.getByTestId("settings-app-server-section")).toContainText("App Server");
+  await expect(page.getByTestId("settings-runtime-section")).toContainText("Task Runtime");
+  await expect(page.getByTestId("settings-runtime-automatic")).toContainText("Codex");
+  await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
   await expect(page.getByText("Protocol")).toHaveCount(0);
   await expect(page.getByText("Version")).toHaveCount(0);
 });

@@ -38,8 +38,13 @@ test("keeps settings sparse and removes legacy workspace management controls", a
   await expect(page.getByText("Protocol")).toHaveCount(0);
   await expect(page.getByText("Version")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
-  await expect(page.getByText("muxagent app-server")).toBeVisible();
-  await expect(page.getByText("Available")).toBeVisible();
+  await expect(page.getByTestId("settings-app-server-section")).toContainText("App Server");
+  await expect(page.getByTestId("settings-runtime-section")).toContainText("Task Runtime");
+  await expect(page.getByTestId("settings-runtime-automatic")).toContainText("Codex");
+  await expect(page.getByTestId("settings-runtime-automatic")).toContainText("Detected");
+  await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
+  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "Claude Code" })).toContainText("Available");
+  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "OpenCode" })).toContainText("Unavailable");
 });
 
 test("uses a single active destination state between Tasks and workspace rows", async ({ page }) => {

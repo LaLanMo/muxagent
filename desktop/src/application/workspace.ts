@@ -2,6 +2,7 @@ import type { DesktopRuntime } from "@/platform/contract";
 import type {
   ConfigCatalogResult,
   InitializeResult,
+  RuntimeStatusResult,
   ServiceStatusResult,
   TaskViewDto,
   WorkspaceSummaryDto,
@@ -10,6 +11,7 @@ import type {
 export type ServerBootstrap = {
   server: InitializeResult;
   status: ServiceStatusResult;
+  runtimeStatus: RuntimeStatusResult;
   catalog: ConfigCatalogResult;
   workspaces: WorkspaceSummaryDto[];
 };
@@ -32,7 +34,8 @@ export async function connectServer(
   runtime: DesktopRuntime,
 ): Promise<ServerBootstrap> {
   const server = await runtime.backend.connect();
-  const [status, catalog, workspaceList] = await Promise.all([
+  const [runtimeStatus, status, catalog, workspaceList] = await Promise.all([
+    runtime.backend.runtimeStatus(),
     runtime.backend.status(),
     runtime.backend.configCatalog(),
     runtime.backend.workspaceList(),
@@ -41,6 +44,7 @@ export async function connectServer(
   return {
     server,
     status,
+    runtimeStatus,
     catalog,
     workspaces: workspaceList.workspaces,
   };
@@ -67,26 +71,6 @@ export async function getWorkspace(
     throw new Error("Workspace id is required");
   }
   const result = await runtime.backend.workspaceGet(trimmedWorkspaceId);
-  return result.workspace;
-}
-
-export async function renameWorkspace(
-  runtime: DesktopRuntime,
-  workspaceId: string,
-  displayName: string,
-): Promise<WorkspaceSummaryDto> {
-  const trimmedWorkspaceId = workspaceId.trim();
-  const trimmedDisplayName = displayName.trim();
-  if (!trimmedWorkspaceId) {
-    throw new Error("Workspace id is required");
-  }
-  if (!trimmedDisplayName) {
-    throw new Error("Workspace name is required");
-  }
-  const result = await runtime.backend.workspaceUpdate({
-    workspace_id: trimmedWorkspaceId,
-    display_name: trimmedDisplayName,
-  });
   return result.workspace;
 }
 

@@ -3,6 +3,7 @@ import type { TaskSurfaceReturnState } from "@/domain/routes";
 import type {
   ConfigCatalogResult,
   InitializeResult,
+  RuntimeStatusResult,
   ServiceStatusResult,
   WorkspaceSummaryDto,
 } from "@/rpc/types";
@@ -12,6 +13,7 @@ interface WorkspaceState {
   bootstrapPending: boolean;
   server?: InitializeResult;
   status?: ServiceStatusResult;
+  runtimeStatus?: RuntimeStatusResult;
   catalog?: ConfigCatalogResult;
   workspaces: WorkspaceSummaryDto[];
   workspaceReconcileCounts: Record<string, number>;
@@ -23,6 +25,7 @@ interface WorkspaceState {
   setConnected: (
     server: InitializeResult,
     status: ServiceStatusResult,
+    runtimeStatus: RuntimeStatusResult,
     catalog: ConfigCatalogResult,
     workspaces: WorkspaceSummaryDto[],
   ) => void;
@@ -59,6 +62,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       bootstrapPending: false,
       server: state.server,
       status: state.status,
+      runtimeStatus: undefined,
       catalog: state.catalog,
       workspaceReconcileCounts: state.workspaceReconcileCounts,
       error: undefined,
@@ -69,6 +73,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       bootstrapPending: true,
       server: undefined,
       status: undefined,
+      runtimeStatus: undefined,
       catalog: undefined,
       workspaces: [],
       workspaceReconcileCounts: {},
@@ -76,12 +81,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       taskSurfaceReturnContext: undefined,
       error: undefined,
     }),
-  setConnected: (server, status, catalog, workspaces) =>
+  setConnected: (server, status, runtimeStatus, catalog, workspaces) =>
     set((state) => ({
       phase: "connected",
       bootstrapPending: false,
       server,
       status,
+      runtimeStatus,
       catalog,
       workspaces: sortWorkspaces(workspaces),
       workspaceReconcileCounts: state.workspaceReconcileCounts,
@@ -100,6 +106,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       bootstrapPending: false,
       server: undefined,
       status: undefined,
+      runtimeStatus: undefined,
       catalog: undefined,
       workspaces: [],
       workspaceReconcileCounts: {},
@@ -192,6 +199,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       bootstrapPending: false,
       server: undefined,
       status: undefined,
+      runtimeStatus: undefined,
       catalog: undefined,
       workspaces: [],
       workspaceReconcileCounts: {},
@@ -205,6 +213,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       bootstrapPending: true,
       server: undefined,
       status: undefined,
+      runtimeStatus: undefined,
       catalog: undefined,
       workspaces: [],
       workspaceReconcileCounts: {},

@@ -202,6 +202,7 @@ export type FixtureState = {
   pendingSyncCompletionByWorkspaceId: Record<string, boolean>;
   configs: FixtureConfig[];
   runtimes: FixtureRuntimeOption[];
+  runtimeStatus: FixtureRuntimeStatus;
 };
 
 type FixtureRuntimeOption = {
@@ -210,6 +211,26 @@ type FixtureRuntimeOption = {
   command?: string;
   args?: string[];
   configured: boolean;
+};
+
+type FixtureRuntimeStatus = {
+  automatic: FixtureRuntimeAutomatic;
+  runtimes: FixtureRuntimeStatusEntry[];
+};
+
+type FixtureRuntimeAutomatic = {
+  runtime_id: string;
+  runtime_name: string;
+  launcher?: string;
+  available: boolean;
+  detected: boolean;
+};
+
+type FixtureRuntimeStatusEntry = {
+  runtime_id: string;
+  runtime_name: string;
+  launcher?: string;
+  available: boolean;
 };
 
 type FixtureConfigDraft = {
@@ -306,6 +327,7 @@ export class FixtureRuntime {
       pendingSyncCompletionByWorkspaceId: {},
       configs: this.defaultConfigs(),
       runtimes: this.defaultRuntimes(),
+      runtimeStatus: this.defaultRuntimeStatus(),
     };
   }
 
@@ -388,6 +410,7 @@ export class FixtureRuntime {
               "config.prompt.get",
               "config.prompt.save",
               "runtime.list",
+              "runtime.status",
               "task.list",
               "task.get",
               "task.get_ancestry",
@@ -406,7 +429,7 @@ export class FixtureRuntime {
           server_version: "fixture",
           protocol_version: 1,
           workspace_count: state.workspaces.length,
-          runtime_count: 0,
+          runtime_count: state.runtimes.length,
           connected_clients: 1,
         });
       case "workspace.list":
@@ -692,6 +715,8 @@ export class FixtureRuntime {
             args: runtime.args,
           })),
         });
+      case "runtime.status":
+        return this.respond(id, state.runtimeStatus);
       case "task.list": {
         const workspace = this.requireWorkspace(
           state,
@@ -1316,6 +1341,38 @@ export class FixtureRuntime {
         configured: false,
       },
     ];
+  }
+
+  private defaultRuntimeStatus(): FixtureRuntimeStatus {
+    return {
+      automatic: {
+        runtime_id: "codex",
+        runtime_name: "Codex",
+        launcher: "codex",
+        available: true,
+        detected: true,
+      },
+      runtimes: [
+        {
+          runtime_id: "codex",
+          runtime_name: "Codex",
+          launcher: "codex",
+          available: true,
+        },
+        {
+          runtime_id: "claude-code",
+          runtime_name: "Claude Code",
+          launcher: "claude",
+          available: true,
+        },
+        {
+          runtime_id: "opencode",
+          runtime_name: "OpenCode",
+          launcher: "opencode",
+          available: false,
+        },
+      ],
+    };
   }
 
   private defaultConfigs(): FixtureConfig[] {

@@ -15,6 +15,7 @@ import {
   type InitializeResult,
   type JsonRpcNotification,
   type NotificationEnvelopeParams,
+  type RuntimeStatusResult,
   type ServiceStatusResult,
   type TaskContinueBlockedParams,
   type TaskGetAncestryResult,
@@ -122,6 +123,10 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   status(): Promise<ServiceStatusResult> {
     return this.request("service.status");
+  }
+
+  runtimeStatus(): Promise<RuntimeStatusResult> {
+    return this.request("runtime.status");
   }
 
   workspaceList(): Promise<WorkspaceListResult> {
