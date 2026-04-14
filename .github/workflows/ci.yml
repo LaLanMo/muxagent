@@ -8,9 +8,37 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  changes:
     runs-on: ubuntu-latest
+    outputs:
+      cli: ${{ steps.filter.outputs.cli }}
+      mobile: ${{ steps.filter.outputs.mobile }}
+      desktop: ${{ steps.filter.outputs.desktop }}
+      relay: ${{ steps.filter.outputs.relay }}
+    steps:
+      - name: Detect changed surfaces
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            cli:
+              - 'cli/**'
+              - 'install.sh'
+              - '.github/workflows/**'
+            mobile:
+              - 'mobile/**'
+              - '.github/workflows/**'
+            desktop:
+              - 'desktop/**'
+              - '.github/workflows/**'
+            relay:
+              - 'relay/**'
+              - '.github/workflows/**'
 
+  cli:
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -20,6 +48,76 @@ jobs:
         with:
           go-version-file: cli/go.mod
 
-      - name: Run tests
+      - name: Run CLI tests
         working-directory: cli
+        run: go test ./...
+
+  mobile:
+    needs: changes
+    if: needs.changes.outputs.mobile == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install mobile dependencies
+        working-directory: mobile
+        run: flutter pub get
+
+      - name: Run mobile smoke tests
+        working-directory: mobile
+        run: |
+          flutter test test/domain/message_test.dart
+          flutter test test/ui/auth/auth_screen_test.dart
+          flutter test test/ui/welcome/welcome_screen_test.dart
+
+  desktop:
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Run desktop typecheck
+        working-directory: desktop
+        run: pnpm typecheck
+
+  relay:
+    needs: changes
+    if: needs.changes.outputs.relay == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: relay/go.mod
+
+      - name: Run relay tests
+        working-directory: relay
         run: go test ./...

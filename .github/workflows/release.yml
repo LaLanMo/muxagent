@@ -1,4 +1,4 @@
-name: Release
+name: CLI Release
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Release version (for example 0.1.0 or v0.1.0)"
+        description: "CLI release version (for example 0.1.0 or v0.1.0)"
         required: true
       ref:
         description: "Git ref to release from"
