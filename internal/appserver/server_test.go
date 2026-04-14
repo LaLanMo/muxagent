@@ -3,11 +3,13 @@ package appserver
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -374,6 +376,138 @@ func TestServerTaskReadFlows(t *testing.T) {
 	}
 	if !catalogResult.DefaultUseWorktree {
 		t.Fatal("default_use_worktree = false, want true")
+	}
+}
+
+func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
+	server := newTestServer(t)
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodInitialize,
+		Params: mustRawParams(t, initializeParams{ProtocolVersion: protocolVersion}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("initialize rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(initializeResult)
+	if !slices.Contains(result.Capabilities.Methods, methodTaskGetAncestry) {
+		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskGetAncestry, result.Capabilities.Methods)
+	}
+}
+
+func TestServerTaskGetAncestryReturnsRootToParentChain(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	rootTaskID, parentTaskID, childTaskID := seedTaskAncestryChain(t, workspacePath)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetAncestry,
+		Params: mustRawParams(t, taskGetParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      childTaskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_ancestry rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskGetAncestryResult)
+	if got := len(result.Ancestors); got != 2 {
+		t.Fatalf("task.get_ancestry count = %d, want 2", got)
+	}
+	if got := result.Ancestors[0].TaskID; got != rootTaskID {
+		t.Fatalf("task.get_ancestry[0].task_id = %q, want %q", got, rootTaskID)
+	}
+	if got := result.Ancestors[0].Description; got != "Stabilize authentication pipeline" {
+		t.Fatalf("task.get_ancestry[0].description = %q, want %q", got, "Stabilize authentication pipeline")
+	}
+	if got := result.Ancestors[0].Status; got != string(taskdomain.TaskStatusDone) {
+		t.Fatalf("task.get_ancestry[0].status = %q, want %q", got, taskdomain.TaskStatusDone)
+	}
+	if got := result.Ancestors[0].ParentTaskID; got != "" {
+		t.Fatalf("task.get_ancestry[0].parent_task_id = %q, want empty", got)
+	}
+	if got := result.Ancestors[1].TaskID; got != parentTaskID {
+		t.Fatalf("task.get_ancestry[1].task_id = %q, want %q", got, parentTaskID)
+	}
+	if got := result.Ancestors[1].Description; got != "Harden refresh token handling" {
+		t.Fatalf("task.get_ancestry[1].description = %q, want %q", got, "Harden refresh token handling")
+	}
+	if got := result.Ancestors[1].Status; got != string(taskdomain.TaskStatusDone) {
+		t.Fatalf("task.get_ancestry[1].status = %q, want %q", got, taskdomain.TaskStatusDone)
+	}
+	if got := result.Ancestors[1].ParentTaskID; got != rootTaskID {
+		t.Fatalf("task.get_ancestry[1].parent_task_id = %q, want %q", got, rootTaskID)
+	}
+
+	rootResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetAncestry,
+		Params: mustRawParams(t, taskGetParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      rootTaskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_ancestry root rpc error: %+v", rpcErr)
+	}
+	rootResult := rootResultAny.(taskGetAncestryResult)
+	if got := len(rootResult.Ancestors); got != 0 {
+		t.Fatalf("task.get_ancestry root count = %d, want 0", got)
+	}
+}
+
+func TestServerTaskGetAncestryRejectsCycleCorruption(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	server := newTestServerAtPath(t, stateDir)
+	defer func() { _ = server.Shutdown(context.Background(), false) }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	rootTaskID, _, childTaskID := seedTaskAncestryChain(t, workspacePath)
+	server.markInitialized()
+
+	db, err := sql.Open("sqlite", taskstore.DBPath(workspacePath))
+	if err != nil {
+		t.Fatalf("open sqlite db: %v", err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`
+		INSERT INTO task_edges (parent_task_id, child_task_id, relation_kind, created_at)
+		VALUES (?, ?, ?, ?)`,
+		childTaskID,
+		rootTaskID,
+		taskdomain.TaskRelationFollowUp,
+		time.Date(2026, 4, 3, 12, 30, 0, 0, time.UTC).Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		t.Fatalf("insert corrupt lineage edge: %v", err)
+	}
+
+	_, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetAncestry,
+		Params: mustRawParams(t, taskGetParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      childTaskID,
+		}),
+	})
+	if rpcErr == nil {
+		t.Fatal("task.get_ancestry rpc error = nil, want lineage corruption error")
+	}
+	if rpcErr.Code != errorCodeInternalError {
+		t.Fatalf("task.get_ancestry error code = %d, want %d", rpcErr.Code, errorCodeInternalError)
+	}
+	if !strings.Contains(rpcErr.Message, taskstore.ErrTaskLineageCorrupt.Error()) {
+		t.Fatalf("task.get_ancestry error message = %q, want corruption detail", rpcErr.Message)
 	}
 }
 
@@ -2240,6 +2374,95 @@ func seedAwaitingTask(t *testing.T, workDir string) (taskID string, awaitingRunI
 		t.Fatalf("write artifact: %v", err)
 	}
 	return taskID, awaitingRunID
+}
+
+func seedTaskAncestryChain(t *testing.T, workDir string) (rootTaskID, parentTaskID, childTaskID string) {
+	t.Helper()
+	store, err := taskstore.Open(workDir)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	configPath, err := taskconfig.DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("default config path: %v", err)
+	}
+	normalizedWorkDir := taskstore.NormalizeWorkDir(workDir)
+	ctx := context.Background()
+	baseTime := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
+
+	createTask := func(taskID, description, nodeName string, status taskdomain.NodeRunStatus, createdAt, updatedAt time.Time, completedAt *time.Time) {
+		t.Helper()
+		materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
+		if err != nil {
+			t.Fatalf("materialize config for %s: %v", taskID, err)
+		}
+		task := taskdomain.Task{
+			ID:           taskID,
+			Description:  description,
+			ConfigAlias:  "default",
+			ConfigPath:   materialized.ConfigPath,
+			WorkDir:      normalizedWorkDir,
+			ExecutionDir: normalizedWorkDir,
+			CreatedAt:    createdAt,
+			UpdatedAt:    updatedAt,
+		}
+		entryRun := taskdomain.NodeRun{
+			ID:          "run-" + taskID,
+			TaskID:      taskID,
+			NodeName:    nodeName,
+			Status:      status,
+			StartedAt:   createdAt,
+			CompletedAt: completedAt,
+		}
+		if err := store.CreateTaskWithEntryRun(ctx, task, entryRun); err != nil {
+			t.Fatalf("create task %s: %v", taskID, err)
+		}
+	}
+
+	rootTaskID = "task-ancestry-root"
+	rootCompletedAt := baseTime.Add(2 * time.Minute)
+	createTask(
+		rootTaskID,
+		"Stabilize authentication pipeline",
+		"done",
+		taskdomain.NodeRunDone,
+		baseTime,
+		baseTime.Add(3*time.Minute),
+		&rootCompletedAt,
+	)
+
+	parentTaskID = "task-ancestry-parent"
+	parentCompletedAt := baseTime.Add(12 * time.Minute)
+	createTask(
+		parentTaskID,
+		"Harden refresh token handling",
+		"done",
+		taskdomain.NodeRunDone,
+		baseTime.Add(10*time.Minute),
+		baseTime.Add(13*time.Minute),
+		&parentCompletedAt,
+	)
+	if err := store.AttachFollowUpParent(ctx, rootTaskID, parentTaskID, baseTime.Add(13*time.Minute)); err != nil {
+		t.Fatalf("attach root->parent lineage: %v", err)
+	}
+
+	childTaskID = "task-ancestry-child"
+	createTask(
+		childTaskID,
+		"Show parent task ancestry in task detail",
+		"draft_plan",
+		taskdomain.NodeRunRunning,
+		baseTime.Add(20*time.Minute),
+		baseTime.Add(21*time.Minute),
+		nil,
+	)
+	if err := store.AttachFollowUpParent(ctx, parentTaskID, childTaskID, baseTime.Add(21*time.Minute)); err != nil {
+		t.Fatalf("attach parent->child lineage: %v", err)
+	}
+
+	return rootTaskID, parentTaskID, childTaskID
 }
 
 func seedRecoverableTerminalRun(t *testing.T, workDir string, output []byte) (taskID string, nodeRunID string) {

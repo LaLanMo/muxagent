@@ -77,6 +77,38 @@ func (m *taskReadModel) LoadTaskView(ctx context.Context, taskID string) (taskdo
 	return view, cfg, nil
 }
 
+func (m *taskReadModel) LoadTaskAncestry(ctx context.Context, taskID string) ([]taskdomain.TaskView, error) {
+	if _, err := m.store.GetTask(ctx, taskID); err != nil {
+		return nil, err
+	}
+
+	visited := map[string]struct{}{
+		taskID: {},
+	}
+	lineage := make([]taskdomain.TaskView, 0)
+	parentTaskID, err := m.store.GetFollowUpParentTaskID(ctx, taskID)
+	if err != nil {
+		return nil, err
+	}
+	for strings.TrimSpace(parentTaskID) != "" {
+		if _, seen := visited[parentTaskID]; seen {
+			return nil, taskstore.ErrTaskLineageCorrupt
+		}
+		visited[parentTaskID] = struct{}{}
+		view, _, err := m.LoadTaskView(ctx, parentTaskID)
+		if err != nil {
+			return nil, err
+		}
+		lineage = append(lineage, view)
+		parentTaskID = view.ParentTaskID
+	}
+
+	for left, right := 0, len(lineage)-1; left < right; left, right = left+1, right-1 {
+		lineage[left], lineage[right] = lineage[right], lineage[left]
+	}
+	return lineage, nil
+}
+
 func (m *taskReadModel) BuildInputRequest(ctx context.Context, taskID, nodeRunID string) (*taskruntime.InputRequest, error) {
 	task, err := m.store.GetTask(ctx, taskID)
 	if err != nil {

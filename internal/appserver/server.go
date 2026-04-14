@@ -389,6 +389,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodWorkspaceReconcile,
 					methodTaskList,
 					methodTaskGet,
+					methodTaskGetAncestry,
 					methodTaskRunHistory,
 					methodTaskInputRequest,
 					methodTaskStart,
@@ -580,6 +581,30 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			}
 		}
 		return result, nil, stopModeContinue, nil
+
+	case methodTaskGetAncestry:
+		params, err := decodeParams[taskGetParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		model, rpcErr := s.openWorkspaceReadModel(workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		defer func() { _ = model.Close() }()
+		views, err := model.LoadTaskAncestry(ctx, strings.TrimSpace(params.TaskID))
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		ancestors := make([]taskAncestryItemDTO, 0, len(views))
+		for _, view := range views {
+			ancestors = append(ancestors, taskAncestryItemToDTO(view))
+		}
+		return taskGetAncestryResult{Ancestors: ancestors}, nil, stopModeContinue, nil
 
 	case methodTaskRunHistory:
 		params, err := decodeParams[taskRunHistoryParams](req.Params)

@@ -26,6 +26,7 @@ const (
 	methodWorkspaceReconcile  = "workspace.reconcile_stale"
 	methodTaskList            = "task.list"
 	methodTaskGet             = "task.get"
+	methodTaskGetAncestry     = "task.get_ancestry"
 	methodTaskRunHistory      = "task.run_history"
 	methodTaskInputRequest    = "task.input_request"
 	methodTaskStart           = "task.start"
@@ -316,6 +317,10 @@ type taskGetResult struct {
 	InputRequest    *inputRequestDTO         `json:"input_request,omitempty"`
 	LiveEvents      []sessionHistoryEventDTO `json:"live_events,omitempty"`
 	LiveOutputRunID string                   `json:"live_output_run_id,omitempty"`
+}
+
+type taskGetAncestryResult struct {
+	Ancestors []taskAncestryItemDTO `json:"ancestors"`
 }
 
 type taskInputRequestResult struct {

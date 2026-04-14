@@ -72,6 +72,14 @@ type taskViewDTO struct {
 	BlockedSteps    []blockedStepDTO `json:"blocked_steps,omitempty"`
 }
 
+type taskAncestryItemDTO struct {
+	TaskID       string    `json:"task_id"`
+	Description  string    `json:"description"`
+	Status       string    `json:"status"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	ParentTaskID string    `json:"parent_task_id,omitempty"`
+}
+
 type configViewDTO struct {
 	Path   string             `json:"path"`
 	Config *taskconfig.Config `json:"config,omitempty"`
@@ -269,6 +277,16 @@ func taskViewToDTO(view taskdomain.TaskView) taskViewDTO {
 		ArtifactPaths:   append([]string(nil), view.ArtifactPaths...),
 		NodeRuns:        nodeRuns,
 		BlockedSteps:    blockedSteps,
+	}
+}
+
+func taskAncestryItemToDTO(view taskdomain.TaskView) taskAncestryItemDTO {
+	return taskAncestryItemDTO{
+		TaskID:       view.Task.ID,
+		Description:  view.Task.Description,
+		Status:       string(view.Status),
+		UpdatedAt:    view.Task.UpdatedAt,
+		ParentTaskID: view.ParentTaskID,
 	}
 }
 
