@@ -37,6 +37,64 @@ async function readHeaderAlignment(page: Page) {
   };
 }
 
+async function readHistoryGeometry(page: Page) {
+  return page.evaluate(() => {
+    const history = document.querySelector('[data-testid="detail-task-history"]');
+    const historyHeader = history?.querySelector(".detail-history__header");
+    const headerIcon = history?.querySelector(".detail-history__header-icon");
+    const row = history?.querySelector(".detail-history__row");
+    const icon = history?.querySelector(".detail-history__row-icon");
+    const title = history?.querySelector(".detail-history__row-title-text");
+    const time = history?.querySelector(".detail-history__row-time");
+    const meta = history?.querySelector(".detail-history__row-meta");
+    const activityHeader = document.querySelector(".detail-activity__header");
+    const activityRow = document.querySelector(".detail-activity-card");
+    const lastActivityRow = document.querySelector(".detail-activity-card:last-child");
+    if (
+      !history ||
+      !historyHeader ||
+      !headerIcon ||
+      !row ||
+      !icon ||
+      !title ||
+      !time ||
+      !meta ||
+      !activityHeader ||
+      !activityRow ||
+      !lastActivityRow
+    ) {
+      throw new Error("Expected the follow-up history section to be visible");
+    }
+    const historyRect = history.getBoundingClientRect();
+    const historyHeaderRect = historyHeader.getBoundingClientRect();
+    const headerIconRect = headerIcon.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    const iconRect = icon.getBoundingClientRect();
+    const activityHeaderRect = activityHeader.getBoundingClientRect();
+    const activityRowRect = activityRow.getBoundingClientRect();
+    const lastActivityRowStyles = getComputedStyle(lastActivityRow);
+    const rowStyles = getComputedStyle(row);
+    const titleStyles = getComputedStyle(title);
+    const timeStyles = getComputedStyle(time);
+    const metaStyles = getComputedStyle(meta);
+    return {
+      activityGap: Math.round(activityRowRect.y - activityHeaderRect.bottom),
+      activityLastBorderBottomWidth: lastActivityRowStyles.borderBottomWidth,
+      activityLastBoxShadow: lastActivityRowStyles.boxShadow,
+      headerInset: Math.round(headerIconRect.x - historyRect.x),
+      historyGap: Math.round(rowRect.y - historyHeaderRect.bottom),
+      iconHeight: Math.round(iconRect.height),
+      iconWidth: Math.round(iconRect.width),
+      rowHeight: Math.round(rowRect.height),
+      rowInset: Math.round(rowRect.x - historyRect.x),
+      rowPaddingLeft: rowStyles.paddingLeft,
+      timeFontSize: timeStyles.fontSize,
+      titleFontSize: titleStyles.fontSize,
+      metaFontSize: metaStyles.fontSize,
+    };
+  });
+}
+
 async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
   await page.evaluate(async ({ workspaceId }) => {
     const [{ getRuntime }, { useTaskSnapshotStore }] = await Promise.all([
@@ -97,7 +155,7 @@ test("aligns the task detail header and section labels on one content column in 
 }) => {
   await connectFixtureWorkspace(page);
 
-  await openTaskFromBoard(page, "task-live-fixture");
+  await openTaskFromBoard(page, "task-blocked-db");
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
 
   const runningAlignment = await readHeaderAlignment(page);
@@ -108,13 +166,86 @@ test("aligns the task detail header and section labels on one content column in 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
 
-  await openTaskFromBoard(page, "task-done-login");
+  await openTaskFromBoard(page, "task-follow-up-history-fixture");
   await expect(page.getByTestId("complete-pane")).toBeVisible();
 
   const followUpAlignment = await readHeaderAlignment(page);
   expect(Math.abs(followUpAlignment.backLabelX - followUpAlignment.promptX)).toBeLessThanOrEqual(1);
   expect(Math.abs(followUpAlignment.activityX - followUpAlignment.promptX)).toBeLessThanOrEqual(1);
   expect(Math.round(followUpAlignment.backLabelX - followUpAlignment.backIconX)).toBe(20);
+});
+
+test("shows parent task history in detail and lets the user navigate up the chain", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  await expect(page.getByTestId("board-card-task-follow-up-history-fixture")).toContainText(
+    "Pause running task gracefully when daemon receives SIGTERM",
+  );
+
+  await openTaskFromBoard(page, "task-follow-up-history-fixture");
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-follow-up-history-fixture$/);
+
+  const history = page.getByTestId("detail-task-history");
+  const headerPrompt = page.locator(".detail-main-header__prompt-text");
+  await expect(history).toBeVisible();
+  await expect(page.getByTestId("complete-pane")).toBeVisible();
+  await expect(page.getByTestId("detail-task-history-count")).toHaveText("2 iterations");
+  await expect(
+    page
+      .getByTestId("detail-task-ancestor-task-follow-up-history-root")
+      .locator(".detail-history__row-title-text"),
+  ).toHaveText("Refactor the auth middleware to use JWT validation with configurable TTL");
+  await expect(
+    page
+      .getByTestId("detail-task-ancestor-task-follow-up-history-parent")
+      .locator(".detail-history__row-title-text"),
+  ).toHaveText("Add test coverage for the new token refresh logic");
+  await expect(headerPrompt).toContainText(
+    "Pause running task gracefully when daemon receives SIGTERM",
+  );
+
+  await page.getByTestId("detail-task-ancestor-task-follow-up-history-parent").click();
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-follow-up-history-parent$/);
+  await expect(headerPrompt).toContainText("Add test coverage for the new token refresh logic");
+  await expect(
+    page
+      .getByTestId("detail-task-ancestor-task-follow-up-history-root")
+      .locator(".detail-history__row-title-text"),
+  ).toHaveText("Refactor the auth middleware to use JWT validation with configurable TTL");
+  await expect(page.getByTestId("detail-task-ancestor-task-follow-up-history-parent")).toHaveCount(
+    0,
+  );
+
+  await page.getByTestId("detail-task-ancestor-task-follow-up-history-root").click();
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-follow-up-history-root$/);
+  await expect(headerPrompt).toContainText(
+    "Refactor the auth middleware to use JWT validation with configurable TTL",
+  );
+  await expect(page.getByTestId("detail-task-history")).toHaveCount(0);
+});
+
+test("matches the follow-up history row geometry from the design frame", async ({ page }) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-follow-up-history-fixture");
+  await expect(page.getByTestId("detail-task-history")).toBeVisible();
+  await expect(page.getByTestId("complete-pane")).toBeVisible();
+
+  const geometry = await readHistoryGeometry(page);
+  expect(geometry.historyGap).toBe(14);
+  expect(geometry.activityGap).toBe(14);
+  expect(geometry.activityLastBorderBottomWidth).toBe("0px");
+  expect(geometry.activityLastBoxShadow).toBe("none");
+  expect(geometry.headerInset).toBe(8);
+  expect(geometry.rowInset).toBe(28);
+  expect(geometry.rowPaddingLeft).toBe("16px");
+  expect(geometry.rowHeight).toBe(60);
+  expect(geometry.iconWidth).toBe(28);
+  expect(geometry.iconHeight).toBe(28);
+  expect(geometry.titleFontSize).toBe("14px");
+  expect(geometry.timeFontSize).toBe("12px");
+  expect(geometry.metaFontSize).toBe("12px");
 });
 
 test("shows running preview rows on the card and keeps the feed pinned on live updates", async ({
@@ -427,9 +558,13 @@ test("keeps task detail aligned when a full workspace task-list reload lands aft
   expect(workspaceId).toBeTruthy();
 
   const statusBlock = page.getByTestId("detail-task-status");
+  const implementStateBadge = page
+    .getByTestId("detail-run-run-sync-implement")
+    .locator(".detail-activity-card__state");
   await expect(statusBlock).toContainText("Status");
   await expect(statusBlock).toContainText("Running");
   await expect(page.getByTestId("detail-run-run-sync-implement")).toContainText("running");
+  await expect(implementStateBadge).toHaveText("running");
 
   await triggerWorkspaceTaskReload(page, workspaceId!);
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
@@ -438,7 +573,7 @@ test("keeps task detail aligned when a full workspace task-list reload lands aft
   expect(refreshedUrl.pathname).toBe(detailPath);
 
   await expect(statusBlock).toContainText("Done");
-  await expect(page.getByTestId("detail-run-run-sync-implement")).toContainText("done");
+  await expect(implementStateBadge).toHaveCount(0);
 });
 
 test("renders MCP transcript rows as grouped tool details with image previews", async ({
@@ -754,6 +889,11 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   );
   await expect(page.getByTestId("follow-up-description")).toBeVisible();
   await expect(page.getByTestId("follow-up-config-trigger")).toContainText("default");
+  await expect(
+    page
+      .getByTestId("detail-run-run-login-implement")
+      .locator(".detail-activity-card__state"),
+  ).toHaveCount(0);
   await expect(page.getByTestId("detail-run-summary-run-login-implement")).toContainText(
     "Patched the login guard to preserve the authenticated session cookie",
   );
@@ -1054,7 +1194,9 @@ test("keeps board lane headers aligned when neighboring columns overflow", async
     (lane) => lane.stackScrollHeight > lane.stackClientHeight + 1,
   );
 
-  expect(overflowingLanes).toHaveLength(2);
+  const overflowingLabels = overflowingLanes.map((lane) => lane.label);
+  expect(overflowingLabels).toContain("Needs Attention");
+  expect(overflowingLabels).toContain("Completed");
   expect(Math.max(...headerHeights) - Math.min(...headerHeights)).toBeLessThanOrEqual(1);
   expect(Math.max(...stackYs) - Math.min(...stackYs)).toBeLessThanOrEqual(1);
 });

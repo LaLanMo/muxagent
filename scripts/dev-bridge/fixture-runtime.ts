@@ -390,12 +390,13 @@ export class FixtureRuntime {
               "runtime.list",
               "task.list",
               "task.get",
+              "task.get_ancestry",
               "task.run_history",
-          "task.input_request",
-          "task.start",
-          "task.recover_stale",
-          "artifact.list",
-        ],
+              "task.input_request",
+              "task.start",
+              "task.recover_stale",
+              "artifact.list",
+            ],
             notifications: ["notification"],
           },
         });
@@ -724,6 +725,25 @@ export class FixtureRuntime {
           input_request: task.input_request,
           live_events: task.live_events,
           live_output_run_id: task.live_output_run_id,
+        });
+      }
+      case "task.get_ancestry": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const taskId = String(params.task_id ?? "");
+        const task = this.fixtureTasks(state, workspace.workspace_id).find(
+          (entry) => entry.task.id === taskId,
+        );
+        if (!task) {
+          return this.fail(id, -32602, "task not found");
+        }
+        return this.respond(id, {
+          ancestors: this.fixtureTaskAncestry(state, workspace.workspace_id, task),
         });
       }
       case "task.run_history": {
@@ -1657,6 +1677,11 @@ export class FixtureRuntime {
     const base = Date.parse("2026-04-03T03:21:00.000Z");
     const makeTime = (offsetMinutes: number) =>
       new Date(base + offsetMinutes * 60_000).toISOString();
+    const recentBase = Date.now();
+    const makeRecentTime = (offsetMs: number) =>
+      new Date(recentBase + offsetMs).toISOString();
+    const minute = 60_000;
+    const day = 24 * 60 * minute;
 
     if (path.basename(workspacePath) === "muxagent-stale-workspace") {
       return [
@@ -1734,6 +1759,295 @@ export class FixtureRuntime {
     }
 
     return [
+      this.makeFixtureTask({
+        workspacePath,
+        taskId: "task-ancestry-root",
+        description: "Stabilize authentication pipeline",
+        configAlias: "default",
+        createdAt: makeTime(-150),
+        updatedAt: makeTime(-145),
+        status: "done",
+        currentNodeName: "done",
+        currentNodeType: "terminal",
+        nodeRuns: [
+          {
+            id: "run-ancestry-root-plan",
+            task_id: "task-ancestry-root",
+            node_name: "plan",
+            status: "done",
+            started_at: makeTime(-150),
+            completed_at: makeTime(-149),
+          },
+          {
+            id: "run-ancestry-root-done",
+            task_id: "task-ancestry-root",
+            node_name: "done",
+            status: "done",
+            started_at: makeTime(-145),
+            completed_at: makeTime(-145),
+          },
+        ],
+      }),
+      (() => {
+        const task = this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-ancestry-parent",
+          description: "Harden refresh token handling",
+          configAlias: "default",
+          createdAt: makeTime(-140),
+          updatedAt: makeTime(-132),
+          status: "done",
+          currentNodeName: "done",
+          currentNodeType: "terminal",
+          nodeRuns: [
+            {
+              id: "run-ancestry-parent-plan",
+              task_id: "task-ancestry-parent",
+              node_name: "plan",
+              status: "done",
+              started_at: makeTime(-140),
+              completed_at: makeTime(-138),
+            },
+            {
+              id: "run-ancestry-parent-implement",
+              task_id: "task-ancestry-parent",
+              node_name: "implement",
+              status: "done",
+              started_at: makeTime(-138),
+              completed_at: makeTime(-132),
+            },
+          ],
+        });
+        task.task.parent_task_id = "task-ancestry-root";
+        task.task.parent_task_description = "Stabilize authentication pipeline";
+        return task;
+      })(),
+      (() => {
+        const task = this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-ancestry-fixture",
+          description: "Show parent task ancestry in task detail",
+          configAlias: "default",
+          createdAt: makeTime(-128),
+          updatedAt: makeTime(-118),
+          status: "running",
+          currentNodeName: "implement",
+          currentNodeType: "agent",
+          nodeRuns: [
+            {
+              id: "run-ancestry-plan",
+              task_id: "task-ancestry-fixture",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeTime(-128),
+              completed_at: makeTime(-126),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-ancestry-implement",
+              task_id: "task-ancestry-fixture",
+              node_name: "implement",
+              status: "running",
+              started_at: makeTime(-125),
+              session_id: "session-ancestry-implement",
+            },
+          ],
+          liveOutputRunId: "run-ancestry-implement",
+          liveEvents: [
+            {
+              event_id: "evt-ancestry-live-1",
+              seq: 1,
+              emitted_at: makeTime(-121),
+              recorded_at: makeTime(-121),
+              session_id: "session-ancestry-implement",
+              provenance: "executor_persisted",
+              kind: "message",
+              role: "assistant",
+              part_type: "text",
+              text: "Tracing the current task lineage and preparing the ancestry header surface.",
+            },
+          ],
+          runHistoryByRunId: {
+            "run-ancestry-implement": [],
+          },
+        });
+        task.task.parent_task_id = "task-ancestry-parent";
+        task.task.parent_task_description = "Harden refresh token handling";
+        return task;
+      })(),
+      (() => {
+        const rootUpdatedOffset = -2 * day;
+        const rootStartOffset = rootUpdatedOffset - 192_000;
+        const task = this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-follow-up-history-root",
+          description: "Refactor the auth middleware to use JWT validation with configurable TTL",
+          configAlias: "default",
+          createdAt: makeRecentTime(rootStartOffset - 8 * minute),
+          updatedAt: makeRecentTime(rootUpdatedOffset),
+          status: "done",
+          currentNodeName: "done",
+          currentNodeType: "terminal",
+          nodeRuns: [
+            {
+              id: "run-follow-up-history-root-plan",
+              task_id: "task-follow-up-history-root",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeRecentTime(rootStartOffset),
+              completed_at: makeRecentTime(rootStartOffset + 36_000),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-follow-up-history-root-review",
+              task_id: "task-follow-up-history-root",
+              node_name: "review_plan",
+              status: "done",
+              started_at: makeRecentTime(rootStartOffset + 45_000),
+              completed_at: makeRecentTime(rootStartOffset + 78_000),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-follow-up-history-root-revise",
+              task_id: "task-follow-up-history-root",
+              node_name: "revise_plan",
+              status: "done",
+              started_at: makeRecentTime(rootStartOffset + 88_000),
+              completed_at: makeRecentTime(rootStartOffset + 102_000),
+            },
+            {
+              id: "run-follow-up-history-root-implement",
+              task_id: "task-follow-up-history-root",
+              node_name: "implement",
+              status: "done",
+              started_at: makeRecentTime(rootStartOffset + 118_000),
+              completed_at: makeRecentTime(rootStartOffset + 164_000),
+              artifact_paths: ["updated_jwt_middleware.ts"],
+            },
+            {
+              id: "run-follow-up-history-root-done",
+              task_id: "task-follow-up-history-root",
+              node_name: "done",
+              status: "done",
+              started_at: makeRecentTime(rootUpdatedOffset - 12_000),
+              completed_at: makeRecentTime(rootUpdatedOffset),
+            },
+          ],
+        });
+        return task;
+      })(),
+      (() => {
+        const parentUpdatedOffset = -1 * day;
+        const parentStartOffset = parentUpdatedOffset - 125_000;
+        const task = this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-follow-up-history-parent",
+          description: "Add test coverage for the new token refresh logic",
+          configAlias: "default",
+          createdAt: makeRecentTime(parentStartOffset - 6 * minute),
+          updatedAt: makeRecentTime(parentUpdatedOffset),
+          status: "done",
+          currentNodeName: "done",
+          currentNodeType: "terminal",
+          nodeRuns: [
+            {
+              id: "run-follow-up-history-parent-plan",
+              task_id: "task-follow-up-history-parent",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeRecentTime(parentStartOffset),
+              completed_at: makeRecentTime(parentStartOffset + 28_000),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-follow-up-history-parent-implement",
+              task_id: "task-follow-up-history-parent",
+              node_name: "implement",
+              status: "done",
+              started_at: makeRecentTime(parentStartOffset + 42_000),
+              completed_at: makeRecentTime(parentStartOffset + 104_000),
+              artifact_paths: ["refresh-token-tests.ts"],
+            },
+            {
+              id: "run-follow-up-history-parent-done",
+              task_id: "task-follow-up-history-parent",
+              node_name: "done",
+              status: "done",
+              started_at: makeRecentTime(parentUpdatedOffset - 9_000),
+              completed_at: makeRecentTime(parentUpdatedOffset),
+            },
+          ],
+        });
+        task.task.parent_task_id = "task-follow-up-history-root";
+        task.task.parent_task_description =
+          "Refactor the auth middleware to use JWT validation with configurable TTL";
+        return task;
+      })(),
+      (() => {
+        const currentUpdatedOffset = -2 * minute;
+        const currentStartOffset = currentUpdatedOffset - 26 * minute;
+        const task = this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-follow-up-history-fixture",
+          description: "Pause running task gracefully when daemon receives SIGTERM",
+          configAlias: "default",
+          createdAt: makeRecentTime(currentStartOffset - 12 * minute),
+          updatedAt: makeRecentTime(currentUpdatedOffset),
+          status: "running",
+          currentNodeName: "implement",
+          currentNodeType: "agent",
+          nodeRuns: [
+            {
+              id: "run-follow-up-history-draft",
+              task_id: "task-follow-up-history-fixture",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeRecentTime(currentStartOffset),
+              completed_at: makeRecentTime(currentStartOffset + 2 * minute),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-follow-up-history-review",
+              task_id: "task-follow-up-history-fixture",
+              node_name: "review_plan",
+              status: "done",
+              started_at: makeRecentTime(currentStartOffset + 3 * minute),
+              completed_at: makeRecentTime(currentStartOffset + 6 * minute),
+              result: {
+                summary:
+                  "Reviewed the plan to confirm in-flight work can pause cleanly and resume with the right state trace.",
+              },
+            },
+            {
+              id: "run-follow-up-history-upsert",
+              task_id: "task-follow-up-history-fixture",
+              node_name: "upsert_plan",
+              status: "done",
+              started_at: makeRecentTime(currentStartOffset + 7 * minute),
+              completed_at: makeRecentTime(currentStartOffset + 11 * minute),
+              result: {
+                summary:
+                  "Saved an updated follow-up plan so shutdown handling and resume sequencing stay aligned.",
+              },
+            },
+            {
+              id: "run-follow-up-history-implement",
+              task_id: "task-follow-up-history-fixture",
+              node_name: "implement",
+              status: "running",
+              started_at: makeRecentTime(currentStartOffset + 12 * minute),
+              artifact_paths: ["updated_jwt_config.ts"],
+            },
+          ],
+          runHistoryByRunId: {
+            "run-follow-up-history-implement": [],
+          },
+        });
+        task.task.parent_task_id = "task-follow-up-history-parent";
+        task.task.parent_task_description =
+          "Add test coverage for the new token refresh logic";
+        return task;
+      })(),
       this.makeFixtureTask({
         workspacePath,
         taskId: "task-live-fixture",
@@ -2651,6 +2965,41 @@ export class FixtureRuntime {
     return state.workspaces.find(
       (workspace) => workspace.workspace_id === workspaceId,
     );
+  }
+
+  private fixtureTaskAncestry(
+    state: FixtureState,
+    workspaceId: string,
+    task: FixtureTask,
+  ) {
+    const tasks = this.fixtureTasks(state, workspaceId);
+    const ancestors: Array<{
+      task_id: string;
+      description: string;
+      status: string;
+      updated_at: string;
+      parent_task_id?: string;
+    }> = [];
+    const visited = new Set<string>();
+    let parentTaskId = task.task.parent_task_id;
+
+    while (parentTaskId && !visited.has(parentTaskId)) {
+      visited.add(parentTaskId);
+      const parentTask = tasks.find((entry) => entry.task.id === parentTaskId);
+      if (!parentTask) {
+        break;
+      }
+      ancestors.unshift({
+        task_id: parentTask.task.id,
+        description: parentTask.task.description,
+        status: parentTask.status,
+        updated_at: parentTask.task.updated_at,
+        parent_task_id: parentTask.task.parent_task_id,
+      });
+      parentTaskId = parentTask.task.parent_task_id;
+    }
+
+    return ancestors;
   }
 
   private fixtureTasks(state: FixtureState, workspaceId: string) {

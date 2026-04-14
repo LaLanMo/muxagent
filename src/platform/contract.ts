@@ -13,6 +13,7 @@ import type {
   NotificationEnvelopeParams,
   ServiceStatusResult,
   TaskContinueBlockedParams,
+  TaskGetAncestryResult,
   TaskGetResult,
   TaskInputRequestResult,
   TaskListResult,
@@ -54,6 +55,10 @@ export interface TaskBackendClient {
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult>;
   taskList(workspaceId: string): Promise<TaskListResult>;
   taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult>;
+  taskGetAncestry(
+    workspaceId: string,
+    taskId: string,
+  ): Promise<TaskGetAncestryResult>;
   taskRunHistory(
     workspaceId: string,
     taskId: string,

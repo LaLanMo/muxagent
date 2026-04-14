@@ -16,6 +16,7 @@ import type {
   NotificationEnvelopeParams,
   ServiceStatusResult,
   TaskContinueBlockedParams,
+  TaskGetAncestryResult,
   TaskRecoverStaleParams,
   TaskRecoverStaleResult,
   TaskRunHistoryResult,
@@ -122,6 +123,16 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   taskGet(workspaceId: string, taskId: string): Promise<TaskGetResult> {
     return this.request("task.get", { workspace_id: workspaceId, task_id: taskId });
+  }
+
+  taskGetAncestry(
+    workspaceId: string,
+    taskId: string,
+  ): Promise<TaskGetAncestryResult> {
+    return this.request("task.get_ancestry", {
+      workspace_id: workspaceId,
+      task_id: taskId,
+    });
   }
 
   taskRunHistory(

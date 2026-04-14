@@ -2,8 +2,10 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import {
   Bot,
   Check,
+  ChevronDown,
   ChevronLeft,
   CircleDashed,
+  CircleDot,
   CircleX,
   FileText,
   Loader,
@@ -33,6 +35,7 @@ import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { Toast } from "@/features/shared/ui/Toast";
 import type {
   ActivityRunActorType,
+  TaskDetailHistoryEntry,
   TaskDetailActionSurface,
 } from "@/features/task-detail/model/use-task-detail-screen";
 import type { TaskDetailModal, TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
@@ -479,6 +482,7 @@ type TaskDetailScreenProps = {
   task?: TaskViewDto;
   loading: boolean;
   detailError?: string;
+  historyEntries: TaskDetailHistoryEntry[];
   title: string;
   statusLabel: string;
   statusTone: "running" | "awaiting" | "done" | "failed" | "neutral";
@@ -524,6 +528,7 @@ type TaskDetailScreenProps = {
   failureReason?: string;
   selectOverview: () => void;
   selectRun: (runId: string) => void;
+  openAncestorTask: (taskId: string) => void;
   openTranscript: (runId: string) => void;
   openArtifact: (artifact: ArtifactRefDto) => void;
   submitApprove: () => Promise<void>;
@@ -541,6 +546,7 @@ export function TaskDetailScreen({
   task,
   loading,
   detailError,
+  historyEntries,
   title,
   statusLabel,
   statusTone,
@@ -585,6 +591,7 @@ export function TaskDetailScreen({
   failureReason,
   selectOverview,
   selectRun,
+  openAncestorTask,
   openTranscript,
   openArtifact,
   submitApprove,
@@ -649,6 +656,7 @@ export function TaskDetailScreen({
   const durationLabel = summarizeTaskDuration(task, timelineRuns);
   const runsLabel = summarizeRuns(timelineRuns);
   const promptLead = task?.task.description ?? title;
+  const showHistorySection = historyEntries.length > 0;
   const activityRef = useRef<HTMLElement | null>(null);
   const shouldStickActivityToBottomRef = useRef(true);
   const lastTaskIdRef = useRef<string | undefined>(undefined);
@@ -871,16 +879,72 @@ export function TaskDetailScreen({
             </header>
             <div className="detail-main-divider" />
 
-            <section className="detail-activity" data-testid="detail-activity" ref={activityRef}>
-              <div className="detail-activity__header">
-                <span className="detail-activity__eyebrow">Activity</span>
-                {loading ? (
-                  <span className="detail-activity__summary">Loading…</span>
-                ) : null}
-              </div>
+            <div className="detail-main-content">
+              {showHistorySection ? (
+                <>
+                  <section className="detail-history" data-testid="detail-task-history">
+                    <div className="detail-history__header">
+                      <span aria-hidden="true" className="detail-history__header-icon">
+                        <ChevronDown size={12} strokeWidth={1.9} />
+                      </span>
+                      <span className="detail-history__eyebrow">History</span>
+                      <span aria-hidden="true" className="detail-history__header-dot">
+                        ·
+                      </span>
+                      <span
+                        className="detail-history__count"
+                        data-testid="detail-task-history-count"
+                      >
+                        {`${historyEntries.length} ${
+                          historyEntries.length === 1 ? "iteration" : "iterations"
+                        }`}
+                      </span>
+                    </div>
 
-              <div className="detail-activity__list">
-                {displayedActivityRuns.map((run) => {
+                    <div className="detail-history__feed">
+                      {historyEntries.map((entry) => (
+                        <button
+                          className="detail-history__row"
+                          data-testid={`detail-task-ancestor-${entry.taskId}`}
+                          key={entry.taskId}
+                          onClick={() => openAncestorTask(entry.taskId)}
+                          type="button"
+                        >
+                          <span aria-hidden="true" className="detail-history__row-icon">
+                            <CircleDot size={14} strokeWidth={1.9} />
+                          </span>
+                          <span className="detail-history__row-copy">
+                            <span className="detail-history__row-title">
+                              <span className="detail-history__row-title-text">
+                                {entry.description}
+                              </span>
+                              <span className="detail-history__row-spacer" />
+                              <span className="detail-history__row-time">
+                                {entry.relativeUpdatedAt}
+                              </span>
+                            </span>
+                            {entry.metaLabel ? (
+                              <span className="detail-history__row-meta">{entry.metaLabel}</span>
+                            ) : null}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                  <div className="detail-history-divider" />
+                </>
+              ) : null}
+
+              <section className="detail-activity" data-testid="detail-activity" ref={activityRef}>
+                <div className="detail-activity__header">
+                  <span className="detail-activity__eyebrow">Activity</span>
+                  {loading ? (
+                    <span className="detail-activity__summary">Loading…</span>
+                  ) : null}
+                </div>
+
+                <div className="detail-activity__list">
+                  {displayedActivityRuns.map((run) => {
                   const isRealRun = realRunIds.has(run.id);
                   const runArtifacts = isRealRun ? artifactsForRun(run, artifacts) : [];
                   const actionKindForRun =
@@ -912,6 +976,7 @@ export function TaskDetailScreen({
                     selectedArtifact?.node_run_id !== run.id;
                   const summaryMarkdown = isRealRun ? completedRunSummary(run) : "";
                   const timing = formatRunTiming(run);
+                  const showRunStateBadge = runStatus !== "done";
                   const runMeta =
                     actionKindForRun === "approval" ||
                     actionKindForRun === "clarification" ||
@@ -922,13 +987,13 @@ export function TaskDetailScreen({
                         : showInlineArtifactRow
                           ? undefined
                           : activityMeta(run, runArtifacts.length);
-                  return (
-                    <article
-                      className={`detail-activity-card detail-activity-card--${tone}${
-                        runSelected ? " is-selected" : ""
-                      }`}
-                      key={run.id}
-                    >
+                    return (
+                      <article
+                        className={`detail-activity-card detail-activity-card--${tone}${
+                          runSelected ? " is-selected" : ""
+                        }`}
+                        key={run.id}
+                      >
                       <div
                         aria-pressed={runSelected}
                         className={`detail-activity-card__summary${
@@ -974,11 +1039,13 @@ export function TaskDetailScreen({
                         <span className="detail-activity-card__copy">
                           <span className="detail-activity-card__title-row">
                             <span className="detail-activity-card__title">{run.node_name}</span>
-                            <span
-                              className={`detail-activity-card__state detail-activity-card__state--${tone}`}
-                            >
-                              {runStatus}
-                            </span>
+                            {showRunStateBadge ? (
+                              <span
+                                className={`detail-activity-card__state detail-activity-card__state--${tone}`}
+                              >
+                                {runStatus}
+                              </span>
+                            ) : null}
                             <span className="detail-activity-card__title-spacer" />
                             {timing.duration ? (
                               <span className="detail-activity-card__duration">
@@ -1066,48 +1133,49 @@ export function TaskDetailScreen({
                           {showActionPanel ? actionPanel : null}
                         </div>
                       ) : null}
-                    </article>
-                  );
-                })}
+                      </article>
+                    );
+                  })}
 
-                {ungroupedArtifacts.length > 0 ? (
-                  <article className="detail-activity-card detail-activity-card--default">
-                    <div className="detail-activity-card__summary">
-                      <span
-                        aria-hidden="true"
-                        className="detail-activity-card__icon detail-activity-card__icon--default"
-                      >
-                        <StageNodeIcon status="pending" />
-                      </span>
-                      <span className="detail-activity-card__copy">
-                        <span className="detail-activity-card__title-row">
-                          <span className="detail-activity-card__title">artifacts</span>
-                        </span>
-                        <span className="detail-activity-card__meta">
-                          {formatCount(ungroupedArtifacts.length, "artifact", "artifacts")}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="detail-activity-card__artifacts">
-                      {ungroupedArtifacts.map((artifact) => (
-                        <button
-                          className={`detail-activity-card__artifact${
-                            selectedArtifact?.resolved_path === artifact.resolved_path
-                              ? " is-selected"
-                              : ""
-                          }`}
-                          key={artifact.resolved_path}
-                          onClick={() => openArtifact(artifact)}
-                          type="button"
+                  {ungroupedArtifacts.length > 0 ? (
+                    <article className="detail-activity-card detail-activity-card--default">
+                      <div className="detail-activity-card__summary">
+                        <span
+                          aria-hidden="true"
+                          className="detail-activity-card__icon detail-activity-card__icon--default"
                         >
-                          {artifact.preview_name}
-                        </button>
-                      ))}
-                    </div>
-                  </article>
-                ) : null}
-              </div>
-            </section>
+                          <StageNodeIcon status="pending" />
+                        </span>
+                        <span className="detail-activity-card__copy">
+                          <span className="detail-activity-card__title-row">
+                            <span className="detail-activity-card__title">artifacts</span>
+                          </span>
+                          <span className="detail-activity-card__meta">
+                            {formatCount(ungroupedArtifacts.length, "artifact", "artifacts")}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="detail-activity-card__artifacts">
+                        {ungroupedArtifacts.map((artifact) => (
+                          <button
+                            className={`detail-activity-card__artifact${
+                              selectedArtifact?.resolved_path === artifact.resolved_path
+                                ? " is-selected"
+                                : ""
+                            }`}
+                            key={artifact.resolved_path}
+                            onClick={() => openArtifact(artifact)}
+                            type="button"
+                          >
+                            {artifact.preview_name}
+                          </button>
+                        ))}
+                      </div>
+                    </article>
+                  ) : null}
+                </div>
+              </section>
+            </div>
 
             {actionSurface.kind === "follow_up" && actionPanel ? (
               <div className="detail-follow-up-slot">{actionPanel}</div>

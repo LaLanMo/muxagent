@@ -6,12 +6,14 @@ type UseTaskDetailDataArgs = {
   workspaceId: string;
   taskId: string;
   connected: boolean;
+  supportsTaskAncestry: boolean;
 };
 
 export function useTaskDetailData({
   workspaceId,
   taskId,
   connected,
+  supportsTaskAncestry,
 }: UseTaskDetailDataArgs) {
   const { task, detailEntry, liveEvents, liveEventsRunId } = useTaskDetailStoreEntry({
     workspaceId,
@@ -21,6 +23,7 @@ export function useTaskDetailData({
     workspaceId,
     taskId,
     connected,
+    supportsTaskAncestry,
     task,
     detailEntry,
   });

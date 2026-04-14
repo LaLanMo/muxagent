@@ -9,6 +9,7 @@ import type {
   ArtifactRefDto,
   ConfigViewDto,
   InputRequestDto,
+  TaskAncestryItemDto,
   TaskViewDto,
 } from "@/rpc/types";
 
@@ -95,6 +96,7 @@ export type TaskDetailCacheEntry = {
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
   artifacts: ArtifactRefDto[];
+  ancestry: TaskAncestryItemDto[];
   liveEventsRunId?: string;
   runHistoryByRunId: Record<string, RunHistoryCacheEntry>;
   loading: boolean;
@@ -131,6 +133,7 @@ interface TaskSnapshotState {
       config?: ConfigViewDto;
       inputRequest?: InputRequestDto;
       artifacts: ArtifactRefDto[];
+      ancestry: TaskAncestryItemDto[];
       liveEventsRunId?: string;
     },
   ) => void;
@@ -298,6 +301,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: true,
@@ -316,6 +320,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
+          ancestry: detail.ancestry,
           liveEventsRunId: detail.liveEventsRunId,
           runHistoryByRunId: state.taskDetailsByWorkspaceId[workspaceId]?.[taskId]
             ?.runHistoryByRunId ?? {},
@@ -335,6 +340,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: {
             ...(current?.runHistoryByRunId ?? {}),
@@ -361,6 +367,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: {
             ...(current?.runHistoryByRunId ?? {}),
@@ -387,6 +394,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: {
             ...(current?.runHistoryByRunId ?? {}),
@@ -413,6 +421,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: false,
@@ -431,6 +440,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: current?.loading ?? false,
@@ -449,6 +459,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
           config: current?.config,
           inputRequest: current?.inputRequest,
           artifacts: current?.artifacts ?? [],
+          ancestry: current?.ancestry ?? [],
           liveEventsRunId: current?.liveEventsRunId,
           runHistoryByRunId: current?.runHistoryByRunId ?? {},
           loading: current?.loading ?? false,

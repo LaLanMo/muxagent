@@ -20,6 +20,7 @@ import type {
   TaskStartParams,
   TaskSubmitInputParams,
   SessionHistoryEventDto,
+  TaskAncestryItemDto,
   TaskViewDto,
 } from "@/rpc/types";
 import type { RuntimeNotification } from "@/platform/contract";
@@ -29,6 +30,7 @@ export type HydratedTaskDetail = {
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
   artifacts: ArtifactRefDto[];
+  ancestry: TaskAncestryItemDto[];
   liveEvents: SessionHistoryEvent[];
   liveEventsRunId?: string;
 };
@@ -201,10 +203,21 @@ export async function hydrateTaskDetail(
   runtime: DesktopRuntime,
   workspaceId: string,
   taskId: string,
+  options: {
+    includeAncestry?: boolean;
+  } = {},
 ): Promise<HydratedTaskDetail> {
-  const [taskResult, artifactResult] = await Promise.all([
+  const ancestryPromise = options.includeAncestry
+    ? runtime.backend
+        .taskGetAncestry(workspaceId, taskId)
+        .then((result) => result.ancestors)
+        .catch(() => [] as TaskAncestryItemDto[])
+    : Promise.resolve([] as TaskAncestryItemDto[]);
+
+  const [taskResult, artifactResult, ancestry] = await Promise.all([
     runtime.backend.taskGet(workspaceId, taskId),
     runtime.backend.artifactList(workspaceId, taskId),
+    ancestryPromise,
   ]);
 
   return {
@@ -212,11 +225,21 @@ export async function hydrateTaskDetail(
     config: taskResult.config,
     inputRequest: taskResult.input_request,
     artifacts: artifactResult.artifacts,
+    ancestry,
     liveEvents: (taskResult.live_events ?? []).map((event, index) =>
       normalizeStreamEvent(event, "live", taskResult.live_output_run_id, index),
     ),
     liveEventsRunId: taskResult.live_output_run_id,
   };
+}
+
+export async function loadTaskAncestry(
+  runtime: DesktopRuntime,
+  workspaceId: string,
+  taskId: string,
+): Promise<TaskAncestryItemDto[]> {
+  const result = await runtime.backend.taskGetAncestry(workspaceId, taskId);
+  return result.ancestors;
 }
 
 export async function loadTaskRunHistory(

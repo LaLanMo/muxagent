@@ -17,6 +17,7 @@ type UseTaskDetailHydrationArgs = {
   workspaceId: string;
   taskId: string;
   connected: boolean;
+  supportsTaskAncestry: boolean;
   task?: TaskViewDto;
   detailEntry?: TaskDetailCacheEntry;
 };
@@ -25,6 +26,7 @@ export function useTaskDetailHydration({
   workspaceId,
   taskId,
   connected,
+  supportsTaskAncestry,
   task,
   detailEntry,
 }: UseTaskDetailHydrationArgs) {
@@ -51,7 +53,9 @@ export function useTaskDetailHydration({
         beginTaskDetailLoad(workspaceId, taskId);
       }
       try {
-        const detail = await hydrateTaskDetail(getRuntime(), workspaceId, taskId);
+        const detail = await hydrateTaskDetail(getRuntime(), workspaceId, taskId, {
+          includeAncestry: supportsTaskAncestry,
+        });
         const currentTask = taskForWorkspace(
           useTaskSnapshotStore.getState().tasksById,
           workspaceId,
@@ -72,6 +76,7 @@ export function useTaskDetailHydration({
           config: detail.config,
           inputRequest: detail.inputRequest,
           artifacts: detail.artifacts,
+          ancestry: detail.ancestry,
           liveEventsRunId: detail.liveEventsRunId,
         });
         return detail;

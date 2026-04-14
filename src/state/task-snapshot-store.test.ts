@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { taskEntityId } from "@/domain/task-identity";
 import type { NormalizedTaskRunHistoryResult } from "@/domain/session-history";
-import type { ArtifactRefDto, TaskViewDto } from "@/rpc/types";
+import type { ArtifactRefDto, TaskAncestryItemDto, TaskViewDto } from "@/rpc/types";
 import { useTaskSnapshotStore } from "./task-snapshot-store";
 
 const workspaceId = "workspace-1";
@@ -71,6 +71,24 @@ function makeArtifact(): ArtifactRefDto {
   };
 }
 
+function makeAncestry(): TaskAncestryItemDto[] {
+  return [
+    {
+      task_id: "task-root",
+      description: "Stabilize authentication pipeline",
+      status: "done",
+      updated_at: "2026-04-12T07:55:00.000Z",
+    },
+    {
+      task_id: "task-parent",
+      description: "Harden refresh token handling",
+      status: "done",
+      updated_at: "2026-04-12T08:00:00.000Z",
+      parent_task_id: "task-root",
+    },
+  ];
+}
+
 const runHistory: NormalizedTaskRunHistoryResult = {
   taskId: "task-1",
   nodeRunId: "run-implement",
@@ -106,6 +124,7 @@ test("full task-list reload updates the shared task truth without overwriting de
     config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
     inputRequest: undefined,
     artifacts: [makeArtifact()],
+    ancestry: [],
     liveEventsRunId: "run-implement",
   });
   store.resolveRunHistory(
@@ -225,6 +244,44 @@ test("older upserts do not roll back a newer shared task entity", () => {
     next.tasksById[taskEntityId(workspaceId, "task-1")]?.current_node_name,
     "done",
   );
+});
+
+test("detail ancestry survives detail-side cache transitions until the next hydrate replaces it", () => {
+  const store = useTaskSnapshotStore.getState();
+  const ancestry = makeAncestry();
+
+  store.beginTaskDetailLoad(workspaceId, "task-1");
+  store.resolveTaskDetail(workspaceId, "task-1", {
+    config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
+    inputRequest: undefined,
+    artifacts: [makeArtifact()],
+    ancestry,
+    liveEventsRunId: "run-implement",
+  });
+
+  store.beginRunHistoryLoad(
+    workspaceId,
+    "task-1",
+    "run-implement",
+    "run-implement|running",
+  );
+  store.failTaskDetail(workspaceId, "task-1", "temporary refresh failure");
+  store.invalidateTaskDetail(workspaceId, "task-1");
+
+  let entry = useTaskSnapshotStore.getState().taskDetailsByWorkspaceId[workspaceId]?.["task-1"];
+  assert.deepEqual(entry?.ancestry, ancestry);
+  assert.equal(entry?.stale, true);
+
+  store.resolveTaskDetail(workspaceId, "task-1", {
+    config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
+    inputRequest: undefined,
+    artifacts: [makeArtifact()],
+    ancestry: ancestry.slice(0, 1),
+    liveEventsRunId: "run-implement",
+  });
+
+  entry = useTaskSnapshotStore.getState().taskDetailsByWorkspaceId[workspaceId]?.["task-1"];
+  assert.deepEqual(entry?.ancestry, ancestry.slice(0, 1));
 });
 
 function nextTaskIds(): string[] {

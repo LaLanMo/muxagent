@@ -362,6 +362,18 @@ export interface TaskGetResult {
   live_output_run_id?: string;
 }
 
+export interface TaskAncestryItemDto {
+  task_id: string;
+  description: string;
+  status: string;
+  updated_at: string;
+  parent_task_id?: string;
+}
+
+export interface TaskGetAncestryResult {
+  ancestors: TaskAncestryItemDto[];
+}
+
 export interface TaskInputRequestResult {
   input_request?: InputRequestDto;
 }
