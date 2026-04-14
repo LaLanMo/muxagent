@@ -1,5 +1,6 @@
 import 'package:get/get.dart';
 
+import '../config/firebase.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/event_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
@@ -89,6 +90,7 @@ class InitialBinding extends Bindings {
     );
     Get.put<PushNotificationService>(
       PushNotificationService(
+        enabled: FirebaseRuntimeConfig.enabled,
         relay: Get.find<RelayService>(),
         tokens: Get.find<TokenService>(),
         crypto: Get.find<CryptoService>(),

@@ -9,6 +9,7 @@ import '../local/crypto_service.dart';
 import '../ws/token_service.dart';
 
 class PushNotificationService {
+  final bool _enabled;
   final RelayService _relay;
   final TokenService _tokens;
   final CryptoService _crypto;
@@ -20,16 +21,22 @@ class PushNotificationService {
   Future<bool>? _activeRegistrationFuture;
 
   PushNotificationService({
+    required bool enabled,
     required RelayService relay,
     required TokenService tokens,
     required CryptoService crypto,
     required PairedMachineRepository machines,
-  }) : _relay = relay,
+  }) : _enabled = enabled,
+       _relay = relay,
        _tokens = tokens,
        _crypto = crypto,
        _machines = machines;
 
   Future<void> init() async {
+    if (!_enabled) {
+      debugPrint('[Push] Firebase disabled; skipping push init');
+      return;
+    }
     try {
       final messaging = FirebaseMessaging.instance;
 
@@ -243,6 +250,9 @@ class PushNotificationService {
 
   /// Re-register the current token (e.g. after pairing a new machine)
   Future<void> refreshRegistration() async {
+    if (!_enabled) {
+      return;
+    }
     if (_currentToken != null) {
       await _registerTokenWithAllRelays(_currentToken!, force: true);
     }

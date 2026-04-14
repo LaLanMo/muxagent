@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 
 import 'bindings/initial_binding.dart';
 import 'config/constant.dart';
+import 'config/firebase.dart';
 import 'config/theme.dart';
 import 'data/repositories/event_repository.dart';
 import 'data/repositories/session_chat_cache_repository.dart';
@@ -15,13 +16,18 @@ import 'routing/routes.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  if (!FirebaseRuntimeConfig.enabled) {
+    return;
+  }
   await Firebase.initializeApp();
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  await Firebase.initializeApp();
+  if (FirebaseRuntimeConfig.enabled) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    await Firebase.initializeApp();
+  }
 
   // Eagerly register bindings so we can init the EventRepository.
   InitialBinding().dependencies();
