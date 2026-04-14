@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/api"
-	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
-	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
+	"github.com/LaLanMo/muxagent/relay/internal/api"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent/relay/internal/repository/dao"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

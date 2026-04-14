@@ -3,11 +3,11 @@ package ioc
 import (
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/api"
-	"github.com/LaLanMo/muxagent-relay/internal/config"
-	"github.com/LaLanMo/muxagent-relay/internal/middleware"
-	"github.com/LaLanMo/muxagent-relay/internal/repository"
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/api"
+	"github.com/LaLanMo/muxagent/relay/internal/config"
+	"github.com/LaLanMo/muxagent/relay/internal/middleware"
+	"github.com/LaLanMo/muxagent/relay/internal/repository"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 )
 
 func InitAuthHandler(auth service.AuthService, cfg *config.Config) *api.AuthHandler {

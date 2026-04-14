@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/config"
-	"github.com/LaLanMo/muxagent-relay/internal/logging"
+	"github.com/LaLanMo/muxagent/relay/internal/config"
+	"github.com/LaLanMo/muxagent/relay/internal/logging"
 )
 
 func main() {

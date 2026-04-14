@@ -4,7 +4,7 @@ import (
 	"crypto/ed25519"
 	"os"
 
-	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/crypto"
 )
 
 type RelaySigningKey struct {

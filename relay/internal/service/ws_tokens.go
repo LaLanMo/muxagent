@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
-	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent/relay/internal/repository"
 	"github.com/google/uuid"
 )
 

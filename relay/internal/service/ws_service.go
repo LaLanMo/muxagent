@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
-	"github.com/LaLanMo/muxagent-relay/internal/logging"
-	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent/relay/internal/logging"
+	"github.com/LaLanMo/muxagent/relay/internal/repository"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"golang.org/x/time/rate"

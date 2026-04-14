@@ -1,9 +1,9 @@
 package ioc
 
 import (
-	"github.com/LaLanMo/muxagent-relay/internal/config"
-	"github.com/LaLanMo/muxagent-relay/internal/infra/db"
-	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
+	"github.com/LaLanMo/muxagent/relay/internal/config"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/db"
+	"github.com/LaLanMo/muxagent/relay/internal/repository/dao"
 	"gorm.io/gorm"
 )
 

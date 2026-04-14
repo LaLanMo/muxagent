@@ -6,9 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/LaLanMo/muxagent-relay/internal/logging"
-	"github.com/LaLanMo/muxagent-relay/internal/service"
-	"github.com/LaLanMo/muxagent-relay/internal/testutil"
+	"github.com/LaLanMo/muxagent/relay/internal/logging"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/testutil"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

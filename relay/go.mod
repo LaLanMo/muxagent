@@ -1,4 +1,4 @@
-module github.com/LaLanMo/muxagent-relay
+module github.com/LaLanMo/muxagent/relay
 
 go 1.25.0
 

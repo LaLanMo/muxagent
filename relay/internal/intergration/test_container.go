@@ -3,7 +3,7 @@ package intergration
 import (
 	"crypto/ed25519"
 
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

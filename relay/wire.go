@@ -3,11 +3,11 @@
 package main
 
 import (
-	"github.com/LaLanMo/muxagent-relay/internal/config"
-	"github.com/LaLanMo/muxagent-relay/internal/ioc"
-	"github.com/LaLanMo/muxagent-relay/internal/repository"
-	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/config"
+	"github.com/LaLanMo/muxagent/relay/internal/ioc"
+	"github.com/LaLanMo/muxagent/relay/internal/repository"
+	"github.com/LaLanMo/muxagent/relay/internal/repository/dao"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 	"github.com/google/wire"
 )
 

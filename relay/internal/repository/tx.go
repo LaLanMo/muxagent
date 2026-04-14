@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 
-	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
+	"github.com/LaLanMo/muxagent/relay/internal/repository/dao"
 	"gorm.io/gorm"
 )
 
 type TxRepositories struct {
-	AuthRequests    AuthRequestRepository
+	AuthRequests     AuthRequestRepository
 	MasterIdentities MasterIdentityRepository
-	MasterKeys      MasterKeyRepository
-	Machines        MachineRepository
-	KeyringUpdates  KeyringUpdateRepository
+	MasterKeys       MasterKeyRepository
+	Machines         MachineRepository
+	KeyringUpdates   KeyringUpdateRepository
 }
 
 type TxRunner interface {
@@ -37,11 +37,11 @@ func (r *gormTxRunner) InTx(ctx context.Context, fn func(repos TxRepositories) e
 	}
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		repos := TxRepositories{
-			AuthRequests:    NewAuthRequestRepository(dao.NewGormAuthRequestDAO(tx)),
+			AuthRequests:     NewAuthRequestRepository(dao.NewGormAuthRequestDAO(tx)),
 			MasterIdentities: NewMasterIdentityRepository(dao.NewGormMasterIdentityDAO(tx)),
-			MasterKeys:      NewMasterKeyRepository(dao.NewGormMasterKeyDAO(tx)),
-			Machines:        NewMachineRepository(dao.NewGormMachineDAO(tx)),
-			KeyringUpdates:  NewKeyringUpdateRepository(dao.NewGormKeyringUpdateDAO(tx)),
+			MasterKeys:       NewMasterKeyRepository(dao.NewGormMasterKeyDAO(tx)),
+			Machines:         NewMachineRepository(dao.NewGormMachineDAO(tx)),
+			KeyringUpdates:   NewKeyringUpdateRepository(dao.NewGormKeyringUpdateDAO(tx)),
 		}
 		return fn(repos)
 	})

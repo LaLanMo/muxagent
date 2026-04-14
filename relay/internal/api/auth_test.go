@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/domain"
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/domain"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

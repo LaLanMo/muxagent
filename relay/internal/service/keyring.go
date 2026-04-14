@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/domain"
-	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
-	"github.com/LaLanMo/muxagent-relay/internal/logging"
-	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent/relay/internal/domain"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent/relay/internal/logging"
+	"github.com/LaLanMo/muxagent/relay/internal/repository"
 	"github.com/google/uuid"
 )
 

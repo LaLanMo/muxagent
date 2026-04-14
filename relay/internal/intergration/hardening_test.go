@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/LaLanMo/muxagent-relay/internal/api"
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/api"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

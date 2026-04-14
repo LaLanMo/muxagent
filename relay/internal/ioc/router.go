@@ -3,9 +3,9 @@ package ioc
 import (
 	"fmt"
 
-	"github.com/LaLanMo/muxagent-relay/internal/api"
-	"github.com/LaLanMo/muxagent-relay/internal/config"
-	"github.com/LaLanMo/muxagent-relay/internal/middleware"
+	"github.com/LaLanMo/muxagent/relay/internal/api"
+	"github.com/LaLanMo/muxagent/relay/internal/config"
+	"github.com/LaLanMo/muxagent/relay/internal/middleware"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

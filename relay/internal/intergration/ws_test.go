@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/infra/crypto"
-	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/infra/crypto"
+	"github.com/LaLanMo/muxagent/relay/internal/repository/dao"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"

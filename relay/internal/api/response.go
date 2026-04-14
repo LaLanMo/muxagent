@@ -1,6 +1,6 @@
 package api
 
-import "github.com/LaLanMo/muxagent-relay/internal/errs"
+import "github.com/LaLanMo/muxagent/relay/internal/errs"
 
 // Envelope wraps all API responses with a standardized structure
 type Envelope struct {

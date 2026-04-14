@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	"firebase.google.com/go/v4/messaging"
-	"github.com/LaLanMo/muxagent-relay/internal/repository"
+	"github.com/LaLanMo/muxagent/relay/internal/repository"
 	"github.com/google/uuid"
 )
 

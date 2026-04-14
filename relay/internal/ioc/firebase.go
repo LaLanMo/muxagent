@@ -6,7 +6,7 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
-	"github.com/LaLanMo/muxagent-relay/internal/config"
+	"github.com/LaLanMo/muxagent/relay/internal/config"
 	"google.golang.org/api/option"
 )
 

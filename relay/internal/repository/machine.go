@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/domain"
-	"github.com/LaLanMo/muxagent-relay/internal/repository/dao"
+	"github.com/LaLanMo/muxagent/relay/internal/domain"
+	"github.com/LaLanMo/muxagent/relay/internal/repository/dao"
 	"github.com/google/uuid"
 )
 

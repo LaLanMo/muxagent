@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/errs"
+	"github.com/LaLanMo/muxagent/relay/internal/errs"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/time/rate"
 )

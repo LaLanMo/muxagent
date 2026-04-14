@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LaLanMo/muxagent-relay/internal/logging"
+	"github.com/LaLanMo/muxagent/relay/internal/logging"
 	"github.com/gin-gonic/gin"
 )
 

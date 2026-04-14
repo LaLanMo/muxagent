@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/LaLanMo/muxagent-relay/internal/service"
+	"github.com/LaLanMo/muxagent/relay/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
