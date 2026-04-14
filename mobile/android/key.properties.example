@@ -1,0 +1,7 @@
+# Copy this file to android/key.properties and fill in your real values.
+# Keep android/key.properties out of git.
+
+storePassword=replace-with-your-keystore-password
+keyPassword=replace-with-your-key-password
+keyAlias=muxagent-upload
+storeFile=/absolute/path/to/muxagent-upload.jks
