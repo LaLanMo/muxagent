@@ -66,6 +66,20 @@
   margin: 0;
 }
 
+.markdown-document h1,
+.markdown-document h2,
+.markdown-document h3,
+.markdown-document h4,
+.markdown-document h5,
+.markdown-document h6,
+.markdown-document p,
+.markdown-document li,
+.markdown-document blockquote,
+.markdown-document th,
+.markdown-document td {
+  white-space: pre-line;
+}
+
 .markdown-document ul,
 .markdown-document ol {
   display: grid;

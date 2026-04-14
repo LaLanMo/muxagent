@@ -302,22 +302,40 @@
 .detail-main-header__prompt {
   display: grid;
   gap: var(--space-1);
+  min-width: 0;
   max-width: none;
   padding-left: var(--detail-main-header-content-offset);
 }
 
-.detail-main-header__prompt-text {
-  color: var(--color-text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: 500;
+.detail-main-header__prompt-body {
+  min-width: 0;
+}
+
+.detail-main-header__prompt-text.markdown-document {
+  min-height: 0;
+  gap: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: 13px;
   line-height: 1.45;
 }
 
-.detail-main-header__prompt p {
-  color: var(--color-text-secondary);
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.45;
+.detail-main-header__prompt-text.markdown-document > * {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.detail-main-header__prompt-text.markdown-document h1,
+.detail-main-header__prompt-text.markdown-document h2,
+.detail-main-header__prompt-text.markdown-document h3,
+.detail-main-header__prompt-text.markdown-document h4,
+.detail-main-header__prompt-text.markdown-document h5,
+.detail-main-header__prompt-text.markdown-document h6,
+.detail-main-header__prompt-text.markdown-document strong {
+  color: var(--color-text-primary);
+  font-size: inherit;
+  font-weight: 500;
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 .detail-main-divider,

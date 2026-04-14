@@ -2253,6 +2253,45 @@ export class FixtureRuntime {
       }),
       this.makeFixtureTask({
         workspacePath,
+        taskId: "task-markdown-detail",
+        description: "**Render markdown in task detail**\nKeep multiline summaries readable.",
+        configAlias: "default",
+        createdAt: makeTime(18),
+        updatedAt: makeTime(24),
+        status: "done",
+        currentNodeName: "done",
+        currentNodeType: "agent",
+        nodeRuns: [
+          {
+            id: "run-markdown-detail-plan",
+            task_id: "task-markdown-detail",
+            node_name: "plan",
+            status: "done",
+            started_at: makeTime(18),
+            completed_at: makeTime(19),
+            result: {
+              summary:
+                "Mapped the header and activity surfaces.\nCaptured the rollout notes in `plan.md`.",
+            },
+            artifact_paths: ["plan.md"],
+          },
+          {
+            id: "run-markdown-detail-implement",
+            task_id: "task-markdown-detail",
+            node_name: "implement",
+            status: "done",
+            started_at: makeTime(19),
+            completed_at: makeTime(24),
+            result: {
+              summary:
+                "**Implemented the task detail markdown pass**\nPreserved the multiline summary in `result.md`.",
+            },
+            artifact_paths: ["result.md"],
+          },
+        ],
+      }),
+      this.makeFixtureTask({
+        workspacePath,
         taskId: "task-clarification-fixture",
         description: "Resolve transcript clarification follow-up",
         configAlias: "default",

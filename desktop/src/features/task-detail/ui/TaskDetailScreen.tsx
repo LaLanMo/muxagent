@@ -870,11 +870,18 @@ export function TaskDetailScreen({
                 <span className="detail-main-header__back-label">Tasks</span>
               </button>
               <div className="detail-main-header__prompt">
-                <p className="detail-main-header__prompt-text">
-                  <span className="detail-main-header__prompt-copy" data-no-window-drag="true">
-                    {promptLead}
-                  </span>
-                </p>
+                <div
+                  className="detail-main-header__prompt-body"
+                  data-no-window-drag="true"
+                  data-testid="task-detail-header-description"
+                >
+                  <DocumentContent
+                    className="detail-main-header__prompt-text"
+                    content={promptLead}
+                    format="markdown"
+                    variant="compact"
+                  />
+                </div>
               </div>
             </header>
             <div className="detail-main-divider" />

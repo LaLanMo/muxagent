@@ -150,6 +150,40 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
 });
 
+test("renders markdown and preserved line breaks in the task detail header and activity summary", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  await openTaskFromBoard(page, "task-markdown-detail");
+  await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+
+  const headerDescription = page.getByTestId("task-detail-header-description");
+  await expect(headerDescription.locator("strong")).toHaveText("Render markdown in task detail");
+  await expect(headerDescription).toContainText("Keep multiline summaries readable.");
+  const headerMetrics = await headerDescription.locator("p").evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      height: element.getBoundingClientRect().height,
+      lineHeight: Number.parseFloat(styles.lineHeight),
+    };
+  });
+  expect(headerMetrics.height).toBeGreaterThan(headerMetrics.lineHeight * 1.5);
+
+  const summary = page.getByTestId("detail-run-summary-run-markdown-detail-implement");
+  await expect(summary.locator("strong")).toHaveText("Implemented the task detail markdown pass");
+  await expect(summary.locator("code")).toHaveText("result.md");
+  await expect(summary).toContainText("Preserved the multiline summary in result.md.");
+  const summaryMetrics = await summary.locator("p").evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      height: element.getBoundingClientRect().height,
+      lineHeight: Number.parseFloat(styles.lineHeight),
+    };
+  });
+  expect(summaryMetrics.height).toBeGreaterThan(summaryMetrics.lineHeight * 1.5);
+});
+
 test("aligns the task detail header and section labels on one content column in default and follow-up states", async ({
   page,
 }) => {
