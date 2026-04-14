@@ -16,6 +16,5 @@ export function canShowFollowUpSurface(args: {
   if (!task || inputRequest || latestBlockedStep || retryRun) {
     return false;
   }
-  const bucket = taskBucket(task);
-  return bucket === "running" || bucket === "done";
+  return taskBucket(task) === "done";
 }

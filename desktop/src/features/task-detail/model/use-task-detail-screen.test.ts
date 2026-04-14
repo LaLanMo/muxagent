@@ -65,7 +65,7 @@ function makeRetryRun(): NodeRunViewDto {
   };
 }
 
-test("canShowFollowUpSurface returns true for running tasks without higher-priority actions", () => {
+test("canShowFollowUpSurface returns false for running tasks without higher-priority actions", () => {
   assert.equal(
     canShowFollowUpSurface({
       task: makeTask("running"),
@@ -73,7 +73,7 @@ test("canShowFollowUpSurface returns true for running tasks without higher-prior
       latestBlockedStep: undefined,
       retryRun: undefined,
     }),
-    true,
+    false,
   );
 });
 

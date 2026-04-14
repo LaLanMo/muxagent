@@ -187,7 +187,7 @@ test("continues a seeded blocked task into the live surface", async ({ page }) =
   });
 });
 
-test("recovers a seeded stale run into a terminal state", async ({ page }) => {
+test("reconciles a seeded stale run into a failed state on open", async ({ page }) => {
   test.slow();
 
   await withSpawnedDesktopServer(async ({ url, workDir, seedWorkspace }) => {
@@ -205,26 +205,13 @@ test("recovers a seeded stale run into a terminal state", async ({ page }) => {
     await expect(page).toHaveURL(
       new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`),
     );
-    await page.getByTestId("detail-run-run-implement-stale").click();
-
-    await expect(page).toHaveURL(/[\?&]modal=transcript/);
-    await expect(page.getByTestId("transcript-modal")).toBeVisible();
-    await expect(page.getByTestId("detail-output-surface")).toContainText(
-      "No live output recorded yet",
-    );
-    await expect(page.getByTestId("recover-run")).toBeVisible();
-
-    await page.getByTestId("recover-run").click();
-
-    await expect(page.getByTestId("recover-run")).toHaveCount(0);
-    await expect(page.getByTestId("transcript-modal")).toContainText(
-      "No persisted stream for this run",
-      { timeout: 30_000 },
-    );
-    await expect(page.getByTestId("transcript-modal")).toContainText("failed");
-    await expect(page.getByTestId("detail-run-run-implement-stale")).toContainText(
-      "failed",
-    );
+    await expect(page.getByTestId("detail-task-status")).toContainText("Failed", {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("detail-run-run-implement-stale")).toContainText("failed");
     await expect(page.getByTestId("failed-pane")).toBeVisible();
+    await expect(page.getByTestId("complete-pane")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-config-trigger")).toHaveCount(0);
   });
 });

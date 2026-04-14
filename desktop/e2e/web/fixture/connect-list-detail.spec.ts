@@ -150,6 +150,16 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
 });
 
+test("hides the follow-up rail for running task detail screens", async ({ page }) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-live-fixture");
+
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-live-fixture$/);
+  await expect(page.getByTestId("complete-pane")).toHaveCount(0);
+  await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
+  await expect(page.getByTestId("follow-up-config-trigger")).toHaveCount(0);
+});
+
 test("renders markdown and preserved line breaks in the task detail header and activity summary", async ({
   page,
 }) => {
