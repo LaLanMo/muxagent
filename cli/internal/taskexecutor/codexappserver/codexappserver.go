@@ -91,7 +91,7 @@ func (e *Executor) Execute(ctx context.Context, req taskexecutor.Request, progre
 		"method": "initialize",
 		"params": map[string]interface{}{
 			"clientInfo": map[string]interface{}{
-				"name":    "muxagent-cli",
+				"name":    "muxagent",
 				"title":   "MuxAgent CLI",
 				"version": "dev",
 			},

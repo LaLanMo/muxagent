@@ -805,7 +805,7 @@ func (u *updater) fetchBytes(ctx context.Context, url string, maxBytes int64, la
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("User-Agent", "muxagent-cli/"+displayVersion(version.Version))
+	req.Header.Set("User-Agent", "muxagent/"+displayVersion(version.Version))
 	resp, err := u.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", label, err)
