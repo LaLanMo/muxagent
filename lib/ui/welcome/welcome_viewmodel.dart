@@ -8,7 +8,7 @@ import '../../routing/routes.dart';
 import '../../utils/app_toast.dart';
 
 const welcomeInstallScriptUrl =
-    'https://raw.githubusercontent.com/LaLanMo/muxagent-cli/main/install.sh';
+    'https://raw.githubusercontent.com/LaLanMo/muxagent/main/install.sh';
 const welcomeInstallCommand = 'curl -fsSL $welcomeInstallScriptUrl | sh';
 
 class WelcomeViewModel extends GetxController {
@@ -61,7 +61,7 @@ class WelcomeViewModel extends GetxController {
   void onGithubPressed() {
     dismissKeyboard();
     launchUrl(
-      Uri.parse('https://github.com/LaLanMo/muxagent-cli'),
+      Uri.parse('https://github.com/LaLanMo/muxagent'),
       mode: LaunchMode.externalApplication,
     );
   }

@@ -1,16 +1,15 @@
-# muxagent
+# muxagent mobile
 
-A new Flutter project.
+Flutter mobile client for `muxagent`.
 
-## Getting Started
+## Firebase setup
 
-This project is a starting point for a Flutter application.
+The committed Firebase config files in this repo are placeholders for open-source
+distribution. Replace these files with your own Firebase project settings before
+building push-notification enabled app builds:
 
-A few resources to get you started if this is your first Flutter project:
+- `android/app/google-services.json`
+- `ios/Runner/GoogleService-Info.plist`
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Without project-specific Firebase credentials, the app can compile, but push
+notifications and related messaging flows are not expected to work correctly.
