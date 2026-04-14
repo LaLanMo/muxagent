@@ -1,0 +1,5 @@
+.idea/
+muxagent-relay
+tasks/
+config/*
+!config/example.json
