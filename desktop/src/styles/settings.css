@@ -1,0 +1,102 @@
+.settings-panel {
+  display: grid;
+  gap: var(--space-8);
+  width: min(100%, 900px);
+}
+
+.settings-section {
+  display: grid;
+  gap: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-border-subtle);
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-section__header {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0 0 var(--space-2);
+}
+
+.settings-section__eyebrow {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-section__body-copy {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-relaxed);
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 40px;
+  border-top: 1px solid var(--color-border-subtle);
+  padding: var(--space-2) 0;
+}
+
+.settings-section > .settings-row:first-of-type {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.settings-row__copy {
+  display: grid;
+  gap: 2px;
+  max-width: 540px;
+}
+
+.settings-row__copy strong {
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+}
+
+.settings-row__copy p {
+  margin: 0;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+}
+
+.settings-row__hint {
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+  font-family: var(--font-mono);
+}
+
+.settings-row__value {
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+}
+
+.settings-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.settings-status::before {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-text-ghost);
+  content: "";
+}
+
+.settings-status--available::before {
+  background: var(--color-status-running);
+}

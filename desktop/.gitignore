@@ -1,0 +1,12 @@
+node_modules/
+dist/
+test-results/
+artifacts/
+src-tauri/target/
+.DS_Store
+.muxagent/
+.tmp/
+.tmp-debug-*.mjs
+*.pen
+lessions.md
+tasks/

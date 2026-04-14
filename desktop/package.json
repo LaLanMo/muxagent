@@ -1,0 +1,45 @@
+{
+  "name": "muxagent-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4173 --strictPort",
+    "bridge": "tsx scripts/dev-bridge.ts",
+    "dev:web": "tsx scripts/dev-web.ts",
+    "build": "tsc --noEmit && vite build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build --debug",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "tsx scripts/run-playwright-fixture.ts && playwright test -c playwright.real.config.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.2.8",
+    "@fontsource-variable/geist-mono": "^5.2.7",
+    "@tauri-apps/api": "^2.10.1",
+    "@xyflow/react": "^12.10.2",
+    "elkjs": "^0.11.1",
+    "lucide-react": "^1.8.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.9.4",
+    "remark-gfm": "^4.0.1",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.1",
+    "@tauri-apps/cli": "^2.10.1",
+    "@types/node": "^24.6.0",
+    "@types/react": "^19.2.1",
+    "@types/react-dom": "^19.2.1",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.10",
+    "ws": "^8.18.3"
+  }
+}
