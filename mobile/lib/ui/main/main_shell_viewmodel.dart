@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get/get.dart';
 
@@ -31,18 +32,23 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
 
   RxBool get relayConnected => _wsRepo.relayConnected;
   Rx<ConnState> get relayConnectionState => _wsRepo.connectionState;
+  ValueListenable<List<PairedMachine>> get machinesListenable =>
+      _machineRepo.machinesListenable;
+  List<PairedMachine> get machines => _machineRepo.machines;
 
   final tabIndex = 0.obs;
-  final machines = <PairedMachine>[].obs;
 
   StreamSubscription<WsMachineStatus>? _machineStatusSub;
+  VoidCallback? _machinesListener;
   bool _isReconnecting = false;
+  bool _machineCatalogInitialized = false;
 
   @override
   void onInit() {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
-    _loadMachines();
+    _subscribeToMachineCatalog();
+    unawaited(_loadMachines());
     _subscribeToMachineStatus();
   }
 
@@ -50,6 +56,9 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
     _machineStatusSub?.cancel();
+    if (_machinesListener != null) {
+      _machineRepo.machinesListenable.removeListener(_machinesListener!);
+    }
     super.onClose();
   }
 
@@ -98,8 +107,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> refreshMachines() async {
-    final list = await _machineRepo.listMachines();
-    machines.value = list;
+    await _machineRepo.refresh();
   }
 
   void navigateToNewSession() {
@@ -126,19 +134,29 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   // --- Private ---
 
   Future<void> _loadMachines() async {
-    final list = await _machineRepo.listMachines();
-    machines.value = list;
+    await _machineRepo.refresh();
+    _machineCatalogInitialized = true;
+    _handleMachineCatalogChanged();
+  }
 
-    if (list.isEmpty) {
+  void _subscribeToMachineCatalog() {
+    _machinesListener = _handleMachineCatalogChanged;
+    _machineRepo.machinesListenable.addListener(_machinesListener!);
+  }
+
+  void _handleMachineCatalogChanged() {
+    if (!_machineCatalogInitialized) {
+      return;
+    }
+    if (machines.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         Get.offAllNamed(Routes.welcome);
       });
       return;
     }
-
-    for (final machine in list) {
+    for (final machine in machines) {
       if (!_wsRepo.hasSession(machine.machineId)) {
-        await _connectMachineInBackground(machine);
+        unawaited(_connectMachineInBackground(machine));
       }
     }
   }

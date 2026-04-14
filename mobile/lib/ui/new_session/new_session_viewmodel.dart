@@ -153,7 +153,9 @@ class NewSessionViewModel extends GetxController {
     return isRecoverableSessionTransportError(error);
   }
 
-  final machines = <PairedMachine>[].obs;
+  ValueListenable<List<PairedMachine>> get machinesListenable =>
+      _machineRepo.machinesListenable;
+  List<PairedMachine> get machines => _machineRepo.machines;
   final selectedMachine = Rxn<PairedMachine>();
   final isLoading = false.obs;
   final uiEffect = Rxn<UiEffect>();
@@ -182,6 +184,7 @@ class NewSessionViewModel extends GetxController {
       _wsRepo.activeSessionIdsListenable;
 
   VoidCallback? _activeSessionIdsListener;
+  VoidCallback? _machinesListener;
   Worker? _relayConnectedWorker;
   int _runtimeLoadToken = 0;
   final _rememberedModeIds = <String, String>{};
@@ -191,9 +194,10 @@ class NewSessionViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _subscribeToMachineCatalog();
     _subscribeToSessionPresence();
     _subscribeToRelayConnection();
-    _loadMachines();
+    unawaited(_machineRepo.refresh());
     _checkSttConfig();
 
     cwdController.addListener(_filterCwds);
@@ -207,6 +211,9 @@ class NewSessionViewModel extends GetxController {
 
   @override
   void onClose() {
+    if (_machinesListener != null) {
+      _machineRepo.machinesListenable.removeListener(_machinesListener!);
+    }
     if (_activeSessionIdsListener != null) {
       _wsRepo.activeSessionIdsListenable.removeListener(
         _activeSessionIdsListener!,
@@ -219,6 +226,12 @@ class NewSessionViewModel extends GetxController {
     cwdController.dispose();
     promptController.dispose();
     super.onClose();
+  }
+
+  void _subscribeToMachineCatalog() {
+    _syncMachineSelection();
+    _machinesListener = _handleMachineCatalogChanged;
+    _machineRepo.machinesListenable.addListener(_machinesListener!);
   }
 
   void _subscribeToSessionPresence() {
@@ -247,14 +260,6 @@ class NewSessionViewModel extends GetxController {
     return _wsRepo.activeSessionIds.contains(machineId);
   }
 
-  Future<void> _loadMachines() async {
-    final list = await _machineRepo.listMachines();
-    machines.value = list;
-    _syncMachineSelection();
-
-    _loadRecentCwds();
-  }
-
   void _syncMachineSelection({bool selectFirstOnlineWhenMultiple = false}) {
     final activeSessionIds = _wsRepo.activeSessionIds;
     final resolved = resolveSelectedMachine(
@@ -278,6 +283,12 @@ class NewSessionViewModel extends GetxController {
       selectedMachine.value = resolved;
     }
     _shouldAutoSelectMachineOnReconnect = false;
+  }
+
+  void _handleMachineCatalogChanged() {
+    _syncMachineSelection(
+      selectFirstOnlineWhenMultiple: _shouldAutoSelectMachineOnReconnect,
+    );
   }
 
   void selectMachine(PairedMachine machine) {

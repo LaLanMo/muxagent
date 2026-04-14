@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
+import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/reconnect_recovery_coordinator.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/local/crypto_service.dart';
@@ -17,17 +20,18 @@ enum MachineConnectionDisplayState { online, connecting, serverLost, offline }
 
 class SettingsTabViewModel extends GetxController {
   final CryptoService _crypto;
+  final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
-  final RxList<PairedMachine> machines;
   final Future<ReconnectRecoveryResult> Function(PairedMachine) _connectMachine;
 
   SettingsTabViewModel({
     required CryptoService crypto,
+    required PairedMachineRepository machineRepo,
     required WsSessionRepository wsRepo,
-    required this.machines,
     required Future<ReconnectRecoveryResult> Function(PairedMachine)
     connectMachine,
   }) : _crypto = crypto,
+       _machineRepo = machineRepo,
        _wsRepo = wsRepo,
        _connectMachine = connectMachine;
 
@@ -37,6 +41,9 @@ class SettingsTabViewModel extends GetxController {
   final uiEffect = Rxn<UiEffect>();
 
   RxBool get relayConnected => _wsRepo.relayConnected;
+  ValueListenable<List<PairedMachine>> get machinesListenable =>
+      _machineRepo.machinesListenable;
+  List<PairedMachine> get machines => _machineRepo.machines;
   ValueListenable<Set<String>> get activeSessionIdsListenable =>
       _wsRepo.activeSessionIdsListenable;
 
@@ -61,6 +68,7 @@ class SettingsTabViewModel extends GetxController {
   void onInit() {
     super.onInit();
     _load();
+    unawaited(_machineRepo.refresh());
   }
 
   Future<void> _load() async {

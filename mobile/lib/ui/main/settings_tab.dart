@@ -43,96 +43,98 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
           Expanded(
             child: ClipRect(
               child: SingleChildScrollView(
-                child: ValueListenableBuilder<Set<String>>(
-                  valueListenable: controller.activeSessionIdsListenable,
-                  builder: (context, activeSessionIds, _) {
-                    return Obx(() {
-                      final machines = controller.machines.toList(
-                        growable: false,
-                      );
-                      final connectingMachines = controller.connectingMachines
-                          .toSet();
-                      controller.relayConnected.value;
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionLabel('MACHINES'),
-                          ..._buildMachineRows(
-                            machines: machines,
-                            activeSessionIds: activeSessionIds,
-                            connectingMachines: connectingMachines,
-                            relayConnected: controller.relayConnected.value,
-                          ),
-                          _buildSectionLabel('PAIRING'),
-                          _buildSettingsRow(
-                            icon: LucideIcons.qrCode,
-                            label: 'Scan QR Code',
-                            trailing: Icon(
-                              LucideIcons.chevronRight,
-                              size: 16,
-                              color: AppTheme.textMuted,
-                            ),
-                            onTap: controller.navigateToScan,
-                          ),
-                          _buildSettingsRow(
-                            icon: LucideIcons.link,
-                            label: 'Enter URL',
-                            trailing: Icon(
-                              LucideIcons.chevronRight,
-                              size: 16,
-                              color: AppTheme.textMuted,
-                            ),
-                            onTap: controller.showPasteUrlDialog,
-                          ),
-                          _buildSectionLabel('CONFIGURATION'),
-                          _buildSettingsRow(
-                            icon: LucideIcons.mic,
-                            label: 'Speech to Text',
-                            trailing: Icon(
-                              LucideIcons.chevronRight,
-                              size: 16,
-                              color: AppTheme.textMuted,
-                            ),
-                            onTap: controller.navigateToSttSettings,
-                          ),
-                          _buildSectionLabel('ABOUT'),
-                          _buildSettingsRow(
-                            icon: LucideIcons.info,
-                            label: 'Version',
-                            trailing: Text(
-                              controller.appVersion.value.isEmpty
-                                  ? 'Loading...'
-                                  : controller.appVersion.value,
-                              style: AppTypography.sans(
-                                fontSize: 15,
-                                color: AppTheme.textTertiary,
+                child: ValueListenableBuilder<List<PairedMachine>>(
+                  valueListenable: controller.machinesListenable,
+                  builder: (context, machines, _) {
+                    return ValueListenableBuilder<Set<String>>(
+                      valueListenable: controller.activeSessionIdsListenable,
+                      builder: (context, activeSessionIds, _) {
+                        return Obx(() {
+                          final connectingMachines = controller.connectingMachines
+                              .toSet();
+                          controller.relayConnected.value;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildSectionLabel('MACHINES'),
+                              ..._buildMachineRows(
+                                machines: machines,
+                                activeSessionIds: activeSessionIds,
+                                connectingMachines: connectingMachines,
+                                relayConnected: controller.relayConnected.value,
                               ),
-                            ),
-                          ),
-                          _buildSettingsRow(
-                            icon: LucideIcons.shield,
-                            label: 'Privacy Policy',
-                            trailing: Icon(
-                              LucideIcons.chevronRight,
-                              size: 16,
-                              color: AppTheme.textMuted,
-                            ),
-                            onTap: controller.openPrivacyPolicy,
-                          ),
-                          _buildSettingsRow(
-                            icon: LucideIcons.fileText,
-                            label: 'Terms of Use',
-                            trailing: Icon(
-                              LucideIcons.chevronRight,
-                              size: 16,
-                              color: AppTheme.textMuted,
-                            ),
-                            onTap: controller.openTermsOfUse,
-                          ),
-                          SizedBox(height: bottomClearance),
-                        ],
-                      );
-                    });
+                              _buildSectionLabel('PAIRING'),
+                              _buildSettingsRow(
+                                icon: LucideIcons.qrCode,
+                                label: 'Scan QR Code',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.navigateToScan,
+                              ),
+                              _buildSettingsRow(
+                                icon: LucideIcons.link,
+                                label: 'Enter URL',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.showPasteUrlDialog,
+                              ),
+                              _buildSectionLabel('CONFIGURATION'),
+                              _buildSettingsRow(
+                                icon: LucideIcons.mic,
+                                label: 'Speech to Text',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.navigateToSttSettings,
+                              ),
+                              _buildSectionLabel('ABOUT'),
+                              _buildSettingsRow(
+                                icon: LucideIcons.info,
+                                label: 'Version',
+                                trailing: Text(
+                                  controller.appVersion.value.isEmpty
+                                      ? 'Loading...'
+                                      : controller.appVersion.value,
+                                  style: AppTypography.sans(
+                                    fontSize: 15,
+                                    color: AppTheme.textTertiary,
+                                  ),
+                                ),
+                              ),
+                              _buildSettingsRow(
+                                icon: LucideIcons.shield,
+                                label: 'Privacy Policy',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.openPrivacyPolicy,
+                              ),
+                              _buildSettingsRow(
+                                icon: LucideIcons.fileText,
+                                label: 'Terms of Use',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.openTermsOfUse,
+                              ),
+                              SizedBox(height: bottomClearance),
+                            ],
+                          );
+                        });
+                      },
+                    );
                   },
                 ),
               ),

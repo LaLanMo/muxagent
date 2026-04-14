@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../domain/enums.dart';
 import '../../config/theme.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
@@ -43,15 +44,19 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
           ),
         ),
         Expanded(
-          child: Obx(() {
-            controller.activeSessions.length;
-            shell.machines.length;
+          child: ValueListenableBuilder<List<PairedMachine>>(
+            valueListenable: shell.machinesListenable,
+            builder: (context, machines, _) {
+              return Obx(() {
+                controller.activeSessions.length;
 
-            if (controller.activeSessions.isEmpty) {
-              return _buildEmptyState();
-            }
-            return _buildSessionList(context);
-          }),
+                if (controller.activeSessions.isEmpty) {
+                  return _buildEmptyState(machines);
+                }
+                return _buildSessionList(context, machines);
+              });
+            },
+          ),
         ),
       ],
     );
@@ -59,7 +64,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
 
   // --- Empty State ---
 
-  Widget _buildEmptyState() {
+  Widget _buildEmptyState(List<PairedMachine> machines) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -89,16 +94,13 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               ),
             ),
             const SizedBox(height: 20),
-            Obx(() {
-              final machines = shell.machines.toList(growable: false);
-              return ValueListenableBuilder<Set<String>>(
-                valueListenable: wsRepo.activeSessionIdsListenable,
-                builder: (context, activeSessionIds, _) => _buildMachineCard(
-                  machines: machines,
-                  activeSessionIds: activeSessionIds,
-                ),
-              );
-            }),
+            ValueListenableBuilder<Set<String>>(
+              valueListenable: wsRepo.activeSessionIdsListenable,
+              builder: (context, activeSessionIds, _) => _buildMachineCard(
+                machines: machines,
+                activeSessionIds: activeSessionIds,
+              ),
+            ),
             const SizedBox(height: 20),
             Semantics(
               label: 'Start New Session',
@@ -122,7 +124,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   Widget _buildMachineCard({
-    required List<dynamic> machines,
+    required List<PairedMachine> machines,
     required Set<String> activeSessionIds,
   }) {
     if (machines.isEmpty) return const SizedBox.shrink();
@@ -149,7 +151,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  Widget _buildMachineRow(dynamic machine, {required bool connected}) {
+  Widget _buildMachineRow(PairedMachine machine, {required bool connected}) {
     return GestureDetector(
       onTap: connected ? null : () => shell.connectMachine(machine),
       child: Container(
@@ -187,7 +189,10 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
 
   // --- Session List (grouped by status sections) ---
 
-  Widget _buildSessionList(BuildContext context) {
+  Widget _buildSessionList(
+    BuildContext context,
+    List<PairedMachine> machines,
+  ) {
     final sessions = controller.activeSessions;
 
     final approvalSessions = sessions
@@ -208,15 +213,19 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (approvalSessions.isNotEmpty)
-            _buildSection('APPROVAL', approvalSessions),
+            _buildSection('APPROVAL', approvalSessions, machines),
           if (runningSessions.isNotEmpty)
-            _buildSection('RUNNING', runningSessions),
+            _buildSection('RUNNING', runningSessions, machines),
         ],
       ),
     );
   }
 
-  Widget _buildSection(String label, List<AgentSession> sessions) {
+  Widget _buildSection(
+    String label,
+    List<AgentSession> sessions,
+    List<PairedMachine> machines,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(top: 32),
       child: Column(
@@ -234,13 +243,16 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
               ),
             ),
           ),
-          ...sessions.map(_buildSessionRow),
+          ...sessions.map((session) => _buildSessionRow(session, machines)),
         ],
       ),
     );
   }
 
-  Widget _buildSessionRow(AgentSession session) {
+  Widget _buildSessionRow(
+    AgentSession session,
+    List<PairedMachine> machines,
+  ) {
     final machineId = session.machineId;
     final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
@@ -291,7 +303,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
                   const SizedBox(height: 2),
                   // Machine + Duration: system sans 12px normal #C8CBD0
                   Text(
-                    _buildMachineDurationText(machineId, session),
+                    _buildMachineDurationText(machineId, session, machines),
                     style: AppTypography.mono(
                       fontSize: 11,
                       fontWeight: FontWeight.w400,
@@ -309,9 +321,13 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  String _buildMachineDurationText(String machineId, AgentSession session) {
+  String _buildMachineDurationText(
+    String machineId,
+    AgentSession session,
+    List<PairedMachine> machines,
+  ) {
     final machineName = machineId.isNotEmpty
-        ? shell.machineDisplayName(machineId)
+        ? _machineDisplayName(machines, machineId)
         : '';
     final duration = _formatDuration(session.updatedAt);
 
@@ -321,6 +337,15 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     if (machineName.isNotEmpty) return machineName;
     if (duration.isNotEmpty) return duration;
     return '';
+  }
+
+  String _machineDisplayName(List<PairedMachine> machines, String machineId) {
+    for (final machine in machines) {
+      if (machine.machineId == machineId) {
+        return machine.hostname ?? machineId;
+      }
+    }
+    return machineId;
   }
 
   String _formatDuration(DateTime updatedAt) {

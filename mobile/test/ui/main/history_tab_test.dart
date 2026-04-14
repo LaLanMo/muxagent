@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
-import 'package:muxagent/data/repositories/paired_machine_repository.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
 import 'package:muxagent/data/repositories/session_chat_cache_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
@@ -11,13 +10,12 @@ import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
+import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/paired_machine.dart';
-import 'package:muxagent/ui/common/pill_tab_bar.dart';
-import 'package:muxagent/ui/main/active_tab_viewmodel.dart';
+import 'package:muxagent/domain/session.dart';
+import 'package:muxagent/ui/main/history_tab.dart';
 import 'package:muxagent/ui/main/history_tab_viewmodel.dart';
-import 'package:muxagent/ui/main/main_shell.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
-import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
 
@@ -32,6 +30,7 @@ class _NoopRelayWsClient extends RelayWsClient {
 
 class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = true.obs;
+  final connectionStateValue = ConnState.connected.obs;
   final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
   Set<String> _activeIds;
 
@@ -44,6 +43,9 @@ class _FakeWsSessionRepository extends WsSessionRepository {
 
   @override
   RxBool get relayConnected => relayConnectedValue;
+
+  @override
+  Rx<ConnState> get connectionState => connectionStateValue;
 
   @override
   Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
@@ -60,6 +62,31 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   }
 }
 
+class _FakeReconnectRecoveryCoordinator extends ReconnectRecoveryCoordinator {
+  _FakeReconnectRecoveryCoordinator({
+    required super.machines,
+    required super.wsRepo,
+    required super.eventRepo,
+  }) : super(chatCacheRepo: SessionChatCacheRepository());
+
+  @override
+  Future<ReconnectRecoveryResult> recoverMachine(
+    String machineId, {
+    TranscriptRecoveryMode transcriptMode =
+        TranscriptRecoveryMode.replayIfPossible,
+  }) async {
+    return ReconnectRecoveryResult(
+      machineId: machineId,
+      transcript: TranscriptRecoveryState.skipped,
+      metadata: MetadataRecoveryState.skipped,
+      sessionReady: false,
+      statusesOk: false,
+      titlesOk: false,
+      approvalsOk: false,
+    );
+  }
+}
+
 PairedMachine _buildMachine(String id) {
   return PairedMachine(
     machineId: id,
@@ -70,79 +97,78 @@ PairedMachine _buildMachine(String id) {
   );
 }
 
+AgentSession _buildSession({required String id, required String machineId}) {
+  final now = DateTime.now();
+  return AgentSession(
+    id: id,
+    machineId: machineId,
+    title: 'History session',
+    cwd: '~/project',
+    createdAt: now,
+    updatedAt: now,
+  );
+}
+
 void main() {
-  group('MainShell', () {
+  group('HistoryTab', () {
     late _FakeWsSessionRepository wsRepo;
     late EventRepository eventRepo;
     late FakePairedMachineRepository machineRepo;
     late MainShellViewModel shell;
+    late HistoryTabViewModel history;
 
     setUp(() {
       Get.testMode = true;
-      final machine = _buildMachine('machine-1');
-      machineRepo = FakePairedMachineRepository([machine]);
-      wsRepo = _FakeWsSessionRepository(initialActiveIds: {'machine-1'});
+      wsRepo = _FakeWsSessionRepository(initialActiveIds: const {'machine-1'});
       eventRepo = EventRepository(wsRepo: wsRepo);
+      eventRepo.sessions['session-2'] = _buildSession(
+        id: 'session-2',
+        machineId: 'machine-2',
+      );
+      machineRepo = FakePairedMachineRepository([_buildMachine('machine-1')]);
       shell = MainShellViewModel(
         machineRepo: machineRepo,
-        recovery: ReconnectRecoveryCoordinator(
+        recovery: _FakeReconnectRecoveryCoordinator(
           machines: machineRepo,
           wsRepo: wsRepo,
           eventRepo: eventRepo,
-          chatCacheRepo: SessionChatCacheRepository(),
         ),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
       );
+      history = HistoryTabViewModel(
+        eventRepo: eventRepo,
+        machineRepo: machineRepo,
+      );
 
-      Get.put<WsSessionRepository>(wsRepo);
-      Get.put<PairedMachineRepository>(machineRepo);
       Get.put<MainShellViewModel>(shell);
-      Get.put<ActiveTabViewModel>(ActiveTabViewModel(eventRepo: eventRepo));
-      Get.put<HistoryTabViewModel>(
-        HistoryTabViewModel(eventRepo: eventRepo, machineRepo: machineRepo),
-      );
-      Get.put<SettingsTabViewModel>(
-        SettingsTabViewModel(
-          crypto: CryptoService(),
-          machineRepo: machineRepo,
-          wsRepo: wsRepo,
-          connectMachine: (_) async =>
-              throw UnimplementedError('not needed in this test'),
-        ),
-      );
+      Get.put<HistoryTabViewModel>(history);
     });
 
     tearDown(() {
-      Get.delete<SettingsTabViewModel>(force: true);
       Get.delete<HistoryTabViewModel>(force: true);
-      Get.delete<ActiveTabViewModel>(force: true);
       Get.delete<MainShellViewModel>(force: true);
-      Get.delete<PairedMachineRepository>(force: true);
-      Get.delete<WsSessionRepository>(force: true);
       eventRepo.dispose();
       machineRepo.dispose();
       wsRepo.dispose();
     });
 
-    testWidgets(
-      'renders the tab bar as an overlay instead of a scaffold footer',
-      (tester) async {
-        await tester.pumpWidget(const GetMaterialApp(home: MainShell()));
-        await tester.pump();
+    testWidgets('updates chips and session labels when a new machine appears', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const GetMaterialApp(home: Scaffold(body: HistoryTab())),
+      );
+      await tester.pump();
 
-        final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
-        expect(scaffold.bottomNavigationBar, isNull);
+      expect(find.text('host-machine-2'), findsNothing);
+      expect(find.textContaining('~/project · machine-2'), findsOneWidget);
 
-        expect(find.byType(PillTabBar), findsOneWidget);
-        expect(
-          find.ancestor(
-            of: find.byType(PillTabBar),
-            matching: find.byType(Align),
-          ),
-          findsOneWidget,
-        );
-      },
-    );
+      await machineRepo.saveMachine(_buildMachine('machine-2'));
+      await tester.pump();
+
+      expect(find.text('host-machine-2'), findsOneWidget);
+      expect(find.textContaining('~/project · host-machine-2'), findsOneWidget);
+    });
   });
 }

@@ -25,14 +25,17 @@ class MainShellBinding extends Bindings {
       () => ActiveTabViewModel(eventRepo: Get.find<EventRepository>()),
     );
     Get.lazyPut(
-      () => HistoryTabViewModel(eventRepo: Get.find<EventRepository>()),
+      () => HistoryTabViewModel(
+        eventRepo: Get.find<EventRepository>(),
+        machineRepo: Get.find<PairedMachineRepository>(),
+      ),
     );
     Get.lazyPut(() {
       final shell = Get.find<MainShellViewModel>();
       return SettingsTabViewModel(
         crypto: Get.find<CryptoService>(),
+        machineRepo: Get.find<PairedMachineRepository>(),
         wsRepo: Get.find<WsSessionRepository>(),
-        machines: shell.machines,
         connectMachine: shell.connectMachine,
       );
     });

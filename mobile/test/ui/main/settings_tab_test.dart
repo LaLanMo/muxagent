@@ -16,6 +16,8 @@ import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 import 'package:muxagent/ui/main/settings_tab.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
+import '../../support/fake_paired_machine_repository.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -23,25 +25,6 @@ class _NoopRelayWsClient extends RelayWsClient {
         tokens: TokenService(crypto: CryptoService()),
         sessions: SessionManager(),
       );
-}
-
-class _FakePairedMachineRepository extends PairedMachineRepository {
-  final List<PairedMachine> _machines;
-
-  _FakePairedMachineRepository(this._machines);
-
-  @override
-  Future<List<PairedMachine>> listMachines() async => _machines;
-
-  @override
-  Future<PairedMachine?> getMachine(String machineId) async {
-    for (final machine in _machines) {
-      if (machine.machineId == machineId) {
-        return machine;
-      }
-    }
-    return null;
-  }
 }
 
 class _FakeWsSessionRepository extends WsSessionRepository {
@@ -98,18 +81,20 @@ void main() {
   group('SettingsTab', () {
     late _FakeWsSessionRepository wsRepo;
     late EventRepository eventRepo;
+    late FakePairedMachineRepository machineRepo;
     late MainShellViewModel shell;
     late SettingsTabViewModel settings;
 
     setUp(() {
       Get.testMode = true;
       final machine = _buildMachine('machine-1');
+      machineRepo = FakePairedMachineRepository([machine]);
       wsRepo = _FakeWsSessionRepository();
       eventRepo = EventRepository(wsRepo: wsRepo);
       shell = MainShellViewModel(
-        machineRepo: _FakePairedMachineRepository([machine]),
+        machineRepo: machineRepo,
         recovery: ReconnectRecoveryCoordinator(
-          machines: _FakePairedMachineRepository([machine]),
+          machines: machineRepo,
           wsRepo: wsRepo,
           eventRepo: eventRepo,
           chatCacheRepo: SessionChatCacheRepository(),
@@ -117,11 +102,10 @@ void main() {
         wsRepo: wsRepo,
         eventRepo: eventRepo,
       );
-      shell.machines.value = [machine];
       settings = SettingsTabViewModel(
         crypto: _FakeCryptoService(),
+        machineRepo: machineRepo,
         wsRepo: wsRepo,
-        machines: shell.machines,
         connectMachine: (_) async {
           throw UnimplementedError();
         },
@@ -134,6 +118,7 @@ void main() {
       Get.delete<SettingsTabViewModel>(force: true);
       Get.delete<MainShellViewModel>(force: true);
       eventRepo.dispose();
+      machineRepo.dispose();
       wsRepo.dispose();
     });
 

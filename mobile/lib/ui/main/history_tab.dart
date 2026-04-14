@@ -5,6 +5,7 @@ import 'package:muxagent/config/app_typography.dart';
 import '../../config/theme.dart';
 import '../../data/repositories/event_repository.dart';
 import '../../domain/enums.dart';
+import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
@@ -40,16 +41,33 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             ],
           ),
         ),
-        Obx(() => _buildFilterChips()),
-        Expanded(child: Obx(() => _buildBody(context))),
+        ValueListenableBuilder<List<PairedMachine>>(
+          valueListenable: controller.machinesListenable,
+          builder: (context, machines, _) {
+            return Obx(
+              () => _buildFilterChips(
+                machines: machines,
+                selected: controller.selectedMachineFilter.value,
+              ),
+            );
+          },
+        ),
+        Expanded(
+          child: ValueListenableBuilder<List<PairedMachine>>(
+            valueListenable: controller.machinesListenable,
+            builder: (context, machines, _) {
+              return Obx(() => _buildBody(context, machines));
+            },
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildFilterChips() {
-    final machines = shell.machines;
-    final selected = controller.selectedMachineFilter.value;
-
+  Widget _buildFilterChips({
+    required List<PairedMachine> machines,
+    required String? selected,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) => Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -106,8 +124,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     );
   }
 
-  Widget _buildBody(BuildContext context) {
-    shell.machines.length;
+  Widget _buildBody(BuildContext context, List<PairedMachine> machines) {
     final groups = controller.sessionGroups;
 
     if (groups.isEmpty) {
@@ -167,12 +184,12 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             ),
           );
         }
-        return _buildSessionRow(item.session!);
+        return _buildSessionRow(item.session!, machines);
       },
     );
   }
 
-  Widget _buildSessionRow(AgentSession session) {
+  Widget _buildSessionRow(AgentSession session, List<PairedMachine> machines) {
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
     final isEmphasized =
         session.status == SessionStatus.waitingApproval ||
@@ -212,7 +229,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
                   ),
                   const SizedBox(height: 2),
                   Text.rich(
-                    TextSpan(children: _buildMetaSpans(session)),
+                    TextSpan(children: _buildMetaSpans(session, machines)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -225,7 +242,10 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     );
   }
 
-  List<InlineSpan> _buildMetaSpans(AgentSession session) {
+  List<InlineSpan> _buildMetaSpans(
+    AgentSession session,
+    List<PairedMachine> machines,
+  ) {
     final spans = <InlineSpan>[
       TextSpan(
         text: session.cwd.isNotEmpty ? session.cwd : '~',
@@ -238,7 +258,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     ];
 
     final machineName = session.machineId.isNotEmpty
-        ? shell.machineDisplayName(session.machineId)
+        ? _machineDisplayName(machines, session.machineId)
         : null;
     if (machineName != null && machineName.isNotEmpty) {
       spans.addAll([
@@ -270,6 +290,15 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     }
 
     return spans;
+  }
+
+  String _machineDisplayName(List<PairedMachine> machines, String machineId) {
+    for (final machine in machines) {
+      if (machine.machineId == machineId) {
+        return machine.hostname ?? machineId;
+      }
+    }
+    return machineId;
   }
 
   InlineSpan _separatorSpan() {

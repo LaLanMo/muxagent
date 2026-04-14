@@ -13,6 +13,8 @@ import 'package:muxagent/data/services/ws/token_service.dart';
 import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
+import '../../support/fake_paired_machine_repository.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -20,25 +22,6 @@ class _NoopRelayWsClient extends RelayWsClient {
         tokens: TokenService(crypto: CryptoService()),
         sessions: SessionManager(),
       );
-}
-
-class _FakePairedMachineRepository extends PairedMachineRepository {
-  final List<PairedMachine> _machines;
-
-  _FakePairedMachineRepository(this._machines);
-
-  @override
-  Future<List<PairedMachine>> listMachines() async => _machines;
-
-  @override
-  Future<PairedMachine?> getMachine(String machineId) async {
-    for (final machine in _machines) {
-      if (machine.machineId == machineId) {
-        return machine;
-      }
-    }
-    return null;
-  }
 }
 
 class _FakeWsSessionRepository extends WsSessionRepository {
@@ -91,7 +74,7 @@ class _FakeReconnectRecoveryCoordinator extends ReconnectRecoveryCoordinator {
     handler,
   }) : _handler = handler,
        super(
-         machines: _FakePairedMachineRepository(const []),
+         machines: FakePairedMachineRepository(const []),
          wsRepo: _FakeWsSessionRepository(initialActiveIds: const {}),
          eventRepo: EventRepository(
            wsRepo: _FakeWsSessionRepository(initialActiveIds: const {}),
@@ -123,16 +106,18 @@ void main() {
   group('MainShellViewModel session presence', () {
     late _FakeWsSessionRepository wsRepo;
     late EventRepository eventRepo;
+    late FakePairedMachineRepository machineRepo;
     late MainShellViewModel viewModel;
 
     setUp(() {
       Get.testMode = true;
       wsRepo = _FakeWsSessionRepository(initialActiveIds: {'machine-1'});
       eventRepo = EventRepository(wsRepo: wsRepo);
+      machineRepo = FakePairedMachineRepository([_buildMachine('machine-1')]);
       viewModel = MainShellViewModel(
-        machineRepo: _FakePairedMachineRepository([_buildMachine('machine-1')]),
+        machineRepo: machineRepo,
         recovery: ReconnectRecoveryCoordinator(
-          machines: _FakePairedMachineRepository([_buildMachine('machine-1')]),
+          machines: machineRepo,
           wsRepo: wsRepo,
           eventRepo: eventRepo,
           chatCacheRepo: SessionChatCacheRepository(),
@@ -145,6 +130,7 @@ void main() {
     tearDown(() {
       viewModel.onClose();
       eventRepo.dispose();
+      machineRepo.dispose();
       wsRepo.dispose();
     });
 
@@ -178,8 +164,10 @@ void main() {
         final machine = _buildMachine('machine-1');
         wsRepo.dispose();
         eventRepo.dispose();
+        machineRepo.dispose();
         wsRepo = _FakeWsSessionRepository(initialActiveIds: const {});
         eventRepo = EventRepository(wsRepo: wsRepo);
+        machineRepo = FakePairedMachineRepository([machine]);
         final recovery = _FakeReconnectRecoveryCoordinator(
           handler:
               (
@@ -199,7 +187,7 @@ void main() {
               },
         );
         viewModel = MainShellViewModel(
-          machineRepo: _FakePairedMachineRepository([machine]),
+          machineRepo: machineRepo,
           recovery: recovery,
           wsRepo: wsRepo,
           eventRepo: eventRepo,

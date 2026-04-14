@@ -12,6 +12,8 @@ import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/domain/ui_effect.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
+import '../../support/fake_paired_machine_repository.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -88,20 +90,20 @@ ReconnectRecoveryResult _buildRecoveryResult({
 
 void main() {
   group('SettingsTabViewModel machine status', () {
-    late RxList<PairedMachine> machines;
+    late FakePairedMachineRepository machineRepo;
     late _FakeWsSessionRepository wsRepo;
     late SettingsTabViewModel viewModel;
     var connectCalls = 0;
 
     setUp(() {
       Get.testMode = true;
-      machines = <PairedMachine>[_buildMachine('machine-1')].obs;
+      machineRepo = FakePairedMachineRepository([_buildMachine('machine-1')]);
       wsRepo = _FakeWsSessionRepository();
       connectCalls = 0;
       viewModel = SettingsTabViewModel(
         crypto: _FakeCryptoService(),
+        machineRepo: machineRepo,
         wsRepo: wsRepo,
-        machines: machines,
         connectMachine: (machine) async {
           connectCalls += 1;
           return _buildRecoveryResult(
@@ -113,6 +115,7 @@ void main() {
     });
 
     tearDown(() {
+      machineRepo.dispose();
       wsRepo.dispose();
     });
 
@@ -143,7 +146,7 @@ void main() {
       () async {
         wsRepo.setActiveSessionIds({'machine-1'});
 
-        await viewModel.connectMachine(machines.first);
+        await viewModel.connectMachine(machineRepo.machines.first);
 
         expect(connectCalls, 0);
         expect(viewModel.connectingMachines, isEmpty);
@@ -155,8 +158,8 @@ void main() {
       () async {
         viewModel = SettingsTabViewModel(
           crypto: _FakeCryptoService(),
+          machineRepo: machineRepo,
           wsRepo: wsRepo,
-          machines: machines,
           connectMachine: (machine) async {
             connectCalls += 1;
             return _buildRecoveryResult(
@@ -166,7 +169,7 @@ void main() {
           },
         );
 
-        await viewModel.connectMachine(machines.first);
+        await viewModel.connectMachine(machineRepo.machines.first);
 
         expect(connectCalls, 1);
         expect(viewModel.uiEffect.value, isA<ShowToast>());
@@ -181,7 +184,7 @@ void main() {
     test(
       'shows failure when recovery completes without a ready session',
       () async {
-        await viewModel.connectMachine(machines.first);
+        await viewModel.connectMachine(machineRepo.machines.first);
 
         expect(connectCalls, 1);
         expect(viewModel.uiEffect.value, isA<ShowToast>());

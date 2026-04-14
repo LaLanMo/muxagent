@@ -17,6 +17,8 @@ import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/ui/common/relay_status_pill.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
+import '../../support/fake_paired_machine_repository.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -24,15 +26,6 @@ class _NoopRelayWsClient extends RelayWsClient {
         tokens: TokenService(crypto: CryptoService()),
         sessions: SessionManager(),
       );
-}
-
-class _FakePairedMachineRepository extends PairedMachineRepository {
-  final List<PairedMachine> _machines;
-
-  _FakePairedMachineRepository(this._machines);
-
-  @override
-  Future<List<PairedMachine>> listMachines() async => _machines;
 }
 
 class _FakeWsSessionRepository extends WsSessionRepository {
@@ -83,17 +76,19 @@ void main() {
   group('RelayStatusPill', () {
     late _FakeWsSessionRepository wsRepo;
     late EventRepository eventRepo;
+    late FakePairedMachineRepository machineRepo;
     late MainShellViewModel shell;
 
     setUp(() {
       Get.testMode = true;
       final machine = _buildMachine('machine-1');
+      machineRepo = FakePairedMachineRepository([machine]);
       wsRepo = _FakeWsSessionRepository(initialActiveIds: {'machine-1'});
       eventRepo = EventRepository(wsRepo: wsRepo);
       shell = MainShellViewModel(
-        machineRepo: _FakePairedMachineRepository([machine]),
+        machineRepo: machineRepo,
         recovery: ReconnectRecoveryCoordinator(
-          machines: _FakePairedMachineRepository([machine]),
+          machines: machineRepo,
           wsRepo: wsRepo,
           eventRepo: eventRepo,
           chatCacheRepo: SessionChatCacheRepository(),
@@ -101,13 +96,13 @@ void main() {
         wsRepo: wsRepo,
         eventRepo: eventRepo,
       );
-      shell.machines.value = [machine];
       Get.put<MainShellViewModel>(shell);
     });
 
     tearDown(() {
       Get.delete<MainShellViewModel>(force: true);
       eventRepo.dispose();
+      machineRepo.dispose();
       wsRepo.dispose();
     });
 

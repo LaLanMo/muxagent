@@ -7,6 +7,7 @@ import '../../config/fonts.dart';
 import '../../config/theme.dart';
 import '../../domain/enums.dart';
 import '../../domain/mode_option.dart';
+import '../../domain/paired_machine.dart';
 import '../../domain/runtime_option.dart';
 import '../common/ui_effect_listener.dart';
 import 'new_session_viewmodel.dart';
@@ -580,57 +581,66 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         color: AppTheme.surface,
-        child: ValueListenableBuilder<Set<String>>(
-          valueListenable: controller.activeSessionIdsListenable,
-          builder: (context, activeSessionIds, _) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Text(
-                    'Select Machine',
-                    style: AppTypography.sans(
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                ),
-                const Divider(height: 1),
-                ...controller.machines.map((machine) {
-                  final isOnline = activeSessionIds.contains(machine.machineId);
-                  final name = machine.hostname ?? 'Unknown host';
-                  return ListTile(
-                    enabled: isOnline,
-                    leading: const Icon(
-                      LucideIcons.monitor,
-                      size: 20,
-                      color: AppTheme.textSecondary,
-                    ),
-                    title: Text(
-                      name,
-                      style: AppTypography.sans(
-                        fontSize: 15,
-                        color: isOnline
-                            ? AppTheme.textPrimary
-                            : AppTheme.textMuted,
+        child: ValueListenableBuilder<List<PairedMachine>>(
+          valueListenable: controller.machinesListenable,
+          builder: (context, machines, _) {
+            return ValueListenableBuilder<Set<String>>(
+              valueListenable: controller.activeSessionIdsListenable,
+              builder: (context, activeSessionIds, _) {
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        'Select Machine',
+                        style: AppTypography.sans(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
                       ),
                     ),
-                    trailing: isOnline ? _statusDot(true) : _statusDot(false),
-                    onTap: isOnline
-                        ? () {
-                            controller.dismissTransientInputs();
-                            controller.selectMachine(machine);
-                            Get.back();
-                          }
-                        : null,
-                  );
-                }),
-              ],
+                    const Divider(height: 1),
+                    ...machines.map((machine) {
+                      final isOnline = activeSessionIds.contains(
+                        machine.machineId,
+                      );
+                      final name = machine.hostname ?? 'Unknown host';
+                      return ListTile(
+                        enabled: isOnline,
+                        leading: const Icon(
+                          LucideIcons.monitor,
+                          size: 20,
+                          color: AppTheme.textSecondary,
+                        ),
+                        title: Text(
+                          name,
+                          style: AppTypography.sans(
+                            fontSize: 15,
+                            color: isOnline
+                                ? AppTheme.textPrimary
+                                : AppTheme.textMuted,
+                          ),
+                        ),
+                        trailing: isOnline
+                            ? _statusDot(true)
+                            : _statusDot(false),
+                        onTap: isOnline
+                            ? () {
+                                controller.dismissTransientInputs();
+                                controller.selectMachine(machine);
+                                Get.back();
+                              }
+                            : null,
+                      );
+                    }),
+                  ],
+                );
+              },
             );
           },
         ),

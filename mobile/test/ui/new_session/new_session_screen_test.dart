@@ -20,6 +20,8 @@ import 'package:muxagent/ui/new_session/new_session_screen.dart';
 import 'package:muxagent/ui/new_session/new_session_viewmodel.dart';
 import 'package:muxagent/usecases/transcribe_audio.dart';
 
+import '../../support/fake_paired_machine_repository.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -43,16 +45,16 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   Rx<ConnState> get connectionState => connectionStateValue;
 }
 
-class _FakePairedMachineRepository extends PairedMachineRepository {}
-
 class _TestNewSessionViewModel extends NewSessionViewModel {
   final EventRepository eventRepo;
+  final FakePairedMachineRepository machineRepo;
 
   _TestNewSessionViewModel._({
     required super.wsRepo,
     required this.eventRepo,
+    required this.machineRepo,
   }) : super(
-         machineRepo: _FakePairedMachineRepository(),
+         machineRepo: machineRepo,
          eventRepo: eventRepo,
          runtimePrefs: RuntimePreferenceRepository(),
          chatCacheRepo: SessionChatCacheRepository(),
@@ -63,7 +65,11 @@ class _TestNewSessionViewModel extends NewSessionViewModel {
 
   factory _TestNewSessionViewModel({required WsSessionRepository wsRepo}) {
     final eventRepo = EventRepository(wsRepo: wsRepo);
-    return _TestNewSessionViewModel._(wsRepo: wsRepo, eventRepo: eventRepo);
+    return _TestNewSessionViewModel._(
+      wsRepo: wsRepo,
+      eventRepo: eventRepo,
+      machineRepo: FakePairedMachineRepository(),
+    );
   }
 
   @override
@@ -110,6 +116,7 @@ void main() {
 
     tearDown(() {
       viewModel.eventRepo.dispose();
+      viewModel.machineRepo.dispose();
       Get.reset();
     });
 
@@ -118,7 +125,7 @@ void main() {
     ) async {
       final machine = _machine();
       final runtime = _runtime();
-      viewModel.machines.value = [machine];
+      viewModel.machineRepo.setMachines([machine]);
       viewModel.selectedMachine.value = machine;
       viewModel.availableRuntimes.value = [runtime];
       viewModel.selectedRuntime.value = runtime;
@@ -150,7 +157,7 @@ void main() {
     ) async {
       final machine = _machine();
       final runtime = _runtime();
-      viewModel.machines.value = [machine];
+      viewModel.machineRepo.setMachines([machine]);
       viewModel.selectedMachine.value = machine;
       viewModel.availableRuntimes.value = [runtime];
       viewModel.selectedRuntime.value = runtime;
@@ -169,7 +176,7 @@ void main() {
     ) async {
       final machine = _machine();
       final runtime = _runtime();
-      viewModel.machines.value = [machine];
+      viewModel.machineRepo.setMachines([machine]);
       viewModel.selectedMachine.value = machine;
       viewModel.availableRuntimes.value = [runtime];
       viewModel.selectedRuntime.value = runtime;
@@ -201,7 +208,7 @@ void main() {
     ) async {
       final machine = _machine();
       final runtime = _runtime();
-      viewModel.machines.value = [machine];
+      viewModel.machineRepo.setMachines([machine]);
       viewModel.selectedMachine.value = machine;
       viewModel.availableRuntimes.value = [runtime];
       viewModel.selectedRuntime.value = runtime;
