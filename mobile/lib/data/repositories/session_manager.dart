@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:cryptography/cryptography.dart';
 
 import '../services/ws/models/rpc_transport_models.dart';
@@ -21,9 +22,10 @@ class SessionManager {
   final Duration rpcTimeout;
   final Duration sessionInitTimeout;
   final Map<String, SessionState> _sessions = {};
-  final StreamController<Set<String>> _activeSessionsController =
-      StreamController.broadcast();
   final Set<String> _activeSessions = {};
+  final ValueNotifier<Set<String>> _activeSessionIdsListenable = ValueNotifier(
+    const <String>{},
+  );
 
   SessionManager({
     this.rpcTimeout = const Duration(seconds: 10),
@@ -34,9 +36,10 @@ class SessionManager {
     return _sessions.putIfAbsent(machineId, SessionState.new);
   }
 
-  Stream<Set<String>> get activeSessions => _activeSessionsController.stream;
-
   Set<String> get activeSessionIds => Set.unmodifiable(_activeSessions);
+
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsListenable;
 
   bool hasSession(String machineId) => _sessions[machineId]?.session != null;
 
@@ -196,7 +199,7 @@ class SessionManager {
   }
 
   void dispose() {
-    _activeSessionsController.close();
+    _activeSessionIdsListenable.dispose();
   }
 
   void _setActive(String machineId, bool active) {
@@ -209,7 +212,8 @@ class SessionManager {
   }
 
   void _emitActiveSessions() {
-    _activeSessionsController.add(Set.unmodifiable(_activeSessions));
+    final activeIds = Set.unmodifiable({..._activeSessions});
+    _activeSessionIdsListenable.value = activeIds;
   }
 
   void _disposeSessionState(SessionState state, Object error) {

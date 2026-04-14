@@ -39,7 +39,7 @@ void main() {
             metadata: MetadataRecoveryState.complete,
           ),
           hasSeenDisconnect: true,
-          connState: ConnState.connected,
+          transportState: ConnState.connected,
           hasSession: true,
         );
 
@@ -54,7 +54,7 @@ void main() {
           metadata: MetadataRecoveryState.degraded,
         ),
         hasSeenDisconnect: true,
-        connState: ConnState.connected,
+        transportState: ConnState.connected,
         hasSession: true,
       );
 
@@ -68,7 +68,7 @@ void main() {
           metadata: MetadataRecoveryState.complete,
         ),
         hasSeenDisconnect: true,
-        connState: ConnState.connected,
+        transportState: ConnState.connected,
         hasSession: true,
       );
 
@@ -83,7 +83,7 @@ void main() {
           sessionReady: false,
         ),
         hasSeenDisconnect: true,
-        connState: ConnState.connected,
+        transportState: ConnState.connected,
         hasSession: false,
       );
 
@@ -97,7 +97,7 @@ void main() {
           metadata: MetadataRecoveryState.complete,
         ),
         hasSeenDisconnect: false,
-        connState: ConnState.connected,
+        transportState: ConnState.connected,
         hasSession: true,
       );
 
@@ -112,11 +112,104 @@ void main() {
           sessionReady: false,
         ),
         hasSeenDisconnect: true,
-        connState: ConnState.connected,
+        transportState: ConnState.connected,
         hasSession: false,
       );
 
       expect(shouldFallback, isFalse);
+    });
+
+    test('queues fallback while transport state is still reconnecting', () {
+      final shouldQueue = ChatViewModel.shouldQueueReconnectFallback(
+        result: buildResult(
+          transcript: TranscriptRecoveryState.fallbackNeeded,
+          metadata: MetadataRecoveryState.complete,
+        ),
+        hasSeenDisconnect: true,
+        transportState: ConnState.reconnecting,
+        hasSession: true,
+      );
+
+      expect(shouldQueue, isTrue);
+      expect(
+        ChatViewModel.shouldTriggerReconnectFallback(
+          result: buildResult(
+            transcript: TranscriptRecoveryState.fallbackNeeded,
+            metadata: MetadataRecoveryState.complete,
+          ),
+          hasSeenDisconnect: true,
+          transportState: ConnState.reconnecting,
+          hasSession: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('resumes queued fallback when transport reconnects', () {
+      expect(
+        ChatViewModel.shouldResumeQueuedReconnectFallback(
+          hasQueuedReconnectFallback: true,
+          hasSeenDisconnect: true,
+          transportState: ConnState.connected,
+          hasSession: true,
+        ),
+        isTrue,
+      );
+      expect(
+        ChatViewModel.shouldResumeQueuedReconnectFallback(
+          hasQueuedReconnectFallback: true,
+          hasSeenDisconnect: true,
+          transportState: ConnState.reconnecting,
+          hasSession: true,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldResumeQueuedReconnectFallback(
+          hasQueuedReconnectFallback: true,
+          hasSeenDisconnect: true,
+          transportState: ConnState.connected,
+          hasSession: false,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('ChatViewModel initial prompt gate', () {
+    test('does not consume initial prompt before composer is ready', () {
+      expect(
+        ChatViewModel.shouldAttemptInitialPrompt(
+          didAttemptInitialPrompt: false,
+          initialPrompt: 'hello',
+          canPrompt: false,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldAttemptInitialPrompt(
+          didAttemptInitialPrompt: false,
+          initialPrompt: 'hello',
+          canPrompt: true,
+        ),
+        isTrue,
+      );
+      expect(
+        ChatViewModel.shouldAttemptInitialPrompt(
+          didAttemptInitialPrompt: true,
+          initialPrompt: 'hello',
+          canPrompt: true,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldAttemptInitialPrompt(
+          didAttemptInitialPrompt: false,
+          initialPrompt: '   ',
+          canPrompt: true,
+        ),
+        isFalse,
+      );
     });
   });
 
@@ -528,7 +621,7 @@ void main() {
       expect(
         ChatViewModel.shouldEnableComposer(
           uiMode: ChatUiMode.normal,
-          connState: ConnState.reconnecting,
+          transportState: ConnState.reconnecting,
           isRecoveringAfterReconnect: false,
         ),
         isFalse,
@@ -536,7 +629,7 @@ void main() {
       expect(
         ChatViewModel.shouldEnableComposer(
           uiMode: ChatUiMode.normal,
-          connState: ConnState.disconnected,
+          transportState: ConnState.disconnected,
           isRecoveringAfterReconnect: false,
         ),
         isFalse,
@@ -544,7 +637,7 @@ void main() {
       expect(
         ChatViewModel.shouldEnableComposer(
           uiMode: ChatUiMode.normal,
-          connState: ConnState.connected,
+          transportState: ConnState.connected,
           isRecoveringAfterReconnect: false,
         ),
         isTrue,
@@ -552,7 +645,7 @@ void main() {
       expect(
         ChatViewModel.shouldEnableComposer(
           uiMode: ChatUiMode.rebuildingReadonly,
-          connState: ConnState.connected,
+          transportState: ConnState.connected,
           isRecoveringAfterReconnect: false,
         ),
         isFalse,

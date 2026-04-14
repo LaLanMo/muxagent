@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/services/ws/models/ws_models.dart';
 
@@ -68,9 +69,10 @@ class WsSessionRepository {
 
   Stream<WsMachineStatus> get machineStatus => _relay.machineStatus;
 
-  Stream<Set<String>> get activeSessions => _sessions.activeSessions;
-
   Set<String> get activeSessionIds => _sessions.activeSessionIds;
+
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _sessions.activeSessionIdsListenable;
 
   bool hasSession(String machineId) => _sessions.hasSession(machineId);
 
@@ -250,7 +252,6 @@ class WsSessionRepository {
     ReplayResyncStatus? status;
     int? responseEpoch;
     var replayedThroughSeq = lastSeq;
-    final payloads = <Map<String, dynamic>>[];
     var truncatedByPageLimit = true;
 
     for (var pageIndex = 0; pageIndex < _pagedResyncMaxPages; pageIndex++) {

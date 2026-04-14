@@ -50,7 +50,7 @@ class ChatScreen extends GetView<ChatViewModel> {
             }),
 
             // Connection banner
-            Obx(() => _buildConnectionBanner(controller.connState.value)),
+            Obx(() => _buildConnectionBanner(controller.transportState.value)),
             Obx(() => _buildUiModeBanner(controller.uiMode.value)),
 
             // Plan panel
@@ -883,10 +883,10 @@ class ChatScreen extends GetView<ChatViewModel> {
     );
   }
 
-  Widget _buildConnectionBanner(ConnState state) {
-    if (state == ConnState.connected) return const SizedBox.shrink();
+  Widget _buildConnectionBanner(ConnState transportState) {
+    if (transportState == ConnState.connected) return const SizedBox.shrink();
 
-    final bool isDisconnected = state == ConnState.disconnected;
+    final bool isDisconnected = transportState == ConnState.disconnected;
     final Color color = isDisconnected
         ? AppTheme.statusDisconnected
         : AppTheme.statusConnecting;

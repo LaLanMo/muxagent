@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:record/record.dart';
@@ -155,7 +156,6 @@ class NewSessionViewModel extends GetxController {
   final machines = <PairedMachine>[].obs;
   final selectedMachine = Rxn<PairedMachine>();
   final isLoading = false.obs;
-  final activeSessionIds = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
   final availableRuntimes = <RuntimeOption>[].obs;
   final selectedRuntime = Rxn<RuntimeOption>();
@@ -178,7 +178,10 @@ class NewSessionViewModel extends GetxController {
   final cwdFocusNode = FocusNode();
   final promptFocusNode = FocusNode();
 
-  StreamSubscription<Set<String>>? _sessionSub;
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _wsRepo.activeSessionIdsListenable;
+
+  VoidCallback? _activeSessionIdsListener;
   Worker? _relayConnectedWorker;
   int _runtimeLoadToken = 0;
   final _rememberedModeIds = <String, String>{};
@@ -188,7 +191,7 @@ class NewSessionViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _subscribeToActiveSessions();
+    _subscribeToSessionPresence();
     _subscribeToRelayConnection();
     _loadMachines();
     _checkSttConfig();
@@ -204,7 +207,11 @@ class NewSessionViewModel extends GetxController {
 
   @override
   void onClose() {
-    _sessionSub?.cancel();
+    if (_activeSessionIdsListener != null) {
+      _wsRepo.activeSessionIdsListenable.removeListener(
+        _activeSessionIdsListener!,
+      );
+    }
     _relayConnectedWorker?.dispose();
     _voiceRecorder?.dispose();
     cwdFocusNode.dispose();
@@ -214,19 +221,14 @@ class NewSessionViewModel extends GetxController {
     super.onClose();
   }
 
-  void _subscribeToActiveSessions() {
-    activeSessionIds
-      ..clear()
-      ..addAll(_wsRepo.activeSessionIds);
+  void _subscribeToSessionPresence() {
     _syncMachineSelection();
-    _sessionSub = _wsRepo.activeSessions.listen((ids) {
-      activeSessionIds
-        ..clear()
-        ..addAll(ids);
+    _activeSessionIdsListener = () {
       _syncMachineSelection(
         selectFirstOnlineWhenMultiple: _shouldAutoSelectMachineOnReconnect,
       );
-    });
+    };
+    _wsRepo.activeSessionIdsListenable.addListener(_activeSessionIdsListener!);
   }
 
   void _subscribeToRelayConnection() {
@@ -242,7 +244,7 @@ class NewSessionViewModel extends GetxController {
   }
 
   bool isMachineConnected(String machineId) {
-    return activeSessionIds.contains(machineId);
+    return _wsRepo.activeSessionIds.contains(machineId);
   }
 
   Future<void> _loadMachines() async {
@@ -254,6 +256,7 @@ class NewSessionViewModel extends GetxController {
   }
 
   void _syncMachineSelection({bool selectFirstOnlineWhenMultiple = false}) {
+    final activeSessionIds = _wsRepo.activeSessionIds;
     final resolved = resolveSelectedMachine(
       machines: machines,
       connectedMachineIds: activeSessionIds,

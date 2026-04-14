@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -39,11 +38,14 @@ class _FakePairedMachineRepository extends PairedMachineRepository {
 class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = true.obs;
   final connectionStateValue = ConnState.connected.obs;
-  final _activeSessionsController = StreamController<Set<String>>.broadcast();
-  final Set<String> _activeIds;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
+  Set<String> _activeIds;
 
   _FakeWsSessionRepository({Set<String>? initialActiveIds})
     : _activeIds = {...?initialActiveIds},
+      _activeSessionIdsNotifier = ValueNotifier(
+        Set.unmodifiable({...?initialActiveIds}),
+      ),
       super(relay: _NoopRelayWsClient(), sessions: SessionManager());
 
   @override
@@ -53,16 +55,17 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   Rx<ConnState> get connectionState => connectionStateValue;
 
   @override
-  Stream<Set<String>> get activeSessions => _activeSessionsController.stream;
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
 
   @override
-  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
 
   @override
   bool hasSession(String machineId) => _activeIds.contains(machineId);
 
   void dispose() {
-    _activeSessionsController.close();
+    _activeSessionIdsNotifier.dispose();
   }
 }
 

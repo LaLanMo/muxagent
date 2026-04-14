@@ -31,9 +31,8 @@ class MainShellBinding extends Bindings {
       final shell = Get.find<MainShellViewModel>();
       return SettingsTabViewModel(
         crypto: Get.find<CryptoService>(),
+        wsRepo: Get.find<WsSessionRepository>(),
         machines: shell.machines,
-        activeSessionIds: shell.activeSessionIds,
-        relayConnected: shell.relayConnected,
         connectMachine: shell.connectMachine,
       );
     });

@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
@@ -40,27 +39,31 @@ class _FakePairedMachineRepository extends PairedMachineRepository {
 
 class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = true.obs;
-  final _activeSessionsController = StreamController<Set<String>>.broadcast();
-  final Set<String> _activeIds;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
+  Set<String> _activeIds;
 
   _FakeWsSessionRepository({Set<String>? initialActiveIds})
     : _activeIds = {...?initialActiveIds},
+      _activeSessionIdsNotifier = ValueNotifier(
+        Set.unmodifiable({...?initialActiveIds}),
+      ),
       super(relay: _NoopRelayWsClient(), sessions: SessionManager());
 
   @override
   RxBool get relayConnected => relayConnectedValue;
 
   @override
-  Stream<Set<String>> get activeSessions => _activeSessionsController.stream;
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
 
   @override
-  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
 
   @override
   bool hasSession(String machineId) => _activeIds.contains(machineId);
 
   void dispose() {
-    _activeSessionsController.close();
+    _activeSessionIdsNotifier.dispose();
   }
 }
 
@@ -98,15 +101,15 @@ void main() {
       );
       shell.machines.value = [machine];
 
+      Get.put<WsSessionRepository>(wsRepo);
       Get.put<MainShellViewModel>(shell);
       Get.put<ActiveTabViewModel>(ActiveTabViewModel(eventRepo: eventRepo));
       Get.put<HistoryTabViewModel>(HistoryTabViewModel(eventRepo: eventRepo));
       Get.put<SettingsTabViewModel>(
         SettingsTabViewModel(
           crypto: CryptoService(),
+          wsRepo: wsRepo,
           machines: shell.machines,
-          activeSessionIds: shell.activeSessionIds,
-          relayConnected: shell.relayConnected,
           connectMachine: (_) async =>
               throw UnimplementedError('not needed in this test'),
         ),
@@ -118,6 +121,7 @@ void main() {
       Get.delete<HistoryTabViewModel>(force: true);
       Get.delete<ActiveTabViewModel>(force: true);
       Get.delete<MainShellViewModel>(force: true);
+      Get.delete<WsSessionRepository>(force: true);
       eventRepo.dispose();
       wsRepo.dispose();
     });

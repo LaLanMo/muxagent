@@ -1,11 +1,54 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
+import 'package:muxagent/data/repositories/session_manager.dart';
+import 'package:muxagent/data/repositories/ws_session_repository.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
+import 'package:muxagent/data/services/ws/relay_ws_client.dart';
+import 'package:muxagent/data/services/ws/token_service.dart';
 import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/domain/ui_effect.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
+
+class _NoopRelayWsClient extends RelayWsClient {
+  _NoopRelayWsClient()
+    : super(
+        crypto: CryptoService(),
+        tokens: TokenService(crypto: CryptoService()),
+        sessions: SessionManager(),
+      );
+}
+
+class _FakeWsSessionRepository extends WsSessionRepository {
+  final relayConnectedValue = true.obs;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
+  Set<String> _activeIds = {};
+
+  _FakeWsSessionRepository()
+    : _activeSessionIdsNotifier = ValueNotifier(const <String>{}),
+      super(relay: _NoopRelayWsClient(), sessions: SessionManager());
+
+  @override
+  RxBool get relayConnected => relayConnectedValue;
+
+  @override
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+
+  @override
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
+
+  void setActiveSessionIds(Set<String> ids) {
+    _activeIds = {...ids};
+    _activeSessionIdsNotifier.value = Set.unmodifiable(_activeIds);
+  }
+
+  void dispose() {
+    _activeSessionIdsNotifier.dispose();
+  }
+}
 
 class _FakeCryptoService extends CryptoService {
   _FakeCryptoService();
@@ -46,22 +89,19 @@ ReconnectRecoveryResult _buildRecoveryResult({
 void main() {
   group('SettingsTabViewModel machine status', () {
     late RxList<PairedMachine> machines;
-    late RxSet<String> activeSessionIds;
-    late RxBool relayConnected;
+    late _FakeWsSessionRepository wsRepo;
     late SettingsTabViewModel viewModel;
     var connectCalls = 0;
 
     setUp(() {
       Get.testMode = true;
       machines = <PairedMachine>[_buildMachine('machine-1')].obs;
-      activeSessionIds = <String>{}.obs;
-      relayConnected = true.obs;
+      wsRepo = _FakeWsSessionRepository();
       connectCalls = 0;
       viewModel = SettingsTabViewModel(
         crypto: _FakeCryptoService(),
+        wsRepo: wsRepo,
         machines: machines,
-        activeSessionIds: activeSessionIds,
-        relayConnected: relayConnected,
         connectMachine: (machine) async {
           connectCalls += 1;
           return _buildRecoveryResult(
@@ -72,8 +112,12 @@ void main() {
       );
     });
 
+    tearDown(() {
+      wsRepo.dispose();
+    });
+
     test('prefers online over connecting when a session is already active', () {
-      activeSessionIds.add('machine-1');
+      wsRepo.setActiveSessionIds({'machine-1'});
       viewModel.connectingMachines.add('machine-1');
 
       expect(
@@ -85,7 +129,7 @@ void main() {
     test(
       'reports serverLost when relay is disconnected and no session exists',
       () {
-        relayConnected.value = false;
+        wsRepo.relayConnected.value = false;
 
         expect(
           viewModel.machineConnectionState('machine-1'),
@@ -97,7 +141,7 @@ void main() {
     test(
       'does not enqueue a reconnect when the machine is already connected',
       () async {
-        activeSessionIds.add('machine-1');
+        wsRepo.setActiveSessionIds({'machine-1'});
 
         await viewModel.connectMachine(machines.first);
 
@@ -111,9 +155,8 @@ void main() {
       () async {
         viewModel = SettingsTabViewModel(
           crypto: _FakeCryptoService(),
+          wsRepo: wsRepo,
           machines: machines,
-          activeSessionIds: activeSessionIds,
-          relayConnected: relayConnected,
           connectMachine: (machine) async {
             connectCalls += 1;
             return _buildRecoveryResult(

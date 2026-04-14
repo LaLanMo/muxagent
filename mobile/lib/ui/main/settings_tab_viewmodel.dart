@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -6,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
 import '../../data/repositories/reconnect_recovery_coordinator.dart';
+import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/local/crypto_service.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/ui_effect.dart';
@@ -15,19 +17,18 @@ enum MachineConnectionDisplayState { online, connecting, serverLost, offline }
 
 class SettingsTabViewModel extends GetxController {
   final CryptoService _crypto;
+  final WsSessionRepository _wsRepo;
   final RxList<PairedMachine> machines;
-  final RxSet<String> activeSessionIds;
-  final RxBool relayConnected;
   final Future<ReconnectRecoveryResult> Function(PairedMachine) _connectMachine;
 
   SettingsTabViewModel({
     required CryptoService crypto,
+    required WsSessionRepository wsRepo,
     required this.machines,
-    required this.activeSessionIds,
-    required this.relayConnected,
     required Future<ReconnectRecoveryResult> Function(PairedMachine)
     connectMachine,
   }) : _crypto = crypto,
+       _wsRepo = wsRepo,
        _connectMachine = connectMachine;
 
   final hasMasterKey = false.obs;
@@ -35,12 +36,16 @@ class SettingsTabViewModel extends GetxController {
   final connectingMachines = <String>{}.obs;
   final uiEffect = Rxn<UiEffect>();
 
+  RxBool get relayConnected => _wsRepo.relayConnected;
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _wsRepo.activeSessionIdsListenable;
+
   bool isMachineConnected(String machineId) {
-    return activeSessionIds.contains(machineId);
+    return _wsRepo.activeSessionIds.contains(machineId);
   }
 
   MachineConnectionDisplayState machineConnectionState(String machineId) {
-    if (activeSessionIds.contains(machineId)) {
+    if (_wsRepo.activeSessionIds.contains(machineId)) {
       return MachineConnectionDisplayState.online;
     }
     if (connectingMachines.contains(machineId)) {

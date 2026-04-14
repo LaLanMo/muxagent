@@ -34,9 +34,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
 
   final tabIndex = 0.obs;
   final machines = <PairedMachine>[].obs;
-  final activeSessionIds = <String>{}.obs;
 
-  StreamSubscription<Set<String>>? _sessionSub;
   StreamSubscription<WsMachineStatus>? _machineStatusSub;
   bool _isReconnecting = false;
 
@@ -45,14 +43,12 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
     super.onInit();
     WidgetsBinding.instance.addObserver(this);
     _loadMachines();
-    _subscribeToActiveSessions();
     _subscribeToMachineStatus();
   }
 
   @override
   void onClose() {
     WidgetsBinding.instance.removeObserver(this);
-    _sessionSub?.cancel();
     _machineStatusSub?.cancel();
     super.onClose();
   }
@@ -89,7 +85,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   int get pendingApprovalCount => _eventRepo.pendingApprovals.length;
 
   bool isMachineConnected(String machineId) {
-    return activeSessionIds.contains(machineId);
+    return _wsRepo.activeSessionIds.contains(machineId);
   }
 
   String machineDisplayName(String machineId) {
@@ -188,18 +184,5 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
         }
       }
     });
-  }
-
-  void _subscribeToActiveSessions() {
-    _replaceActiveSessionIds(_wsRepo.activeSessionIds);
-    _sessionSub = _wsRepo.activeSessions.listen((ids) {
-      _replaceActiveSessionIds(ids);
-    });
-  }
-
-  void _replaceActiveSessionIds(Iterable<String> ids) {
-    activeSessionIds
-      ..clear()
-      ..addAll(ids);
   }
 }

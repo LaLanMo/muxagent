@@ -1,5 +1,4 @@
-import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
@@ -43,19 +42,23 @@ class _FakePairedMachineRepository extends PairedMachineRepository {
 }
 
 class _FakeWsSessionRepository extends WsSessionRepository {
-  final _activeSessionsController = StreamController<Set<String>>.broadcast();
   final relayConnectedValue = true.obs;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
   Set<String> _activeIds;
 
   _FakeWsSessionRepository({required Set<String> initialActiveIds})
     : _activeIds = {...initialActiveIds},
+      _activeSessionIdsNotifier = ValueNotifier(
+        Set.unmodifiable({...initialActiveIds}),
+      ),
       super(relay: _NoopRelayWsClient(), sessions: SessionManager());
 
   @override
-  Stream<Set<String>> get activeSessions => _activeSessionsController.stream;
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
 
   @override
-  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
 
   @override
   bool hasSession(String machineId) => _activeIds.contains(machineId);
@@ -65,11 +68,44 @@ class _FakeWsSessionRepository extends WsSessionRepository {
 
   void emitActiveSessions(Set<String> ids) {
     _activeIds = {...ids};
-    _activeSessionsController.add(Set.unmodifiable(_activeIds));
+    _activeSessionIdsNotifier.value = Set.unmodifiable(_activeIds);
   }
 
   void dispose() {
-    _activeSessionsController.close();
+    _activeSessionIdsNotifier.dispose();
+  }
+}
+
+class _FakeReconnectRecoveryCoordinator extends ReconnectRecoveryCoordinator {
+  final Future<ReconnectRecoveryResult> Function(
+    String machineId, {
+    TranscriptRecoveryMode transcriptMode,
+  })
+  _handler;
+
+  _FakeReconnectRecoveryCoordinator({
+    required Future<ReconnectRecoveryResult> Function(
+      String machineId, {
+      TranscriptRecoveryMode transcriptMode,
+    })
+    handler,
+  }) : _handler = handler,
+       super(
+         machines: _FakePairedMachineRepository(const []),
+         wsRepo: _FakeWsSessionRepository(initialActiveIds: const {}),
+         eventRepo: EventRepository(
+           wsRepo: _FakeWsSessionRepository(initialActiveIds: const {}),
+         ),
+         chatCacheRepo: SessionChatCacheRepository(),
+       );
+
+  @override
+  Future<ReconnectRecoveryResult> recoverMachine(
+    String machineId, {
+    TranscriptRecoveryMode transcriptMode =
+        TranscriptRecoveryMode.replayIfPossible,
+  }) {
+    return _handler(machineId, transcriptMode: transcriptMode);
   }
 }
 
@@ -84,7 +120,7 @@ PairedMachine _buildMachine(String machineId) {
 }
 
 void main() {
-  group('MainShellViewModel active session mirror', () {
+  group('MainShellViewModel session presence', () {
     late _FakeWsSessionRepository wsRepo;
     late EventRepository eventRepo;
     late MainShellViewModel viewModel;
@@ -113,17 +149,17 @@ void main() {
     });
 
     testWidgets(
-      'copies the repository active sessions into the shell on init',
+      'reads initial repository session presence without a shell mirror',
       (tester) async {
         viewModel.onInit();
         await tester.pump();
 
-        expect(viewModel.activeSessionIds, contains('machine-1'));
+        expect(viewModel.isMachineConnected('machine-1'), isTrue);
       },
     );
 
     testWidgets(
-      'replaces mirrored session ids when the repository stream emits',
+      'reflects updated repository session presence after listable changes',
       (tester) async {
         viewModel.onInit();
         await tester.pump();
@@ -131,8 +167,51 @@ void main() {
         wsRepo.emitActiveSessions({'machine-2'});
         await tester.pump();
 
-        expect(viewModel.activeSessionIds, isNot(contains('machine-1')));
-        expect(viewModel.activeSessionIds, contains('machine-2'));
+        expect(viewModel.isMachineConnected('machine-1'), isFalse);
+        expect(viewModel.isMachineConnected('machine-2'), isTrue);
+      },
+    );
+
+    testWidgets(
+      'reports a machine connected after successful recovery updates repository presence',
+      (tester) async {
+        final machine = _buildMachine('machine-1');
+        wsRepo.dispose();
+        eventRepo.dispose();
+        wsRepo = _FakeWsSessionRepository(initialActiveIds: const {});
+        eventRepo = EventRepository(wsRepo: wsRepo);
+        final recovery = _FakeReconnectRecoveryCoordinator(
+          handler:
+              (
+                machineId, {
+                transcriptMode = TranscriptRecoveryMode.replayIfPossible,
+              }) async {
+                wsRepo.emitActiveSessions({machineId});
+                return ReconnectRecoveryResult(
+                  machineId: machineId,
+                  transcript: TranscriptRecoveryState.skipped,
+                  metadata: MetadataRecoveryState.complete,
+                  sessionReady: true,
+                  statusesOk: true,
+                  titlesOk: true,
+                  approvalsOk: true,
+                );
+              },
+        );
+        viewModel = MainShellViewModel(
+          machineRepo: _FakePairedMachineRepository([machine]),
+          recovery: recovery,
+          wsRepo: wsRepo,
+          eventRepo: eventRepo,
+        );
+
+        expect(viewModel.isMachineConnected(machine.machineId), isFalse);
+
+        final result = await viewModel.connectMachine(machine);
+        await tester.pump();
+
+        expect(result.sessionReady, isTrue);
+        expect(viewModel.isMachineConnected(machine.machineId), isTrue);
       },
     );
   });

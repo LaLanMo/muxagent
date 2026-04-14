@@ -106,7 +106,9 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
                         Obx(
                           () => _buildFieldLabel(
-                            _modeSectionLabel(controller.selectedRuntime.value?.id),
+                            _modeSectionLabel(
+                              controller.selectedRuntime.value?.id,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -390,9 +392,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   runtime.label,
                   style: AppTypography.sans(
                     fontSize: 14,
-                    fontWeight: isSelected
-                        ? FontWeight.w500
-                        : FontWeight.w400,
+                    fontWeight: isSelected ? FontWeight.w500 : FontWeight.w400,
                     color: labelColor,
                   ),
                 ),
@@ -580,49 +580,59 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         color: AppTheme.surface,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Select Machine',
-                style: AppTypography.sans(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-            ),
-            const Divider(height: 1),
-            ...controller.machines.map((machine) {
-              final isOnline = controller.isMachineConnected(machine.machineId);
-              final name = machine.hostname ?? 'Unknown host';
-              return ListTile(
-                enabled: isOnline,
-                leading: const Icon(
-                  LucideIcons.monitor,
-                  size: 20,
-                  color: AppTheme.textSecondary,
-                ),
-                title: Text(
-                  name,
-                  style: AppTypography.sans(
-                    fontSize: 15,
-                    color: isOnline ? AppTheme.textPrimary : AppTheme.textMuted,
+        child: ValueListenableBuilder<Set<String>>(
+          valueListenable: controller.activeSessionIdsListenable,
+          builder: (context, activeSessionIds, _) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Text(
+                    'Select Machine',
+                    style: AppTypography.sans(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
                   ),
                 ),
-                trailing: isOnline ? _statusDot(true) : _statusDot(false),
-                onTap: isOnline
-                    ? () {
-                        controller.dismissTransientInputs();
-                        controller.selectMachine(machine);
-                        Get.back();
-                      }
-                    : null,
-              );
-            }),
-          ],
+                const Divider(height: 1),
+                ...controller.machines.map((machine) {
+                  final isOnline = activeSessionIds.contains(machine.machineId);
+                  final name = machine.hostname ?? 'Unknown host';
+                  return ListTile(
+                    enabled: isOnline,
+                    leading: const Icon(
+                      LucideIcons.monitor,
+                      size: 20,
+                      color: AppTheme.textSecondary,
+                    ),
+                    title: Text(
+                      name,
+                      style: AppTypography.sans(
+                        fontSize: 15,
+                        color: isOnline
+                            ? AppTheme.textPrimary
+                            : AppTheme.textMuted,
+                      ),
+                    ),
+                    trailing: isOnline ? _statusDot(true) : _statusDot(false),
+                    onTap: isOnline
+                        ? () {
+                            controller.dismissTransientInputs();
+                            controller.selectMachine(machine);
+                            Get.back();
+                          }
+                        : null,
+                  );
+                }),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -728,14 +738,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               ),
             ),
             if (isOpen) ...[
-              Container(
-                height: 1,
-                color: AppTheme.borderStrong,
-              ),
+              Container(height: 1, color: AppTheme.borderStrong),
               Obx(() {
                 final filtered = controller.filteredCwds;
-                final highlightFirstMatch =
-                    controller.cwdController.text.trim().isNotEmpty;
+                final highlightFirstMatch = controller.cwdController.text
+                    .trim()
+                    .isNotEmpty;
                 if (filtered.isEmpty) {
                   return Container(
                     width: double.infinity,

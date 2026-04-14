@@ -63,14 +63,52 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   static bool shouldTriggerReconnectFallback({
     required ReconnectRecoveryResult result,
     required bool hasSeenDisconnect,
-    required ConnState connState,
+    required ConnState transportState,
     required bool hasSession,
   }) {
     return hasSeenDisconnect &&
         result.transcript == TranscriptRecoveryState.fallbackNeeded &&
-        connState == ConnState.connected &&
+        transportState == ConnState.connected &&
         hasSession &&
         result.sessionReady;
+  }
+
+  @visibleForTesting
+  static bool shouldQueueReconnectFallback({
+    required ReconnectRecoveryResult result,
+    required bool hasSeenDisconnect,
+    required ConnState transportState,
+    required bool hasSession,
+  }) {
+    return hasSeenDisconnect &&
+        result.transcript == TranscriptRecoveryState.fallbackNeeded &&
+        transportState != ConnState.connected &&
+        hasSession &&
+        result.sessionReady;
+  }
+
+  @visibleForTesting
+  static bool shouldResumeQueuedReconnectFallback({
+    required bool hasQueuedReconnectFallback,
+    required bool hasSeenDisconnect,
+    required ConnState transportState,
+    required bool hasSession,
+  }) {
+    return hasQueuedReconnectFallback &&
+        hasSeenDisconnect &&
+        transportState == ConnState.connected &&
+        hasSession;
+  }
+
+  @visibleForTesting
+  static bool shouldAttemptInitialPrompt({
+    required bool didAttemptInitialPrompt,
+    required String initialPrompt,
+    required bool canPrompt,
+  }) {
+    return !didAttemptInitialPrompt &&
+        initialPrompt.trim().isNotEmpty &&
+        canPrompt;
   }
 
   @visibleForTesting
@@ -141,11 +179,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   @visibleForTesting
   static bool shouldEnableComposer({
     required ChatUiMode uiMode,
-    required ConnState connState,
+    required ConnState transportState,
     required bool isRecoveringAfterReconnect,
   }) {
     return uiMode == ChatUiMode.normal &&
-        connState == ConnState.connected &&
+        transportState == ConnState.connected &&
         !isRecoveringAfterReconnect;
   }
 
@@ -197,7 +235,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   final currentMode = Rxn<ModeOption>();
   final availableModes = <ModeOption>[].obs;
   final runtimeId = ''.obs;
-  final connState = ConnState.connected.obs;
   final sessionTitle = ''.obs;
   final isLoading = true.obs;
   final showScrollToBottomButton = false.obs;
@@ -221,9 +258,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   final usageVersion = 0.obs;
   final isRecoveringAfterReconnect = false.obs;
   String get cwd => effectiveCwd.value;
+  Rx<ConnState> get transportState => _wsRepo.connectionState;
+  ConnState get currentTransportState => _wsRepo.connectionState.value;
   bool get canPrompt => shouldEnableComposer(
     uiMode: uiMode.value,
-    connState: connState.value,
+    transportState: currentTransportState,
     isRecoveringAfterReconnect: isRecoveringAfterReconnect.value,
   );
   bool get canMutateSession => uiMode.value == ChatUiMode.normal;
@@ -292,15 +331,17 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   SessionChatCacheEntry? _lastCacheEntry;
   Future<void>? _sessionLoadFuture;
   bool _pendingTranscriptRepair = false;
+  bool _pendingReconnectFallback = false;
   int _visibleTranscriptWatermark = 0;
   int _rebuildTranscriptWatermark = 0;
   String? _initialPrompt;
   bool _didAttemptInitialPrompt = false;
+  ConnState _lastTransportState = ConnState.connected;
 
   StreamSubscription<AgentEvent>? _eventSub;
   StreamSubscription<void>? _sessionMetaSub;
   StreamSubscription<ReconnectRecoveryResult>? _recoverySub;
-  Worker? _connStateWorker;
+  Worker? _transportStateWorker;
   Timer? _foregroundReconnectTimer;
 
   @override
@@ -336,7 +377,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
     _eventRepo.markViewing(sessionId);
     _eventRepo.markAsRead(sessionId);
-    connState.value = _wsRepo.connectionState.value;
+    _lastTransportState = currentTransportState;
 
     scrollController.addListener(_onScrollChanged);
     inputController.addListener(_detectMention);
@@ -377,7 +418,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     _subscribeEvents();
     _subscribeSessionSnapshot();
     _subscribeRecoveryNotifications();
-    _subscribeConnectionState();
+    _subscribeTransportState();
   }
 
   void _subscribeEvents() {
@@ -403,27 +444,35 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         });
   }
 
-  void _subscribeConnectionState() {
-    _connStateWorker = ever<ConnState>(_wsRepo.connectionState, (state) {
-      final previous = connState.value;
-      connState.value = state;
-      if (state == ConnState.disconnected) {
-        _hasSeenDisconnect = true;
-        _startForegroundReconnectRetry();
-        return;
-      }
-      if (state == ConnState.reconnecting) {
-        _hasSeenDisconnect = true;
-        return;
-      }
-      _stopForegroundReconnectRetry();
-      if (previous != ConnState.connected) {
-        _syncSessionSnapshotFromRepository();
-      }
+  void _subscribeTransportState() {
+    _transportStateWorker = ever<ConnState>(_wsRepo.connectionState, (state) {
+      unawaited(_handleTransportStateChange(state));
     });
-    if (connState.value == ConnState.disconnected) {
+    if (currentTransportState == ConnState.disconnected) {
       _hasSeenDisconnect = true;
       _startForegroundReconnectRetry();
+    } else if (currentTransportState == ConnState.reconnecting) {
+      _hasSeenDisconnect = true;
+    }
+  }
+
+  Future<void> _handleTransportStateChange(ConnState state) async {
+    final previous = _lastTransportState;
+    _lastTransportState = state;
+    if (state == ConnState.disconnected) {
+      _hasSeenDisconnect = true;
+      _startForegroundReconnectRetry();
+      return;
+    }
+    if (state == ConnState.reconnecting) {
+      _hasSeenDisconnect = true;
+      return;
+    }
+    _stopForegroundReconnectRetry();
+    if (previous != ConnState.connected) {
+      _syncSessionSnapshotFromRepository();
+      await _maybeRunQueuedReconnectFallback();
+      _maybeSendInitialPrompt();
     }
   }
 
@@ -511,17 +560,22 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   void _maybeSendInitialPrompt() {
+    final prompt = _initialPrompt?.trim() ?? '';
     if (_didAttemptInitialPrompt) {
       return;
     }
-    _didAttemptInitialPrompt = true;
-    final prompt = _initialPrompt?.trim() ?? '';
     if (prompt.isEmpty) {
+      _didAttemptInitialPrompt = true;
       return;
     }
-    if (!canPrompt) {
+    if (!shouldAttemptInitialPrompt(
+      didAttemptInitialPrompt: _didAttemptInitialPrompt,
+      initialPrompt: prompt,
+      canPrompt: canPrompt,
+    )) {
       return;
     }
+    _didAttemptInitialPrompt = true;
     unawaited(sendMessage(prompt));
   }
 
@@ -577,7 +631,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
     unawaited(_attemptForegroundRecovery());
     _foregroundReconnectTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      if (isClosed || connState.value == ConnState.connected) {
+      if (isClosed || currentTransportState == ConnState.connected) {
         _stopForegroundReconnectRetry();
         return;
       }
@@ -615,7 +669,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       '[ChatRecovery] session=$sessionId machine=$machineId '
       'transcript=${result.transcript} metadata=${result.metadata} '
       'hasSeenDisconnect=$_hasSeenDisconnect '
-      'conn=${connState.value} '
+      'transport=$currentTransportState '
       'hasSession=${_wsRepo.hasSession(machineId)} '
       'sessionReady=${result.sessionReady}',
     );
@@ -628,19 +682,48 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     }
 
     if (result.transcript == TranscriptRecoveryState.complete) {
+      _pendingReconnectFallback = false;
       unawaited(_refreshSessionConfigInBackground());
       _hasSeenDisconnect = false;
+      _maybeSendInitialPrompt();
+      return;
+    }
+    final hasSession = _wsRepo.hasSession(machineId);
+    if (shouldQueueReconnectFallback(
+      result: result,
+      hasSeenDisconnect: _hasSeenDisconnect,
+      transportState: currentTransportState,
+      hasSession: hasSession,
+    )) {
+      _pendingReconnectFallback = true;
       return;
     }
     if (!shouldTriggerReconnectFallback(
       result: result,
       hasSeenDisconnect: _hasSeenDisconnect,
-      connState: connState.value,
-      hasSession: _wsRepo.hasSession(machineId),
+      transportState: currentTransportState,
+      hasSession: hasSession,
     )) {
       return;
     }
 
+    await _runReconnectFallback();
+  }
+
+  Future<void> _maybeRunQueuedReconnectFallback() async {
+    if (!shouldResumeQueuedReconnectFallback(
+      hasQueuedReconnectFallback: _pendingReconnectFallback,
+      hasSeenDisconnect: _hasSeenDisconnect,
+      transportState: currentTransportState,
+      hasSession: _wsRepo.hasSession(machineId),
+    )) {
+      return;
+    }
+    await _runReconnectFallback();
+  }
+
+  Future<void> _runReconnectFallback() async {
+    _pendingReconnectFallback = false;
     debugPrint(
       '[ChatRecovery] session=$sessionId machine=$machineId '
       'triggering=session.load-fallback',
@@ -653,6 +736,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       if (refreshed != null && refreshed.isRenderable) {
         uiMode.value = ChatUiMode.viewOnly;
       }
+      _maybeSendInitialPrompt();
       return;
     }
     await _performSessionLoad(
@@ -663,6 +747,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     if (!isClosed) {
       _hasSeenDisconnect = false;
     }
+    _maybeSendInitialPrompt();
   }
 
   void _applyRepositoryConfigSnapshot(SessionConfigSnapshot snapshot) {
@@ -707,7 +792,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   Future<void> _refreshSessionConfigInBackground() async {
     if (isClosed ||
         machineId.isEmpty ||
-        connState.value != ConnState.connected ||
+        currentTransportState != ConnState.connected ||
         _sessionLoadFuture != null) {
       return;
     }
@@ -1726,7 +1811,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     _eventSub?.cancel();
     _sessionMetaSub?.cancel();
     _recoverySub?.cancel();
-    _connStateWorker?.dispose();
+    _transportStateWorker?.dispose();
     _searchDebounce?.cancel();
     _stopForegroundReconnectRetry();
     scrollController.dispose();

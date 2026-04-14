@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../domain/enums.dart';
 import '../../config/theme.dart';
+import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/session.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
@@ -16,6 +17,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   const ActiveTab({super.key});
 
   MainShellViewModel get shell => Get.find<MainShellViewModel>();
+  WsSessionRepository get wsRepo => Get.find<WsSessionRepository>();
 
   @override
   Widget build(BuildContext context) {
@@ -89,10 +91,12 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             const SizedBox(height: 20),
             Obx(() {
               final machines = shell.machines.toList(growable: false);
-              final activeSessionIds = shell.activeSessionIds.toSet();
-              return _buildMachineCard(
-                machines: machines,
-                activeSessionIds: activeSessionIds,
+              return ValueListenableBuilder<Set<String>>(
+                valueListenable: wsRepo.activeSessionIdsListenable,
+                builder: (context, activeSessionIds, _) => _buildMachineCard(
+                  machines: machines,
+                  activeSessionIds: activeSessionIds,
+                ),
               );
             }),
             const SizedBox(height: 20),
