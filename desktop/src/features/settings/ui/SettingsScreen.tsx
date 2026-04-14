@@ -1,21 +1,11 @@
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
-import type { SettingsWorkspaceRowModel } from "@/features/settings/model/use-settings-screen";
 import type { InitializeResult, ServiceStatusResult } from "@/rpc/types";
 
 type SettingsScreenProps = {
   shell: ShellChromeModel;
   status?: ServiceStatusResult;
-  workDir?: string;
   server?: InitializeResult;
-  workspaceRows: SettingsWorkspaceRowModel[];
-  renameDraft: string;
-  setRenameDraft: (value: string) => void;
-  workspaceActionError?: string;
-  beginRename: (workspaceId: string) => void;
-  cancelRename: () => void;
-  commitRename: (workspaceId: string) => Promise<void>;
-  removeWorkspace: (workspaceId: string) => Promise<void>;
 };
 
 export function SettingsScreen({
@@ -34,6 +24,7 @@ export function SettingsScreen({
       onPrimaryAction={shell.openNewTask}
       primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
       primaryNav={shell.primaryNav}
+      workspaceRemoveDialog={shell.workspaceRemoveDialog}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
       topBarLeft={<h1 className="screen-title">Settings</h1>}

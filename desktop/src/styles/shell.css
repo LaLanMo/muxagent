@@ -145,11 +145,19 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   overflow: auto;
 }
 
+.shell-workspace__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .shell-workspace__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
+  width: 100%;
   min-height: 0;
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
@@ -165,6 +173,37 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
 .shell-workspace__row.is-active {
   background: var(--color-surface-selected);
   color: var(--color-text-primary);
+}
+
+.shell-workspace__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(4px);
+}
+
+.shell-workspace__item:hover .shell-workspace__remove,
+.shell-workspace__item:focus-within .shell-workspace__remove,
+.shell-workspace__item.is-pending .shell-workspace__remove {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.shell-workspace__remove:hover,
+.shell-workspace__remove:focus-visible {
+  background: var(--color-error-bg);
+  color: var(--color-status-failed-text);
+}
+
+.shell-workspace__remove:disabled {
+  cursor: wait;
+  opacity: 1;
 }
 
 .shell-workspace__leading {

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 async function connectWorkspace(page: Page, path: string) {
   await expect(page.getByTestId("workspace-picker-button")).toBeEnabled();
@@ -10,6 +10,19 @@ async function connectPrimaryWorkspace(page: Page) {
   await page.goto("/");
   await connectWorkspace(page, "/tmp/muxagent-workspace");
   await expect(page.getByTestId("entry-shell")).toBeVisible();
+}
+
+function workspaceRow(page: Page, label: string): Locator {
+  return page.locator('[data-testid^="workspace-row-"]').filter({ hasText: label }).first();
+}
+
+async function removeWorkspaceFromSidebar(page: Page, label: string) {
+  const row = workspaceRow(page, label);
+  await row.hover();
+  await expect(row.getByTestId("workspace-row-remove-button")).toBeVisible();
+  await row.getByTestId("workspace-row-remove-button").click();
+  await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+  await page.getByTestId("confirm-dialog-submit").click();
 }
 
 test("keeps settings sparse and removes legacy workspace management controls", async ({ page }) => {
@@ -36,7 +49,7 @@ test("uses a single active destination state between Tasks and workspace rows", 
   await expect(page.locator(".shell-nav__row.is-active")).toContainText("Tasks");
   await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
 
-  await page.locator(".shell-workspace__row").filter({ hasText: "muxagent-alt-workspace" }).click();
+  await workspaceRow(page, "muxagent-alt-workspace").locator(".shell-workspace__row").click();
   await expect(page).toHaveURL(/\/$/);
   await expect(
     page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
@@ -46,4 +59,25 @@ test("uses a single active destination state between Tasks and workspace rows", 
   await page.getByRole("link", { name: /^Tasks$/i }).click();
   await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
   await expect(page.locator(".shell-nav__row.is-active")).toContainText("Tasks");
+});
+
+test("reveals a row-scoped sidebar delete action and removes the selected workspace", async ({
+  page,
+}) => {
+  await connectPrimaryWorkspace(page);
+  await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
+
+  await workspaceRow(page, "muxagent-alt-workspace").locator(".shell-workspace__row").click();
+  await expect(
+    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+  ).toContainText("muxagent-alt-workspace");
+
+  await removeWorkspaceFromSidebar(page, "muxagent-alt-workspace");
+
+  await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+  await expect(workspaceRow(page, "muxagent-alt-workspace")).toHaveCount(0);
+  await expect(workspaceRow(page, "muxagent-workspace")).toHaveCount(1);
+  await expect(
+    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+  ).toContainText("muxagent-workspace");
 });

@@ -827,6 +827,7 @@ export function TaskDetailScreen({
       primaryNav={shell.primaryNav}
       topBarClassName="desktop-shell__topbar--detail"
       topBarLeft={<span />}
+      workspaceRemoveDialog={shell.workspaceRemoveDialog}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
     >

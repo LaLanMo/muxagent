@@ -1,8 +1,12 @@
 import type { ReactNode } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { ShellIcon, type ShellIconName } from "@/features/layout/ui/ShellIcon";
 import { Button } from "@/features/shared/ui/Button";
+import {
+  ConfirmDialog,
+  type ConfirmDialogProps,
+} from "@/features/shared/ui/ConfirmDialog";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
 
 export type ShellNavItem = {
@@ -21,6 +25,8 @@ export type ShellWorkspaceItem = {
   badgeCount?: number;
   badgeTone?: "running" | "attention";
   onClick: () => void;
+  onRemove?: () => void;
+  removePending?: boolean;
 };
 
 type DesktopShellFrameProps = {
@@ -35,6 +41,7 @@ type DesktopShellFrameProps = {
   primaryActionDisabled?: boolean;
   primaryNav: ShellNavItem[];
   footerNav?: ShellNavItem;
+  workspaceRemoveDialog?: ConfirmDialogProps;
 };
 
 function ShellNavRow(item: ShellNavItem) {
@@ -81,28 +88,52 @@ function ShellNavRow(item: ShellNavItem) {
 }
 
 function ShellWorkspaceRow(item: ShellWorkspaceItem) {
+  const badgeClassName = item.badgeTone
+    ? `shell-workspace__badge shell-workspace__badge--${item.badgeTone}`
+    : "shell-workspace__badge";
+
   return (
-    <button
+    <div
+      className={`shell-workspace__item${item.active ? " is-active" : ""}${
+        item.removePending ? " is-pending" : ""
+      }`}
       data-testid={`workspace-row-${item.id}`}
-      className={`shell-workspace__row${item.active ? " is-active" : ""}`}
-      onClick={item.onClick}
-      title={item.label}
-      type="button"
     >
-      <span className="shell-workspace__leading">
-        <span aria-hidden="true" className="shell-workspace__glyph">
-          {item.active ? "⌂" : "◌"}
+      <button
+        className={`shell-workspace__row${item.active ? " is-active" : ""}`}
+        onClick={item.onClick}
+        title={item.label}
+        type="button"
+      >
+        <span className="shell-workspace__leading">
+          <span aria-hidden="true" className="shell-workspace__glyph">
+            {item.active ? "⌂" : "◌"}
+          </span>
+          <span className="shell-workspace__copy">
+            <span className="shell-workspace__label">{item.label}</span>
+          </span>
         </span>
-        <span className="shell-workspace__copy">
-          <span className="shell-workspace__label">{item.label}</span>
-        </span>
-      </span>
-      {item.active && item.badgeCount ? (
-        <span className="shell-workspace__count">
-          {item.badgeCount}
-        </span>
+        {item.active && item.badgeCount ? (
+          <span className={badgeClassName}>{item.badgeCount}</span>
+        ) : null}
+      </button>
+
+      {item.onRemove ? (
+        <button
+          aria-label={`Remove workspace ${item.label}`}
+          className="icon-button shell-workspace__remove"
+          data-testid="workspace-row-remove-button"
+          disabled={item.removePending}
+          onClick={(event) => {
+            event.stopPropagation();
+            item.onRemove?.();
+          }}
+          type="button"
+        >
+          <Trash2 aria-hidden="true" size={14} strokeWidth={1.9} />
+        </button>
       ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -118,96 +149,101 @@ export function DesktopShellFrame({
   primaryActionDisabled = false,
   primaryNav,
   footerNav,
+  workspaceRemoveDialog,
 }: DesktopShellFrameProps) {
   return (
-    <main className="desktop-shell">
-      <aside className="desktop-shell__sidebar">
-        <div
-          aria-hidden="true"
-          className="desktop-shell__sidebar-drag-strip"
-          onMouseDown={(event) => {
-            void startWindowDrag(event);
-          }}
-        />
-        <div className="desktop-shell__sidebar-top">
-          {onPrimaryAction ? (
-            <Button
-              data-testid="open-new-task"
-              disabled={primaryActionDisabled}
-              fullWidth
-              leadingIcon={<Plus strokeWidth={2.2} />}
-              onClick={onPrimaryAction}
-              size="md"
-              type="button"
-              variant="primary"
-            >
-              New Task
-            </Button>
-          ) : null}
+    <>
+      <main className="desktop-shell">
+        <aside className="desktop-shell__sidebar">
+          <div
+            aria-hidden="true"
+            className="desktop-shell__sidebar-drag-strip"
+            onMouseDown={(event) => {
+              void startWindowDrag(event);
+            }}
+          />
+          <div className="desktop-shell__sidebar-top">
+            {onPrimaryAction ? (
+              <Button
+                data-testid="open-new-task"
+                disabled={primaryActionDisabled}
+                fullWidth
+                leadingIcon={<Plus strokeWidth={2.2} />}
+                onClick={onPrimaryAction}
+                size="md"
+                type="button"
+                variant="primary"
+              >
+                New Task
+              </Button>
+            ) : null}
 
-          <nav className="shell-nav">
-            <div className="shell-nav__group">
-              {primaryNav.map((item) => (
-                <ShellNavRow key={`${item.label}-${item.to ?? "action"}`} {...item} />
-              ))}
-            </div>
-          </nav>
+            <nav className="shell-nav">
+              <div className="shell-nav__group">
+                {primaryNav.map((item) => (
+                  <ShellNavRow key={`${item.label}-${item.to ?? "action"}`} {...item} />
+                ))}
+              </div>
+            </nav>
 
-          <div className="shell-section">
-            <div className="shell-section__header">
-              <span className="shell-section__title">Workspaces</span>
-              {onAddWorkspace ? (
-                <button
-                  className="shell-section__add"
-                  data-testid="workspace-picker-button"
-                  disabled={addWorkspaceDisabled}
-                  onClick={onAddWorkspace}
-                  type="button"
-                >
-                  <Plus aria-hidden="true" size={12} strokeWidth={2.2} />
-                </button>
-              ) : null}
-            </div>
-            <div className="shell-workspace__list">
-              {workspaceItems.length > 0 ? (
-                workspaceItems.map((item) => (
-                  <ShellWorkspaceRow key={item.id} {...item} />
-                ))
-              ) : (
-                <div className="shell-section__empty">No workspaces yet</div>
-              )}
+            <div className="shell-section">
+              <div className="shell-section__header">
+                <span className="shell-section__title">Workspaces</span>
+                {onAddWorkspace ? (
+                  <button
+                    className="shell-section__add"
+                    data-testid="workspace-picker-button"
+                    disabled={addWorkspaceDisabled}
+                    onClick={onAddWorkspace}
+                    type="button"
+                  >
+                    <Plus aria-hidden="true" size={12} strokeWidth={2.2} />
+                  </button>
+                ) : null}
+              </div>
+              <div className="shell-workspace__list">
+                {workspaceItems.length > 0 ? (
+                  workspaceItems.map((item) => (
+                    <ShellWorkspaceRow key={item.id} {...item} />
+                  ))
+                ) : (
+                  <div className="shell-section__empty">No workspaces yet</div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {footerNav ? (
-          <div className="desktop-shell__sidebar-footer">
-            <ShellNavRow {...footerNav} />
-          </div>
-        ) : null}
-      </aside>
-
-      <div className="desktop-shell__divider" />
-
-      <section className="desktop-shell__main">
-        <header
-          className={
-            topBarClassName
-              ? `desktop-shell__topbar ${topBarClassName}`
-              : "desktop-shell__topbar"
-          }
-          onMouseDown={(event) => {
-            void startWindowDrag(event);
-          }}
-        >
-          <div className="desktop-shell__topbar-left">{topBarLeft}</div>
-          {topBarRight ? (
-            <div className="desktop-shell__topbar-right">{topBarRight}</div>
+          {footerNav ? (
+            <div className="desktop-shell__sidebar-footer">
+              <ShellNavRow {...footerNav} />
+            </div>
           ) : null}
-        </header>
-        <div className="desktop-shell__topbar-divider" />
-        <div className="desktop-shell__content">{children}</div>
-      </section>
-    </main>
+        </aside>
+
+        <div className="desktop-shell__divider" />
+
+        <section className="desktop-shell__main">
+          <header
+            className={
+              topBarClassName
+                ? `desktop-shell__topbar ${topBarClassName}`
+                : "desktop-shell__topbar"
+            }
+            onMouseDown={(event) => {
+              void startWindowDrag(event);
+            }}
+          >
+            <div className="desktop-shell__topbar-left">{topBarLeft}</div>
+            {topBarRight ? (
+              <div className="desktop-shell__topbar-right">{topBarRight}</div>
+            ) : null}
+          </header>
+          <div className="desktop-shell__topbar-divider" />
+          <div className="desktop-shell__content">{children}</div>
+        </section>
+      </main>
+
+      {workspaceRemoveDialog ? <ConfirmDialog {...workspaceRemoveDialog} /> : null}
+    </>
   );
 }

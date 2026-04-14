@@ -161,22 +161,7 @@ function ConfigEditorRoute() {
 
 function SettingsRoute() {
   const model = useSettingsScreen();
-  return (
-    <SettingsScreen
-      beginRename={model.beginRename}
-      cancelRename={model.cancelRename}
-      commitRename={model.commitRename}
-      removeWorkspace={model.removeWorkspace}
-      renameDraft={model.renameDraft}
-      server={model.server}
-      shell={model.shell}
-      status={model.status}
-      setRenameDraft={model.setRenameDraft}
-      workspaceActionError={model.workspaceActionError}
-      workspaceRows={model.workspaceRows}
-      workDir={model.workDir}
-    />
-  );
+  return <SettingsScreen server={model.server} shell={model.shell} status={model.status} />;
 }
 
 export function App() {

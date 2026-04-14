@@ -1,9 +1,10 @@
+import type { ReactNode } from "react";
 import { Button } from "@/features/shared/ui/Button";
 
-type ConfirmDialogProps = {
+export type ConfirmDialogProps = {
   open: boolean;
   title: string;
-  body: string;
+  body: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   confirmDisabled?: boolean;
@@ -34,7 +35,7 @@ export function ConfirmDialog({
         </header>
 
         <div className="confirm-modal__body">
-          <p>{body}</p>
+          {typeof body === "string" ? <p>{body}</p> : body}
         </div>
 
         <footer className="confirm-modal__footer">

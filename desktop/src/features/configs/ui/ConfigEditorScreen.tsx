@@ -94,6 +94,7 @@ export function ConfigEditorScreen({
       primaryNav={shell.primaryNav}
       topBarClassName="desktop-shell__topbar--detail"
       topBarLeft={null}
+      workspaceRemoveDialog={shell.workspaceRemoveDialog}
       workspaceItems={shell.workspaceItems}
       onAddWorkspace={() => void shell.addWorkspace()}
     >

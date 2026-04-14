@@ -10,6 +10,7 @@ import type {
   ShellNavItem,
   ShellWorkspaceItem,
 } from "@/features/layout/ui/DesktopShellFrame";
+import type { ConfirmDialogProps } from "@/features/shared/ui/ConfirmDialog";
 import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
@@ -57,6 +58,7 @@ export type ShellChromeState = {
 export type ShellChromeModel = Omit<ShellChromeState, "workspaceItems"> &
   ShellCommands & {
     workspaceItems: ShellWorkspaceItem[];
+    workspaceRemoveDialog?: ConfirmDialogProps;
   };
 
 export function useShellChrome(): ShellChromeState {

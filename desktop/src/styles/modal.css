@@ -86,6 +86,8 @@
 }
 
 .confirm-modal__body {
+  display: grid;
+  gap: var(--space-3);
   padding: var(--space-5) var(--space-6);
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);

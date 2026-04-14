@@ -42,6 +42,7 @@ export function EntryShellScreen({
           shell.phase !== "connected" || shell.workspaceCount === 0 || launchableEntries.length === 0
         }
         primaryNav={shell.primaryNav}
+        workspaceRemoveDialog={shell.workspaceRemoveDialog}
         workspaceItems={shell.workspaceItems}
         onAddWorkspace={() => void shell.addWorkspace()}
         topBarLeft={
