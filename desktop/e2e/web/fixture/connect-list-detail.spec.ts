@@ -16,7 +16,7 @@ async function connectFixtureWorkspace(
 }
 
 async function openTaskFromBoard(page: Page, taskId: string) {
-  await page.getByTestId(`board-card-${taskId}`).click();
+  await page.getByTestId(`board-card-link-${taskId}`).click();
 }
 
 async function readHeaderAlignment(page: Page) {
@@ -290,6 +290,33 @@ test("shows parent task history in detail and lets the user navigate up the chai
     "Refactor the auth middleware to use JWT validation with configurable TTL",
   );
   await expect(page.getByTestId("detail-task-history")).toHaveCount(0);
+});
+
+test("aggregates follow-up parents on the board and reveals the full lineage on each leaf card", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  await expect(page.getByTestId("board-card-task-follow-up-history-root")).toHaveCount(0);
+  await expect(page.getByTestId("board-card-task-follow-up-history-parent")).toHaveCount(0);
+  await expect(page.getByTestId("board-card-task-follow-up-history-fixture")).toBeVisible();
+  await expect(page.getByTestId("board-card-task-follow-up-history-sibling")).toBeVisible();
+  await expect(
+    page.getByTestId("board-card-lineage-toggle-task-follow-up-history-sibling"),
+  ).toContainText("2 PREVIOUS");
+
+  await page.getByTestId("board-card-lineage-toggle-task-follow-up-history-fixture").click();
+  await expect(
+    page.getByTestId("board-card-lineage-toggle-task-follow-up-history-fixture"),
+  ).toContainText("PREVIOUSLY");
+  await expect(
+    page
+      .getByTestId("board-card-lineage-task-follow-up-history-fixture")
+      .locator(".task-board-card__ancestor-title"),
+  ).toHaveText([
+    "Refactor the auth middleware to use JWT validation with configurable TTL",
+    "Add test coverage for the new token refresh logic",
+  ]);
 });
 
 test("matches the follow-up history row geometry from the design frame", async ({ page }) => {
@@ -797,7 +824,8 @@ test("restores the originating task-surface workspace scope after leaving task d
     .locator('[data-testid="board-card-task-live-fixture"]')
     .filter({ hasText: "muxagent-workspace" })
     .first();
-  await allTasksCard.click();
+  const allTasksLink = allTasksCard.getByTestId("board-card-link-task-live-fixture");
+  await allTasksLink.click();
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await expect(
     page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
@@ -807,7 +835,7 @@ test("restores the originating task-surface workspace scope after leaving task d
   await expect(page).toHaveURL(/\/$/);
   await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
 
-  await allTasksCard.click();
+  await allTasksLink.click();
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
@@ -1348,11 +1376,13 @@ test("keeps dense completed-column cards at their natural height instead of shri
   );
 });
 
-test("keeps board lane headers aligned when neighboring columns overflow", async ({
+test("keeps board lane headers aligned when neighboring columns overflow and lineage cards expand", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1200, height: 540 });
   await connectFixtureWorkspace(page);
+  await page.getByTestId("board-card-lineage-toggle-task-follow-up-history-sibling").click();
+  await page.getByTestId("board-card-lineage-toggle-task-follow-up-history-fixture").click();
 
   const lanes = await page.getByTestId("task-board").evaluate((board) => {
     const counts = board.querySelectorAll<HTMLElement>(".board-column__count");

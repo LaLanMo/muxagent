@@ -1843,7 +1843,8 @@ export class FixtureRuntime {
     const recentBase = Date.now();
     const makeRecentTime = (offsetMs: number) =>
       new Date(recentBase + offsetMs).toISOString();
-    const minute = 60_000;
+    const second = 1_000;
+    const minute = 60 * second;
     const day = 24 * 60 * minute;
 
     if (path.basename(workspacePath) === "muxagent-stale-workspace") {
@@ -2205,6 +2206,71 @@ export class FixtureRuntime {
           ],
           runHistoryByRunId: {
             "run-follow-up-history-implement": [],
+          },
+        });
+        task.task.parent_task_id = "task-follow-up-history-parent";
+        task.task.parent_task_description =
+          "Add test coverage for the new token refresh logic";
+        return task;
+      })(),
+      (() => {
+        const currentUpdatedOffset = -45 * second;
+        const currentStartOffset = currentUpdatedOffset - 18 * minute;
+        const task = this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-follow-up-history-sibling",
+          description: "Restore paused daemon state by replaying the last persisted follow-up snapshot",
+          configAlias: "default",
+          createdAt: makeRecentTime(currentStartOffset - 10 * minute),
+          updatedAt: makeRecentTime(currentUpdatedOffset),
+          status: "running",
+          currentNodeName: "verify",
+          currentNodeType: "agent",
+          nodeRuns: [
+            {
+              id: "run-follow-up-history-sibling-draft",
+              task_id: "task-follow-up-history-sibling",
+              node_name: "draft_plan",
+              status: "done",
+              started_at: makeRecentTime(currentStartOffset),
+              completed_at: makeRecentTime(currentStartOffset + 2 * minute),
+              artifact_paths: ["plan.md"],
+            },
+            {
+              id: "run-follow-up-history-sibling-implement",
+              task_id: "task-follow-up-history-sibling",
+              node_name: "implement",
+              status: "done",
+              started_at: makeRecentTime(currentStartOffset + 3 * minute),
+              completed_at: makeRecentTime(currentStartOffset + 12 * minute),
+              artifact_paths: ["resume-snapshot.ts"],
+            },
+            {
+              id: "run-follow-up-history-sibling-verify",
+              task_id: "task-follow-up-history-sibling",
+              node_name: "verify",
+              status: "running",
+              started_at: makeRecentTime(currentStartOffset + 13 * minute),
+              session_id: "session-follow-up-history-sibling-verify",
+            },
+          ],
+          liveOutputRunId: "run-follow-up-history-sibling-verify",
+          liveEvents: [
+            {
+              event_id: "evt-follow-up-history-sibling-1",
+              seq: 1,
+              emitted_at: makeRecentTime(currentUpdatedOffset - 20 * second),
+              recorded_at: makeRecentTime(currentUpdatedOffset - 20 * second),
+              session_id: "session-follow-up-history-sibling-verify",
+              provenance: "executor_persisted",
+              kind: "message",
+              role: "assistant",
+              part_type: "text",
+              text: "Comparing the resumed daemon snapshot with the persisted follow-up task chain.",
+            },
+          ],
+          runHistoryByRunId: {
+            "run-follow-up-history-sibling-verify": [],
           },
         });
         task.task.parent_task_id = "task-follow-up-history-parent";

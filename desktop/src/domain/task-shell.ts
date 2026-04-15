@@ -41,6 +41,23 @@ export type ScopedTaskView = {
   task: TaskViewDto;
 };
 
+export type BoardLeafTask = {
+  leafTask: ScopedTaskView;
+  ancestors: ScopedTaskView[];
+};
+
+export type ScopedBoardColumn = {
+  key: BoardColumnBucket;
+  label: string;
+  tasks: BoardLeafTask[];
+};
+
+export type ScopedTaskBoardGrouping = {
+  allLeafTasks: BoardLeafTask[];
+  visibleLeafTasks: BoardLeafTask[];
+  columns: ScopedBoardColumn[];
+};
+
 const boardColumnLabels: Record<BoardColumnBucket, string> = {
   attention: "Needs Attention",
   running: "Running",
@@ -114,21 +131,110 @@ export function boardColumnBucket(task: TaskViewDto): BoardColumnBucket {
 }
 
 export function filterTasks(tasks: TaskViewDto[], filter: BoardFilter): TaskViewDto[] {
-  return tasks.filter((task) => {
-    const bucket = taskBucket(task);
-    switch (filter) {
-      case "attention":
-        return bucket === "awaiting" || bucket === "failed";
-      case "active":
-        return bucket === "running";
-      case "history":
-        return bucket === "done";
-      case "mine":
-      case "all":
-      default:
-        return true;
+  return tasks.filter((task) => taskMatchesBoardFilter(task, filter));
+}
+
+function taskMatchesBoardFilter(task: TaskViewDto, filter: BoardFilter): boolean {
+  const bucket = taskBucket(task);
+  switch (filter) {
+    case "attention":
+      return bucket === "awaiting" || bucket === "failed";
+    case "active":
+      return bucket === "running";
+    case "history":
+      return bucket === "done";
+    case "mine":
+    case "all":
+    default:
+      return true;
+  }
+}
+
+function sortScopedTasksByUpdatedAtDesc(
+  left: ScopedTaskView,
+  right: ScopedTaskView,
+): number {
+  return right.task.task.updated_at.localeCompare(left.task.task.updated_at);
+}
+
+function buildLeafTaskAncestors(
+  leafTask: ScopedTaskView,
+  taskIndex: ReadonlyMap<string, ScopedTaskView>,
+): ScopedTaskView[] {
+  const ancestors: ScopedTaskView[] = [];
+  const visited = new Set<string>([
+    taskEntityId(leafTask.workspaceId, leafTask.task.task.id),
+  ]);
+  let parentTaskId = leafTask.task.task.parent_task_id;
+
+  while (parentTaskId) {
+    const parentEntityId = taskEntityId(leafTask.workspaceId, parentTaskId);
+    if (visited.has(parentEntityId)) {
+      break;
     }
-  });
+    visited.add(parentEntityId);
+    const parentTask = taskIndex.get(parentEntityId);
+    if (!parentTask) {
+      break;
+    }
+    ancestors.unshift(parentTask);
+    parentTaskId = parentTask.task.task.parent_task_id;
+  }
+
+  return ancestors;
+}
+
+export function groupScopedTasksIntoBoardColumns(
+  scopedTasks: ScopedTaskView[],
+  filter: BoardFilter,
+): ScopedTaskBoardGrouping {
+  const taskIndex = new Map(
+    scopedTasks.map((task) => [
+      taskEntityId(task.workspaceId, task.task.task.id),
+      task,
+    ] as const),
+  );
+  const taskEntityIdsWithChildren = new Set<string>();
+
+  for (const task of scopedTasks) {
+    if (!task.task.task.parent_task_id) {
+      continue;
+    }
+    taskEntityIdsWithChildren.add(
+      taskEntityId(task.workspaceId, task.task.task.parent_task_id),
+    );
+  }
+
+  const allLeafTasks = [...scopedTasks]
+    .filter(
+      (task) =>
+        !taskEntityIdsWithChildren.has(taskEntityId(task.workspaceId, task.task.task.id)),
+    )
+    .map((leafTask) => ({
+      leafTask,
+      ancestors: buildLeafTaskAncestors(leafTask, taskIndex),
+    }))
+    .sort((left, right) =>
+      sortScopedTasksByUpdatedAtDesc(left.leafTask, right.leafTask),
+    );
+  const visibleLeafTasks = allLeafTasks.filter((task) =>
+    taskMatchesBoardFilter(task.leafTask.task, filter),
+  );
+  const columns = (["attention", "running", "completed"] as const)
+    .map((key) => ({
+      key,
+      label: boardColumnLabels[key],
+      tasks: visibleLeafTasks.filter(
+        (task) => boardColumnBucket(task.leafTask.task) === key,
+      ),
+    }))
+    .filter((column) => column.tasks.length > 0 || filter === "all");
+
+  return {
+    allLeafTasks,
+    visibleLeafTasks,
+    columns,
+  };
 }
 
 export function statusTone(

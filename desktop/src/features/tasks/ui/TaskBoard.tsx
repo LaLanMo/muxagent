@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
   Link,
   useLocation,
@@ -6,6 +8,13 @@ import {
 import type { TaskDetailLocationState } from "@/domain/routes";
 import { useNativeContextMenu } from "@/features/shared/ui/use-native-context-menu";
 import { useWorkspaceStore } from "@/state/workspace-store";
+
+export type TaskBoardAncestorModel = {
+  id: string;
+  title: string;
+  meta: string;
+};
+
 export type TaskBoardCardModel = {
   id: string;
   workspaceId?: string;
@@ -13,6 +22,8 @@ export type TaskBoardCardModel = {
   title: string;
   meta: string;
   tone: "running" | "awaiting" | "done" | "failed" | "neutral";
+  ancestorCount: number;
+  ancestors: TaskBoardAncestorModel[];
 };
 
 export type TaskBoardColumnModel = {
@@ -29,7 +40,8 @@ function hasAttentionAccent(tone: TaskBoardCardModel["tone"]) {
   return tone === "awaiting" || tone === "failed";
 }
 
-function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
+function TaskBoardCard({ card }: { card: TaskBoardCardModel }) {
+  const [lineageExpanded, setLineageExpanded] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const selectedWorkspaceId = useWorkspaceStore(
@@ -44,7 +56,7 @@ function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
       workspaceId: selectedWorkspaceId,
     },
   };
-  const contextMenu = useNativeContextMenu<HTMLAnchorElement>({
+  const contextMenu = useNativeContextMenu<HTMLElement>({
     actions: [
       {
         id: `open-task:${card.workspaceId ?? "global"}:${card.id}`,
@@ -58,30 +70,76 @@ function TaskBoardCardLink({ card }: { card: TaskBoardCardModel }) {
       },
     ],
   });
+  const hasAncestors = card.ancestorCount > 0;
+  const lineageId = `board-card-lineage-${card.id}`;
 
   return (
-    <Link
+    <article
       ref={contextMenu.ref}
       className={`task-board-card${
         hasAttentionAccent(card.tone) ? ` task-board-card--${card.tone}` : ""
       }`}
       data-testid={`board-card-${card.id}`}
-      onClick={() => {
-        if (detailState.taskSurfaceReturnContext) {
-          captureTaskSurfaceReturnContext(detailState.taskSurfaceReturnContext);
-        }
-      }}
       onContextMenu={contextMenu.onContextMenu}
-      state={detailState}
-      to={card.href}
     >
-      <div className="task-board-card__body">
-        <h3>{card.title}</h3>
-        <p className={`task-board-card__meta task-board-card__meta--${card.tone}`}>
-          {card.meta}
-        </p>
-      </div>
-    </Link>
+      <Link
+        className="task-board-card__link"
+        data-testid={`board-card-link-${card.id}`}
+        onClick={() => {
+          if (detailState.taskSurfaceReturnContext) {
+            captureTaskSurfaceReturnContext(detailState.taskSurfaceReturnContext);
+          }
+        }}
+        state={detailState}
+        to={card.href}
+      >
+        <div className="task-board-card__body">
+          <h3>{card.title}</h3>
+          <p className={`task-board-card__meta task-board-card__meta--${card.tone}`}>
+            {card.meta}
+          </p>
+        </div>
+      </Link>
+      {hasAncestors ? (
+        <>
+          <button
+            aria-controls={lineageId}
+            aria-expanded={lineageExpanded}
+            className="task-board-card__lineage-toggle"
+            data-testid={`board-card-lineage-toggle-${card.id}`}
+            onClick={() => {
+              setLineageExpanded((expanded) => !expanded);
+            }}
+            type="button"
+          >
+            {lineageExpanded ? (
+              <ChevronDown aria-hidden="true" size={12} strokeWidth={1.75} />
+            ) : (
+              <ChevronRight aria-hidden="true" size={12} strokeWidth={1.75} />
+            )}
+            <span>{lineageExpanded ? "PREVIOUSLY" : `${card.ancestorCount} PREVIOUS`}</span>
+          </button>
+          {lineageExpanded ? (
+            <div
+              className="task-board-card__lineage"
+              data-testid={`board-card-lineage-${card.id}`}
+              id={lineageId}
+            >
+              {card.ancestors.map((ancestor) => (
+                <div
+                  className="task-board-card__ancestor"
+                  data-testid={`board-card-ancestor-${card.id}-${ancestor.id}`}
+                  key={ancestor.id}
+                >
+                  <p className="task-board-card__ancestor-title">{ancestor.title}</p>
+                  <p className="task-board-card__ancestor-meta">{ancestor.meta}</p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : null}
+    </article>
   );
 }
 
@@ -100,7 +158,7 @@ function TaskBoardColumn({ column }: { column: TaskBoardColumnModel }) {
       </header>
       <div className="board-column__stack">
         {column.cards.map((card) => (
-          <TaskBoardCardLink
+          <TaskBoardCard
             card={card}
             key={`${card.workspaceId ?? "global"}:${card.id}`}
           />
