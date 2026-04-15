@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri",
     "tauri:dev": "tsx scripts/tauri-dev.ts",
-    "tauri:build": "tauri build --debug",
+    "tauri:build": "tauri build",
+    "tauri:build:debug": "tauri build --debug",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",
     "test:e2e": "tsx scripts/run-playwright-fixture.ts && playwright test -c playwright.real.config.ts"
