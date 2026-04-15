@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { canShowFollowUpSurface } from "@/features/task-detail/model/task-detail-action-surface";
+import { deriveFollowUpDockState } from "@/features/task-detail/model/follow-up-dock-state";
 import type {
   BlockedStepDto,
   InputRequestDto,
   NodeRunViewDto,
+  TaskFollowUpDto,
   TaskViewDto,
 } from "@/rpc/types";
 
@@ -65,6 +67,14 @@ function makeRetryRun(): NodeRunViewDto {
   };
 }
 
+function makeFollowUp(): TaskFollowUpDto {
+  return {
+    default_mode: "continue_here",
+    available_modes: ["continue_here", "fork_head", "fork_with_changes"],
+    uncommitted_change_count: 3,
+  };
+}
+
 test("canShowFollowUpSurface returns false for running tasks without higher-priority actions", () => {
   assert.equal(
     canShowFollowUpSurface({
@@ -119,5 +129,63 @@ test("canShowFollowUpSurface returns false for blocked and failed retry states",
       retryRun: makeRetryRun(),
     }),
     false,
+  );
+});
+
+test("deriveFollowUpDockState returns basic for completed non-git tasks once detail matches", () => {
+  const task = makeTask("done");
+  assert.equal(
+    deriveFollowUpDockState({
+      task,
+      detailEntry: {
+        artifacts: [],
+        ancestry: [],
+        runHistoryByRunId: {},
+        loading: false,
+        stale: false,
+        latestRequestGeneration: 1,
+        lastAppliedSnapshotKey: "done|2026-04-14T06:05:00.000Z",
+      },
+    }),
+    "basic",
+  );
+});
+
+test("deriveFollowUpDockState returns refine for completed repo-backed tasks once detail matches", () => {
+  const task = makeTask("done");
+  assert.equal(
+    deriveFollowUpDockState({
+      task,
+      detailEntry: {
+        followUp: makeFollowUp(),
+        artifacts: [],
+        ancestry: [],
+        runHistoryByRunId: {},
+        loading: false,
+        stale: false,
+        latestRequestGeneration: 2,
+        lastAppliedSnapshotKey: "done|2026-04-14T06:05:00.000Z",
+      },
+    }),
+    "refine",
+  );
+});
+
+test("deriveFollowUpDockState returns pending when detail lags behind a completed snapshot", () => {
+  const task = makeTask("done");
+  assert.equal(
+    deriveFollowUpDockState({
+      task,
+      detailEntry: {
+        artifacts: [],
+        ancestry: [],
+        runHistoryByRunId: {},
+        loading: false,
+        stale: true,
+        latestRequestGeneration: 3,
+        lastAppliedSnapshotKey: "running|2026-04-14T06:04:00.000Z",
+      },
+    }),
+    "pending",
   );
 });

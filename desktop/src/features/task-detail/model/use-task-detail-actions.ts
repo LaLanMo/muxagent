@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   continueBlockedUntilResumed,
   recoverStaleTaskRun,
-  retryTaskNodeAction,
+  retryTaskUntilResumed,
   startFollowUpAndReloadTaskList,
   submitTaskApproval,
   submitTaskClarification,
@@ -13,7 +13,9 @@ import { buildTaskDetailPath } from "@/domain/routes";
 import type { LoadTaskDetailFn } from "@/features/task-detail/model/use-task-detail-data";
 import type {
   ConfigCatalogEntryDto,
+  FollowUpModeDto,
   InputRequestDto,
+  TaskFollowUpDto,
   TaskViewDto,
 } from "@/rpc/types";
 import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
@@ -39,6 +41,7 @@ type UseTaskDetailActionsArgs = {
   workspaceId: string;
   taskId: string;
   task: TaskViewDto | undefined;
+  followUp: TaskFollowUpDto | undefined;
   configEntries: ConfigCatalogEntryDto[];
   inputRequest: InputRequestDto | undefined;
   latestFailedRunId: string | undefined;
@@ -49,6 +52,7 @@ export function useTaskDetailActions({
   workspaceId,
   taskId,
   task,
+  followUp,
   configEntries,
   inputRequest,
   latestFailedRunId,
@@ -77,6 +81,7 @@ export function useTaskDetailActions({
   const [submittingClarification, setSubmittingClarification] = useState(false);
   const [followUpDescription, setFollowUpDescription] = useState("");
   const [followUpConfigAlias, setFollowUpConfigAlias] = useState<string | undefined>();
+  const [followUpMode, setFollowUpMode] = useState<FollowUpModeDto | undefined>();
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
@@ -96,6 +101,18 @@ export function useTaskDetailActions({
   useEffect(() => {
     setFollowUpConfigAlias(undefined);
   }, [taskId, task?.task.config_alias, task?.task.config_path]);
+
+  useEffect(() => {
+    if (!followUp) {
+      setFollowUpMode(undefined);
+      return;
+    }
+    setFollowUpMode((current) =>
+      current && followUp.available_modes.includes(current)
+        ? current
+        : followUp.default_mode,
+    );
+  }, [taskId, followUp]);
 
   async function runTaskAction(
     fallbackMessage: string,
@@ -201,6 +218,7 @@ export function useTaskDetailActions({
             taskId,
             task,
             description: trimmed,
+            followUpMode,
             selectedConfig: selectedConfig
               ? {
                   alias: selectedConfig.alias,
@@ -227,11 +245,12 @@ export function useTaskDetailActions({
     setRetryingNodeId(nodeRunId);
     try {
       await runTaskAction("Failed to retry node", async () => {
-        await retryTaskNodeAction(getRuntime(), {
+        await retryTaskUntilResumed(getRuntime(), {
           workspaceId,
           taskId,
           nodeRunId,
           force,
+          loadDetail: () => loadDetail({ showLoading: false }),
         });
         invalidateTaskDetail(workspaceId, taskId);
       });
@@ -310,6 +329,8 @@ export function useTaskDetailActions({
     setFollowUpDescription,
     followUpConfigAlias,
     setFollowUpConfigAlias,
+    followUpMode,
+    setFollowUpMode,
     submittingFollowUp,
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,

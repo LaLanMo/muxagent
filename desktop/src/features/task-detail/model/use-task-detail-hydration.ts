@@ -4,6 +4,7 @@ import { getRuntime } from "@/app/runtime";
 import type { TaskViewDto } from "@/rpc/types";
 import type { TaskDetailCacheEntry } from "@/state/task-snapshot-store";
 import {
+  taskSnapshotKey,
   shouldReplaceTask,
   taskForWorkspace,
   useTaskSnapshotStore,
@@ -40,8 +41,8 @@ export function useTaskDetailHydration({
   const resolveTaskDetail = useTaskSnapshotStore(
     (state) => state.resolveTaskDetail,
   );
-  const failTaskDetail = useTaskSnapshotStore(
-    (state) => state.failTaskDetail,
+  const failTaskDetailLoad = useTaskSnapshotStore(
+    (state) => state.failTaskDetailLoad,
   );
 
   const loadDetail = useEffectEvent<LoadTaskDetailFn>(
@@ -49,9 +50,15 @@ export function useTaskDetailHydration({
       if (!taskId || !workspaceId || !connected) {
         return undefined;
       }
-      if (options.showLoading ?? true) {
-        beginTaskDetailLoad(workspaceId, taskId);
-      }
+      const requestedTask = taskForWorkspace(
+        useTaskSnapshotStore.getState().tasksById,
+        workspaceId,
+        taskId,
+      );
+      const requestedSnapshotKey = taskSnapshotKey(requestedTask);
+      const generation = beginTaskDetailLoad(workspaceId, taskId, requestedSnapshotKey, {
+        showLoading: options.showLoading,
+      });
       try {
         const detail = await hydrateTaskDetail(getRuntime(), workspaceId, taskId, {
           includeAncestry: supportsTaskAncestry,
@@ -72,18 +79,27 @@ export function useTaskDetailHydration({
             detail.liveEvents,
           );
         }
-        resolveTaskDetail(workspaceId, taskId, {
+        resolveTaskDetail(
+          workspaceId,
+          taskId,
+          taskSnapshotKey(detail.task),
+          generation,
+          {
           config: detail.config,
           inputRequest: detail.inputRequest,
+          followUp: detail.followUp,
           artifacts: detail.artifacts,
           ancestry: detail.ancestry,
           liveEventsRunId: detail.liveEventsRunId,
-        });
+          },
+        );
         return detail;
       } catch (error) {
-        failTaskDetail(
+        failTaskDetailLoad(
           workspaceId,
           taskId,
+          requestedSnapshotKey,
+          generation,
           error instanceof Error ? error.message : "Failed to load task detail",
         );
         return undefined;

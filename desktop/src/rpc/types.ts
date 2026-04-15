@@ -378,8 +378,20 @@ export interface TaskGetResult {
   task: TaskViewDto;
   config?: ConfigViewDto;
   input_request?: InputRequestDto;
+  follow_up?: TaskFollowUpDto;
   live_events?: SessionHistoryEventDto[];
   live_output_run_id?: string;
+}
+
+export type FollowUpModeDto =
+  | "continue_here"
+  | "fork_head"
+  | "fork_with_changes";
+
+export interface TaskFollowUpDto {
+  default_mode: FollowUpModeDto;
+  available_modes: FollowUpModeDto[];
+  uncommitted_change_count: number;
 }
 
 export interface TaskAncestryItemDto {
@@ -446,6 +458,7 @@ export interface TaskStartFollowUpParams {
   description: string;
   config_alias?: string;
   config_path?: string;
+  follow_up_mode?: FollowUpModeDto;
 }
 
 export interface TaskSubmitInputParams {

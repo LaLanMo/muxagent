@@ -6,12 +6,16 @@ import {
   hydrateTaskDetail,
   loadTaskAncestry,
   readArtifactPreview,
+  retryTaskUntilResumed,
+  startFollowUpFromTask,
 } from "@/application/tasks";
 import type { DesktopRuntime, ShellHost, TaskBackendClient } from "@/platform/contract";
 import type {
   ArtifactListResult,
   ArtifactRefDto,
+  CommandAcceptedResult,
   TaskAncestryItemDto,
+  TaskFollowUpDto,
   TaskGetAncestryResult,
   TaskGetResult,
   TaskViewDto,
@@ -81,18 +85,32 @@ function makeArtifact(overrides: Partial<ArtifactRefDto> = {}): ArtifactRefDto {
   };
 }
 
+function makeFollowUp(): TaskFollowUpDto {
+  return {
+    default_mode: "continue_here",
+    available_modes: ["continue_here", "fork_head", "fork_with_changes"],
+    uncommitted_change_count: 3,
+  };
+}
+
 function makeRuntime(args: {
   taskGetResult?: TaskGetResult;
+  taskGetResults?: TaskGetResult[];
   artifactListResult?: ArtifactListResult;
   taskGetAncestryResult?: TaskGetAncestryResult;
   taskGetAncestryError?: Error;
   onTaskGetAncestry?: () => void;
+  onTaskStartFollowUp?: (params: unknown) => void;
+  onTaskRetryNode?: (params: unknown) => void;
   shell?: Partial<ShellHost>;
 }): DesktopRuntime {
+  let taskGetIndex = 0;
   const backend = {
     taskGet: async () =>
+      args.taskGetResults?.[Math.min(taskGetIndex++, args.taskGetResults.length - 1)] ??
       args.taskGetResult ?? {
         task: makeTaskView(),
+        follow_up: makeFollowUp(),
         live_output_run_id: "run-implement",
         live_events: [
           {
@@ -123,6 +141,20 @@ function makeRuntime(args: {
       return args.taskGetAncestryResult ?? {
         ancestors: makeAncestry(),
       };
+    },
+    taskStartFollowUp: async (params: unknown) => {
+      args.onTaskStartFollowUp?.(params);
+      return {
+        accepted: true,
+        client_command_id: "cmd-follow-up",
+      } satisfies CommandAcceptedResult;
+    },
+    taskRetryNode: async (params: unknown) => {
+      args.onTaskRetryNode?.(params);
+      return {
+        accepted: true,
+        client_command_id: "cmd-retry",
+      } satisfies CommandAcceptedResult;
     },
   } as unknown as TaskBackendClient;
   const shell = {
@@ -155,6 +187,7 @@ test("hydrateTaskDetail includes ancestry when requested", async () => {
   assert.equal(ancestryRequests, 1);
   assert.deepEqual(detail.ancestry, makeAncestry());
   assert.equal(detail.artifacts[0]?.preview_name, "plan.md");
+  assert.equal(detail.followUp?.default_mode, "continue_here");
   assert.equal(detail.liveEventsRunId, "run-implement");
   assert.equal(detail.liveEvents[0]?.kind, "message");
   assert.equal(detail.liveEvents[0]?.text, "Tracing task ancestry for the new header.");
@@ -188,6 +221,90 @@ test("hydrateTaskDetail degrades to an empty ancestry chain when the lookup fail
   );
 
   assert.deepEqual(detail.ancestry, []);
+});
+
+test("startFollowUpFromTask forwards each supported follow-up mode", async () => {
+  const modes = ["continue_here", "fork_head", "fork_with_changes"] as const;
+
+  for (const mode of modes) {
+    let captured:
+      | {
+          workspace_id: string;
+          parent_task_id: string;
+          description: string;
+          follow_up_mode?: string;
+        }
+      | undefined;
+
+    await startFollowUpFromTask(
+      makeRuntime({
+        onTaskStartFollowUp: (params) => {
+          captured = params as typeof captured;
+        },
+      }),
+      {
+        workspaceId: "workspace-1",
+        taskId: "task-1",
+        task: makeTaskView("task-1"),
+        description: "Follow up on the current task",
+        followUpMode: mode,
+      },
+    );
+
+    assert.equal(captured?.workspace_id, "workspace-1");
+    assert.equal(captured?.parent_task_id, "task-1");
+    assert.equal(captured?.description, "Follow up on the current task");
+    assert.equal(captured?.follow_up_mode, mode);
+  }
+});
+
+test("retryTaskUntilResumed polls task detail until the failed state clears", async () => {
+  let captured:
+    | {
+        workspace_id: string;
+        task_id: string;
+        node_run_id: string;
+      }
+    | undefined;
+
+  const failedTask = makeTaskView("task-1");
+  failedTask.status = "failed";
+  const runningTask = makeTaskView("task-1");
+  runningTask.status = "running";
+
+  const runtime = makeRuntime({
+    taskGetResults: [
+      {
+        task: failedTask,
+        live_events: [],
+      },
+      {
+        task: runningTask,
+        live_events: [],
+      },
+    ],
+    onTaskRetryNode: (params) => {
+      captured = params as typeof captured;
+    },
+  });
+
+  const resumed = await retryTaskUntilResumed(runtime, {
+    workspaceId: "workspace-1",
+    taskId: "task-1",
+    nodeRunId: "run-implement",
+    force: false,
+    delayMs: 0,
+    attempts: 3,
+    loadDetail: () =>
+      hydrateTaskDetail(runtime, "workspace-1", "task-1", {
+        includeAncestry: false,
+      }),
+  });
+
+  assert.equal(resumed, true);
+  assert.equal(captured?.workspace_id, "workspace-1");
+  assert.equal(captured?.task_id, "task-1");
+  assert.equal(captured?.node_run_id, "run-implement");
 });
 
 test("loadTaskAncestry returns the backend ancestry chain", async () => {

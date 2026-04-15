@@ -2,8 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { taskEntityId } from "@/domain/task-identity";
 import type { NormalizedTaskRunHistoryResult } from "@/domain/session-history";
-import type { ArtifactRefDto, TaskAncestryItemDto, TaskViewDto } from "@/rpc/types";
-import { useTaskSnapshotStore } from "./task-snapshot-store";
+import type {
+  ArtifactRefDto,
+  TaskAncestryItemDto,
+  TaskFollowUpDto,
+  TaskViewDto,
+} from "@/rpc/types";
+import { taskSnapshotKey, useTaskSnapshotStore } from "./task-snapshot-store";
 
 const workspaceId = "workspace-1";
 const secondaryWorkspaceId = "workspace-2";
@@ -89,6 +94,14 @@ function makeAncestry(): TaskAncestryItemDto[] {
   ];
 }
 
+function makeFollowUp(): TaskFollowUpDto {
+  return {
+    default_mode: "continue_here",
+    available_modes: ["continue_here", "fork_head", "fork_with_changes"],
+    uncommitted_change_count: 3,
+  };
+}
+
 const runHistory: NormalizedTaskRunHistoryResult = {
   taskId: "task-1",
   nodeRunId: "run-implement",
@@ -119,8 +132,12 @@ test("full task-list reload updates the shared task truth without overwriting de
 
   const store = useTaskSnapshotStore.getState();
   store.setTasks(workspaceId, [runningTask]);
-  store.beginTaskDetailLoad(workspaceId, "task-1");
-  store.resolveTaskDetail(workspaceId, "task-1", {
+  const generation = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(runningTask),
+  );
+  store.resolveTaskDetail(workspaceId, "task-1", taskSnapshotKey(runningTask), generation, {
     config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
     inputRequest: undefined,
     artifacts: [makeArtifact()],
@@ -250,8 +267,19 @@ test("detail ancestry survives detail-side cache transitions until the next hydr
   const store = useTaskSnapshotStore.getState();
   const ancestry = makeAncestry();
 
-  store.beginTaskDetailLoad(workspaceId, "task-1");
-  store.resolveTaskDetail(workspaceId, "task-1", {
+  const generation = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(
+      makeTask({
+        status: "running",
+        updatedAt: "2026-04-12T08:15:00.000Z",
+        currentNodeName: "implement",
+        nodeStatus: "running",
+      }),
+    ),
+  );
+  store.resolveTaskDetail(workspaceId, "task-1", "running|2026-04-12T08:15:00.000Z", generation, {
     config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
     inputRequest: undefined,
     artifacts: [makeArtifact()],
@@ -272,16 +300,155 @@ test("detail ancestry survives detail-side cache transitions until the next hydr
   assert.deepEqual(entry?.ancestry, ancestry);
   assert.equal(entry?.stale, true);
 
-  store.resolveTaskDetail(workspaceId, "task-1", {
+  const refreshGeneration = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    "done|2026-04-12T08:20:00.000Z",
+  );
+  store.resolveTaskDetail(
+    workspaceId,
+    "task-1",
+    "done|2026-04-12T08:20:00.000Z",
+    refreshGeneration,
+    {
     config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
     inputRequest: undefined,
     artifacts: [makeArtifact()],
     ancestry: ancestry.slice(0, 1),
     liveEventsRunId: "run-implement",
-  });
+    },
+  );
 
   entry = useTaskSnapshotStore.getState().taskDetailsByWorkspaceId[workspaceId]?.["task-1"];
   assert.deepEqual(entry?.ancestry, ancestry.slice(0, 1));
+});
+
+test("late task detail loads cannot overwrite a newer done-state hydrate", () => {
+  const runningTask = makeTask({
+    status: "running",
+    updatedAt: "2026-04-12T08:15:00.000Z",
+    currentNodeName: "implement",
+    nodeStatus: "running",
+  });
+  const doneTask = makeTask({
+    status: "done",
+    updatedAt: "2026-04-12T08:20:00.000Z",
+    currentNodeName: "done",
+    nodeStatus: "done",
+  });
+
+  const store = useTaskSnapshotStore.getState();
+  store.setTasks(workspaceId, [runningTask]);
+  const requestA = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(runningTask),
+  );
+  store.upsertTask(workspaceId, doneTask);
+  const requestB = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(doneTask),
+  );
+  store.resolveTaskDetail(workspaceId, "task-1", taskSnapshotKey(doneTask), requestB, {
+    config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
+    inputRequest: undefined,
+    followUp: makeFollowUp(),
+    artifacts: [makeArtifact()],
+    ancestry: [],
+    liveEventsRunId: "run-done",
+  });
+  store.resolveTaskDetail(workspaceId, "task-1", taskSnapshotKey(runningTask), requestA, {
+    config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
+    inputRequest: undefined,
+    artifacts: [],
+    ancestry: [],
+    liveEventsRunId: "run-implement",
+  });
+  store.failTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(runningTask),
+    requestA,
+    "stale load failed",
+  );
+
+  const entry = useTaskSnapshotStore.getState().taskDetailsByWorkspaceId[workspaceId]?.["task-1"];
+  assert.equal(entry?.lastAppliedSnapshotKey, taskSnapshotKey(doneTask));
+  assert.equal(entry?.latestRequestedSnapshotKey, taskSnapshotKey(doneTask));
+  assert.equal(entry?.followUp?.default_mode, "continue_here");
+  assert.equal(entry?.error, undefined);
+});
+
+test("direct task detail issues still surface during background refresh generations", () => {
+  const doneTask = makeTask({
+    status: "done",
+    updatedAt: "2026-04-12T08:20:00.000Z",
+    currentNodeName: "done",
+    nodeStatus: "done",
+  });
+  const store = useTaskSnapshotStore.getState();
+  store.setTasks(workspaceId, [doneTask]);
+  const initialGeneration = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(doneTask),
+  );
+  store.resolveTaskDetail(workspaceId, "task-1", taskSnapshotKey(doneTask), initialGeneration, {
+    config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
+    inputRequest: undefined,
+    artifacts: [makeArtifact()],
+    ancestry: [],
+    liveEventsRunId: "run-done",
+  });
+
+  const refreshGeneration = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(doneTask),
+    { showLoading: false },
+  );
+  store.failTaskDetail(workspaceId, "task-1", "Follow-up description is required");
+
+  const entry = useTaskSnapshotStore.getState().taskDetailsByWorkspaceId[workspaceId]?.["task-1"];
+  assert.equal(entry?.latestRequestGeneration, refreshGeneration);
+  assert.equal(entry?.error, "Follow-up description is required");
+});
+
+test("hidden detail refreshes still reserve a new generation without forcing loading", () => {
+  const doneTask = makeTask({
+    status: "done",
+    updatedAt: "2026-04-12T08:20:00.000Z",
+    currentNodeName: "done",
+    nodeStatus: "done",
+  });
+  const store = useTaskSnapshotStore.getState();
+  store.setTasks(workspaceId, [doneTask]);
+
+  const initialGeneration = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(doneTask),
+  );
+  store.resolveTaskDetail(workspaceId, "task-1", taskSnapshotKey(doneTask), initialGeneration, {
+    config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
+    inputRequest: undefined,
+    artifacts: [makeArtifact()],
+    ancestry: [],
+    liveEventsRunId: "run-done",
+  });
+
+  const refreshGeneration = store.beginTaskDetailLoad(
+    workspaceId,
+    "task-1",
+    taskSnapshotKey(doneTask),
+    { showLoading: false },
+  );
+
+  const entry = useTaskSnapshotStore.getState().taskDetailsByWorkspaceId[workspaceId]?.["task-1"];
+  assert.equal(refreshGeneration, initialGeneration + 1);
+  assert.equal(entry?.loading, false);
+  assert.equal(entry?.latestRequestGeneration, refreshGeneration);
 });
 
 function nextTaskIds(): string[] {

@@ -13,29 +13,34 @@ import {
   Bot,
   Check,
   ChevronRight,
+  CircleDot,
   Copy,
   FileText,
+  GitBranch,
   Image,
   Minus,
   Plus,
   RotateCcw,
+  SlidersHorizontal,
   SquareArrowOutUpRight,
   User,
-  Workflow,
   X,
 } from "lucide-react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { TranscriptSnapshot } from "@/domain/session-history";
 import { detailStatusLabel } from "@/domain/task-shell";
+import type { FollowUpDockState } from "@/features/task-detail/model/follow-up-dock-state";
 import type { TaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
 import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
   ConfigCatalogEntryDto,
+  FollowUpModeDto,
   InputQuestionDto,
   NodeRunViewDto,
+  TaskFollowUpDto,
   TaskViewDto,
 } from "@/rpc/types";
 import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
@@ -101,10 +106,14 @@ type RetryDockProps = {
 type FollowUpDockProps = {
   configEntries: ConfigCatalogEntryDto[];
   defaultConfigAlias?: string;
+  followUp?: TaskFollowUpDto;
+  followUpState?: FollowUpDockState;
   followUpConfigAlias?: string;
   followUpDescription: string;
+  followUpMode?: FollowUpModeDto;
   setFollowUpDescription: (value: string) => void;
   onConfigChange: (alias: string) => void;
+  onModeChange: (mode: FollowUpModeDto) => void;
   submittingFollowUp: boolean;
   onStartFollowUp: () => Promise<void>;
 };
@@ -2391,13 +2400,55 @@ export function TaskRetryDock({
   );
 }
 
+function followUpModeLabel(mode: FollowUpModeDto) {
+  switch (mode) {
+    case "continue_here":
+      return "Continue here";
+    case "fork_head":
+      return "Fork from HEAD";
+    case "fork_with_changes":
+      return "Fork with changes";
+  }
+}
+
+function followUpModeMeta(mode: FollowUpModeDto, changeCount: number) {
+  switch (mode) {
+    case "continue_here":
+      return "same worktree";
+    case "fork_head":
+      return `without ${changeCount} uncommitted`;
+    case "fork_with_changes":
+      return `with ${changeCount} uncommitted`;
+  }
+}
+
+function followUpTriggerMeta(mode: FollowUpModeDto, changeCount: number) {
+  if (mode === "continue_here") {
+    return undefined;
+  }
+  return `${changeCount} uncommitted`;
+}
+
+function followUpModeIcon(mode: FollowUpModeDto) {
+  return mode === "continue_here" ? CircleDot : GitBranch;
+}
+
+function FollowUpModeGlyph({ mode }: { mode: FollowUpModeDto }) {
+  const Icon = followUpModeIcon(mode);
+  return <Icon aria-hidden="true" size={14} strokeWidth={1.8} />;
+}
+
 export function TaskFollowUpDock({
   configEntries,
   defaultConfigAlias,
+  followUp,
+  followUpState,
   followUpConfigAlias,
   followUpDescription,
+  followUpMode,
   setFollowUpDescription,
   onConfigChange,
+  onModeChange,
   submittingFollowUp,
   onStartFollowUp,
 }: FollowUpDockProps) {
@@ -2406,25 +2457,42 @@ export function TaskFollowUpDock({
     launchable.find((entry) => entry.alias === followUpConfigAlias) ??
     launchable.find((entry) => entry.alias === defaultConfigAlias) ??
     launchable[0];
-  const pickerId = useId();
+  const configPickerId = useId();
+  const modePickerId = useId();
   const rootRef = useRef<HTMLElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const configTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const modeTriggerRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [configPickerOpen, setConfigPickerOpen] = useState(false);
+  const [modePickerOpen, setModePickerOpen] = useState(false);
+  const dockState = followUpState ?? (followUp ? "refine" : "basic");
 
-  const closePicker = useEffectEvent((focusTarget?: "trigger" | "input") => {
-    setPickerOpen(false);
-    if (focusTarget === "trigger") {
-      triggerRef.current?.focus();
-      return;
-    }
-    if (focusTarget === "input") {
-      inputRef.current?.focus();
-    }
-  });
+  const closeOverlays = useEffectEvent(
+    (focusTarget?: "config-trigger" | "mode-trigger" | "input") => {
+      setConfigPickerOpen(false);
+      setModePickerOpen(false);
+      if (focusTarget === "config-trigger") {
+        configTriggerRef.current?.focus();
+        return;
+      }
+      if (focusTarget === "mode-trigger") {
+        modeTriggerRef.current?.focus();
+        return;
+      }
+      if (focusTarget === "input") {
+        inputRef.current?.focus();
+      }
+    },
+  );
 
   useEffect(() => {
-    if (!pickerOpen) {
+    if (dockState !== "refine" && modePickerOpen) {
+      setModePickerOpen(false);
+    }
+  }, [dockState, modePickerOpen]);
+
+  useEffect(() => {
+    if (!configPickerOpen && !modePickerOpen) {
       return;
     }
 
@@ -2433,14 +2501,16 @@ export function TaskFollowUpDock({
         return;
       }
       if (!rootRef.current?.contains(event.target)) {
-        closePicker();
+        closeOverlays();
       }
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         event.preventDefault();
-        closePicker("trigger");
+        closeOverlays(
+          modePickerOpen ? "mode-trigger" : configPickerOpen ? "config-trigger" : undefined,
+        );
       }
     }
 
@@ -2450,7 +2520,7 @@ export function TaskFollowUpDock({
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [closePicker, pickerOpen]);
+  }, [closeOverlays, configPickerOpen, modePickerOpen]);
 
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -2475,20 +2545,36 @@ export function TaskFollowUpDock({
       return;
     }
     event.preventDefault();
-    if (!submittingFollowUp) {
+    if (dockState !== "pending" && !submittingFollowUp) {
       void onStartFollowUp();
     }
   }
 
   const selectedAlias = selectedEntry?.alias ?? followUpConfigAlias ?? defaultConfigAlias ?? "";
+  const selectedMode: FollowUpModeDto =
+    followUpMode && followUp?.available_modes.includes(followUpMode)
+      ? followUpMode
+      : followUp?.default_mode ?? "continue_here";
+  const modeTriggerMeta = followUp ? followUpTriggerMeta(selectedMode, followUp.uncommitted_change_count) : undefined;
+  const canSubmit = dockState !== "pending" && !submittingFollowUp;
+  const configSelectable = launchable.length > 1;
 
   return (
-    <section className="detail-follow-up-rail" data-testid="complete-pane" ref={rootRef}>
+    <section
+      className="detail-follow-up-rail"
+      data-follow-up-state={dockState}
+      data-testid="complete-pane"
+      ref={rootRef}
+    >
       <form
-        className={`detail-follow-up-rail__box${pickerOpen ? " is-picker-open" : ""}`}
+        className={`detail-follow-up-rail__box${
+          configPickerOpen || modePickerOpen ? " is-picker-open" : ""
+        } detail-follow-up-rail__box--${dockState}`}
         onSubmit={(event) => {
           event.preventDefault();
-          void onStartFollowUp();
+          if (dockState !== "pending") {
+            void onStartFollowUp();
+          }
         }}
       >
         <textarea
@@ -2503,75 +2589,168 @@ export function TaskFollowUpDock({
           rows={1}
           value={followUpDescription}
         />
-
-        {selectedAlias ? (
-          <div className="detail-follow-up-rail__config-anchor">
-            <button
-              aria-controls={pickerOpen ? pickerId : undefined}
-              aria-expanded={pickerOpen}
-              aria-haspopup="listbox"
-              className="detail-follow-up-rail__config-trigger"
-              data-testid="follow-up-config-trigger"
-              disabled={submittingFollowUp || launchable.length < 2}
-              onClick={() => {
-                if (launchable.length < 2) {
-                  return;
-                }
-                setPickerOpen((current) => !current);
-              }}
-              ref={triggerRef}
-              type="button"
-            >
-              <Workflow aria-hidden="true" size={12} strokeWidth={1.9} />
-              <span>{selectedAlias}</span>
-            </button>
-
-            {pickerOpen ? (
-              <div
-                aria-label="Configs"
-                className="detail-follow-up-rail__config-picker"
-                data-testid="follow-up-config-picker"
-                id={pickerId}
-                role="listbox"
-              >
-                <span className="detail-follow-up-rail__config-picker-label">Configs</span>
-                {launchable.map((entry) => {
-                  const selected = entry.alias === selectedEntry?.alias;
-                  const nodeCountLabel =
-                    entry.node_names != null
-                      ? `${entry.node_names.length} ${entry.node_names.length === 1 ? "node" : "nodes"}`
-                      : undefined;
-                  return (
-                    <button
-                      aria-selected={selected}
-                      className={`detail-follow-up-rail__config-option${selected ? " is-selected" : ""}`}
-                      data-testid={`follow-up-config-option-${entry.alias}`}
-                      key={entry.alias}
-                      onClick={() => {
-                        onConfigChange(entry.alias);
-                        closePicker("input");
-                      }}
-                      role="option"
-                      type="button"
-                    >
-                      <span className="detail-follow-up-rail__config-option-name">
-                        {entry.alias}
-                      </span>
-                      {nodeCountLabel ? (
-                        <>
-                          <span className="detail-follow-up-rail__config-option-divider" />
-                          <span className="detail-follow-up-rail__config-option-count">
-                            {nodeCountLabel}
+        <div className="detail-follow-up-rail__divider" />
+        <div className="detail-follow-up-rail__footer">
+          <div className="detail-follow-up-rail__footer-left">
+            {selectedAlias ? (
+              <div className="detail-follow-up-rail__config-anchor">
+                <button
+                  aria-controls={configPickerOpen ? configPickerId : undefined}
+                  aria-expanded={configPickerOpen}
+                  aria-haspopup="listbox"
+                  className="detail-follow-up-rail__config-trigger"
+                  data-testid="follow-up-config-trigger"
+                  disabled={submittingFollowUp || !configSelectable}
+                  onClick={() => {
+                    if (!configSelectable) {
+                      return;
+                    }
+                    setModePickerOpen(false);
+                    setConfigPickerOpen((current) => !current);
+                  }}
+                  ref={configTriggerRef}
+                  type="button"
+                >
+                  <SlidersHorizontal aria-hidden="true" size={12} strokeWidth={1.9} />
+                  <span>{selectedAlias}</span>
+                </button>
+                {configPickerOpen ? (
+                  <div
+                    aria-label="Configs"
+                    className="detail-follow-up-rail__config-picker"
+                    data-testid="follow-up-config-picker"
+                    id={configPickerId}
+                    role="listbox"
+                  >
+                    <span className="detail-follow-up-rail__config-picker-label">Configs</span>
+                    {launchable.map((entry) => {
+                      const selected = entry.alias === selectedEntry?.alias;
+                      const nodeCountLabel =
+                        entry.node_names != null
+                          ? `${entry.node_names.length} ${entry.node_names.length === 1 ? "node" : "nodes"}`
+                          : undefined;
+                      return (
+                        <button
+                          aria-selected={selected}
+                          className={`detail-follow-up-rail__config-option${selected ? " is-selected" : ""}`}
+                          data-testid={`follow-up-config-option-${entry.alias}`}
+                          key={entry.alias}
+                          onClick={() => {
+                            onConfigChange(entry.alias);
+                            closeOverlays("input");
+                          }}
+                          role="option"
+                          type="button"
+                        >
+                          <span className="detail-follow-up-rail__config-option-name">
+                            {entry.alias}
                           </span>
-                        </>
-                      ) : null}
-                    </button>
-                  );
-                })}
+                          {nodeCountLabel ? (
+                            <>
+                              <span className="detail-follow-up-rail__config-option-divider" />
+                              <span className="detail-follow-up-rail__config-option-count">
+                                {nodeCountLabel}
+                              </span>
+                            </>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
-        ) : null}
+          <div className="detail-follow-up-rail__footer-actions">
+            {dockState === "pending" ? (
+              <div
+                className="detail-follow-up-rail__mode-pill detail-follow-up-rail__mode-pill--pending"
+                data-testid="follow-up-mode-pending"
+              >
+                <span>Resolving follow-up modes…</span>
+              </div>
+            ) : dockState === "refine" ? (
+              <div className="detail-follow-up-rail__mode-anchor">
+                <button
+                  aria-controls={modePickerOpen ? modePickerId : undefined}
+                  aria-expanded={modePickerOpen}
+                  aria-haspopup="listbox"
+                  className="detail-follow-up-rail__mode-trigger"
+                  data-testid="follow-up-mode-trigger"
+                  disabled={submittingFollowUp || !followUp}
+                  onClick={() => {
+                    if (!followUp) {
+                      return;
+                    }
+                    setConfigPickerOpen(false);
+                    setModePickerOpen((current) => !current);
+                  }}
+                  ref={modeTriggerRef}
+                  type="button"
+                >
+                  <span className="detail-follow-up-rail__mode-trigger-main">
+                    <FollowUpModeGlyph mode={selectedMode} />
+                    <span>{followUpModeLabel(selectedMode)}</span>
+                    {modeTriggerMeta ? (
+                      <span
+                        className="detail-follow-up-rail__mode-trigger-meta"
+                        data-testid="follow-up-dirty-hint"
+                      >
+                        · {modeTriggerMeta}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+                {modePickerOpen && followUp ? (
+                  <div
+                    aria-label="Follow-up modes"
+                    className="detail-follow-up-rail__mode-popup"
+                    data-testid="follow-up-mode-popup"
+                    id={modePickerId}
+                    role="listbox"
+                  >
+                    <span className="detail-follow-up-rail__mode-popup-label">Mode</span>
+                    {followUp.available_modes.map((mode) => {
+                      const selected = mode === selectedMode;
+                      return (
+                        <button
+                          aria-selected={selected}
+                          className={`detail-follow-up-rail__mode-option${selected ? " is-selected" : ""}`}
+                          data-testid={`follow-up-mode-option-${mode}`}
+                          key={mode}
+                          onClick={() => {
+                            onModeChange(mode);
+                            closeOverlays("input");
+                          }}
+                          role="option"
+                          type="button"
+                        >
+                          <span className="detail-follow-up-rail__mode-option-title">
+                            {followUpModeLabel(mode)}
+                          </span>
+                          <span className="detail-follow-up-rail__mode-option-rule" />
+                          <span className="detail-follow-up-rail__mode-option-meta">
+                            {followUpModeMeta(mode, followUp.uncommitted_change_count)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            <Button
+              className="detail-follow-up-rail__send"
+              data-testid="follow-up-send"
+              disabled={!canSubmit}
+              size="sm"
+              type="submit"
+              variant="primary"
+            >
+              {submittingFollowUp ? "Sending…" : "Send"}
+            </Button>
+          </div>
+        </div>
       </form>
     </section>
   );

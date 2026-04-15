@@ -266,6 +266,14 @@ test("shows parent task history in detail and lets the user navigate up the chai
   const headerPrompt = page.locator(".detail-main-header__prompt-text");
   await expect(history).toBeVisible();
   await expect(page.getByTestId("complete-pane")).toBeVisible();
+  await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+    "data-follow-up-state",
+    "basic",
+  );
+  await expect(page.getByTestId("follow-up-mode-fixed")).toContainText("Continue here");
+  await expect(page.getByTestId("follow-up-send")).toBeVisible();
+  await page.getByTestId("follow-up-mode-fixed").click();
+  await expect(page.getByTestId("follow-up-mode-popup")).toHaveCount(0);
   await expect(page.getByTestId("detail-task-history-count")).toHaveText("2 iterations");
   await expect(
     page
@@ -1126,7 +1134,25 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   await expect(page.locator('[data-testid="detail-activity"] [data-testid="complete-pane"]')).toHaveCount(
     0,
   );
+  await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+    "data-follow-up-state",
+    "refine",
+  );
   await expect(page.getByTestId("follow-up-description")).toBeVisible();
+  await expect(page.getByTestId("follow-up-send")).toBeVisible();
+  await expect(page.locator(".detail-follow-up-rail__divider")).toBeVisible();
+  const modeTrigger = page.getByTestId("follow-up-mode-trigger");
+  await expect(modeTrigger).toContainText("Continue here");
+  await modeTrigger.click();
+  await expect(page.getByTestId("follow-up-mode-popup")).toBeVisible();
+  await expect(page.getByTestId("follow-up-mode-option-fork_head")).toContainText(
+    "Fork from HEAD",
+  );
+  await expect(page.getByTestId("follow-up-mode-option-fork_with_changes")).toContainText(
+    "Fork with changes",
+  );
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("follow-up-mode-popup")).toHaveCount(0);
   await expect(page.getByTestId("follow-up-config-trigger")).toContainText("default");
   await expect(
     page
@@ -1165,9 +1191,15 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
   const configTrigger = page.getByTestId("follow-up-config-trigger");
   const configPicker = page.getByTestId("follow-up-config-picker");
   const descriptionInput = page.getByTestId("follow-up-description");
+  const modeTrigger = page.getByTestId("follow-up-mode-trigger");
+  const modePopup = page.getByTestId("follow-up-mode-popup");
+  const sendButton = page.getByTestId("follow-up-send");
 
   await expect(completePane).toBeVisible();
+  await expect(completePane).toHaveAttribute("data-follow-up-state", "refine");
   await expect(configTrigger).toContainText("default");
+  await expect(modeTrigger).toContainText("Continue here");
+  await expect(sendButton).toBeVisible();
 
   await configTrigger.click();
   await expect(configPicker).toBeVisible();
@@ -1185,6 +1217,12 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
   await expect(configPicker).toHaveCount(0);
   await expect(configTrigger).toContainText("quick");
   await expect(descriptionInput).toHaveJSProperty("tagName", "TEXTAREA");
+  await modeTrigger.click();
+  await expect(modePopup).toBeVisible();
+  await page.getByTestId("follow-up-mode-option-fork_with_changes").click();
+  await expect(modePopup).toHaveCount(0);
+  await expect(modeTrigger).toContainText("Fork with changes");
+  await expect(page.getByTestId("follow-up-dirty-hint")).toContainText("3 uncommitted");
 
   const previousPath = new URL(page.url()).pathname;
   await descriptionInput.fill(description);
@@ -1197,7 +1235,7 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
     .toBe(previousPath);
   const expandedHeight = await descriptionInput.evaluate((element) => element.clientHeight);
   expect(expandedHeight).toBeGreaterThan(initialHeight);
-  await descriptionInput.press("Enter");
+  await sendButton.click();
 
   await expect
     .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
@@ -1206,36 +1244,16 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
     "data-no-window-drag",
     "true",
   );
-  await expect(page.locator(".detail-main-header__prompt-copy")).toHaveAttribute(
+  await expect(page.locator(".detail-main-header__prompt-body")).toHaveAttribute(
     "data-no-window-drag",
     "true",
   );
-  const promptDragProbe = await page.evaluate(() => {
-    const prompt = document.querySelector(".detail-main-header__prompt");
-    const promptCopy = document.querySelector(".detail-main-header__prompt-copy");
-    if (!(prompt instanceof HTMLElement) || !(promptCopy instanceof HTMLElement)) {
-      throw new Error("Expected task detail header prompt surfaces to exist");
-    }
-    const promptRect = prompt.getBoundingClientRect();
-    const promptCopyRect = promptCopy.getBoundingClientRect();
-    const blankSpaceWidth = promptRect.right - promptCopyRect.right;
-    const probeX = promptCopyRect.right + Math.min(8, Math.max(blankSpaceWidth - 2, 1));
-    const probeY = promptCopyRect.top + promptCopyRect.height / 2;
-    const probeTarget = document.elementFromPoint(probeX, probeY);
-    return {
-      blankSpaceWidth,
-      insideNoDragSurface: Boolean(
-        probeTarget instanceof Element && probeTarget.closest("[data-no-window-drag]"),
-      ),
-    };
-  });
-  expect(promptDragProbe.blankSpaceWidth).toBeGreaterThan(8);
-  expect(promptDragProbe.insideNoDragSurface).toBe(false);
   await expect(page.locator(".detail-main-header__prompt-text")).toContainText(description);
   await expect(page.locator(".detail-main-header__prompt-text")).toContainText(secondLine);
   await expect(
     page.locator(".detail-properties__block").filter({ hasText: /^Config/ }),
   ).toContainText("quick");
+  await expect(page.getByText("follow-up-mode-fork_with_changes.md")).toBeVisible();
 });
 
 test("renders the blocked task surface", async ({ page }) => {

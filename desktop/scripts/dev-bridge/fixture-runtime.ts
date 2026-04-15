@@ -63,6 +63,11 @@ export type FixtureTask = {
   status: string;
   current_node_name: string;
   current_node_type: string;
+  follow_up?: {
+    default_mode: "continue_here" | "fork_head" | "fork_with_changes";
+    available_modes: Array<"continue_here" | "fork_head" | "fork_with_changes">;
+    uncommitted_change_count: number;
+  };
   current_issue?: {
     kind: string;
     node_name: string;
@@ -830,6 +835,7 @@ export class FixtureRuntime {
         return this.respond(id, {
           task,
           input_request: task.input_request,
+          follow_up: task.follow_up,
           live_events: task.live_events,
           live_output_run_id: task.live_output_run_id,
         });
@@ -1006,6 +1012,8 @@ export class FixtureRuntime {
           String(params.config_alias ?? "").trim() || parentTask.task.config_alias;
         const configPath =
           String(params.config_path ?? "").trim() || parentTask.task.config_path;
+        const followUpMode =
+          String(params.follow_up_mode ?? "").trim() || "continue_here";
         if (!configAlias || !configPath) {
           return this.fail(id, -32602, "config_alias and config_path are required");
         }
@@ -1022,6 +1030,7 @@ export class FixtureRuntime {
           status: "running",
           currentNodeName: isQuickConfig ? "inspect" : "implement",
           currentNodeType: "agent",
+          taskArtifactPaths: [`follow-up-mode-${followUpMode}.md`],
           nodeRuns: isQuickConfig
             ? [
                 {
@@ -1792,6 +1801,7 @@ export class FixtureRuntime {
     currentNodeType: string;
     nodeRuns: FixtureNodeRun[];
     taskArtifactPaths?: string[];
+    followUp?: FixtureTask["follow_up"];
     currentIssue?: FixtureTask["current_issue"];
     inputRequest?: FixtureTask["input_request"];
     blockedSteps?: FixtureTask["blocked_steps"];
@@ -1826,6 +1836,7 @@ export class FixtureRuntime {
       status: params.status,
       current_node_name: params.currentNodeName,
       current_node_type: params.currentNodeType,
+      follow_up: params.followUp,
       current_issue: params.currentIssue,
       input_request: params.inputRequest,
       node_runs: params.nodeRuns,
@@ -3076,6 +3087,11 @@ export class FixtureRuntime {
         status: "done",
         currentNodeName: "test",
         currentNodeType: "agent",
+        followUp: {
+          default_mode: "continue_here",
+          available_modes: ["continue_here", "fork_head", "fork_with_changes"],
+          uncommitted_change_count: 3,
+        },
         nodeRuns: [
           {
             id: "run-login-plan",

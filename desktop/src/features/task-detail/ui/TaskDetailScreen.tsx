@@ -40,6 +40,7 @@ import type {
   TaskDetailHistoryEntry,
   TaskDetailActionSurface,
 } from "@/features/task-detail/model/use-task-detail-screen";
+import type { FollowUpDockState } from "@/features/task-detail/model/follow-up-dock-state";
 import type { TaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
 import type { TaskDetailModal, TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
 import {
@@ -56,8 +57,10 @@ import type {
   BlockedStepDto,
   ClarificationExchangeDto,
   ConfigCatalogEntryDto,
+  FollowUpModeDto,
   InputRequestDto,
   NodeRunViewDto,
+  TaskFollowUpDto,
   TaskViewDto,
 } from "@/rpc/types";
 import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
@@ -524,6 +527,10 @@ type TaskDetailScreenProps = {
   setFollowUpDescription: (value: string) => void;
   followUpConfigAlias?: string;
   setFollowUpConfigAlias: (alias: string) => void;
+  followUp?: TaskFollowUpDto;
+  followUpState?: FollowUpDockState;
+  followUpMode?: FollowUpModeDto;
+  setFollowUpMode: (mode: FollowUpModeDto) => void;
   configEntries: ConfigCatalogEntryDto[];
   submittingFollowUp: boolean;
   submittingRetry: boolean;
@@ -589,6 +596,10 @@ export function TaskDetailScreen({
   setFollowUpDescription,
   followUpConfigAlias,
   setFollowUpConfigAlias,
+  followUp,
+  followUpState,
+  followUpMode,
+  setFollowUpMode,
   configEntries,
   submittingFollowUp,
   submittingRetry,
@@ -819,9 +830,13 @@ export function TaskDetailScreen({
       <TaskFollowUpDock
         configEntries={configEntries}
         defaultConfigAlias={task?.task.config_alias}
+        followUp={followUp}
+        followUpState={followUpState}
         followUpConfigAlias={followUpConfigAlias}
         followUpDescription={followUpDescription}
         onConfigChange={setFollowUpConfigAlias}
+        followUpMode={followUpMode}
+        onModeChange={setFollowUpMode}
         onStartFollowUp={submitFollowUp}
         setFollowUpDescription={setFollowUpDescription}
         submittingFollowUp={submittingFollowUp}

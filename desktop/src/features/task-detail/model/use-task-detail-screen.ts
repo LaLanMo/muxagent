@@ -26,6 +26,9 @@ import {
 import { useWorkspaceStore } from "@/state/workspace-store";
 import { useTaskDetailActions } from "@/features/task-detail/model/use-task-detail-actions";
 import { useTaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
+import {
+  deriveFollowUpDockState,
+} from "@/features/task-detail/model/follow-up-dock-state";
 import { canShowFollowUpSurface } from "@/features/task-detail/model/task-detail-action-surface";
 import { useTaskDetailData } from "@/features/task-detail/model/use-task-detail-data";
 import { useTaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
@@ -242,6 +245,7 @@ export function useTaskDetailScreen() {
     });
   const artifacts = detailEntry?.artifacts ?? emptyArtifacts;
   const ancestry = detailEntry?.ancestry ?? emptyAncestry;
+  const followUp = detailEntry?.followUp;
   const tasksById = useTaskSnapshotStore((state) => state.tasksById);
   const inputRequest = detailEntry?.inputRequest;
   const nodeActorTypes = resolveNodeActorTypes(detailEntry?.config);
@@ -326,6 +330,8 @@ export function useTaskDetailScreen() {
     setFollowUpDescription,
     followUpConfigAlias,
     setFollowUpConfigAlias,
+    followUpMode,
+    setFollowUpMode,
     submittingFollowUp,
     submittingRetry,
     submittingContinue,
@@ -341,6 +347,7 @@ export function useTaskDetailScreen() {
     workspaceId,
     taskId,
     task: resolvedTask,
+    followUp,
     configEntries,
     inputRequest,
     latestFailedRunId: retryRun?.id,
@@ -360,6 +367,13 @@ export function useTaskDetailScreen() {
   const retrySurfaceRun = retryRun;
   const showFollowUpSurface = canShowFollowUpSurface({
     task: resolvedTask,
+    inputRequest,
+    latestBlockedStep,
+    retryRun: retrySurfaceRun,
+  });
+  const followUpState = deriveFollowUpDockState({
+    task: resolvedTask,
+    detailEntry,
     inputRequest,
     latestBlockedStep,
     retryRun: retrySurfaceRun,
@@ -473,6 +487,10 @@ export function useTaskDetailScreen() {
     setFollowUpDescription,
     followUpConfigAlias,
     setFollowUpConfigAlias,
+    followUp,
+    followUpState,
+    followUpMode,
+    setFollowUpMode,
     submittingFollowUp,
     submittingRetry,
     submittingContinue,

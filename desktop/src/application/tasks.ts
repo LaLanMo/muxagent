@@ -11,10 +11,12 @@ import type {
   ArtifactRefDto,
   CommandAcceptedResult,
   ConfigViewDto,
+  FollowUpModeDto,
   InputRequestDto,
   TaskContinueBlockedParams,
   TaskRecoverStaleParams,
   TaskRecoverStaleResult,
+  TaskFollowUpDto,
   TaskRetryNodeParams,
   TaskStartFollowUpParams,
   TaskStartParams,
@@ -29,6 +31,7 @@ export type HydratedTaskDetail = {
   task: TaskViewDto;
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
+  followUp?: TaskFollowUpDto;
   artifacts: ArtifactRefDto[];
   ancestry: TaskAncestryItemDto[];
   liveEvents: SessionHistoryEvent[];
@@ -64,6 +67,7 @@ type StartFollowUpFromTaskArgs = {
   taskId: string;
   task: TaskViewDto;
   description: string;
+  followUpMode?: FollowUpModeDto;
   selectedConfig?: {
     alias: string;
     configPath: string;
@@ -122,6 +126,12 @@ type WaitForTaskTransitionArgs = {
 };
 
 type ContinueBlockedUntilResumedArgs = ContinueBlockedTaskActionArgs & {
+  loadDetail: () => Promise<HydratedTaskDetail | undefined>;
+  attempts?: number;
+  delayMs?: number;
+};
+
+type RetryTaskUntilResumedArgs = RetryTaskNodeActionArgs & {
   loadDetail: () => Promise<HydratedTaskDetail | undefined>;
   attempts?: number;
   delayMs?: number;
@@ -257,6 +267,7 @@ export async function hydrateTaskDetail(
     task: taskResult.task,
     config: taskResult.config,
     inputRequest: taskResult.input_request,
+    followUp: taskResult.follow_up,
     artifacts: artifactResult.artifacts,
     ancestry,
     liveEvents: (taskResult.live_events ?? []).map((event, index) =>
@@ -378,6 +389,7 @@ export async function startFollowUpFromTask(
     description: args.description.trim(),
     config_alias: args.selectedConfig?.alias ?? args.task.task.config_alias,
     config_path: args.selectedConfig?.configPath ?? args.task.task.config_path,
+    follow_up_mode: args.followUpMode,
   });
 }
 
@@ -478,6 +490,25 @@ export async function continueBlockedUntilResumed(
     predicate: (task) =>
       task.current_issue?.kind !== "blocked_step" &&
       (task.blocked_steps?.length ?? 0) === 0,
+  });
+}
+
+export async function retryTaskUntilResumed(
+  runtime: DesktopRuntime,
+  args: RetryTaskUntilResumedArgs,
+): Promise<boolean> {
+  await retryTaskNodeAction(runtime, {
+    workspaceId: args.workspaceId,
+    taskId: args.taskId,
+    nodeRunId: args.nodeRunId,
+    force: args.force,
+  });
+
+  return waitForTaskTransition({
+    loadDetail: args.loadDetail,
+    attempts: args.attempts,
+    delayMs: args.delayMs,
+    predicate: (task) => task.status.toLowerCase() !== "failed",
   });
 }
 

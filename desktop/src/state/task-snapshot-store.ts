@@ -9,6 +9,7 @@ import type {
   ArtifactRefDto,
   ConfigViewDto,
   InputRequestDto,
+  TaskFollowUpDto,
   TaskAncestryItemDto,
   TaskViewDto,
 } from "@/rpc/types";
@@ -21,6 +22,13 @@ type TaskDetailsByWorkspace = Record<string, Record<string, TaskDetailCacheEntry
 
 function compareTaskSnapshots(left: TaskViewDto, right: TaskViewDto): number {
   return left.task.updated_at.localeCompare(right.task.updated_at);
+}
+
+export function taskSnapshotKey(task: TaskViewDto | undefined): string | undefined {
+  if (!task) {
+    return undefined;
+  }
+  return `${task.status}|${task.task.updated_at}`;
 }
 
 export function shouldReplaceTask(
@@ -95,6 +103,7 @@ export type RunHistoryCacheEntry = {
 export type TaskDetailCacheEntry = {
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
+  followUp?: TaskFollowUpDto;
   artifacts: ArtifactRefDto[];
   ancestry: TaskAncestryItemDto[];
   liveEventsRunId?: string;
@@ -102,6 +111,9 @@ export type TaskDetailCacheEntry = {
   loading: boolean;
   stale: boolean;
   error?: string;
+  latestRequestedSnapshotKey?: string;
+  lastAppliedSnapshotKey?: string;
+  latestRequestGeneration: number;
 };
 
 interface TaskSnapshotState {
@@ -125,17 +137,32 @@ interface TaskSnapshotState {
     runId: string | undefined,
     events: SessionHistoryEvent[],
   ) => void;
-  beginTaskDetailLoad: (workspaceId: string, taskId: string) => void;
+  beginTaskDetailLoad: (
+    workspaceId: string,
+    taskId: string,
+    snapshotKey: string | undefined,
+    options?: { showLoading?: boolean },
+  ) => number;
   resolveTaskDetail: (
     workspaceId: string,
     taskId: string,
+    snapshotKey: string | undefined,
+    generation: number,
     detail: {
       config?: ConfigViewDto;
       inputRequest?: InputRequestDto;
+      followUp?: TaskFollowUpDto;
       artifacts: ArtifactRefDto[];
       ancestry: TaskAncestryItemDto[];
       liveEventsRunId?: string;
     },
+  ) => void;
+  failTaskDetailLoad: (
+    workspaceId: string,
+    taskId: string,
+    snapshotKey: string | undefined,
+    generation: number,
+    error: string,
   ) => void;
   beginRunHistoryLoad: (
     workspaceId: string,
@@ -172,15 +199,37 @@ function updateTaskDetailEntry(
   state: TaskSnapshotState,
   workspaceId: string,
   taskId: string,
-  updater: (current?: TaskDetailCacheEntry) => TaskDetailCacheEntry,
+  updater: (current?: TaskDetailCacheEntry) => TaskDetailCacheEntry | undefined,
 ): TaskDetailsByWorkspace {
   const workspaceDetails = state.taskDetailsByWorkspaceId[workspaceId] ?? {};
+  const nextEntry = updater(workspaceDetails[taskId]);
+  if (!nextEntry) {
+    return state.taskDetailsByWorkspaceId;
+  }
   return {
     ...state.taskDetailsByWorkspaceId,
     [workspaceId]: {
       ...workspaceDetails,
-      [taskId]: updater(workspaceDetails[taskId]),
+      [taskId]: nextEntry,
     },
+  };
+}
+
+function baseTaskDetailEntry(current?: TaskDetailCacheEntry): TaskDetailCacheEntry {
+  return {
+    config: current?.config,
+    inputRequest: current?.inputRequest,
+    followUp: current?.followUp,
+    artifacts: current?.artifacts ?? [],
+    ancestry: current?.ancestry ?? [],
+    liveEventsRunId: current?.liveEventsRunId,
+    runHistoryByRunId: current?.runHistoryByRunId ?? {},
+    loading: current?.loading ?? false,
+    stale: current?.stale ?? false,
+    error: current?.error,
+    latestRequestedSnapshotKey: current?.latestRequestedSnapshotKey,
+    lastAppliedSnapshotKey: current?.lastAppliedSnapshotKey,
+    latestRequestGeneration: current?.latestRequestGeneration ?? 0,
   };
 }
 
@@ -291,43 +340,74 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         },
       };
     }),
-  beginTaskDetailLoad: (workspaceId, taskId) =>
+  beginTaskDetailLoad: (workspaceId, taskId, snapshotKey, options) => {
+    let generation = 0;
     set((state) => ({
       taskDetailsByWorkspaceId: updateTaskDetailEntry(
         state,
         workspaceId,
         taskId,
-        (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: current?.runHistoryByRunId ?? {},
-          loading: true,
-          stale: false,
-          error: undefined,
-        }),
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          generation = base.latestRequestGeneration + 1;
+          return {
+            ...base,
+            loading: options?.showLoading ?? true ? true : base.loading,
+            stale: false,
+            error: undefined,
+            latestRequestedSnapshotKey: snapshotKey,
+            latestRequestGeneration: generation,
+          };
+        },
+      ),
+    }));
+    return generation;
+  },
+  resolveTaskDetail: (workspaceId, taskId, snapshotKey, generation, detail) =>
+    set((state) => ({
+      taskDetailsByWorkspaceId: updateTaskDetailEntry(
+        state,
+        workspaceId,
+        taskId,
+        (current) => {
+          if (!current || current.latestRequestGeneration !== generation) {
+            return current;
+          }
+          return {
+            config: detail.config,
+            inputRequest: detail.inputRequest,
+            followUp: detail.followUp,
+            artifacts: detail.artifacts,
+            ancestry: detail.ancestry,
+            liveEventsRunId: detail.liveEventsRunId,
+            runHistoryByRunId: current.runHistoryByRunId,
+            loading: false,
+            stale: false,
+            error: undefined,
+            latestRequestedSnapshotKey: current.latestRequestedSnapshotKey,
+            lastAppliedSnapshotKey: snapshotKey,
+            latestRequestGeneration: current.latestRequestGeneration,
+          };
+        },
       ),
     })),
-  resolveTaskDetail: (workspaceId, taskId, detail) =>
+  failTaskDetailLoad: (workspaceId, taskId, _snapshotKey, generation, error) =>
     set((state) => ({
       taskDetailsByWorkspaceId: updateTaskDetailEntry(
         state,
         workspaceId,
         taskId,
-        () => ({
-          config: detail.config,
-          inputRequest: detail.inputRequest,
-          artifacts: detail.artifacts,
-          ancestry: detail.ancestry,
-          liveEventsRunId: detail.liveEventsRunId,
-          runHistoryByRunId: state.taskDetailsByWorkspaceId[workspaceId]?.[taskId]
-            ?.runHistoryByRunId ?? {},
-          loading: false,
-          stale: false,
-          error: undefined,
-        }),
+        (current) => {
+          if (!current || current.latestRequestGeneration !== generation) {
+            return current;
+          }
+          return {
+            ...baseTaskDetailEntry(current),
+            loading: false,
+            stale: false,
+            error,
+          };
+        },
       ),
     })),
   beginRunHistoryLoad: (workspaceId, taskId, nodeRunId, signature) =>
@@ -336,25 +416,21 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         state,
         workspaceId,
         taskId,
-        (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: {
-            ...(current?.runHistoryByRunId ?? {}),
-            [nodeRunId]: {
-              loading: true,
-              signature,
-              result: current?.runHistoryByRunId?.[nodeRunId]?.result,
-              error: undefined,
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          return {
+            ...base,
+            runHistoryByRunId: {
+              ...base.runHistoryByRunId,
+              [nodeRunId]: {
+                loading: true,
+                signature,
+                result: base.runHistoryByRunId?.[nodeRunId]?.result,
+                error: undefined,
+              },
             },
-          },
-          loading: current?.loading ?? false,
-          stale: current?.stale ?? false,
-          error: current?.error,
-        }),
+          };
+        },
       ),
     })),
   resolveRunHistory: (workspaceId, taskId, nodeRunId, signature, result) =>
@@ -363,25 +439,21 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         state,
         workspaceId,
         taskId,
-        (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: {
-            ...(current?.runHistoryByRunId ?? {}),
-            [nodeRunId]: {
-              loading: false,
-              signature,
-              result,
-              error: undefined,
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          return {
+            ...base,
+            runHistoryByRunId: {
+              ...base.runHistoryByRunId,
+              [nodeRunId]: {
+                loading: false,
+                signature,
+                result,
+                error: undefined,
+              },
             },
-          },
-          loading: current?.loading ?? false,
-          stale: current?.stale ?? false,
-          error: current?.error,
-        }),
+          };
+        },
       ),
     })),
   failRunHistory: (workspaceId, taskId, nodeRunId, signature, error) =>
@@ -390,25 +462,21 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         state,
         workspaceId,
         taskId,
-        (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: {
-            ...(current?.runHistoryByRunId ?? {}),
-            [nodeRunId]: {
-              loading: false,
-              signature,
-              result: current?.runHistoryByRunId?.[nodeRunId]?.result,
-              error,
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          return {
+            ...base,
+            runHistoryByRunId: {
+              ...base.runHistoryByRunId,
+              [nodeRunId]: {
+                loading: false,
+                signature,
+                result: base.runHistoryByRunId?.[nodeRunId]?.result,
+                error,
+              },
             },
-          },
-          loading: current?.loading ?? false,
-          stale: current?.stale ?? false,
-          error: current?.error,
-        }),
+          };
+        },
       ),
     })),
   failTaskDetail: (workspaceId, taskId, error) =>
@@ -418,12 +486,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: current?.runHistoryByRunId ?? {},
+          ...baseTaskDetailEntry(current),
           loading: false,
           stale: false,
           error,
@@ -437,14 +500,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: current?.runHistoryByRunId ?? {},
-          loading: current?.loading ?? false,
-          stale: current?.stale ?? false,
+          ...baseTaskDetailEntry(current),
           error: undefined,
         }),
       ),
@@ -456,13 +512,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
         workspaceId,
         taskId,
         (current) => ({
-          config: current?.config,
-          inputRequest: current?.inputRequest,
-          artifacts: current?.artifacts ?? [],
-          ancestry: current?.ancestry ?? [],
-          liveEventsRunId: current?.liveEventsRunId,
-          runHistoryByRunId: current?.runHistoryByRunId ?? {},
-          loading: current?.loading ?? false,
+          ...baseTaskDetailEntry(current),
           stale: true,
           error: undefined,
         }),

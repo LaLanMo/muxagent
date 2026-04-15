@@ -150,6 +150,8 @@ export type SpawnedDesktopServerContext = {
     kind:
       | "awaiting-review"
       | "completed-review"
+      | "completed-repo-follow-up"
+      | "completed-worktree-follow-up"
       | "failed-retry"
       | "blocked-continue"
       | "stale-recover",
@@ -196,6 +198,7 @@ export async function withSpawnedDesktopServer(
       MUXAGENT_TASKCONFIG_ROOT: taskConfigRootDir,
       MUXAGENT_WEB_PORT: webPort,
       MUXAGENT_BRIDGE_PORT: bridgePort,
+      HOME: tempRoot,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -223,7 +226,10 @@ export async function withSpawnedDesktopServer(
           ["--workdir", workDir, "--kind", kind],
           {
             cwd: desktopRoot,
-            env: process.env,
+            env: {
+              ...process.env,
+              HOME: tempRoot,
+            },
           },
         );
         const parsed = JSON.parse(result.stdout) as {
