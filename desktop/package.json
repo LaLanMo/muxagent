@@ -9,7 +9,7 @@
     "dev:web": "tsx scripts/dev-web.ts",
     "build": "tsc --noEmit && vite build",
     "tauri": "tauri",
-    "tauri:dev": "tauri dev",
+    "tauri:dev": "tsx scripts/tauri-dev.ts",
     "tauri:build": "tauri build --debug",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
     "typecheck": "tsc --noEmit",

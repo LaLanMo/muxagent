@@ -5,6 +5,7 @@ artifacts/
 src-tauri/target/
 .DS_Store
 .muxagent/
+.muxagent-dev/
 .tmp/
 .tmp-debug-*.mjs
 *.pen
