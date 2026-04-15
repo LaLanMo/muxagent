@@ -1248,23 +1248,43 @@ test("renders the blocked task surface", async ({ page }) => {
   expect(blockedPaneStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
   const continueButton = page.getByTestId("continue-blocked");
   await expect(continueButton).toBeVisible();
-  await expect(continueButton.locator(".button__icon--trailing svg")).toHaveCount(1);
+  await expect(continueButton.locator(".button__icon--leading svg")).toHaveCount(1);
+  await expect(continueButton.locator(".button__icon--trailing")).toHaveCount(0);
   const continueButtonChildOrder = await continueButton.evaluate((element) => {
     return Array.from(element.children).map((child) =>
       child instanceof HTMLElement ? child.className : child.tagName.toLowerCase(),
     );
   });
-  expect(continueButtonChildOrder[0]).toContain("button__label");
-  expect(continueButtonChildOrder[1]).toContain("button__icon--trailing");
+  expect(continueButtonChildOrder[0]).toContain("button__icon--leading");
+  expect(continueButtonChildOrder[1]).toContain("button__label");
+  await expect(continueButton).toHaveClass(/button--ghost/);
+  await expect(continueButton).toHaveClass(/button--sm/);
   const continueButtonStyles = await continueButton.evaluate((element) => {
     const styles = getComputedStyle(element);
+    const rect = element.getBoundingClientRect();
     return {
       backgroundColor: styles.backgroundColor,
+      color: styles.color,
       borderRadius: styles.borderRadius,
+      fontSize: styles.fontSize,
+      gap: styles.gap,
+      paddingLeft: styles.paddingLeft,
+      paddingTop: styles.paddingTop,
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
     };
   });
-  expect(continueButtonStyles.backgroundColor).toBe("rgb(47, 40, 37)");
-  expect(continueButtonStyles.borderRadius).toBe("0px");
+  expect(continueButtonStyles.backgroundColor).toBe("rgb(251, 248, 246)");
+  expect(continueButtonStyles.color).toBe("rgb(95, 85, 80)");
+  expect(continueButtonStyles.borderRadius).toBe("4px");
+  expect(continueButtonStyles.fontSize).toBe("13px");
+  expect(continueButtonStyles.gap).toBe("6px");
+  expect(continueButtonStyles.paddingLeft).toBe("14px");
+  expect(continueButtonStyles.paddingTop).toBe("6px");
+  expect(continueButtonStyles.width).toBeGreaterThanOrEqual(101);
+  expect(continueButtonStyles.width).toBeLessThanOrEqual(106);
+  expect(continueButtonStyles.height).toBeGreaterThanOrEqual(28);
+  expect(continueButtonStyles.height).toBeLessThanOrEqual(31);
 });
 
 test("adds a new blocked activity row when the next iteration is blocked by max iterations", async ({

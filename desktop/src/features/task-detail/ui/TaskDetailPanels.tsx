@@ -2588,17 +2588,18 @@ export function TaskBlockedDock({
         {blockedStep?.reason ?? "The current task is waiting to continue."}
       </p>
       <Button
+        className="detail-blocked-dock__continue-button"
         data-testid="continue-blocked"
         disabled={submittingContinue}
-        onClick={() => void onContinue()}
-        size="xl"
-        trailingIcon={
+        leadingIcon={
           !submittingContinue
-            ? <ArrowRight strokeWidth={1.85} />
+            ? <ArrowRight size={13} strokeWidth={1.9} />
             : undefined
         }
+        onClick={() => void onContinue()}
+        size="sm"
         type="button"
-        variant="primary"
+        variant="ghost"
       >
         {submittingContinue ? "Continuing…" : "Continue"}
       </Button>

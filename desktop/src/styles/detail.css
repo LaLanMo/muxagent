@@ -3554,6 +3554,16 @@
   justify-items: start;
 }
 
+.detail-blocked-dock__continue-button {
+  --button-font-size: var(--font-size-mono);
+  --button-padding-block: 6px;
+  --button-padding-inline: 14px;
+  --button-gap: 6px;
+  --button-icon-size: 13px;
+
+  border-radius: var(--radius-sm);
+}
+
 .detail-retry-dock__error {
   font-family: var(--font-mono);
   overflow-wrap: anywhere;
