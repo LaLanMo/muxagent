@@ -150,6 +150,11 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--space-1);
+  border-radius: var(--radius-sm);
+}
+
+.shell-workspace__item.is-active {
+  background: var(--color-surface-selected);
 }
 
 .shell-workspace__row {
@@ -165,13 +170,15 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   color: var(--color-text-secondary);
 }
 
-.shell-workspace__row:hover {
+.shell-workspace__item:not(.is-active):hover {
   background: var(--color-surface-2);
+}
+
+.shell-workspace__row:hover {
   color: var(--color-text-primary);
 }
 
 .shell-workspace__row.is-active {
-  background: var(--color-surface-selected);
   color: var(--color-text-primary);
 }
 
