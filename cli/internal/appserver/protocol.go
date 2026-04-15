@@ -6,6 +6,7 @@ import (
 
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
+	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 )
 
 const (
@@ -243,12 +244,13 @@ type taskStartParams struct {
 }
 
 type taskStartFollowUpParams struct {
-	WorkspaceID     string `json:"workspace_id"`
-	ClientCommandID string `json:"client_command_id,omitempty"`
-	ParentTaskID    string `json:"parent_task_id"`
-	Description     string `json:"description,omitempty"`
-	ConfigAlias     string `json:"config_alias,omitempty"`
-	ConfigPath      string `json:"config_path,omitempty"`
+	WorkspaceID     string                   `json:"workspace_id"`
+	ClientCommandID string                   `json:"client_command_id,omitempty"`
+	ParentTaskID    string                   `json:"parent_task_id"`
+	Description     string                   `json:"description,omitempty"`
+	ConfigAlias     string                   `json:"config_alias,omitempty"`
+	ConfigPath      string                   `json:"config_path,omitempty"`
+	FollowUpMode    taskruntime.FollowUpMode `json:"follow_up_mode,omitempty"`
 }
 
 type taskSubmitInputParams struct {
@@ -316,6 +318,7 @@ type taskGetResult struct {
 	Task            taskViewDTO              `json:"task"`
 	Config          *configViewDTO           `json:"config,omitempty"`
 	InputRequest    *inputRequestDTO         `json:"input_request,omitempty"`
+	FollowUp        *followUpDTO             `json:"follow_up,omitempty"`
 	LiveEvents      []sessionHistoryEventDTO `json:"live_events,omitempty"`
 	LiveOutputRunID string                   `json:"live_output_run_id,omitempty"`
 }

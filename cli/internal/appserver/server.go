@@ -578,6 +578,11 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			Task:         taskViewToDTO(view),
 			InputRequest: inputRequestToDTO(input),
 		}
+		followUp, err := model.BuildFollowUpInfo(view.Task, view.Status)
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		result.FollowUp = followUp
 		if runID, events := s.liveEventSnapshot(params.WorkspaceID, params.TaskID); runID != "" || len(events) > 0 {
 			result.LiveOutputRunID = runID
 			result.LiveEvents = events
@@ -718,6 +723,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			Description:  params.Description,
 			ConfigAlias:  params.ConfigAlias,
 			ConfigPath:   params.ConfigPath,
+			FollowUpMode: params.FollowUpMode,
 		}
 		s.enqueuePendingClientCommand(workspace.WorkspaceID, methodTaskStartFollowUp, params.ClientCommandID, cmd)
 		if err := s.runtimes.dispatch(workspace, cmd); err != nil {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"slices"
@@ -23,6 +24,7 @@ import (
 	"github.com/LaLanMo/muxagent/cli/internal/taskhistory"
 	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 )
 
 func TestServerRejectsCallsBeforeInitialize(t *testing.T) {
@@ -377,6 +379,64 @@ func TestServerTaskReadFlows(t *testing.T) {
 	if !catalogResult.DefaultUseWorktree {
 		t.Fatal("default_use_worktree = false, want true")
 	}
+}
+
+func TestServerTaskGetOmitsFollowUpMetadataForCompletedNonGitTask(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedAppServerTask(t, workspacePath, "task-non-git-follow-up", "Completed plain task", workspacePath)
+	server.markInitialized()
+
+	getResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGet,
+		Params: mustRawParams(t, taskGetParams{WorkspaceID: workspace.WorkspaceID, TaskID: taskID}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get rpc error: %+v", rpcErr)
+	}
+	getResult := getResultAny.(taskGetResult)
+	if getResult.FollowUp != nil {
+		t.Fatalf("task.get follow_up = %#v, want nil", getResult.FollowUp)
+	}
+}
+
+func TestServerTaskGetIncludesFollowUpMetadataForCompletedRepoBackedMainCheckoutTask(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedRepoBackedMainCheckoutTask(t, workspacePath)
+	server.markInitialized()
+
+	assertTaskGetFollowUpMetadata(t, server, workspace.WorkspaceID, taskID, 3)
+}
+
+func TestServerTaskGetIncludesFollowUpMetadataForCompletedWorktreeTask(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedWorktreeTask(t, workspacePath)
+	server.markInitialized()
+
+	assertTaskGetFollowUpMetadata(t, server, workspace.WorkspaceID, taskID, 3)
 }
 
 func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
@@ -1275,6 +1335,55 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 	}
 	if dispatches[1].Type != taskruntime.CommandSubmitInput {
 		t.Fatalf("second dispatch type = %q, want %q", dispatches[1].Type, taskruntime.CommandSubmitInput)
+	}
+}
+
+func TestServerTaskStartFollowUpForwardsExplicitMode(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+	fakeService := newFakeRuntimeService()
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{
+		runtimeFactory: func(workDir string) (runtimeService, error) {
+			return fakeService, nil
+		},
+	})
+	defer func() { _ = server.runtimes.closeAll() }()
+
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskStartFollowUp,
+		Params: mustRawParams(t, taskStartFollowUpParams{
+			WorkspaceID:     workspace.WorkspaceID,
+			ClientCommandID: "cmd-follow-up",
+			ParentTaskID:    "task-parent",
+			Description:     "Continue from the worktree",
+			ConfigAlias:     "default",
+			ConfigPath:      "/tmp/default/config.yaml",
+			FollowUpMode:    taskruntime.FollowUpModeForkWithChanges,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.start_follow_up rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(commandAcceptedResult)
+	if !result.Accepted || result.ClientCommandID != "cmd-follow-up" {
+		t.Fatalf("task.start_follow_up accepted result = %#v", result)
+	}
+
+	dispatches := fakeService.Dispatched()
+	if len(dispatches) != 1 {
+		t.Fatalf("dispatch count = %d, want 1", len(dispatches))
+	}
+	if got := dispatches[0].Type; got != taskruntime.CommandStartFollowUp {
+		t.Fatalf("dispatch type = %q, want %q", got, taskruntime.CommandStartFollowUp)
+	}
+	if got := dispatches[0].FollowUpMode; got != taskruntime.FollowUpModeForkWithChanges {
+		t.Fatalf("dispatch follow_up_mode = %q, want %q", got, taskruntime.FollowUpModeForkWithChanges)
 	}
 }
 
@@ -2496,6 +2605,183 @@ func seedAwaitingTask(t *testing.T, workDir string) (taskID string, awaitingRunI
 		t.Fatalf("write artifact: %v", err)
 	}
 	return taskID, awaitingRunID
+}
+
+func seedAppServerGitRepo(t *testing.T) string {
+	t.Helper()
+	repo := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatalf("resolve repo path: %v", err)
+	}
+	repo = resolved
+	runTestGit(t, repo, "git", "init")
+	runTestGit(t, repo, "git", "config", "user.email", "test@test.com")
+	runTestGit(t, repo, "git", "config", "user.name", "Test")
+	if err := os.MkdirAll(filepath.Join(repo, "packages", "app"), 0o755); err != nil {
+		t.Fatalf("mkdir repo app dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write README: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "packages", "app", ".keep"), []byte("keep"), 0o644); err != nil {
+		t.Fatalf("write .keep: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "packages", "app", "delete-me.txt"), []byte("delete"), 0o644); err != nil {
+		t.Fatalf("write delete-me.txt: %v", err)
+	}
+	runTestGit(t, repo, "git", "add", ".")
+	runTestGit(t, repo, "git", "commit", "-m", "init")
+	return repo
+}
+
+func assertTaskGetFollowUpMetadata(t *testing.T, server *Server, workspaceID, taskID string, minDirtyCount int) {
+	t.Helper()
+	getResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGet,
+		Params: mustRawParams(t, taskGetParams{WorkspaceID: workspaceID, TaskID: taskID}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get rpc error: %+v", rpcErr)
+	}
+	getResult := getResultAny.(taskGetResult)
+	if getResult.FollowUp == nil {
+		t.Fatal("task.get follow_up = nil, want value")
+	}
+	if got := getResult.FollowUp.DefaultMode; got != taskruntime.FollowUpModeContinueHere {
+		t.Fatalf("task.get follow_up.default_mode = %q, want %q", got, taskruntime.FollowUpModeContinueHere)
+	}
+	if got := getResult.FollowUp.AvailableModes; len(got) != 3 {
+		t.Fatalf("task.get follow_up.available_modes len = %d, want 3", len(got))
+	}
+	if got := getResult.FollowUp.UncommittedChangeCount; got < minDirtyCount {
+		t.Fatalf("task.get follow_up.uncommitted_change_count = %d, want >= %d", got, minDirtyCount)
+	}
+}
+
+func seedCompletedAppServerTask(t *testing.T, workDir, taskID, description, executionDir string) string {
+	t.Helper()
+	_, err := taskconfig.EnsureManagedDefaultAssets()
+	if err != nil {
+		t.Fatalf("ensure managed default assets: %v", err)
+	}
+	store, err := taskstore.Open(workDir)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	configPath, err := taskconfig.DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("default config path: %v", err)
+	}
+	materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
+	if err != nil {
+		t.Fatalf("materialize config: %v", err)
+	}
+
+	now := time.Date(2026, 4, 12, 2, 0, 0, 0, time.UTC)
+	task := taskdomain.Task{
+		ID:           taskID,
+		Description:  description,
+		ConfigAlias:  "default",
+		ConfigPath:   materialized.ConfigPath,
+		WorkDir:      taskstore.NormalizeWorkDir(workDir),
+		ExecutionDir: taskstore.NormalizeWorkDir(executionDir),
+		CreatedAt:    now,
+		UpdatedAt:    now.Add(2 * time.Minute),
+	}
+	entryCompleted := now.Add(time.Minute)
+	entryRun := taskdomain.NodeRun{
+		ID:          "run-implement-" + taskID,
+		TaskID:      taskID,
+		NodeName:    "handle_request",
+		Status:      taskdomain.NodeRunDone,
+		StartedAt:   now,
+		CompletedAt: &entryCompleted,
+	}
+	if err := store.CreateTaskWithEntryRun(context.Background(), task, entryRun); err != nil {
+		t.Fatalf("create task with entry run: %v", err)
+	}
+	doneRun := taskdomain.NodeRun{
+		ID:          "run-done-" + taskID,
+		TaskID:      taskID,
+		NodeName:    "done",
+		Status:      taskdomain.NodeRunDone,
+		StartedAt:   entryCompleted,
+		CompletedAt: &entryCompleted,
+	}
+	if err := store.SaveNodeRun(context.Background(), doneRun); err != nil {
+		t.Fatalf("save terminal run: %v", err)
+	}
+	return taskID
+}
+
+func seedCompletedRepoBackedMainCheckoutTask(t *testing.T, workDir string) string {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(workDir, ".keep"), []byte("dirty"), 0o644); err != nil {
+		t.Fatalf("edit tracked file: %v", err)
+	}
+	if err := os.Remove(filepath.Join(workDir, "delete-me.txt")); err != nil {
+		t.Fatalf("delete tracked file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workDir, "notes.md"), []byte("notes"), 0o644); err != nil {
+		t.Fatalf("write untracked file: %v", err)
+	}
+	return seedCompletedAppServerTask(
+		t,
+		workDir,
+		"task-main-follow-up",
+		"Completed main-checkout task",
+		workDir,
+	)
+}
+
+func seedCompletedWorktreeTask(t *testing.T, workDir string) string {
+	t.Helper()
+	repoRoot, err := worktree.FindRepoRoot(workDir)
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	parentWorktreeRoot, err := worktree.Create(repoRoot, "appserver-follow-up-parent")
+	if err != nil {
+		t.Fatalf("create parent worktree: %v", err)
+	}
+	runTestGit(t, repoRoot, "git", "add", ".")
+	if err := os.WriteFile(filepath.Join(repoRoot, "repo-head.txt"), []byte("moved"), 0o644); err != nil {
+		t.Fatalf("write repo-head.txt: %v", err)
+	}
+	runTestGit(t, repoRoot, "git", "add", "repo-head.txt")
+	runTestGit(t, repoRoot, "git", "commit", "-m", "move repo head")
+
+	parentExecutionDir := filepath.Join(parentWorktreeRoot, "packages", "app")
+	if err := os.WriteFile(filepath.Join(parentExecutionDir, ".keep"), []byte("dirty"), 0o644); err != nil {
+		t.Fatalf("edit parent tracked file: %v", err)
+	}
+	if err := os.Remove(filepath.Join(parentExecutionDir, "delete-me.txt")); err != nil {
+		t.Fatalf("delete parent tracked file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(parentWorktreeRoot, "notes.md"), []byte("notes"), 0o644); err != nil {
+		t.Fatalf("write parent untracked file: %v", err)
+	}
+
+	return seedCompletedAppServerTask(
+		t,
+		workDir,
+		"task-worktree-follow-up",
+		"Completed worktree task",
+		parentExecutionDir,
+	)
+}
+
+func runTestGit(t *testing.T, dir string, name string, args ...string) {
+	t.Helper()
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("command %s %v failed: %s", name, args, string(out))
+	}
 }
 
 func seedTaskAncestryChain(t *testing.T, workDir string) (rootTaskID, parentTaskID, childTaskID string) {

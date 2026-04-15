@@ -149,6 +149,24 @@ func TestCreate_FromRepoRoot(t *testing.T) {
 	assert.Equal(t, headOrig, headWT)
 }
 
+func TestCreateFromRef_UsesRequestedCommitInsteadOfRepoHEAD(t *testing.T) {
+	repo := initRepoWithCommit(t)
+	originalHead := gitHead(t, repo)
+
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "README.md"), []byte("updated"), 0o644))
+	run(t, repo, "git", "add", "README.md")
+	run(t, repo, "git", "commit", "-m", "update")
+	repoHead := gitHead(t, repo)
+	require.NotEqual(t, originalHead, repoHead)
+
+	t.Setenv("HOME", t.TempDir())
+	wtPath, err := CreateFromRef(repo, "from-ref", originalHead)
+	require.NoError(t, err)
+
+	assert.Equal(t, originalHead, gitHead(t, wtPath))
+	assert.NotEqual(t, repoHead, gitHead(t, wtPath))
+}
+
 func TestCreate_EmptyRepo(t *testing.T) {
 	repo := initRepo(t) // no commit
 
@@ -184,6 +202,22 @@ func TestCreate_TwoWorktrees(t *testing.T) {
 	branches := string(out)
 	assert.Contains(t, branches, "muxagent/wt-aaa")
 	assert.Contains(t, branches, "muxagent/wt-bbb")
+}
+
+func TestDirtyChangeCount_CapturesTrackedDeletedAndUntrackedChanges(t *testing.T) {
+	repo := initRepoWithCommit(t)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("tracked"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "delete-me.txt"), []byte("delete"), 0o644))
+	run(t, repo, "git", "add", ".")
+	run(t, repo, "git", "commit", "-m", "tracked files")
+
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "tracked.txt"), []byte("tracked, edited"), 0o644))
+	require.NoError(t, os.Remove(filepath.Join(repo, "delete-me.txt")))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "untracked.txt"), []byte("new"), 0o644))
+
+	count, err := DirtyChangeCount(repo)
+	require.NoError(t, err)
+	assert.Equal(t, 3, count)
 }
 
 func TestCreate_DuplicateID(t *testing.T) {
@@ -241,10 +275,92 @@ func TestCleanup_RemovesWorktreeAndBranch(t *testing.T) {
 	assert.Empty(t, strings.TrimSpace(string(out)))
 }
 
+func TestMirrorCheckout_PreservesSymlinksExecutableBitsAndDeletions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink behavior is not portable on windows")
+	}
+
+	repo := initRepoWithCommit(t)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "script.sh"), []byte("#!/bin/sh\necho before\n"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "remove.txt"), []byte("remove"), 0o644))
+	require.NoError(t, os.Symlink("script.sh", filepath.Join(repo, "current-script")))
+	run(t, repo, "git", "add", ".")
+	run(t, repo, "git", "commit", "-m", "seed snapshot files")
+
+	t.Setenv("HOME", t.TempDir())
+	destinationRoot, err := Create(repo, "mirror-destination")
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "script.sh"), []byte("#!/bin/sh\necho after\n"), 0o755))
+	require.NoError(t, os.Remove(filepath.Join(repo, "remove.txt")))
+	require.NoError(t, os.Remove(filepath.Join(repo, "current-script")))
+	require.NoError(t, os.Symlink("notes.md", filepath.Join(repo, "current-script")))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "notes.md"), []byte("snapshot"), 0o644))
+
+	require.NoError(t, MirrorCheckout(repo, destinationRoot))
+
+	linkInfo, err := os.Lstat(filepath.Join(destinationRoot, "current-script"))
+	require.NoError(t, err)
+	assert.True(t, linkInfo.Mode()&os.ModeSymlink != 0)
+	linkTarget, err := os.Readlink(filepath.Join(destinationRoot, "current-script"))
+	require.NoError(t, err)
+	assert.Equal(t, "notes.md", linkTarget)
+
+	scriptInfo, err := os.Stat(filepath.Join(destinationRoot, "script.sh"))
+	require.NoError(t, err)
+	assert.True(t, scriptInfo.Mode().Perm()&0o111 != 0)
+	assert.Equal(t, "#!/bin/sh\necho after\n", readFile(t, filepath.Join(destinationRoot, "script.sh")))
+	assert.Equal(t, "snapshot", readFile(t, filepath.Join(destinationRoot, "notes.md")))
+
+	_, err = os.Stat(filepath.Join(destinationRoot, "remove.txt"))
+	require.Error(t, err)
+	assert.True(t, os.IsNotExist(err))
+
+	gitInfo, err := os.Stat(filepath.Join(destinationRoot, ".git"))
+	require.NoError(t, err)
+	assert.False(t, gitInfo.IsDir())
+}
+
+func TestMirrorCheckout_ExcludesRequestedSubtreeOnly(t *testing.T) {
+	repo := initRepoWithCommit(t)
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "packages", "app"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "packages", "other"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "packages", "app", "tracked.txt"), []byte("tracked"), 0o644))
+	run(t, repo, "git", "add", ".")
+	run(t, repo, "git", "commit", "-m", "seed muxagent subtree")
+
+	t.Setenv("HOME", t.TempDir())
+	destinationRoot, err := Create(repo, "mirror-exclude")
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "packages", "app", "tracked.txt"), []byte("tracked update"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "packages", "app", ".muxagent", "tasks"), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(repo, "packages", "other", ".muxagent"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "packages", "app", ".muxagent", "tasks", "state.db"), []byte("runtime update"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "packages", "other", ".muxagent", "keep.txt"), []byte("keep update"), 0o644))
+
+	require.NoError(t, MirrorCheckout(
+		repo,
+		destinationRoot,
+		filepath.Join("packages", "app", ".muxagent"),
+	))
+
+	assert.Equal(t, "tracked update", readFile(t, filepath.Join(destinationRoot, "packages", "app", "tracked.txt")))
+	assert.Equal(t, "keep update", readFile(t, filepath.Join(destinationRoot, "packages", "other", ".muxagent", "keep.txt")))
+	assert.NoFileExists(t, filepath.Join(destinationRoot, "packages", "app", ".muxagent", "tasks", "state.db"))
+}
+
 func gitHead(t *testing.T, dir string) string {
 	t.Helper()
 	cmd := exec.Command("git", "-C", dir, "rev-parse", "HEAD")
 	out, err := cmd.Output()
 	require.NoError(t, err)
 	return strings.TrimSpace(string(out))
+}
+
+func readFile(t *testing.T, path string) string {
+	t.Helper()
+	payload, err := os.ReadFile(path)
+	require.NoError(t, err)
+	return string(payload)
 }

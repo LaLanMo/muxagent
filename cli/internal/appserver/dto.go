@@ -72,6 +72,12 @@ type taskViewDTO struct {
 	BlockedSteps    []blockedStepDTO `json:"blocked_steps,omitempty"`
 }
 
+type followUpDTO struct {
+	DefaultMode            taskruntime.FollowUpMode   `json:"default_mode"`
+	AvailableModes         []taskruntime.FollowUpMode `json:"available_modes"`
+	UncommittedChangeCount int                        `json:"uncommitted_change_count"`
+}
+
 type taskAncestryItemDTO struct {
 	TaskID       string    `json:"task_id"`
 	Description  string    `json:"description"`

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -136,7 +137,7 @@ func (s *Service) handleCommand(ctx context.Context, cmd RunCommand) error {
 	case CommandStartTask:
 		return s.startTask(ctx, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath, firstNonEmpty(cmd.WorkDir, s.workDir), cmd.UseWorktree)
 	case CommandStartFollowUp:
-		return s.startFollowUpTask(ctx, cmd.ParentTaskID, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath)
+		return s.startFollowUpTask(ctx, cmd.ParentTaskID, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath, cmd.FollowUpMode)
 	case CommandSubmitInput:
 		return s.submitInput(ctx, cmd.TaskID, cmd.NodeRunID, cmd.Payload)
 	case CommandRetryNode:
@@ -151,10 +152,12 @@ func (s *Service) handleCommand(ctx context.Context, cmd RunCommand) error {
 }
 
 func (s *Service) startTask(ctx context.Context, description, configAlias, configPath, workDir string, useWorktree bool) (err error) {
-	return s.startTaskWithInheritedLaunch(ctx, "", description, configAlias, configPath, workDir, useWorktree)
+	return s.startTaskWithExecution(ctx, "", description, configAlias, configPath, workDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+		return prepareTaskExecutionDir(normalizedWorkDir, taskID, useWorktree)
+	})
 }
 
-func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, description, configAlias, configPath string) error {
+func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, description, configAlias, configPath string, requestedMode FollowUpMode) error {
 	parentTaskID = strings.TrimSpace(parentTaskID)
 	if parentTaskID == "" {
 		return errors.New("parent task id is required")
@@ -179,11 +182,60 @@ func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, descripti
 	case configAlias == "" || configPath == "":
 		return errors.New("follow-up task config alias and path must be provided together")
 	}
-	useWorktree := strings.TrimSpace(parentTask.ExecutionDir) != "" && parentTask.ExecutionDir != parentTask.WorkDir
-	return s.startTaskWithInheritedLaunch(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, useWorktree)
+
+	parentExecutionDir, parentCheckoutRoot, relativeCWD, err := resolveTaskCheckout(parentTask)
+	if err != nil {
+		if taskIsRepoBacked(parentTask) {
+			return err
+		}
+		if strings.TrimSpace(string(requestedMode)) != "" {
+			return fmt.Errorf("follow-up mode %q requires a repo-backed parent task", requestedMode)
+		}
+		return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+			return prepareTaskExecutionDir(normalizedWorkDir, taskID, false)
+		})
+	}
+	mode, err := resolveFollowUpMode(requestedMode)
+	if err != nil {
+		return err
+	}
+	if mode == FollowUpModeContinueHere {
+		if err := s.ensureCheckoutAvailableForContinueHere(ctx, parentTask.ID, parentCheckoutRoot); err != nil {
+			return err
+		}
+		return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+			return parentExecutionDir, nil, nil
+		})
+	}
+
+	parentHead, err := worktree.HeadCommit(parentCheckoutRoot)
+	if err != nil {
+		return fmt.Errorf("resolve parent checkout HEAD: %w", err)
+	}
+	mirrorExclusions, err := followUpMirrorExclusions(parentTask, parentCheckoutRoot)
+	if err != nil {
+		return err
+	}
+	return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+		executionDir, childCheckoutRoot, rollback, err := prepareTaskExecutionDirFromRef(parentCheckoutRoot, taskID, parentHead, relativeCWD)
+		if err != nil {
+			return "", rollback, err
+		}
+		if mode != FollowUpModeForkWithChanges {
+			return executionDir, rollback, nil
+		}
+		if err := worktree.MirrorCheckout(parentCheckoutRoot, childCheckoutRoot, mirrorExclusions...); err != nil {
+			return "", rollback, fmt.Errorf("snapshot parent checkout: %w", err)
+		}
+		executionDir, err = worktree.ResolveWorktreeCWD(childCheckoutRoot, relativeCWD)
+		if err != nil {
+			return "", rollback, err
+		}
+		return executionDir, rollback, nil
+	})
 }
 
-func (s *Service) startTaskWithInheritedLaunch(ctx context.Context, parentTaskID, description, configAlias, configPath, workDir string, useWorktree bool) (err error) {
+func (s *Service) startTaskWithExecution(ctx context.Context, parentTaskID, description, configAlias, configPath, workDir string, prepareExecution func(taskID, normalizedWorkDir string) (string, func() error, error)) (err error) {
 	workDir = taskstore.NormalizeWorkDir(workDir)
 	taskID := uuid.NewString()
 	now := time.Now().UTC()
@@ -214,7 +266,7 @@ func (s *Service) startTaskWithInheritedLaunch(ctx context.Context, parentTaskID
 	if err != nil {
 		return err
 	}
-	executionDir, rollback, err := prepareTaskExecutionDir(workDir, taskID, useWorktree)
+	executionDir, rollback, err := prepareExecution(taskID, workDir)
 	rollbackWorktree = rollback
 	if err != nil {
 		return err
@@ -294,18 +346,123 @@ func prepareTaskExecutionDir(workDir, taskID string, useWorktree bool) (string, 
 	if err != nil {
 		return "", nil, err
 	}
-	worktreePath, err := worktree.Create(repoRoot, taskID)
-	if err != nil {
-		return "", nil, err
-	}
-	rollback := func() error {
-		return worktree.Cleanup(repoRoot, worktreePath, worktree.BranchName(taskID))
-	}
-	executionDir, err := worktree.ResolveWorktreeCWD(worktreePath, relPath)
+	executionDir, _, rollback, err := prepareTaskExecutionDirFromRef(repoRoot, taskID, "HEAD", relPath)
 	if err != nil {
 		return "", rollback, err
 	}
 	return executionDir, rollback, nil
+}
+
+func prepareTaskExecutionDirFromRef(repoRoot, taskID, ref, relativeCWD string) (string, string, func() error, error) {
+	worktreePath, err := worktree.CreateFromRef(repoRoot, taskID, ref)
+	if err != nil {
+		return "", "", nil, err
+	}
+	rollback := func() error {
+		return worktree.Cleanup(repoRoot, worktreePath, worktree.BranchName(taskID))
+	}
+	executionDir, err := worktree.ResolveWorktreeCWD(worktreePath, relativeCWD)
+	if err != nil {
+		return "", worktreePath, rollback, err
+	}
+	return executionDir, worktreePath, rollback, nil
+}
+
+func taskUsesWorktree(task taskdomain.Task) bool {
+	executionDir := strings.TrimSpace(task.ExecutionDir)
+	workDir := strings.TrimSpace(task.WorkDir)
+	if executionDir == "" || workDir == "" {
+		return false
+	}
+	return taskstore.NormalizeWorkDir(executionDir) != taskstore.NormalizeWorkDir(workDir)
+}
+
+func taskIsRepoBacked(task taskdomain.Task) bool {
+	if _, err := worktree.FindRepoRoot(task.ExecutionDir); err == nil {
+		return true
+	}
+	_, err := worktree.FindRepoRoot(task.WorkDir)
+	return err == nil
+}
+
+func resolveFollowUpMode(requestedMode FollowUpMode) (FollowUpMode, error) {
+	switch requestedMode {
+	case "", FollowUpModeContinueHere:
+		return FollowUpModeContinueHere, nil
+	case FollowUpModeForkHead, FollowUpModeForkWithChanges:
+		return requestedMode, nil
+	default:
+		return "", fmt.Errorf("unsupported follow-up mode %q", requestedMode)
+	}
+}
+
+func resolveTaskCheckout(task taskdomain.Task) (string, string, string, error) {
+	checkoutRoot, err := worktree.FindRepoRoot(task.ExecutionDir)
+	if err != nil {
+		return "", "", "", fmt.Errorf("parent checkout unavailable: %w", err)
+	}
+	relativeCWD, err := worktree.NormalizeRepoRelativePath(checkoutRoot, task.ExecutionDir)
+	if err != nil {
+		return "", "", "", fmt.Errorf("parent checkout unavailable: %w", err)
+	}
+	executionDir, err := worktree.ResolveWorktreeCWD(checkoutRoot, relativeCWD)
+	if err != nil {
+		return "", "", "", fmt.Errorf("parent checkout unavailable: %w", err)
+	}
+	return executionDir, checkoutRoot, relativeCWD, nil
+}
+
+func (s *Service) ensureCheckoutAvailableForContinueHere(ctx context.Context, parentTaskID, parentCheckoutRoot string) error {
+	liveStatuses := []taskdomain.NodeRunStatus{
+		taskdomain.NodeRunRunning,
+		taskdomain.NodeRunAwaitingUser,
+	}
+	seenTaskIDs := map[string]struct{}{}
+	for _, status := range liveStatuses {
+		runs, err := s.store.ListNodeRunsByStatus(ctx, status)
+		if err != nil {
+			return err
+		}
+		for _, run := range runs {
+			if run.TaskID == parentTaskID {
+				continue
+			}
+			if _, ok := seenTaskIDs[run.TaskID]; ok {
+				continue
+			}
+			seenTaskIDs[run.TaskID] = struct{}{}
+			task, err := s.store.GetTask(ctx, run.TaskID)
+			if err != nil {
+				return err
+			}
+			_, checkoutRoot, _, err := resolveTaskCheckout(task)
+			if err != nil {
+				continue
+			}
+			if checkoutRoot == parentCheckoutRoot {
+				return fmt.Errorf("cannot continue here while task %q is still active in this checkout", task.ID)
+			}
+		}
+	}
+	return nil
+}
+
+func followUpMirrorExclusions(task taskdomain.Task, checkoutRoot string) ([]string, error) {
+	if taskUsesWorktree(task) {
+		return nil, nil
+	}
+	muxagentRoot := filepath.Join(task.WorkDir, ".muxagent")
+	if _, err := os.Stat(muxagentRoot); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("inspect parent runtime state: %w", err)
+	}
+	relativePath, err := worktree.NormalizeRepoRelativePath(checkoutRoot, muxagentRoot)
+	if err != nil {
+		return nil, fmt.Errorf("resolve parent runtime exclusion: %w", err)
+	}
+	return []string{relativePath}, nil
 }
 
 func (s *Service) submitInput(ctx context.Context, taskID, nodeRunID string, payload map[string]interface{}) error {

@@ -112,7 +112,7 @@ func (s *Service) executeAgentNode(ctx context.Context, task taskdomain.Task, cf
 		return err
 	}
 	executionDir := task.ExecutionWorkDir()
-	if task.ExecutionDir != "" && task.ExecutionDir != task.WorkDir {
+	if taskUsesWorktree(task) {
 		executionDir, err = worktree.ResolveWorktreeCWD(task.ExecutionDir, ".")
 		if err != nil {
 			return err

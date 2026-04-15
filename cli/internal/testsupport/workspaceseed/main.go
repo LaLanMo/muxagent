@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 )
 
 const seededReviewConfig = `version: 1
@@ -137,16 +139,16 @@ func main() {
 		kind    string
 	)
 	flag.StringVar(&workDir, "workdir", "", "workspace directory to seed")
-	flag.StringVar(&kind, "kind", "", "seed kind: awaiting-review | completed-review | failed-retry | blocked-continue | stale-recover")
+	flag.StringVar(&kind, "kind", "", "seed kind: awaiting-review | completed-review | completed-repo-follow-up | completed-worktree-follow-up | failed-retry | blocked-continue | stale-recover")
 	flag.Parse()
 
 	if workDir == "" {
 		fatalf("--workdir is required")
 	}
 	switch kind {
-	case "awaiting-review", "completed-review", "failed-retry", "blocked-continue", "stale-recover":
+	case "awaiting-review", "completed-review", "completed-repo-follow-up", "completed-worktree-follow-up", "failed-retry", "blocked-continue", "stale-recover":
 	default:
-		fatalf("--kind must be one of awaiting-review, completed-review, failed-retry, blocked-continue, or stale-recover")
+		fatalf("--kind must be one of awaiting-review, completed-review, completed-repo-follow-up, completed-worktree-follow-up, failed-retry, blocked-continue, or stale-recover")
 	}
 
 	normalized := taskstore.NormalizeWorkDir(workDir)
@@ -161,18 +163,22 @@ func main() {
 
 func seed(workDir, kind string) (*seedResult, error) {
 	taskID := map[string]string{
-		"awaiting-review":  "task-awaiting-real",
-		"completed-review": "task-complete-real",
-		"failed-retry":     "task-failed-real",
-		"blocked-continue": "task-blocked-real",
-		"stale-recover":    "task-stale-real",
+		"awaiting-review":              "task-awaiting-real",
+		"completed-review":             "task-complete-real",
+		"completed-repo-follow-up":     "task-repo-follow-up-real",
+		"completed-worktree-follow-up": "task-worktree-follow-up-real",
+		"failed-retry":                 "task-failed-real",
+		"blocked-continue":             "task-blocked-real",
+		"stale-recover":                "task-stale-real",
 	}[kind]
 	description := map[string]string{
-		"awaiting-review":  "Seeded approval review",
-		"completed-review": "Seeded completed review",
-		"failed-retry":     "Seeded failed retry",
-		"blocked-continue": "Seeded blocked continue",
-		"stale-recover":    "Seeded stale recovery",
+		"awaiting-review":              "Seeded approval review",
+		"completed-review":             "Seeded completed review",
+		"completed-repo-follow-up":     "Seeded completed repo follow-up",
+		"completed-worktree-follow-up": "Seeded completed worktree follow-up",
+		"failed-retry":                 "Seeded failed retry",
+		"blocked-continue":             "Seeded blocked continue",
+		"stale-recover":                "Seeded stale recovery",
 	}[kind]
 
 	configPath, err := writeSeedConfig(workDir, kind+".yaml")
@@ -242,6 +248,14 @@ func seed(workDir, kind string) (*seedResult, error) {
 		if err := store.SaveNodeRun(ctx, doneRun); err != nil {
 			return nil, err
 		}
+	case "completed-repo-follow-up":
+		if err := seedCompletedRepoFollowUp(ctx, store, &task, taskID, now); err != nil {
+			return nil, err
+		}
+	case "completed-worktree-follow-up":
+		if err := seedCompletedWorktreeFollowUp(ctx, store, &task, taskID, now); err != nil {
+			return nil, err
+		}
 	case "failed-retry":
 		entryRun := taskdomain.NodeRun{
 			ID:            "run-implement-failed",
@@ -288,6 +302,136 @@ func seed(workDir, kind string) (*seedResult, error) {
 		TaskID:      taskID,
 		Description: description,
 	}, nil
+}
+
+func seedCompletedRepoFollowUp(ctx context.Context, store *taskstore.Store, task *taskdomain.Task, taskID string, now time.Time) error {
+	if err := initializeSeedGitRepo(task.WorkDir); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(task.WorkDir, "tracked.txt"), []byte("dirty tracked change"), 0o644); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(task.WorkDir, "delete-me.txt")); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(task.WorkDir, "notes.md"), []byte("dirty untracked change"), 0o644); err != nil {
+		return err
+	}
+
+	entryCompleted := now.Add(90 * time.Second)
+	entryRun := taskdomain.NodeRun{
+		ID:          "run-approve-repo-follow-up",
+		TaskID:      taskID,
+		NodeName:    "approve",
+		Status:      taskdomain.NodeRunDone,
+		Result:      map[string]interface{}{"approved": true},
+		StartedAt:   now.Add(time.Minute),
+		CompletedAt: &entryCompleted,
+	}
+	if err := store.CreateTaskWithEntryRun(ctx, *task, entryRun); err != nil {
+		return err
+	}
+	doneAt := entryCompleted.Add(time.Second)
+	doneRun := taskdomain.NodeRun{
+		ID:          "run-done-repo-follow-up",
+		TaskID:      taskID,
+		NodeName:    "done",
+		Status:      taskdomain.NodeRunDone,
+		Result:      map[string]interface{}{},
+		StartedAt:   doneAt,
+		CompletedAt: &doneAt,
+	}
+	return store.SaveNodeRun(ctx, doneRun)
+}
+
+func seedCompletedWorktreeFollowUp(ctx context.Context, store *taskstore.Store, task *taskdomain.Task, taskID string, now time.Time) error {
+	if err := initializeSeedGitRepo(task.WorkDir); err != nil {
+		return err
+	}
+	parentWorktreeRoot, err := worktree.Create(task.WorkDir, taskID+"-parent")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(task.WorkDir, "repo-head.txt"), []byte("repo head moved"), 0o644); err != nil {
+		return err
+	}
+	if err := runSeedGit(task.WorkDir, "git", "add", "repo-head.txt"); err != nil {
+		return err
+	}
+	if err := runSeedGit(task.WorkDir, "git", "commit", "-m", "move repo head"); err != nil {
+		return err
+	}
+
+	if err := os.WriteFile(filepath.Join(parentWorktreeRoot, "tracked.txt"), []byte("dirty tracked change"), 0o644); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(parentWorktreeRoot, "delete-me.txt")); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(parentWorktreeRoot, "notes.md"), []byte("dirty untracked change"), 0o644); err != nil {
+		return err
+	}
+
+	task.ExecutionDir = parentWorktreeRoot
+	entryCompleted := now.Add(90 * time.Second)
+	entryRun := taskdomain.NodeRun{
+		ID:          "run-approve-worktree-follow-up",
+		TaskID:      taskID,
+		NodeName:    "approve",
+		Status:      taskdomain.NodeRunDone,
+		Result:      map[string]interface{}{"approved": true},
+		StartedAt:   now.Add(time.Minute),
+		CompletedAt: &entryCompleted,
+	}
+	if err := store.CreateTaskWithEntryRun(ctx, *task, entryRun); err != nil {
+		return err
+	}
+	doneAt := entryCompleted.Add(time.Second)
+	doneRun := taskdomain.NodeRun{
+		ID:          "run-done-worktree-follow-up",
+		TaskID:      taskID,
+		NodeName:    "done",
+		Status:      taskdomain.NodeRunDone,
+		Result:      map[string]interface{}{},
+		StartedAt:   doneAt,
+		CompletedAt: &doneAt,
+	}
+	return store.SaveNodeRun(ctx, doneRun)
+}
+
+func initializeSeedGitRepo(repoRoot string) error {
+	if err := runSeedGit(repoRoot, "git", "init"); err != nil {
+		return err
+	}
+	if err := runSeedGit(repoRoot, "git", "config", "user.email", "seed@test.com"); err != nil {
+		return err
+	}
+	if err := runSeedGit(repoRoot, "git", "config", "user.name", "Seed"); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "README.md"), []byte("seeded worktree"), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "tracked.txt"), []byte("tracked"), 0o644); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "delete-me.txt"), []byte("delete"), 0o644); err != nil {
+		return err
+	}
+	if err := runSeedGit(repoRoot, "git", "add", "."); err != nil {
+		return err
+	}
+	return runSeedGit(repoRoot, "git", "commit", "-m", "seed repo")
+}
+
+func runSeedGit(dir string, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s %v failed: %s: %w", name, args, string(out), err)
+	}
+	return nil
 }
 
 func writeSeedConfig(workDir, name string) (string, error) {

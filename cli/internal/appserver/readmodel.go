@@ -14,6 +14,7 @@ import (
 	"github.com/LaLanMo/muxagent/cli/internal/taskhistory"
 	"github.com/LaLanMo/muxagent/cli/internal/taskruntime"
 	"github.com/LaLanMo/muxagent/cli/internal/taskstore"
+	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 )
 
 type taskReadModel struct {
@@ -189,6 +190,42 @@ func (m *taskReadModel) loadTaskLineage(ctx context.Context, view *taskdomain.Ta
 	view.ParentTaskID = parentTaskID
 	view.ParentTaskDescription = parentTask.Description
 	return nil
+}
+
+func (m *taskReadModel) BuildFollowUpInfo(task taskdomain.Task, status taskdomain.TaskStatus) (*followUpDTO, error) {
+	if status != taskdomain.TaskStatusDone {
+		return nil, nil
+	}
+	executionDir := taskstore.NormalizeWorkDir(strings.TrimSpace(task.ExecutionDir))
+	if executionDir == "" {
+		return nil, nil
+	}
+
+	checkoutRoot, err := worktree.FindRepoRoot(executionDir)
+	if err != nil {
+		return nil, nil
+	}
+	relativeCWD, err := worktree.NormalizeRepoRelativePath(checkoutRoot, executionDir)
+	if err != nil {
+		return nil, nil
+	}
+	if _, err := worktree.ResolveWorktreeCWD(checkoutRoot, relativeCWD); err != nil {
+		return nil, nil
+	}
+
+	dirtyCount, err := worktree.DirtyChangeCount(checkoutRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &followUpDTO{
+		DefaultMode: taskruntime.FollowUpModeContinueHere,
+		AvailableModes: []taskruntime.FollowUpMode{
+			taskruntime.FollowUpModeContinueHere,
+			taskruntime.FollowUpModeForkHead,
+			taskruntime.FollowUpModeForkWithChanges,
+		},
+		UncommittedChangeCount: dirtyCount,
+	}, nil
 }
 
 func (m *taskReadModel) buildInputRequest(ctx context.Context, task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, run taskdomain.NodeRun) (*taskruntime.InputRequest, error) {

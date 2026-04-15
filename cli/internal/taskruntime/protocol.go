@@ -17,6 +17,14 @@ const (
 	CommandShutdown        CommandType = "task.shutdown"
 )
 
+type FollowUpMode string
+
+const (
+	FollowUpModeContinueHere    FollowUpMode = "continue_here"
+	FollowUpModeForkHead        FollowUpMode = "fork_head"
+	FollowUpModeForkWithChanges FollowUpMode = "fork_with_changes"
+)
+
 type RunCommand struct {
 	Type         CommandType
 	TaskID       string
@@ -27,6 +35,7 @@ type RunCommand struct {
 	ConfigPath   string
 	WorkDir      string
 	UseWorktree  bool
+	FollowUpMode FollowUpMode
 	Payload      map[string]interface{}
 	Force        bool
 }
