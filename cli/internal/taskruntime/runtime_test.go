@@ -547,20 +547,16 @@ func TestServiceSingleRunFollowUpUsesHandleRequestAndInheritedParentContext(t *t
 	writeConfigAtPath(t, singleHandleRequestFixture(), configPath)
 
 	handleRequestPrompt := strings.Join([]string{
-		"Step: {{NODE_NAME}}",
-		"ArtifactDir: {{ARTIFACT_DIR}}",
-		"Iteration: {{CURRENT_ITERATION}}",
+		"{{RUN_METADATA_XML}}",
 		"",
-		"Task",
-		"```",
-		"{{TASK_DESCRIPTION}}",
-		"```",
+		"Primary task for this step:",
+		"<<< PRIMARY TASK >>>",
+		"{{TASK_DESCRIPTION_BLOCK}}",
+		"<<< END PRIMARY TASK >>>",
 		"",
-		"Workflow history (oldest first):",
-		"{{WORKFLOW_HISTORY}}",
+		"{{WORKFLOW_CONTEXT_XML}}",
 		"",
-		"Clarifications so far:",
-		"{{CLARIFICATION_HISTORY}}",
+		"{{CLARIFICATION_CONTEXT_XML}}",
 	}, "\n")
 	promptPath := filepath.Join(filepath.Dir(configPath), "prompts", "handle_request.md")
 	require.NoError(t, os.WriteFile(promptPath, []byte(handleRequestPrompt), 0o644))
@@ -612,10 +608,10 @@ func TestServiceSingleRunFollowUpUsesHandleRequestAndInheritedParentContext(t *t
 	handleRequests := executor.requestsForNode("handle_request")
 	require.Len(t, handleRequests, 2)
 	childPrompt := handleRequests[1].Prompt
-	assert.Contains(t, childPrompt, "## Direct Parent Task")
-	assert.Contains(t, childPrompt, "Description: parent task")
+	assert.Contains(t, childPrompt, "Follow-up lineage:")
+	assert.Contains(t, childPrompt, "- Direct parent task: parent task")
 	assert.Contains(t, childPrompt, taskstore.TaskDir(service.workDir, parentCompleted.TaskID))
-	assert.Contains(t, childPrompt, "parent-result.md")
+	assert.Contains(t, childPrompt, filepath.Join(taskstore.TaskDir(service.workDir, parentCompleted.TaskID), "runs"))
 }
 
 func TestServiceStartFollowUpUsesExplicitConfigOverride(t *testing.T) {
@@ -801,6 +797,28 @@ func TestServiceStartFollowUpDefaultsToContinueHereForWorktreeParents(t *testing
 	assert.Len(t, gitWorktreeList(t, repoRoot), 2)
 }
 
+func TestServiceStartFollowUpDefaultsToContinueHereForRepoBackedMainCheckoutParents(t *testing.T) {
+	parentTask := seedCompletedMainCheckoutParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	service.Dispatch(startFollowUpCommand(parentTask.completed.TaskID, "child main-checkout task"))
+	childCompleted := waitForEventWhere(t, service.Events(), 5*time.Second, func(event RunEvent) bool {
+		return event.Type == EventTaskCompleted && event.TaskID != parentTask.completed.TaskID
+	})
+
+	parent, err := service.store.GetTask(context.Background(), parentTask.completed.TaskID)
+	require.NoError(t, err)
+	child, err := service.store.GetTask(context.Background(), childCompleted.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, parent.WorkDir, child.WorkDir)
+	assert.Equal(t, parent.ExecutionDir, child.ExecutionDir)
+
+	repoRoot, err := worktree.FindRepoRoot(parent.WorkDir)
+	require.NoError(t, err)
+	assert.Len(t, gitWorktreeList(t, repoRoot), 1)
+}
+
 func TestServiceStartFollowUpContinueHereRejectsRunningSiblingInSameCheckout(t *testing.T) {
 	parentTask := seedCompletedWorktreeParentTask(t)
 	service := parentTask.service
@@ -820,12 +838,50 @@ func TestServiceStartFollowUpContinueHereRejectsRunningSiblingInSameCheckout(t *
 	assert.Contains(t, err.Error(), "still active in this checkout")
 }
 
+func TestServiceStartFollowUpContinueHereRejectsRunningPlainSiblingInSameCheckout(t *testing.T) {
+	parentTask := seedCompletedMainCheckoutParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	seedLiveTaskInCheckout(t, service, parentTask.task, "plain-sibling-running", taskdomain.NodeRunRunning)
+
+	err := service.startFollowUpTask(
+		context.Background(),
+		parentTask.completed.TaskID,
+		"blocked child",
+		"",
+		"",
+		FollowUpModeContinueHere,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "still active in this checkout")
+}
+
 func TestServiceStartFollowUpContinueHereRejectsAwaitingSiblingInSameCheckout(t *testing.T) {
 	parentTask := seedCompletedWorktreeParentTask(t)
 	service := parentTask.service
 	defer service.Close()
 
 	seedLiveTaskInCheckout(t, service, parentTask.task, "sibling-awaiting", taskdomain.NodeRunAwaitingUser)
+
+	err := service.startFollowUpTask(
+		context.Background(),
+		parentTask.completed.TaskID,
+		"blocked child",
+		"",
+		"",
+		FollowUpModeContinueHere,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "still active in this checkout")
+}
+
+func TestServiceStartFollowUpContinueHereRejectsAwaitingPlainSiblingInSameCheckout(t *testing.T) {
+	parentTask := seedCompletedMainCheckoutParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	seedLiveTaskInCheckout(t, service, parentTask.task, "plain-sibling-awaiting", taskdomain.NodeRunAwaitingUser)
 
 	err := service.startFollowUpTask(
 		context.Background(),
@@ -873,6 +929,45 @@ func TestServiceStartFollowUpForkHeadUsesParentHeadInsteadOfRepoHEAD(t *testing.
 	assert.NotEqual(t, parentTask.task.ExecutionDir, childTask.ExecutionDir)
 	assert.Equal(t, parentHead, childHead)
 	assert.NotEqual(t, repoHead, childHead)
+}
+
+func TestServiceStartFollowUpForkHeadFromRepoBackedMainCheckoutIgnoresUncommittedChanges(t *testing.T) {
+	parentTask := seedCompletedMainCheckoutParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	repoRoot, err := worktree.FindRepoRoot(parentTask.task.WorkDir)
+	require.NoError(t, err)
+	parentHead, err := worktree.HeadCommit(repoRoot)
+	require.NoError(t, err)
+
+	mainTrackedFile := filepath.Join(parentTask.task.ExecutionDir, ".keep")
+	mainDeletedFile := filepath.Join(parentTask.task.ExecutionDir, "delete-me.txt")
+	mainUntrackedFile := filepath.Join(parentTask.task.ExecutionDir, "notes.md")
+	require.NoError(t, os.WriteFile(mainTrackedFile, []byte("dirty main checkout change"), 0o644))
+	require.NoError(t, os.Remove(mainDeletedFile))
+	require.NoError(t, os.WriteFile(mainUntrackedFile, []byte("main checkout notes"), 0o644))
+
+	service.Dispatch(startFollowUpCommandWithMode(
+		parentTask.completed.TaskID,
+		"fork head from main checkout",
+		FollowUpModeForkHead,
+	))
+	childCompleted := waitForEventWhere(t, service.Events(), 5*time.Second, func(event RunEvent) bool {
+		return event.Type == EventTaskCompleted && event.TaskID != parentTask.completed.TaskID
+	})
+
+	childTask, err := service.store.GetTask(context.Background(), childCompleted.TaskID)
+	require.NoError(t, err)
+	childCheckoutRoot, err := worktree.FindRepoRoot(childTask.ExecutionDir)
+	require.NoError(t, err)
+	childHead, err := worktree.HeadCommit(childCheckoutRoot)
+	require.NoError(t, err)
+
+	assert.Equal(t, parentHead, childHead)
+	assert.Equal(t, "keep", readTestFile(t, filepath.Join(childTask.ExecutionDir, ".keep")))
+	assert.FileExists(t, filepath.Join(childTask.ExecutionDir, "delete-me.txt"))
+	assert.NoFileExists(t, filepath.Join(childTask.ExecutionDir, "notes.md"))
 }
 
 func TestServiceStartFollowUpForkWithChangesUsesParentHeadAndSnapshotsCheckout(t *testing.T) {
@@ -939,6 +1034,49 @@ func TestServiceStartFollowUpForkWithChangesUsesParentHeadAndSnapshotsCheckout(t
 	assert.True(t, execInfo.Mode().Perm()&0o111 != 0)
 }
 
+func TestServiceStartFollowUpForkWithChangesFromRepoBackedMainCheckoutSkipsRuntimeState(t *testing.T) {
+	parentTask := seedCompletedMainCheckoutParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	repoRoot, err := worktree.FindRepoRoot(parentTask.task.WorkDir)
+	require.NoError(t, err)
+	parentHead, err := worktree.HeadCommit(repoRoot)
+	require.NoError(t, err)
+
+	mainTrackedFile := filepath.Join(parentTask.task.ExecutionDir, ".keep")
+	mainDeletedFile := filepath.Join(parentTask.task.ExecutionDir, "delete-me.txt")
+	mainUntrackedFile := filepath.Join(parentTask.task.ExecutionDir, "notes.md")
+	require.NoError(t, os.WriteFile(mainTrackedFile, []byte("dirty main checkout change"), 0o644))
+	require.NoError(t, os.Remove(mainDeletedFile))
+	require.NoError(t, os.WriteFile(mainUntrackedFile, []byte("main checkout notes"), 0o644))
+	require.NoError(t, os.WriteFile(taskstore.DBPath(parentTask.task.WorkDir), []byte("runtime"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(taskstore.TaskDir(parentTask.task.WorkDir, parentTask.task.ID), "marker.txt"), []byte("parent task state"), 0o644))
+
+	service.Dispatch(startFollowUpCommandWithMode(
+		parentTask.completed.TaskID,
+		"fork with changes from main checkout",
+		FollowUpModeForkWithChanges,
+	))
+	childCompleted := waitForEventWhere(t, service.Events(), 5*time.Second, func(event RunEvent) bool {
+		return event.Type == EventTaskCompleted && event.TaskID != parentTask.completed.TaskID
+	})
+
+	childTask, err := service.store.GetTask(context.Background(), childCompleted.TaskID)
+	require.NoError(t, err)
+	childCheckoutRoot, err := worktree.FindRepoRoot(childTask.ExecutionDir)
+	require.NoError(t, err)
+	childHead, err := worktree.HeadCommit(childCheckoutRoot)
+	require.NoError(t, err)
+
+	assert.Equal(t, parentHead, childHead)
+	assert.Equal(t, "dirty main checkout change", readTestFile(t, filepath.Join(childTask.ExecutionDir, ".keep")))
+	assert.NoFileExists(t, filepath.Join(childTask.ExecutionDir, "delete-me.txt"))
+	assert.Equal(t, "main checkout notes", readTestFile(t, filepath.Join(childTask.ExecutionDir, "notes.md")))
+	assert.NoFileExists(t, taskstore.DBPath(childTask.ExecutionDir))
+	assert.NoFileExists(t, filepath.Join(taskstore.TaskDir(childTask.ExecutionDir, parentTask.task.ID), "marker.txt"))
+}
+
 func TestServiceStartFollowUpFailsWhenParentWorktreeIsMissing(t *testing.T) {
 	parentTask := seedCompletedWorktreeParentTask(t)
 	service := parentTask.service
@@ -957,7 +1095,7 @@ func TestServiceStartFollowUpFailsWhenParentWorktreeIsMissing(t *testing.T) {
 		FollowUpModeForkHead,
 	)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parent worktree unavailable")
+	assert.Contains(t, err.Error(), "parent checkout unavailable")
 }
 
 func TestServiceStartFollowUpRejectsIncompleteParent(t *testing.T) {
@@ -1085,16 +1223,19 @@ func TestLoadInheritedContextIncludesAllParentRunsAndAncestors(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, inherited)
 
-	assert.Contains(t, inherited.WorkflowHistory, "## Direct Parent Task")
-	assert.Contains(t, inherited.WorkflowHistory, "Description: parent task")
-	assert.Contains(t, inherited.WorkflowHistory, taskstore.TaskDir(service.workDir, parentTask.ID))
-	for i := 1; i <= 10; i++ {
-		assert.Contains(t, inherited.WorkflowHistory, fmt.Sprintf("/tmp/parent-run-%02d.md", i))
+	require.NotNil(t, inherited.DirectParent)
+	assert.Equal(t, "parent task", inherited.DirectParent.Description)
+	assert.Equal(t, taskstore.TaskDir(service.workDir, parentTask.ID), inherited.DirectParent.TaskDir)
+	assert.Len(t, inherited.EarlierAncestors, 6)
+	actualAncestors := make([]string, 0, len(inherited.EarlierAncestors))
+	for _, ancestor := range inherited.EarlierAncestors {
+		actualAncestors = append(actualAncestors, ancestor.Description+"|"+ancestor.TaskDir)
 	}
+	expectedAncestors := make([]string, 0, 6)
 	for i := 1; i <= 6; i++ {
-		assert.Contains(t, inherited.WorkflowHistory, fmt.Sprintf("- ancestor task %d", i))
-		assert.Contains(t, inherited.WorkflowHistory, taskstore.TaskDir(service.workDir, fmt.Sprintf("ancestor-%d", i)))
+		expectedAncestors = append(expectedAncestors, fmt.Sprintf("ancestor task %d|%s", i, taskstore.TaskDir(service.workDir, fmt.Sprintf("ancestor-%d", i))))
 	}
+	assert.ElementsMatch(t, expectedAncestors, actualAncestors)
 }
 
 func TestLoadInheritedInputArtifactsIncludesAllExistingParentArtifacts(t *testing.T) {
@@ -2628,6 +2769,44 @@ type completedWorktreeParent struct {
 	task      taskdomain.Task
 }
 
+func seedCompletedMainCheckoutParentTask(t *testing.T) completedWorktreeParent {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	_, err := taskconfig.EnsureManagedDefaultAssets()
+	require.NoError(t, err)
+
+	cfg := singleAgentTerminalFixture()
+	writeConfigAtPath(t, cfg, managedDefaultTestConfigPath(t))
+
+	repo := initRuntimeGitRepoWithCommit(t, true)
+	workDir := filepath.Join(repo, "packages", "app")
+	executor := &fakeExecutor{
+		steps: map[string][]taskexecutor.Result{
+			"implement": {
+				{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("parent-impl.md")},
+				{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("child-impl.md")},
+			},
+		},
+	}
+	service, err := NewService(workDir, executor)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = service.Run(ctx) }()
+
+	service.Dispatch(startTaskCommand(t, service, "parent main checkout task"))
+	completed := waitForEvent(t, service.Events(), EventTaskCompleted)
+	task, err := service.store.GetTask(context.Background(), completed.TaskID)
+	require.NoError(t, err)
+	return completedWorktreeParent{
+		service:   service,
+		completed: completed,
+		task:      task,
+	}
+}
+
 func seedCompletedWorktreeParentTask(t *testing.T) completedWorktreeParent {
 	t.Helper()
 	home := t.TempDir()
@@ -2727,6 +2906,7 @@ func initRuntimeGitRepoWithCommit(t *testing.T, includeSubdir bool) string {
 		subdir := filepath.Join(repo, "packages", "app")
 		require.NoError(t, os.MkdirAll(subdir, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(subdir, ".keep"), []byte("keep"), 0o644))
+		require.NoError(t, os.WriteFile(filepath.Join(subdir, "delete-me.txt"), []byte("delete"), 0o644))
 	}
 	runRuntimeGit(t, repo, "git", "add", ".")
 	runRuntimeGit(t, repo, "git", "commit", "-m", "init")

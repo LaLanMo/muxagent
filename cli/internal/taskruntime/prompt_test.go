@@ -13,57 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuildPromptPresentsWorkflowHistoryChronologically(t *testing.T) {
-	cfg := &taskconfig.Config{
-		Version: 1,
-		Clarification: taskconfig.ClarificationConfig{
-			MaxQuestions:          4,
-			MaxOptionsPerQuestion: 4,
-			MinOptionsPerQuestion: 2,
-		},
-		Topology: taskconfig.Topology{
-			MaxIterations: 3,
-			Entry:         "draft_plan",
-			Nodes: []taskconfig.NodeRef{
-				{Name: "draft_plan"},
-				{Name: "review_plan"},
-			},
-			Edges: []taskconfig.Edge{
-				{From: "draft_plan", To: "review_plan"},
-			},
-		},
-		NodeDefinitions: map[string]taskconfig.NodeDefinition{
-			"draft_plan": func() taskconfig.NodeDefinition {
-				def := artifactAgentNode()
-				def.SystemPrompt = "./prompts/draft_plan.md"
-				return def
-			}(),
-			"review_plan": func() taskconfig.NodeDefinition {
-				def := artifactAgentNode()
-				def.SystemPrompt = "./prompts/review_plan.md"
-				return def
-			}(),
-		},
-	}
-	configPath := writeOverrideConfig(t, cfg)
-	promptPath := filepath.Join(filepath.Dir(configPath), "prompts", "draft_plan.md")
-	template := strings.Join([]string{
-		"Task:",
-		"```",
-		"{{TASK_DESCRIPTION}}",
-		"```",
-		"",
-		"Iteration:",
-		"{{CURRENT_ITERATION}}",
-		"",
-		"Workflow history so far (oldest first):",
-		"{{WORKFLOW_HISTORY}}",
-		"",
-		"Clarification history:",
-		"{{CLARIFICATION_HISTORY}}",
-	}, "\n")
-	require.NoError(t, os.WriteFile(promptPath, []byte(template), 0o644))
-
+func TestSummarizeWorkflowHistoryPresentsEntriesChronologically(t *testing.T) {
 	runs := []taskdomain.NodeRun{
 		{
 			ID:       "upsert-1",
@@ -89,29 +39,17 @@ func TestBuildPromptPresentsWorkflowHistoryChronologically(t *testing.T) {
 		},
 	}
 
-	prompt, err := buildPrompt(
-		taskdomain.Task{Description: "Create hello.txt"},
-		cfg,
-		configPath,
-		runs,
-		runs[2],
-		"/tmp/task-artifacts/upsert-2",
-	)
-	require.NoError(t, err)
+	history := summarizeWorkflowHistory(runs)
 
-	assert.Contains(t, prompt, "Task:\n```\nCreate hello.txt\n```")
-	assert.Contains(t, prompt, "\n2\n")
-	assert.Contains(t, prompt, "1. draft_plan (#1)")
-	assert.Contains(t, prompt, "2. review_plan (#1)")
-	assert.Contains(t, prompt, "/tmp/plan-v1.md")
-	assert.Contains(t, prompt, "/tmp/review-v1.md")
-	assert.Contains(t, prompt, "\"passed\":false")
-	assert.Contains(t, prompt, "Clarification history:\n(none)")
-	assert.NotContains(t, prompt, "Artifacts:")
-	assert.Equal(t, 1, strings.Count(prompt, "/tmp/plan-v1.md"))
-	assert.Equal(t, 1, strings.Count(prompt, "/tmp/review-v1.md"))
-	assert.Less(t, strings.Index(prompt, "1. draft_plan (#1)"), strings.Index(prompt, "2. review_plan (#1)"))
-	assert.Less(t, strings.Index(prompt, "/tmp/plan-v1.md"), strings.Index(prompt, "/tmp/review-v1.md"))
+	assert.Contains(t, history, "1. draft_plan (#1)")
+	assert.Contains(t, history, "2. review_plan (#1)")
+	assert.Contains(t, history, "/tmp/plan-v1.md")
+	assert.Contains(t, history, "/tmp/review-v1.md")
+	assert.Contains(t, history, "\"passed\":false")
+	assert.Equal(t, 1, strings.Count(history, "/tmp/plan-v1.md"))
+	assert.Equal(t, 1, strings.Count(history, "/tmp/review-v1.md"))
+	assert.Less(t, strings.Index(history, "1. draft_plan (#1)"), strings.Index(history, "2. review_plan (#1)"))
+	assert.Less(t, strings.Index(history, "/tmp/plan-v1.md"), strings.Index(history, "/tmp/review-v1.md"))
 }
 
 func TestBuildPromptWorkflowContextUsesRunDirectoriesInsteadOfInliningArtifacts(t *testing.T) {
@@ -246,9 +184,7 @@ func TestDefaultPromptTemplatesReadLikeStepInstructions(t *testing.T) {
 				"List every artifact you wrote in `file_paths`.",
 			},
 			excludes: []string{
-				"Step: {{NODE_NAME}}",
 				"ArtifactDir: {{ARTIFACT_DIR}}",
-				"Iteration: {{CURRENT_ITERATION}}",
 				"{{WORKFLOW_CONTEXT}}",
 				"{{CLARIFICATION_CONTEXT}}",
 				"Output\n",
@@ -271,9 +207,7 @@ func TestDefaultPromptTemplatesReadLikeStepInstructions(t *testing.T) {
 				"passed",
 			},
 			excludes: []string{
-				"Step: {{NODE_NAME}}",
 				"ArtifactDir: {{ARTIFACT_DIR}}",
-				"Iteration: {{CURRENT_ITERATION}}",
 				"{{WORKFLOW_CONTEXT}}",
 				"{{CLARIFICATION_CONTEXT}}",
 				"Output\n",
@@ -296,9 +230,7 @@ func TestDefaultPromptTemplatesReadLikeStepInstructions(t *testing.T) {
 				"List only supporting artifacts under {{ARTIFACT_DIR}} in `file_paths`.",
 			},
 			excludes: []string{
-				"Step: {{NODE_NAME}}",
 				"ArtifactDir: {{ARTIFACT_DIR}}",
-				"Iteration: {{CURRENT_ITERATION}}",
 				"{{WORKFLOW_CONTEXT}}",
 				"{{CLARIFICATION_CONTEXT}}",
 				"Output\n",
@@ -321,9 +253,7 @@ func TestDefaultPromptTemplatesReadLikeStepInstructions(t *testing.T) {
 				"passed",
 			},
 			excludes: []string{
-				"Step: {{NODE_NAME}}",
 				"ArtifactDir: {{ARTIFACT_DIR}}",
-				"Iteration: {{CURRENT_ITERATION}}",
 				"{{WORKFLOW_CONTEXT}}",
 				"{{CLARIFICATION_CONTEXT}}",
 				"Output\n",

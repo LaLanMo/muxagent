@@ -40,38 +40,20 @@ func buildPromptWithInheritedContext(task taskdomain.Task, cfg *taskconfig.Confi
 	if err != nil {
 		return "", err
 	}
-	workflowHistory := summarizeWorkflowHistory(runs)
-	if inherited != nil {
-		workflowHistory = combineInheritedSection(
-			"## Current Task Workflow History (oldest first)",
-			workflowHistory,
-			inherited.WorkflowHistory,
-		)
-	}
-	clarificationHistory := summarizeClarificationHistory(run.Clarifications)
 	workflowContext := buildWorkflowContext(task, cfg, runs, run, inherited)
 	clarificationContext := summarizeClarificationContext(run.Clarifications)
 	workflowDiagram := buildWorkflowDiagram(cfg)
 	runMetadataXML := buildRunMetadataXML(task, cfg, run, iteration, artifactDir)
 	taskDescriptionBlock := buildPlainPromptBlock(task.Description)
-	taskRequestXML := buildTaskRequestXML(task.Description)
 	workflowContextXML := buildTaggedTextBlock("execution_context", workflowContext)
 	clarificationContextXML := buildTaggedTextBlock("clarification_state", clarificationContext)
 	replacer := strings.NewReplacer(
-		"{{NODE_NAME}}", run.NodeName,
-		"{{CURRENT_ITERATION}}", fmt.Sprintf("%d", iteration),
-		"{{TASK_DESCRIPTION}}", task.Description,
 		"{{TASK_DESCRIPTION_BLOCK}}", taskDescriptionBlock,
-		"{{WORKFLOW_HISTORY}}", workflowHistory,
-		"{{WORKFLOW_CONTEXT}}", workflowContext,
 		"{{WORKFLOW_CONTEXT_XML}}", workflowContextXML,
-		"{{CLARIFICATION_HISTORY}}", clarificationHistory,
-		"{{CLARIFICATION_CONTEXT}}", clarificationContext,
 		"{{CLARIFICATION_CONTEXT_XML}}", clarificationContextXML,
 		"{{ARTIFACT_DIR}}", artifactDir,
 		"{{WORKFLOW_DIAGRAM}}", workflowDiagram,
 		"{{RUN_METADATA_XML}}", runMetadataXML,
-		"{{TASK_REQUEST_XML}}", taskRequestXML,
 	)
 	return replacer.Replace(template), nil
 }
@@ -144,14 +126,6 @@ func buildClarificationResumePrompt(task taskdomain.Task, cfg *taskconfig.Config
 	return strings.Join(lines, "\n"), nil
 }
 
-func buildPromptHeader(nodeName, artifactDir string, iteration int) string {
-	return strings.Join([]string{
-		fmt.Sprintf("Step: %s", nodeName),
-		fmt.Sprintf("ArtifactDir: %s", artifactDir),
-		fmt.Sprintf("Iteration: %d", iteration),
-	}, "\n")
-}
-
 func buildRunMetadataXML(task taskdomain.Task, cfg *taskconfig.Config, run taskdomain.NodeRun, iteration int, artifactDir string) string {
 	taskDir := taskstore.TaskDir(task.WorkDir, task.ID)
 	runsDir := filepath.Join(taskDir, "runs")
@@ -168,10 +142,6 @@ func buildRunMetadataXML(task taskdomain.Task, cfg *taskconfig.Config, run taskd
 		"</task_metadata>",
 	}
 	return strings.Join(lines, "\n")
-}
-
-func buildTaskRequestXML(taskDescription string) string {
-	return buildTaggedTextBlock("task_request", taskDescription)
 }
 
 func buildPlainPromptBlock(content string) string {
@@ -259,36 +229,6 @@ func runIteration(runs []taskdomain.NodeRun, current taskdomain.NodeRun) int {
 		return 1
 	}
 	return ordinal
-}
-
-func summarizeClarificationHistory(exchanges []taskdomain.ClarificationExchange) string {
-	entries := make([]string, 0, len(exchanges))
-	for _, exchange := range exchanges {
-		for qi, question := range exchange.Request.Questions {
-			lines := []string{fmt.Sprintf("- Q: %s", question.Question)}
-			if question.WhyItMatters != "" {
-				lines = append(lines, fmt.Sprintf("  Context: %s", question.WhyItMatters))
-			}
-			if len(question.Options) > 0 {
-				lines = append(lines, "  Options:")
-				for _, opt := range question.Options {
-					if opt.Description != "" {
-						lines = append(lines, fmt.Sprintf("    - %s: %s", opt.Label, opt.Description))
-					} else {
-						lines = append(lines, fmt.Sprintf("    - %s", opt.Label))
-					}
-				}
-			}
-			if exchange.Response != nil && qi < len(exchange.Response.Answers) {
-				answerData, err := json.Marshal(exchange.Response.Answers[qi].Selected)
-				if err == nil {
-					lines = append(lines, fmt.Sprintf("  Selected: %s", string(answerData)))
-				}
-			}
-			entries = append(entries, strings.Join(lines, "\n"))
-		}
-	}
-	return joinLines(entries)
 }
 
 func buildWorkflowContext(task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, current taskdomain.NodeRun, inherited *inheritedContext) string {
@@ -584,18 +524,6 @@ func joinLines(items []string) string {
 		return "(none)"
 	}
 	return strings.Join(items, "\n")
-}
-
-func combineInheritedSection(currentHeading, currentBody, inheritedBody string) string {
-	if strings.TrimSpace(inheritedBody) == "" {
-		return currentBody
-	}
-	return strings.Join([]string{
-		currentHeading,
-		currentBody,
-		"",
-		inheritedBody,
-	}, "\n")
 }
 
 func sortedRunsByStart(runs []taskdomain.NodeRun) []taskdomain.NodeRun {

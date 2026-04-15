@@ -11,7 +11,13 @@ import (
 )
 
 type inheritedContext struct {
-	WorkflowHistory string
+	DirectParent     *inheritedTaskReference
+	EarlierAncestors []inheritedTaskReference
+}
+
+type inheritedTaskReference struct {
+	Description string
+	TaskDir     string
 }
 
 func (s *Service) loadInheritedContext(ctx context.Context, task taskdomain.Task) (*inheritedContext, error) {
@@ -27,18 +33,13 @@ func (s *Service) loadInheritedContext(ctx context.Context, task taskdomain.Task
 	if err != nil {
 		return nil, err
 	}
-	parentRuns, err := s.store.ListNodeRunsByTask(ctx, parentTaskID)
-	if err != nil {
-		return nil, err
-	}
-	directParentRuns := completedRuns(parentRuns)
-	parentTaskDir := taskstore.TaskDir(parentTask.WorkDir, parentTask.ID)
 
 	ancestorIDs, err := s.store.ListAncestorTaskIDs(ctx, task.ID)
 	if err != nil {
 		return nil, err
 	}
 	ancestorReferences := make([]string, 0, len(ancestorIDs))
+	ancestorTasks := make([]inheritedTaskReference, 0, len(ancestorIDs))
 	for _, ancestorTaskID := range ancestorIDs {
 		if ancestorTaskID == parentTaskID {
 			continue
@@ -48,26 +49,12 @@ func (s *Service) loadInheritedContext(ctx context.Context, task taskdomain.Task
 			return nil, err
 		}
 		ancestorReferences = append(ancestorReferences, formatAncestorTaskReference(ancestorTask))
-	}
-
-	workflowSections := []string{
-		"## Direct Parent Task",
-		fmt.Sprintf("Description: %s", parentTask.Description),
-		fmt.Sprintf("Task directory: %s", parentTaskDir),
-		"",
-		"## Direct Parent Workflow History (oldest first)",
-		summarizeWorkflowHistory(directParentRuns),
-	}
-	if len(ancestorReferences) > 0 {
-		workflowSections = append(workflowSections,
-			"",
-			"## Earlier Ancestors (inspect only if needed)",
-			joinLines(ancestorReferences),
-		)
+		ancestorTasks = append(ancestorTasks, makeInheritedTaskReference(ancestorTask))
 	}
 
 	return &inheritedContext{
-		WorkflowHistory: strings.Join(workflowSections, "\n"),
+		DirectParent:     inheritedTaskReferencePtr(makeInheritedTaskReference(parentTask)),
+		EarlierAncestors: ancestorTasks,
 	}, nil
 }
 
@@ -125,14 +112,30 @@ func existingArtifactPaths(paths []string) []string {
 }
 
 func formatAncestorTaskReference(task taskdomain.Task) string {
-	description := strings.TrimSpace(task.Description)
-	if description == "" {
-		description = "(no description)"
-	}
+	description := normalizeInheritedTaskDescription(task.Description)
 	return strings.Join([]string{
 		fmt.Sprintf("- %s", description),
 		fmt.Sprintf("  Task directory: %s", taskstore.TaskDir(task.WorkDir, task.ID)),
 	}, "\n")
+}
+
+func makeInheritedTaskReference(task taskdomain.Task) inheritedTaskReference {
+	return inheritedTaskReference{
+		Description: normalizeInheritedTaskDescription(task.Description),
+		TaskDir:     taskstore.TaskDir(task.WorkDir, task.ID),
+	}
+}
+
+func inheritedTaskReferencePtr(ref inheritedTaskReference) *inheritedTaskReference {
+	return &ref
+}
+
+func normalizeInheritedTaskDescription(description string) string {
+	description = strings.TrimSpace(description)
+	if description == "" {
+		return "(no description)"
+	}
+	return description
 }
 
 func resolveArtifactPaths(task taskdomain.Task, runs []taskdomain.NodeRun) []string {

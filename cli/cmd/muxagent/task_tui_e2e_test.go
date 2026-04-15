@@ -2902,9 +2902,9 @@ func assertPromptFiles(t *testing.T, workDir, taskID string, want []string, requ
 		if requireHeader {
 			data, err := os.ReadFile(path)
 			require.NoError(t, err)
-			assert.Contains(t, string(data), "Step: {{NODE_NAME}}")
-			assert.Contains(t, string(data), "ArtifactDir: {{ARTIFACT_DIR}}")
-			assert.Contains(t, string(data), "Iteration: {{CURRENT_ITERATION}}")
+			assert.Contains(t, string(data), "{{RUN_METADATA_XML}}")
+			assert.Contains(t, string(data), "{{TASK_DESCRIPTION_BLOCK}}")
+			assert.Contains(t, string(data), "{{WORKFLOW_DIAGRAM}}")
 		}
 		return nil
 	})
