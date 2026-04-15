@@ -193,7 +193,7 @@ function DetailMetaItem({
   value,
 }: {
   label: string;
-  value: string | number;
+  value: ReactNode;
 }) {
   return (
     <span className="detail-modal-frame__meta-item">
@@ -477,6 +477,23 @@ function shortenSessionId(value: string | undefined): string {
   return `${trimmed.slice(0, 8)}…${trimmed.slice(-6)}`;
 }
 
+function shortenArtifactPath(value: string | undefined) {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return "unavailable";
+  }
+  if (trimmed.length <= 52) {
+    return trimmed;
+  }
+  const normalized = trimmed.replaceAll("\\", "/");
+  const segments = normalized.split("/").filter(Boolean);
+  const tail = segments.slice(-3).join("/");
+  if (tail.length <= 40) {
+    return `…/${tail}`;
+  }
+  return `…${trimmed.slice(-47)}`;
+}
+
 async function copyTextToClipboard(value: string) {
   if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(value);
@@ -497,6 +514,36 @@ async function copyTextToClipboard(value: string) {
   if (!copied) {
     throw new Error("Clipboard copy failed");
   }
+}
+
+function useClipboardCopy() {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+
+  useEffect(() => {
+    if (copyState === "idle") {
+      return;
+    }
+    const timeoutId = window.setTimeout(() => {
+      setCopyState("idle");
+    }, 1600);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copyState]);
+
+  const copyValue = useEffectEvent(async (value: string | undefined) => {
+    if (!value) {
+      return;
+    }
+    try {
+      await copyTextToClipboard(value);
+      setCopyState("copied");
+    } catch {
+      setCopyState("failed");
+    }
+  });
+
+  return { copyState, copyValue };
 }
 
 function describeHistoryStatus(
@@ -1279,7 +1326,7 @@ export function TaskTranscriptModal({
   const totalTokens = summarizeUsageTokens(rawTranscriptItems);
   const eventCount = transcript.events.length || streamLines.length;
   const runStatus = detailStatusLabel(run.status);
-  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const { copyState, copyValue } = useClipboardCopy();
   const transcriptAvailability = describeTranscriptAvailability(
     streamSource,
     transcript,
@@ -1287,30 +1334,6 @@ export function TaskTranscriptModal({
     isCurrentRun,
     recoveryAction,
   );
-
-  useEffect(() => {
-    if (copyState === "idle") {
-      return;
-    }
-    const timeoutId = window.setTimeout(() => {
-      setCopyState("idle");
-    }, 1600);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [copyState]);
-
-  async function handleCopySessionId() {
-    if (!providerSessionId) {
-      return;
-    }
-    try {
-      await copyTextToClipboard(providerSessionId);
-      setCopyState("copied");
-    } catch {
-      setCopyState("failed");
-    }
-  }
 
   function renderTranscriptItem(item: TranscriptTimelineItem) {
     if (item.kind === "message") {
@@ -1423,25 +1446,25 @@ export function TaskTranscriptModal({
         }
         meta={
           <>
-            <span className="detail-transcript-modal__meta-value">
+            <span className="detail-modal-frame__meta-inline-value">
               {formatPanelDuration(run.started_at, run.completed_at)}
             </span>
-            <span className="detail-transcript-modal__meta-separator">·</span>
-            <span className="detail-transcript-modal__meta-value">
+            <span className="detail-modal-frame__meta-inline-separator">·</span>
+            <span className="detail-modal-frame__meta-inline-value">
               {totalTokens.toLocaleString()} tokens
             </span>
-            <span className="detail-transcript-modal__meta-separator">·</span>
-            <span className="detail-transcript-modal__meta-value">
+            <span className="detail-modal-frame__meta-inline-separator">·</span>
+            <span className="detail-modal-frame__meta-inline-value">
               {eventCount} events
             </span>
-            <span className="detail-transcript-modal__meta-separator">·</span>
-            <span className="detail-transcript-modal__session-label">Session</span>
+            <span className="detail-modal-frame__meta-inline-separator">·</span>
+            <span className="detail-modal-frame__meta-inline-label">Session</span>
             <button
               aria-label={providerSessionId ? "Copy provider session ID" : "Provider session ID unavailable"}
-              className="detail-transcript-modal__session-copy"
+              className="detail-modal-frame__meta-inline-copy"
               disabled={!providerSessionId}
               onClick={() => {
-                void handleCopySessionId();
+                void copyValue(providerSessionId);
               }}
               title={providerSessionId || undefined}
               type="button"
@@ -1563,6 +1586,13 @@ export function TaskArtifactModal({
   error,
   onClose,
 }: ArtifactPaneProps) {
+  const artifactPath =
+    artifact?.resolved_path?.trim() ||
+    artifact?.display_path?.trim() ||
+    artifact?.raw_path?.trim() ||
+    "";
+  const { copyState, copyValue } = useClipboardCopy();
+
   return (
     <DetailOverlayModal onClose={onClose ?? (() => {})} testId="artifact-modal">
       <DetailModalFrame
@@ -1572,6 +1602,30 @@ export function TaskArtifactModal({
             <FileText aria-hidden="true" size={16} strokeWidth={1.9} />
           </span>
         }
+        meta={
+          <>
+            <span className="detail-modal-frame__meta-inline-label">Path</span>
+            <button
+              aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
+              className="detail-modal-frame__meta-inline-copy"
+              data-testid="artifact-path-copy"
+              disabled={!artifactPath}
+              onClick={() => {
+                void copyValue(artifactPath);
+              }}
+              title={artifactPath || undefined}
+              type="button"
+            >
+              {copyState === "copied" ? (
+                <Check aria-hidden="true" size={11} strokeWidth={2} />
+              ) : (
+                <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
+              )}
+              <span>{shortenArtifactPath(artifactPath)}</span>
+            </button>
+          </>
+        }
+        metaClassName="detail-modal-frame__meta--inline"
         onClose={onClose}
         subtitle={`from ${artifact?.source_label || artifact?.node_name || "preview"}`}
         title={artifact?.preview_name || "Preview"}

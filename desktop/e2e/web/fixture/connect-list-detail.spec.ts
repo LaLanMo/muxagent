@@ -817,6 +817,32 @@ test("renders approval and artifact preview task surfaces", async ({ page }) => 
   await expect(artifactModal.getByText("src/styles/detail.css")).toBeVisible();
   await expect(artifactModal.getByText("design.pen")).toBeVisible();
   await expect(artifactModal.locator(".detail-artifact-modal__document a")).toHaveCount(2);
+  const expectedArtifactPath =
+    "/tmp/muxagent-workspace/.muxagent/tasks/task-live-fixture/artifacts/run-live-plan/plan.md";
+  const artifactPathCopy = artifactModal.getByTestId("artifact-path-copy");
+  await expect(artifactPathCopy).toBeVisible();
+  await expect(artifactPathCopy).toHaveAttribute("title", expectedArtifactPath);
+  await page.evaluate(() => {
+    const windowWithClipboard = window as Window & { __copiedArtifactPath?: string };
+    windowWithClipboard.__copiedArtifactPath = "";
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText(value: string) {
+          windowWithClipboard.__copiedArtifactPath = value;
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  await artifactPathCopy.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as Window & { __copiedArtifactPath?: string }).__copiedArtifactPath ?? "",
+      ),
+    )
+    .toBe(expectedArtifactPath);
   const artifactLink = artifactModal
     .locator(".detail-artifact-modal__document a")
     .first();

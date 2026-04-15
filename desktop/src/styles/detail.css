@@ -1844,7 +1844,7 @@
 }
 
 .detail-modal-frame--artifact .detail-modal-frame__header {
-  border-bottom: 1px solid #d1c8c2;
+  border-bottom: none;
 }
 
 .detail-modal-frame--artifact .detail-modal-frame__header-main {
@@ -1934,6 +1934,7 @@
   background: transparent;
 }
 
+.detail-modal-frame__meta--inline,
 .detail-modal-frame--transcript .detail-modal-frame__meta {
   align-items: center;
   gap: var(--space-3);
@@ -2098,31 +2099,32 @@
   color: #756a63;
 }
 
-.detail-transcript-modal__meta-value,
-.detail-transcript-modal__meta-separator {
+.detail-modal-frame__meta-inline-value,
+.detail-modal-frame__meta-inline-separator {
   font-size: var(--font-size-xs);
   line-height: 1;
 }
 
-.detail-transcript-modal__meta-value {
+.detail-modal-frame__meta-inline-value {
   color: #5f5550;
   font-family: var(--font-mono);
 }
 
-.detail-transcript-modal__meta-separator {
+.detail-modal-frame__meta-inline-separator {
   color: #9b8e87;
 }
 
-.detail-transcript-modal__session-label {
+.detail-modal-frame__meta-inline-label {
   color: #9b8e87;
   font-size: var(--font-size-xs);
   line-height: 1;
 }
 
-.detail-transcript-modal__session-copy {
+.detail-modal-frame__meta-inline-copy {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
   padding: 0;
   border: none;
   background: none;
@@ -2133,15 +2135,19 @@
   line-height: 1;
 }
 
-.detail-transcript-modal__session-copy span {
+.detail-modal-frame__meta-inline-copy span {
+  max-width: min(50vw, 420px);
+  overflow: hidden;
+  color: #5f5550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-modal-frame__meta-inline-copy:hover {
   color: #5f5550;
 }
 
-.detail-transcript-modal__session-copy:hover {
-  color: #5f5550;
-}
-
-.detail-transcript-modal__session-copy:disabled {
+.detail-modal-frame__meta-inline-copy:disabled {
   cursor: default;
   opacity: 0.5;
 }
