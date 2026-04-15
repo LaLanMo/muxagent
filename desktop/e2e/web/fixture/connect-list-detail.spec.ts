@@ -922,6 +922,7 @@ test("renders image artifacts with zoom controls and reset behavior", async ({
   await page.getByRole("button", { name: /review-portrait\.svg/i }).click();
 
   const artifactModal = page.getByTestId("artifact-modal");
+  const artifactFrame = artifactModal.locator(".detail-modal-frame--artifact");
   const image = artifactModal.getByTestId("artifact-image-preview");
   await expect(artifactModal).toBeVisible();
   await expect(image).toBeVisible();
@@ -930,6 +931,24 @@ test("renders image artifacts with zoom controls and reset behavior", async ({
   await expect(
     artifactModal.getByTestId("artifact-image-mode-contain"),
   ).toHaveAttribute("aria-pressed", "true");
+
+  const viewport = page.viewportSize();
+  expect(viewport).not.toBeNull();
+  const modalBounds = await artifactFrame.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return {
+      bottom: rect.bottom,
+      centerX: rect.left + rect.width / 2,
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+    };
+  });
+  expect(modalBounds.left).toBeGreaterThanOrEqual(12);
+  expect(modalBounds.right).toBeLessThanOrEqual(viewport!.width - 12);
+  expect(modalBounds.top).toBeGreaterThanOrEqual(12);
+  expect(modalBounds.bottom).toBeLessThanOrEqual(viewport!.height - 12);
+  expect(Math.abs(modalBounds.centerX - viewport!.width / 2)).toBeLessThan(8);
 
   const containWidth = await image.evaluate(
     (element) => element.getBoundingClientRect().width,

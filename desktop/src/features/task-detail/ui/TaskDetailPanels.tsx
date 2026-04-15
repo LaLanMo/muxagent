@@ -210,6 +210,21 @@ function DetailMetaItem({
   );
 }
 
+function DetailInlineMetaPair({
+  label,
+  value,
+}: {
+  label: string;
+  value: ReactNode;
+}) {
+  return (
+    <span className="detail-artifact-modal__meta-pair">
+      <span className="detail-modal-frame__meta-inline-label">{label}</span>
+      <span className="detail-modal-frame__meta-inline-value">{value}</span>
+    </span>
+  );
+}
+
 function DetailModalFrame({
   eyebrow,
   title,
@@ -704,9 +719,15 @@ function ArtifactImageViewer({
           height: `${viewer.renderedHeight}px`,
         }
       : undefined;
+  const viewerClassName = [
+    "detail-artifact-modal__image-viewer",
+    aspectRatio && aspectRatio >= 3 ? "detail-artifact-modal__image-viewer--panoramic" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <div className="detail-artifact-modal__image-viewer">
+    <div className={viewerClassName}>
       <div
         className={`detail-artifact-modal__image-canvas detail-artifact-modal__image-canvas--${viewer.fitMode}`}
         data-testid="artifact-image-canvas"
@@ -1902,15 +1923,38 @@ export function TaskArtifactModal({
   );
   const meta = imagePreview ? (
     <>
-      <DetailMetaItem
-        label="Image"
-        value={formatArtifactImageDimensions(viewer.naturalSize)}
-      />
-      <DetailMetaItem
-        label="File"
-        value={formatArtifactByteLength(imagePreview.byteLength)}
-      />
-      <DetailMetaItem label="Zoom" value={viewer.zoomLabel} />
+      <div className="detail-artifact-modal__meta-summary">
+        <DetailInlineMetaPair
+          label="Image"
+          value={formatArtifactImageDimensions(viewer.naturalSize)}
+        />
+        <span className="detail-modal-frame__meta-inline-separator">·</span>
+        <DetailInlineMetaPair
+          label="File"
+          value={formatArtifactByteLength(imagePreview.byteLength)}
+        />
+        <span className="detail-modal-frame__meta-inline-separator">·</span>
+        <DetailInlineMetaPair label="Zoom" value={viewer.zoomLabel} />
+        <span className="detail-modal-frame__meta-inline-separator">·</span>
+        <button
+          aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
+          className="detail-modal-frame__meta-inline-copy"
+          data-testid="artifact-path-copy"
+          disabled={!artifactPath}
+          onClick={() => {
+            void copyValue(artifactPath);
+          }}
+          title={artifactPath || undefined}
+          type="button"
+        >
+          {copyState === "copied" ? (
+            <Check aria-hidden="true" size={11} strokeWidth={2} />
+          ) : (
+            <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
+          )}
+          <span>{shortenArtifactPath(artifactPath)}</span>
+        </button>
+      </div>
       <div className="detail-artifact-modal__toolbar">
         <div
           aria-label="Image fit mode"
@@ -1974,6 +2018,16 @@ export function TaskArtifactModal({
         >
           Open externally
         </Button>
+      </div>
+    </>
+  ) : artifact ? (
+    <>
+      <div className="detail-artifact-modal__meta-summary">
+        <DetailInlineMetaPair
+          label="Format"
+          value={imageArtifact ? "Image" : artifact.markdown ? "Markdown" : "Text"}
+        />
+        <span className="detail-modal-frame__meta-inline-separator">·</span>
         <button
           aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
           className="detail-modal-frame__meta-inline-copy"
@@ -1993,32 +2047,7 @@ export function TaskArtifactModal({
           <span>{shortenArtifactPath(artifactPath)}</span>
         </button>
       </div>
-    </>
-  ) : artifact ? (
-    <>
-      <DetailMetaItem
-        label="Format"
-        value={imageArtifact ? "Image" : artifact.markdown ? "Markdown" : "Text"}
-      />
       <div className="detail-artifact-modal__toolbar">
-        <button
-          aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
-          className="detail-modal-frame__meta-inline-copy"
-          data-testid="artifact-path-copy"
-          disabled={!artifactPath}
-          onClick={() => {
-            void copyValue(artifactPath);
-          }}
-          title={artifactPath || undefined}
-          type="button"
-        >
-          {copyState === "copied" ? (
-            <Check aria-hidden="true" size={11} strokeWidth={2} />
-          ) : (
-            <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
-          )}
-          <span>{shortenArtifactPath(artifactPath)}</span>
-        </button>
         <Button
           className="detail-artifact-modal__open-button"
           data-testid="artifact-open-externally"
