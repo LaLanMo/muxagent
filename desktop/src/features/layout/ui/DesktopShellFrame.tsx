@@ -106,9 +106,7 @@ function ShellWorkspaceRow(item: ShellWorkspaceItem) {
         type="button"
       >
         <span className="shell-workspace__leading">
-          <span aria-hidden="true" className="shell-workspace__glyph">
-            {item.active ? "⌂" : "◌"}
-          </span>
+          <ShellIcon name="workspace" />
           <span className="shell-workspace__copy">
             <span className="shell-workspace__label">{item.label}</span>
           </span>

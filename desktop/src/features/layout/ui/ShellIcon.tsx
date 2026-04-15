@@ -3,12 +3,12 @@ import {
   History,
   Inbox,
   LayoutGrid,
-  ListChecks,
+  ListTodo,
   Play,
   Rows3,
   ServerCog,
   Settings,
-  Workflow,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -30,43 +30,25 @@ type ShellIconProps = {
 
 const iconMap: Record<ShellIconName, LucideIcon> = {
   inbox: Inbox,
-  tasks: ListChecks,
+  tasks: ListTodo,
   active: Play,
   history: History,
   list: Rows3,
   board: LayoutGrid,
   machines: ServerCog,
-  configs: Workflow,
+  configs: SlidersHorizontal,
   settings: Settings,
   workspace: Folder,
 };
 
-const glyphMap: Partial<Record<ShellIconName, string>> = {
-  tasks: "◫",
-  configs: "⌘",
-  settings: "◔",
-};
-
 export function ShellIcon({ name }: ShellIconProps) {
-  const glyph = glyphMap[name];
-  if (glyph) {
-    return (
-      <span aria-hidden="true" className="shell-icon shell-icon--glyph">
-        {glyph}
-      </span>
-    );
-  }
-
   const Icon: LucideIcon = iconMap[name];
-  const size = name === "workspace" ? 13 : 14;
-  const strokeWidth = name === "workspace" ? 1.5 : 1.75;
-
   return (
     <Icon
       aria-hidden="true"
       className="shell-icon"
-      size={size}
-      strokeWidth={strokeWidth}
+      size={14}
+      strokeWidth={1.75}
     />
   );
 }

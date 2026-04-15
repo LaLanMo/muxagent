@@ -179,8 +179,9 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  align-self: stretch;
+  aspect-ratio: 1;
+  padding: 0;
   border-radius: var(--radius-sm);
   opacity: 0;
   pointer-events: none;
@@ -211,13 +212,6 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-}
-
-.shell-workspace__glyph {
-  color: currentColor;
-  font-size: 14px;
-  line-height: 1;
-  flex: none;
 }
 
 .shell-workspace__copy {
@@ -270,16 +264,6 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
 .shell-icon {
   flex: none;
   opacity: 1;
-}
-
-.shell-icon--glyph {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 14px;
-  color: currentColor;
-  font-size: 14px;
-  line-height: 1;
 }
 
 .desktop-shell__divider,
