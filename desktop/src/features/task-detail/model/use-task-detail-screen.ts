@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { getRuntime } from "@/app/runtime";
 import { buildTaskDetailPath } from "@/domain/routes";
 import { buildTranscriptSnapshot } from "@/domain/session-history";
 import {
@@ -266,8 +268,9 @@ export function useTaskDetailScreen() {
     inputRequest,
     blockedStep: latestBlockedStep,
   });
-  const { artifactContent, artifactError } =
+  const { artifactPreview, artifactError } =
     useTaskDetailArtifactPreview(selectedArtifact);
+  const [artifactActionError, setArtifactActionError] = useState<string | undefined>();
   const selectedRunHistory = useTaskRunHistory({
     workspaceId,
     taskId,
@@ -275,6 +278,26 @@ export function useTaskDetailScreen() {
     selectedRun,
     detailEntry,
   });
+
+  useEffect(() => {
+    setArtifactActionError(undefined);
+  }, [selectedArtifact?.resolved_path]);
+
+  async function openArtifactExternally() {
+    if (!selectedArtifact) {
+      return;
+    }
+    setArtifactActionError(undefined);
+    try {
+      await getRuntime().shell.openPath(selectedArtifact.resolved_path);
+    } catch (actionError) {
+      setArtifactActionError(
+        actionError instanceof Error
+          ? actionError.message
+          : "Failed to open artifact externally",
+      );
+    }
+  }
 
   const stageNodes = resolvedTask ? buildStageNodes(resolvedTask) : [];
   const latest = resolvedTask ? latestRun(resolvedTask) : undefined;
@@ -423,8 +446,9 @@ export function useTaskDetailScreen() {
     navigatorRuns,
     selectedRun,
     selectedArtifact,
-    artifactContent,
+    artifactPreview,
     artifactError,
+    artifactActionError,
     artifacts,
     inputRequest,
     liveEvents,
@@ -496,6 +520,7 @@ export function useTaskDetailScreen() {
     selectArtifact,
     openTranscript,
     openArtifact,
+    openArtifactExternally,
     submitApprove,
     submitReject,
     submitClarification,

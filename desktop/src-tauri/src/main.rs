@@ -280,6 +280,35 @@ fn read_text_file(state: State<'_, AppState>, path: String) -> Result<String, St
     fs::read_to_string(&requested).map_err(|error| format!("read file: {error}"))
 }
 
+fn describe_inline_preview_limit(max_bytes: u64) -> String {
+    let megabytes = max_bytes as f64 / (1024.0 * 1024.0);
+    if (megabytes - megabytes.round()).abs() < f64::EPSILON {
+        return format!("{} MB", megabytes.round() as u64);
+    }
+    format!("{megabytes:.1} MB")
+}
+
+#[tauri::command]
+fn read_binary_file(
+    state: State<'_, AppState>,
+    path: String,
+    max_bytes: u64,
+) -> Result<Vec<u8>, String> {
+    if max_bytes == 0 {
+        return Err("maxBytes must be a positive integer".to_string());
+    }
+    let _session = state.manager.current()?;
+    let requested = resolve_absolute_path(&path)?;
+    let metadata = fs::metadata(&requested).map_err(|error| format!("read file metadata: {error}"))?;
+    if metadata.len() > max_bytes {
+        return Err(format!(
+            "Artifact preview exceeds the {} inline limit. Open externally to inspect the full file.",
+            describe_inline_preview_limit(max_bytes)
+        ));
+    }
+    fs::read(&requested).map_err(|error| format!("read file: {error}"))
+}
+
 #[tauri::command]
 fn open_path(state: State<'_, AppState>, path: String) -> Result<(), String> {
     let _session = state.manager.current()?;
@@ -572,6 +601,7 @@ fn main() {
             app_server_request,
             pick_directory,
             read_text_file,
+            read_binary_file,
             open_path,
             show_context_menu
         ])

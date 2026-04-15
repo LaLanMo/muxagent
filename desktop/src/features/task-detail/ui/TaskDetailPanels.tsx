@@ -15,7 +15,11 @@ import {
   ChevronRight,
   Copy,
   FileText,
+  Image,
+  Minus,
+  Plus,
   RotateCcw,
+  SquareArrowOutUpRight,
   User,
   Workflow,
   X,
@@ -24,6 +28,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { TranscriptSnapshot } from "@/domain/session-history";
 import { detailStatusLabel } from "@/domain/task-shell";
+import type { TaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
 import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
 import type {
   ArtifactRefDto,
@@ -62,8 +67,10 @@ type RunPaneProps = {
 
 type ArtifactPaneProps = {
   artifact?: ArtifactRefDto;
-  content?: string;
+  preview?: TaskDetailArtifactPreview;
   error?: string;
+  actionError?: string;
+  onOpenExternally?: () => void;
   onClose?: () => void;
 };
 
@@ -427,6 +434,299 @@ function ArtifactModalContent({
     <pre className="document-content detail-artifact-modal__document detail-artifact-modal__text">
       {normalized}
     </pre>
+  );
+}
+
+type ArtifactImageFitMode = "contain" | "fit-width" | "actual";
+
+const artifactImageFitModeOptions: Array<{
+  value: ArtifactImageFitMode;
+  label: string;
+}> = [
+  { value: "contain", label: "Contain" },
+  { value: "fit-width", label: "Fit width" },
+  { value: "actual", label: "100%" },
+];
+
+const ARTIFACT_IMAGE_ZOOM_STEP = 0.25;
+const ARTIFACT_IMAGE_MIN_ZOOM = 0.25;
+const ARTIFACT_IMAGE_MAX_ZOOM = 4;
+const artifactImageExtensions = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".bmp",
+  ".svg",
+]);
+
+function clampNumber(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function artifactPreviewExtension(artifact: ArtifactRefDto | undefined): string {
+  if (!artifact) {
+    return "";
+  }
+  for (const candidate of [
+    artifact.preview_name,
+    artifact.resolved_path,
+    artifact.raw_path,
+  ]) {
+    const normalized = candidate.trim().replace(/\\/g, "/").toLowerCase();
+    const basename = normalized.slice(normalized.lastIndexOf("/") + 1);
+    const dotIndex = basename.lastIndexOf(".");
+    if (dotIndex > 0) {
+      return basename.slice(dotIndex);
+    }
+  }
+  return "";
+}
+
+function isImageArtifact(artifact: ArtifactRefDto | undefined): boolean {
+  return Boolean(artifact && !artifact.markdown && artifactImageExtensions.has(artifactPreviewExtension(artifact)));
+}
+
+function formatArtifactByteLength(bytes: number | undefined): string {
+  if (!bytes || bytes <= 0) {
+    return "Unknown";
+  }
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+  const kilobytes = bytes / 1024;
+  if (kilobytes < 1024) {
+    return `${kilobytes.toFixed(kilobytes >= 100 ? 0 : 1)} KB`;
+  }
+  const megabytes = kilobytes / 1024;
+  return `${megabytes.toFixed(megabytes >= 100 ? 0 : 1)} MB`;
+}
+
+function formatArtifactImageDimensions(
+  dimensions: { width: number; height: number } | undefined,
+): string {
+  if (!dimensions) {
+    return "Loading…";
+  }
+  return `${dimensions.width} × ${dimensions.height}`;
+}
+
+function computeArtifactImageBaseScale({
+  fitMode,
+  naturalSize,
+  containerSize,
+}: {
+  fitMode: ArtifactImageFitMode;
+  naturalSize?: {
+    width: number;
+    height: number;
+  };
+  containerSize: {
+    width: number;
+    height: number;
+  };
+}) {
+  if (!naturalSize || naturalSize.width <= 0 || naturalSize.height <= 0) {
+    return 1;
+  }
+  if (fitMode === "actual") {
+    return 1;
+  }
+  if (containerSize.width <= 0 || containerSize.height <= 0) {
+    return 1;
+  }
+  if (fitMode === "fit-width") {
+    return Math.min(containerSize.width / naturalSize.width, 1);
+  }
+  return Math.min(
+    containerSize.width / naturalSize.width,
+    containerSize.height / naturalSize.height,
+    1,
+  );
+}
+
+function useArtifactImageViewerState(
+  preview: Extract<TaskDetailArtifactPreview, { kind: "image" }> | undefined,
+  artifactPath: string | undefined,
+) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [fitMode, setFitMode] = useState<ArtifactImageFitMode>("contain");
+  const [zoomMultiplier, setZoomMultiplier] = useState(1);
+  const [naturalSize, setNaturalSize] = useState<
+    | {
+        width: number;
+        height: number;
+      }
+    | undefined
+  >();
+  const [loadError, setLoadError] = useState<string | undefined>();
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    setFitMode("contain");
+    setZoomMultiplier(1);
+    setNaturalSize(undefined);
+    setLoadError(undefined);
+    setContainerSize({ width: 0, height: 0 });
+  }, [artifactPath, preview?.url]);
+
+  useLayoutEffect(() => {
+    if (!preview) {
+      return;
+    }
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const updateSize = (width: number, height: number) => {
+      setContainerSize({
+        width,
+        height,
+      });
+    };
+    updateSize(container.clientWidth, container.clientHeight);
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) {
+        return;
+      }
+      updateSize(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+    };
+  }, [preview]);
+
+  const baseScale = computeArtifactImageBaseScale({
+    fitMode,
+    naturalSize,
+    containerSize,
+  });
+  const effectiveScale = clampNumber(baseScale * zoomMultiplier, 0.05, 8);
+  const renderedWidth = naturalSize
+    ? Math.max(1, Math.round(naturalSize.width * effectiveScale))
+    : undefined;
+  const renderedHeight = naturalSize
+    ? Math.max(1, Math.round(naturalSize.height * effectiveScale))
+    : undefined;
+  const zoomLabel = naturalSize
+    ? `${Math.round(effectiveScale * 100)}%`
+    : "Loading…";
+
+  function selectFitMode(nextMode: ArtifactImageFitMode) {
+    setFitMode(nextMode);
+    setZoomMultiplier(1);
+  }
+
+  function adjustZoom(delta: number) {
+    setZoomMultiplier((value) =>
+      clampNumber(
+        Number((value + delta).toFixed(2)),
+        ARTIFACT_IMAGE_MIN_ZOOM,
+        ARTIFACT_IMAGE_MAX_ZOOM,
+      ),
+    );
+  }
+
+  return {
+    containerRef,
+    fitMode,
+    loadError,
+    naturalSize,
+    renderedWidth,
+    renderedHeight,
+    zoomLabel,
+    canZoomIn:
+      Boolean(naturalSize) &&
+      !loadError &&
+      zoomMultiplier < ARTIFACT_IMAGE_MAX_ZOOM,
+    canZoomOut:
+      Boolean(naturalSize) &&
+      !loadError &&
+      zoomMultiplier > ARTIFACT_IMAGE_MIN_ZOOM,
+    selectFitMode,
+    zoomIn: () => adjustZoom(ARTIFACT_IMAGE_ZOOM_STEP),
+    zoomOut: () => adjustZoom(-ARTIFACT_IMAGE_ZOOM_STEP),
+    handleImageLoad: (image: HTMLImageElement) => {
+      setLoadError(undefined);
+      setNaturalSize({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      });
+    },
+    handleImageError: () => {
+      setLoadError("Couldn't render this image preview. Open it externally instead.");
+    },
+  };
+}
+
+function ArtifactImageViewer({
+  artifact,
+  preview,
+  viewer,
+}: {
+  artifact?: ArtifactRefDto;
+  preview: Extract<TaskDetailArtifactPreview, { kind: "image" }>;
+  viewer: ReturnType<typeof useArtifactImageViewerState>;
+}) {
+  if (viewer.loadError) {
+    return (
+      <div className="detail-artifact-modal__image-status detail-artifact-modal__image-status--error">
+        <p>{viewer.loadError}</p>
+      </div>
+    );
+  }
+
+  const aspectRatio = viewer.naturalSize
+    ? viewer.naturalSize.width / Math.max(viewer.naturalSize.height, 1)
+    : undefined;
+  const frameClassName = [
+    "detail-artifact-modal__image-frame",
+    viewer.naturalSize &&
+    (viewer.naturalSize.width < 120 || viewer.naturalSize.height < 120)
+      ? "detail-artifact-modal__image-frame--tiny"
+      : "",
+    aspectRatio && (aspectRatio >= 3 || aspectRatio <= 0.35)
+      ? "detail-artifact-modal__image-frame--panoramic"
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const imageStyle =
+    viewer.renderedWidth && viewer.renderedHeight
+      ? {
+          width: `${viewer.renderedWidth}px`,
+          height: `${viewer.renderedHeight}px`,
+        }
+      : undefined;
+
+  return (
+    <div className="detail-artifact-modal__image-viewer">
+      <div
+        className={`detail-artifact-modal__image-canvas detail-artifact-modal__image-canvas--${viewer.fitMode}`}
+        data-testid="artifact-image-canvas"
+        ref={viewer.containerRef}
+      >
+        <div className="detail-artifact-modal__image-stage">
+          <div className={frameClassName}>
+            <img
+              alt={artifact?.preview_name || "Artifact image preview"}
+              className="detail-artifact-modal__image"
+              data-testid="artifact-image-preview"
+              onError={() => viewer.handleImageError()}
+              onLoad={(event) => viewer.handleImageLoad(event.currentTarget)}
+              src={preview.url}
+              style={imageStyle}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1582,8 +1882,10 @@ export function TaskTranscriptModal({
 
 export function TaskArtifactModal({
   artifact,
-  content,
+  preview,
   error,
+  actionError,
+  onOpenExternally,
   onClose,
 }: ArtifactPaneProps) {
   const artifactPath =
@@ -1592,6 +1894,146 @@ export function TaskArtifactModal({
     artifact?.raw_path?.trim() ||
     "";
   const { copyState, copyValue } = useClipboardCopy();
+  const imagePreview = preview?.kind === "image" ? preview : undefined;
+  const imageArtifact = Boolean(imagePreview) || isImageArtifact(artifact);
+  const viewer = useArtifactImageViewerState(
+    imagePreview,
+    artifact?.resolved_path,
+  );
+  const meta = imagePreview ? (
+    <>
+      <DetailMetaItem
+        label="Image"
+        value={formatArtifactImageDimensions(viewer.naturalSize)}
+      />
+      <DetailMetaItem
+        label="File"
+        value={formatArtifactByteLength(imagePreview.byteLength)}
+      />
+      <DetailMetaItem label="Zoom" value={viewer.zoomLabel} />
+      <div className="detail-artifact-modal__toolbar">
+        <div
+          aria-label="Image fit mode"
+          className="detail-artifact-modal__segmented"
+          role="group"
+        >
+          {artifactImageFitModeOptions.map((option) => (
+            <Button
+              aria-pressed={viewer.fitMode === option.value}
+              className={`detail-artifact-modal__segmented-button${
+                viewer.fitMode === option.value ? " is-active" : ""
+              }`}
+              data-testid={`artifact-image-mode-${option.value}`}
+              key={option.value}
+              onClick={() => viewer.selectFitMode(option.value)}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+        <div aria-label="Image zoom" className="detail-artifact-modal__zoom-controls" role="group">
+          <Button
+            aria-label="Zoom out"
+            className="detail-artifact-modal__icon-button"
+            data-testid="artifact-image-zoom-out"
+            disabled={!viewer.canZoomOut}
+            leadingIcon={<Minus size={13} strokeWidth={2} />}
+            onClick={viewer.zoomOut}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Zoom out
+          </Button>
+          <Button
+            aria-label="Zoom in"
+            className="detail-artifact-modal__icon-button"
+            data-testid="artifact-image-zoom-in"
+            disabled={!viewer.canZoomIn}
+            leadingIcon={<Plus size={13} strokeWidth={2} />}
+            onClick={viewer.zoomIn}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            Zoom in
+          </Button>
+        </div>
+        <Button
+          className="detail-artifact-modal__open-button"
+          data-testid="artifact-open-externally"
+          disabled={!artifact || !onOpenExternally}
+          leadingIcon={<SquareArrowOutUpRight size={13} strokeWidth={1.9} />}
+          onClick={onOpenExternally}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          Open externally
+        </Button>
+        <button
+          aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
+          className="detail-modal-frame__meta-inline-copy"
+          data-testid="artifact-path-copy"
+          disabled={!artifactPath}
+          onClick={() => {
+            void copyValue(artifactPath);
+          }}
+          title={artifactPath || undefined}
+          type="button"
+        >
+          {copyState === "copied" ? (
+            <Check aria-hidden="true" size={11} strokeWidth={2} />
+          ) : (
+            <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
+          )}
+          <span>{shortenArtifactPath(artifactPath)}</span>
+        </button>
+      </div>
+    </>
+  ) : artifact ? (
+    <>
+      <DetailMetaItem
+        label="Format"
+        value={imageArtifact ? "Image" : artifact.markdown ? "Markdown" : "Text"}
+      />
+      <div className="detail-artifact-modal__toolbar">
+        <button
+          aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
+          className="detail-modal-frame__meta-inline-copy"
+          data-testid="artifact-path-copy"
+          disabled={!artifactPath}
+          onClick={() => {
+            void copyValue(artifactPath);
+          }}
+          title={artifactPath || undefined}
+          type="button"
+        >
+          {copyState === "copied" ? (
+            <Check aria-hidden="true" size={11} strokeWidth={2} />
+          ) : (
+            <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
+          )}
+          <span>{shortenArtifactPath(artifactPath)}</span>
+        </button>
+        <Button
+          className="detail-artifact-modal__open-button"
+          data-testid="artifact-open-externally"
+          disabled={!onOpenExternally}
+          leadingIcon={<SquareArrowOutUpRight size={13} strokeWidth={1.9} />}
+          onClick={onOpenExternally}
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          Open externally
+        </Button>
+      </div>
+    </>
+  ) : undefined;
 
   return (
     <DetailOverlayModal onClose={onClose ?? (() => {})} testId="artifact-modal">
@@ -1599,47 +2041,46 @@ export function TaskArtifactModal({
         className="detail-modal-frame--artifact"
         leading={
           <span className="detail-artifact-modal__leading">
-            <FileText aria-hidden="true" size={16} strokeWidth={1.9} />
+            {imagePreview ? (
+              <Image aria-hidden="true" size={16} strokeWidth={1.9} />
+            ) : (
+              <FileText aria-hidden="true" size={16} strokeWidth={1.9} />
+            )}
           </span>
         }
-        meta={
-          <>
-            <span className="detail-modal-frame__meta-inline-label">Path</span>
-            <button
-              aria-label={artifactPath ? "Copy artifact file path" : "Artifact file path unavailable"}
-              className="detail-modal-frame__meta-inline-copy"
-              data-testid="artifact-path-copy"
-              disabled={!artifactPath}
-              onClick={() => {
-                void copyValue(artifactPath);
-              }}
-              title={artifactPath || undefined}
-              type="button"
-            >
-              {copyState === "copied" ? (
-                <Check aria-hidden="true" size={11} strokeWidth={2} />
-              ) : (
-                <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
-              )}
-              <span>{shortenArtifactPath(artifactPath)}</span>
-            </button>
-          </>
-        }
-        metaClassName="detail-modal-frame__meta--inline"
+        meta={meta}
+        metaClassName="detail-artifact-modal__meta"
         onClose={onClose}
         subtitle={`from ${artifact?.source_label || artifact?.node_name || "preview"}`}
         title={artifact?.preview_name || "Preview"}
       >
-        {error ? <p className="screen-error">{error}</p> : null}
+        {error && !imageArtifact ? <p className="screen-error">{error}</p> : null}
+        {actionError ? <p className="screen-error">{actionError}</p> : null}
 
         <div
           className="detail-modal-frame__surface detail-modal-frame__surface--artifact"
           data-testid="artifact-preview-surface"
         >
-          <ArtifactModalContent
-            content={content}
-            format={artifact?.markdown ? "markdown" : "text"}
-          />
+          {imagePreview ? (
+            <ArtifactImageViewer
+              artifact={artifact}
+              preview={imagePreview}
+              viewer={viewer}
+            />
+          ) : imageArtifact ? (
+            <div
+              className={`detail-artifact-modal__image-status${
+                error ? " detail-artifact-modal__image-status--error" : ""
+              }`}
+            >
+              <p>{error ?? "Loading image preview…"}</p>
+            </div>
+          ) : (
+            <ArtifactModalContent
+              content={preview?.kind === "image" ? undefined : preview?.content}
+              format={artifact?.markdown ? "markdown" : "text"}
+            />
+          )}
         </div>
       </DetailModalFrame>
     </DetailOverlayModal>

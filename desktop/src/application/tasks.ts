@@ -81,6 +81,27 @@ export type StartFollowUpAndReloadTaskListResult = {
   followUpTaskId?: string;
 };
 
+export type ArtifactPreview =
+  | {
+      kind: "markdown" | "text";
+      content: string;
+    }
+  | {
+      kind: "image";
+      bytes: Uint8Array;
+      mimeType: string;
+      byteLength: number;
+    };
+
+type ArtifactPreviewDescriptor =
+  | {
+      kind: "markdown" | "text";
+    }
+  | {
+      kind: "image";
+      mimeType: string;
+    };
+
 type RetryTaskNodeActionArgs = {
   workspaceId: string;
   taskId: string;
@@ -105,6 +126,18 @@ type ContinueBlockedUntilResumedArgs = ContinueBlockedTaskActionArgs & {
   attempts?: number;
   delayMs?: number;
 };
+
+const ARTIFACT_IMAGE_MIME_TYPES = new Map<string, string>([
+  [".png", "image/png"],
+  [".jpg", "image/jpeg"],
+  [".jpeg", "image/jpeg"],
+  [".gif", "image/gif"],
+  [".webp", "image/webp"],
+  [".bmp", "image/bmp"],
+  [".svg", "image/svg+xml"],
+]);
+
+export const ARTIFACT_IMAGE_PREVIEW_MAX_BYTES = 8 * 1024 * 1024;
 
 function nextClientCommandId() {
   return globalThis.crypto?.randomUUID?.() ?? String(Date.now());
@@ -448,9 +481,87 @@ export async function continueBlockedUntilResumed(
   });
 }
 
+function artifactExtensionCandidates(artifact: ArtifactRefDto): string[] {
+  return [artifact.preview_name, artifact.resolved_path, artifact.raw_path].filter(Boolean);
+}
+
+function readArtifactExtension(artifact: ArtifactRefDto): string {
+  for (const candidate of artifactExtensionCandidates(artifact)) {
+    const normalized = candidate.trim().replace(/\\/g, "/").split(/[?#]/, 1)[0]?.toLowerCase();
+    if (!normalized) {
+      continue;
+    }
+    const basename = normalized.slice(normalized.lastIndexOf("/") + 1);
+    const dotIndex = basename.lastIndexOf(".");
+    if (dotIndex > 0) {
+      return basename.slice(dotIndex);
+    }
+  }
+  return "";
+}
+
+function isArtifactPreviewTooLarge(message: string): boolean {
+  return /(?:inline limit|too large|preview exceeds|byte limit)/i.test(message);
+}
+
+function normalizeArtifactPreviewError(
+  error: unknown,
+  descriptor: ArtifactPreviewDescriptor,
+): Error {
+  if (descriptor.kind === "image" && error instanceof Error) {
+    if (isArtifactPreviewTooLarge(error.message)) {
+      return new Error(
+        "This image is too large to preview in-app. Open externally to inspect the full file.",
+      );
+    }
+    return error;
+  }
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error("Failed to read artifact preview");
+}
+
+export function classifyArtifactPreview(
+  artifact: ArtifactRefDto,
+): ArtifactPreviewDescriptor {
+  if (artifact.markdown) {
+    return { kind: "markdown" };
+  }
+  const mimeType = ARTIFACT_IMAGE_MIME_TYPES.get(readArtifactExtension(artifact));
+  if (mimeType) {
+    return {
+      kind: "image",
+      mimeType,
+    };
+  }
+  return { kind: "text" };
+}
+
 export async function readArtifactPreview(
   runtime: DesktopRuntime,
   artifact: ArtifactRefDto,
-): Promise<string> {
-  return runtime.shell.readTextFile(artifact.resolved_path);
+): Promise<ArtifactPreview> {
+  const descriptor = classifyArtifactPreview(artifact);
+  try {
+    if (descriptor.kind === "image") {
+      const bytes = await runtime.shell.readBinaryFile(
+        artifact.resolved_path,
+        ARTIFACT_IMAGE_PREVIEW_MAX_BYTES,
+      );
+      return {
+        kind: "image",
+        bytes,
+        mimeType: descriptor.mimeType,
+        byteLength: bytes.byteLength,
+      };
+    }
+    const content = await runtime.shell.readTextFile(artifact.resolved_path);
+    return {
+      kind: descriptor.kind,
+      content,
+    };
+  } catch (error) {
+    throw normalizeArtifactPreviewError(error, descriptor);
+  }
 }

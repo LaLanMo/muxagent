@@ -314,15 +314,20 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 class BrowserShellHost implements ShellHost {
   constructor(private readonly backend: BrowserTaskBackendClient) {}
 
+  private requireSessionId(): string {
+    const sessionId = this.backend.getActiveSessionId();
+    if (!sessionId) {
+      throw new Error("No active bridge session");
+    }
+    return sessionId;
+  }
+
   async pickDirectory(): Promise<string | null> {
     return window.prompt("Workspace absolute path")?.trim() ?? null;
   }
 
   async readTextFile(path: string): Promise<string> {
-    const sessionId = this.backend.getActiveSessionId();
-    if (!sessionId) {
-      throw new Error("No active bridge session");
-    }
+    const sessionId = this.requireSessionId();
     const response = await fetch(
       `${bridgeOrigin}/bridge/session/${sessionId}/file?path=${encodeURIComponent(path)}`,
     );
@@ -334,6 +339,20 @@ class BrowserShellHost implements ShellHost {
     }
     const payload = (await response.json()) as { content: string };
     return payload.content;
+  }
+
+  async readBinaryFile(path: string, maxBytes: number): Promise<Uint8Array> {
+    const sessionId = this.requireSessionId();
+    const response = await fetch(
+      `${bridgeOrigin}/bridge/session/${sessionId}/file/binary?path=${encodeURIComponent(path)}&maxBytes=${encodeURIComponent(String(maxBytes))}`,
+    );
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: string }
+        | null;
+      throw new Error(payload?.error ?? "Failed to read file");
+    }
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   async openPath(path: string): Promise<void> {

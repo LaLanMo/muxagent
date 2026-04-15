@@ -1,7 +1,7 @@
 import http from "node:http";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { spawn } from "node:child_process";
 import { WebSocket, WebSocketServer } from "ws";
@@ -153,6 +153,37 @@ function sendJson(
     "access-control-allow-headers": "content-type",
   });
   res.end(JSON.stringify(body));
+}
+
+function sendBinary(
+  res: http.ServerResponse,
+  statusCode: number,
+  body: Uint8Array,
+) {
+  res.writeHead(statusCode, {
+    "content-type": "application/octet-stream",
+    "content-length": String(body.byteLength),
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
+    "access-control-allow-headers": "content-type",
+  });
+  res.end(body);
+}
+
+function parseBinaryPreviewLimit(rawValue: string | null): number | null {
+  const parsed = Number.parseInt(rawValue?.trim() ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function describeInlinePreviewLimit(maxBytes: number): string {
+  const megabytes = maxBytes / (1024 * 1024);
+  if (Number.isInteger(megabytes)) {
+    return `${megabytes} MB`;
+  }
+  return `${megabytes.toFixed(1)} MB`;
 }
 
 function broadcastNotification(
@@ -334,6 +365,58 @@ const server = http.createServer(async (req, res) => {
     try {
       const content = await readFile(normalized, "utf8");
       sendJson(res, 200, { content });
+    } catch (error) {
+      const errno = error as NodeJS.ErrnoException;
+      sendJson(res, errno.code === "ENOENT" ? 404 : 500, {
+        error:
+          error instanceof Error ? error.message : "failed to read file",
+      });
+    }
+    return;
+  }
+
+  const binaryFileMatch = url.pathname.match(/^\/bridge\/session\/([^/]+)\/file\/binary$/);
+  if (req.method === "GET" && binaryFileMatch) {
+    const session = sessions.get(binaryFileMatch[1]);
+    if (!session) {
+      sendJson(res, 404, { error: "session not found" });
+      return;
+    }
+    const requestedPath = url.searchParams.get("path")?.trim() ?? "";
+    if (!requestedPath || !path.isAbsolute(requestedPath)) {
+      sendJson(res, 400, { error: "path must be an absolute path" });
+      return;
+    }
+    const maxBytes = parseBinaryPreviewLimit(url.searchParams.get("maxBytes"));
+    if (!maxBytes) {
+      sendJson(res, 400, { error: "maxBytes must be a positive integer" });
+      return;
+    }
+    const normalized = path.resolve(requestedPath);
+    const fixtureContent =
+      session.mode === "fixture"
+        ? fixtureRuntime.readBinaryFileContent(normalized)
+        : null;
+    if (fixtureContent) {
+      if (fixtureContent.byteLength > maxBytes) {
+        sendJson(res, 413, {
+          error: `Artifact preview exceeds the ${describeInlinePreviewLimit(maxBytes)} inline limit. Open externally to inspect the full file.`,
+        });
+        return;
+      }
+      sendBinary(res, 200, fixtureContent);
+      return;
+    }
+    try {
+      const metadata = await stat(normalized);
+      if (metadata.size > maxBytes) {
+        sendJson(res, 413, {
+          error: `Artifact preview exceeds the ${describeInlinePreviewLimit(maxBytes)} inline limit. Open externally to inspect the full file.`,
+        });
+        return;
+      }
+      const content = await readFile(normalized);
+      sendBinary(res, 200, content);
     } catch (error) {
       const errno = error as NodeJS.ErrnoException;
       sendJson(res, errno.code === "ENOENT" ? 404 : 500, {

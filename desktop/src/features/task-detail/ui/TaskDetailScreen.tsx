@@ -38,6 +38,7 @@ import type {
   TaskDetailHistoryEntry,
   TaskDetailActionSurface,
 } from "@/features/task-detail/model/use-task-detail-screen";
+import type { TaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
 import type { TaskDetailModal, TaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
 import {
   TaskApprovalDock,
@@ -499,8 +500,9 @@ type TaskDetailScreenProps = {
   currentRun?: NodeRunViewDto;
   selectedRun?: NodeRunViewDto;
   selectedArtifact?: ArtifactRefDto;
-  artifactContent?: string;
+  artifactPreview?: TaskDetailArtifactPreview;
   artifactError?: string;
+  artifactActionError?: string;
   liveEvents: SessionHistoryEvent[];
   liveEventsRunId?: string;
   selectedRunHistory?: RunHistoryCacheEntry;
@@ -531,6 +533,7 @@ type TaskDetailScreenProps = {
   openAncestorTask: (taskId: string) => void;
   openTranscript: (runId: string) => void;
   openArtifact: (artifact: ArtifactRefDto) => void;
+  openArtifactExternally: () => Promise<void>;
   submitApprove: () => Promise<void>;
   submitReject: () => Promise<void>;
   submitClarification: () => Promise<void>;
@@ -562,8 +565,9 @@ export function TaskDetailScreen({
   currentRun,
   selectedRun,
   selectedArtifact,
-  artifactContent,
+  artifactPreview,
   artifactError,
+  artifactActionError,
   liveEvents,
   liveEventsRunId,
   selectedRunHistory,
@@ -594,6 +598,7 @@ export function TaskDetailScreen({
   openAncestorTask,
   openTranscript,
   openArtifact,
+  openArtifactExternally,
   submitApprove,
   submitReject,
   submitClarification,
@@ -674,8 +679,10 @@ export function TaskDetailScreen({
     modal.kind === "artifact" ? (
       <TaskArtifactModal
         artifact={selectedArtifact}
-        content={artifactContent}
+        preview={artifactPreview}
         error={artifactError}
+        actionError={artifactActionError}
+        onOpenExternally={() => void openArtifactExternally()}
         onClose={() => {
           if (selectedArtifact?.node_run_id) {
             selectRun(selectedArtifact.node_run_id);

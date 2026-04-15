@@ -260,6 +260,11 @@ class TauriShellHost implements ShellHost {
     return invoke<string>("read_text_file", { path });
   }
 
+  async readBinaryFile(path: string, maxBytes: number): Promise<Uint8Array> {
+    const bytes = await invoke<number[]>("read_binary_file", { path, maxBytes });
+    return Uint8Array.from(bytes);
+  }
+
   async openPath(path: string): Promise<void> {
     await invoke("open_path", { path });
   }

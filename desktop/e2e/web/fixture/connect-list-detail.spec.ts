@@ -912,6 +912,75 @@ test("renders approval and artifact preview task surfaces", async ({ page }) => 
   );
 });
 
+test("renders image artifacts with zoom controls and reset behavior", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await connectFixtureWorkspace(page);
+
+  await openTaskFromBoard(page, "task-live-fixture");
+  await page.getByRole("button", { name: /review-portrait\.svg/i }).click();
+
+  const artifactModal = page.getByTestId("artifact-modal");
+  const image = artifactModal.getByTestId("artifact-image-preview");
+  await expect(artifactModal).toBeVisible();
+  await expect(image).toBeVisible();
+  await expect(artifactModal.getByText("420 × 1180")).toBeVisible();
+  await expect(artifactModal.getByTestId("artifact-open-externally")).toBeVisible();
+  await expect(
+    artifactModal.getByTestId("artifact-image-mode-contain"),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  const containWidth = await image.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+
+  await artifactModal.getByTestId("artifact-image-mode-fit-width").click();
+  await expect(
+    artifactModal.getByTestId("artifact-image-mode-fit-width"),
+  ).toHaveAttribute("aria-pressed", "true");
+  const fitWidthWidth = await image.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(fitWidthWidth).toBeGreaterThan(containWidth + 40);
+
+  await artifactModal.getByTestId("artifact-image-mode-actual").click();
+  await expect(
+    artifactModal.getByTestId("artifact-image-mode-actual"),
+  ).toHaveAttribute("aria-pressed", "true");
+  const actualWidth = await image.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(Math.abs(actualWidth - fitWidthWidth)).toBeLessThan(8);
+
+  await artifactModal.getByTestId("artifact-image-zoom-in").click();
+  const zoomedWidth = await image.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(zoomedWidth).toBeGreaterThan(actualWidth + 40);
+
+  await artifactModal.getByTestId("artifact-image-zoom-out").click();
+  const zoomedOutWidth = await image.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(zoomedOutWidth).toBeLessThan(zoomedWidth);
+
+  await page.getByRole("button", { name: "Close detail" }).click();
+  await expect(artifactModal).toHaveCount(0);
+
+  await page.getByRole("button", { name: /review-portrait\.svg/i }).click();
+  const reopenedModal = page.getByTestId("artifact-modal");
+  const reopenedImage = reopenedModal.getByTestId("artifact-image-preview");
+  await expect(reopenedModal.getByTestId("artifact-image-mode-contain")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const reopenedWidth = await reopenedImage.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  );
+  expect(Math.abs(reopenedWidth - containWidth)).toBeLessThan(8);
+});
+
 test("keeps run drill-in available while showing the clarification action surface", async ({
   page,
 }) => {
