@@ -193,17 +193,17 @@ handle_node_exec() {
         echo '{"type":"item.completed","item":{"id":"ws_123","type":"web_search","query":"latest github release announcement","action":{"type":"search","query":"latest github release announcement","queries":["latest github release announcement"]}}}'
         sleep 0.4
       fi
-      write_exec_result "plan-${count}.md" ""
+      write_exec_result "plan-${count}.md" "\"summary\":\"draft plan ${count}\""
       ;;
     review_plan)
       passed=true
       if [ "$flow" = "review-reject-once" ] && [ "$count" -eq 1 ]; then
         passed=false
       fi
-      write_exec_result "review-${count}.md" "\"passed\":${passed}"
+      write_exec_result "review-${count}.md" "\"passed\":${passed},\"summary\":\"review ${count}\""
       ;;
     handle_request)
-      write_exec_result "result-${count}.md" ""
+      write_exec_result "result-${count}.md" "\"summary\":\"handled request ${count}\""
       ;;
     implement)
       if [ "$flow" = "clarify-late" ] && [ "$count" -eq 1 ] && [ "$resume_mode" -eq 0 ]; then
@@ -214,7 +214,7 @@ handle_node_exec() {
         echo "simulated implement failure" >&2
         exit 1
       fi
-      write_exec_result "implementation-${count}.md" ""
+      write_exec_result "implementation-${count}.md" "\"summary\":\"implementation ${count}\""
       ;;
     verify)
       passed=true
@@ -226,7 +226,7 @@ handle_node_exec() {
       if [ "$flow" = "yolo-replan-once" ]; then
         write_exec_result "verify-${count}.md" "\"passed\":${passed},\"summary\":\"wave ${count} complete\""
       else
-        write_exec_result "verify-${count}.md" "\"passed\":${passed}"
+        write_exec_result "verify-${count}.md" "\"passed\":${passed},\"summary\":\"verification ${count}\""
       fi
       ;;
     evaluate_progress)
@@ -259,7 +259,7 @@ handle_node_appserver() {
           if [ "$flow" = "web-search" ] && [ "$resume_mode" -eq 0 ]; then
             emit_app_web_search
           fi
-          emit_app_message_result "plan-${count}.md" ""
+          emit_app_message_result "plan-${count}.md" ",\\\"summary\\\":\\\"draft plan ${count}\\\""
         fi
       fi
       ;;
@@ -268,10 +268,10 @@ handle_node_appserver() {
       if [ "$flow" = "review-reject-once" ] && [ "$count" -eq 1 ]; then
         passed=false
       fi
-      emit_app_message_result "review-${count}.md" ",\\\"passed\\\":${passed}"
+      emit_app_message_result "review-${count}.md" ",\\\"passed\\\":${passed},\\\"summary\\\":\\\"review ${count}\\\""
       ;;
     handle_request)
-      emit_app_message_result "result-${count}.md" ""
+      emit_app_message_result "result-${count}.md" ",\\\"summary\\\":\\\"handled request ${count}\\\""
       ;;
     implement)
       if [ "$flow" = "clarify-late" ] && [ "$count" -eq 1 ] && [ "$resume_mode" -eq 0 ]; then
@@ -281,7 +281,7 @@ handle_node_appserver() {
           echo "simulated implement failure" >&2
           exit 1
         fi
-        emit_app_message_result "implementation-${count}.md" ""
+        emit_app_message_result "implementation-${count}.md" ",\\\"summary\\\":\\\"implementation ${count}\\\""
       fi
       ;;
     verify)
@@ -294,7 +294,7 @@ handle_node_appserver() {
       if [ "$flow" = "yolo-replan-once" ]; then
         emit_app_message_result "verify-${count}.md" ",\\\"passed\\\":${passed},\\\"summary\\\":\\\"wave ${count} complete\\\""
       else
-        emit_app_message_result "verify-${count}.md" ",\\\"passed\\\":${passed}"
+        emit_app_message_result "verify-${count}.md" ",\\\"passed\\\":${passed},\\\"summary\\\":\\\"verification ${count}\\\""
       fi
       ;;
     evaluate_progress)

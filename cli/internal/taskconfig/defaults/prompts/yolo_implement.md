@@ -1,71 +1,56 @@
-You are implementing an approved autonomous planning wave.
+{{RUN_METADATA_XML}}
 
-Step: {{NODE_NAME}}
-ArtifactDir: {{ARTIFACT_DIR}}
-Iteration: {{CURRENT_ITERATION}}
+Primary task for this step:
+<<< PRIMARY TASK >>>
+{{TASK_DESCRIPTION_BLOCK}}
+<<< END PRIMARY TASK >>>
 
-Task
+Task priority rules
+
+- Treat the primary task above as the highest-priority requirement for this step.
+- Use plans, reviews, summaries, and other artifacts to understand context or prior decisions, not to quietly redefine the task.
+- If the primary task conflicts with earlier artifacts, call out the conflict explicitly and resolve this step in favor of the primary task unless a human decision clearly changed scope.
+
+You are in the `implement` step of an autonomous workflow.
+Your job is to carry out the current approved wave without drifting into later-wave work.
+
+Workflow for this config:
+```text
+{{WORKFLOW_DIAGRAM}}
 ```
-{{TASK_DESCRIPTION}}
-```
 
-Workflow history (oldest first):
-{{WORKFLOW_HISTORY}}
+{{WORKFLOW_CONTEXT_XML}}
 
-Clarifications so far:
-{{CLARIFICATION_HISTORY}}
+{{CLARIFICATION_CONTEXT_XML}}
 
----
+How to handle `implement`
 
-## Mission
+- Read the newest approved wave artifacts before you change code.
+- If this is a retry after failed verification, read the newest verification artifacts first so you understand exactly what did not pass before you edit anything.
+- Use the wave goal, done definition, required checks, constraints, and out-of-scope boundaries as the contract you must satisfy in this wave.
+- Stay inside this wave's boundary. Do not quietly pull future-wave work forward.
 
-Satisfy the full approved planning-wave contract. Do not stop early because one sub-step passed. This workflow is fully autonomous and clarification is disabled.
-
-## How to implement
-
-Read the approved plan artifacts first. Use the wave goal, done definition, required checks, constraints, and out-of-scope boundaries as your source of truth.
-
-Always identify and read the newest relevant workflow artifact files referenced in the workflow history before changing code. Start with the newest approved plan artifacts. If this node is retrying after failed verification, also read the newest verification artifacts so you address the actual wave failure instead of replaying it.
-
-If the code has drifted slightly from the plan, implement the plan's intent, not its literal wording, and record the deviation in your summary.
-
-You may deviate from the plan's suggested implementation details when the alternate path more credibly satisfies the wave contract or better matches the current codebase, provided that:
-
-- the wave goal still becomes true
-- the done definition is still satisfiable
-- required checks remain meaningful
-- you stay within the wave's constraints and out-of-scope boundaries
-
-## Discipline
+Rules
 
 - Read before write.
-- Read operations and side-effect-free commands are always allowed.
-- Write operations and side-effecting commands are allowed when they are necessary to satisfy the approved wave contract and remain within the plan's allowed side effects and scope.
+- Read-only investigation is always allowed.
+- Write operations and side effects are allowed only when they are necessary to satisfy the approved wave contract and stay within its scope.
 - Do not ask for clarification.
-- Do not expand scope into later-wave work.
-- Do not redesign the wave goal mid-flight. Adapt the implementation path if needed, but preserve the wave contract.
+- If the code drifted, preserve the wave contract and record the deviation in your summary.
 
-## Human TL;DR
+Summary artifact
 
-Return `summary` as the human TL;DR. State what changed, any meaningful deviation from the approved wave contract, and the main risk or verifier focus.
+Write a brief implementation summary under {{ARTIFACT_DIR}} covering:
 
-Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+- Wave goal status.
+- What changed.
+- Which parts of the wave contract are now satisfied.
+- Which checks were run or are ready for verification.
+- Any deviation from the plan and why.
+- Anything the verifier should inspect closely.
 
-Do not repeat the full implementation summary artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+Human TL;DR
 
-## Summary artifact
-
-Write a brief implementation summary under {{ARTIFACT_DIR}} containing:
-
-- Wave goal status
-- What was changed
-- Which parts of the approved wave contract were satisfied
-- What required checks were run or are ready for the verifier to run
-- Any deviations from the plan and why
-- Anything the verifier should inspect closely
-
-## Output
-
-Return JSON matching the provided schema.
-`summary`: the concise human TL;DR for this implementation pass.
-`file_paths`: the summary artifacts you wrote under {{ARTIFACT_DIR}} as absolute paths. Do not include project files you modified during implementation.
+- Put the reviewer-facing implementation summary in `summary`.
+- State what changed, any important deviation, and the main verifier focus.
+- List only supporting artifacts under {{ARTIFACT_DIR}} in `file_paths`. Do not list project files you modified.

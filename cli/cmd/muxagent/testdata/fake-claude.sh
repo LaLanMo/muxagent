@@ -101,24 +101,24 @@ case "$node_name" in
       printf '{"type":"result","subtype":"success","session_id":"%s","structured_output":{"kind":"clarification","result":null,"clarification":{"questions":[{"question":"Which path should we take?","why_it_matters":"The plan changes based on this choice.","options":[{"label":"A","description":"Option A"},{"label":"B","description":"Option B"}],"multi_select":false}]}}}\n' "$session_id"
       exit 0
     fi
-    write_result "plan-${count}.md" ""
+    write_result "plan-${count}.md" "\"summary\":\"draft plan ${count}\""
     ;;
   review_plan)
     passed=true
     if [ "$flow" = "review-reject-once" ] && [ "$count" -eq 1 ]; then
       passed=false
     fi
-    write_result "review-${count}.md" "\"passed\":${passed}"
+    write_result "review-${count}.md" "\"passed\":${passed},\"summary\":\"review ${count}\""
     ;;
   handle_request)
-    write_result "result-${count}.md" ""
+    write_result "result-${count}.md" "\"summary\":\"handled request ${count}\""
     ;;
   implement)
     if [ "$flow" = "implement-fail-once" ] && [ "$count" -eq 1 ]; then
       echo "simulated implement failure" >&2
       exit 1
     fi
-    write_result "implementation-${count}.md" ""
+    write_result "implementation-${count}.md" "\"summary\":\"implementation ${count}\""
     ;;
   verify)
     passed=true
@@ -127,7 +127,7 @@ case "$node_name" in
     elif [ "$flow" = "verify-fail-once" ] && [ "$count" -eq 1 ]; then
       passed=false
     fi
-    write_result "verify-${count}.md" "\"passed\":${passed}"
+    write_result "verify-${count}.md" "\"passed\":${passed},\"summary\":\"verification ${count}\""
     ;;
   *)
     echo "unexpected node: $node_name" >&2

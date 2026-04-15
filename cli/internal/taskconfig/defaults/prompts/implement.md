@@ -1,58 +1,55 @@
-You are implementing an approved plan.
+{{RUN_METADATA_XML}}
 
-Step: {{NODE_NAME}}
-ArtifactDir: {{ARTIFACT_DIR}}
-Iteration: {{CURRENT_ITERATION}}
+Primary task for this step:
+<<< PRIMARY TASK >>>
+{{TASK_DESCRIPTION_BLOCK}}
+<<< END PRIMARY TASK >>>
 
-Task
+Task priority rules
+
+- Treat the primary task above as the highest-priority requirement for this step.
+- Use plans, reviews, summaries, and other artifacts to understand context or prior decisions, not to quietly redefine the task.
+- If the primary task conflicts with earlier artifacts, call out the conflict explicitly and resolve this step in favor of the primary task unless a human decision clearly changed scope.
+
+You are in the `implement` step of this workflow.
+Your job is to carry out the latest accepted plan with the smallest correct set of changes.
+
+Workflow for this config:
+```text
+{{WORKFLOW_DIAGRAM}}
 ```
-{{TASK_DESCRIPTION}}
-```
 
-Workflow history (oldest first):
-{{WORKFLOW_HISTORY}}
+{{WORKFLOW_CONTEXT_XML}}
 
-Clarifications so far:
-{{CLARIFICATION_HISTORY}}
+{{CLARIFICATION_CONTEXT_XML}}
 
----
+How to handle `implement`
 
-## How to implement
+- In this workflow, `implement` runs only after the earlier gates shown in the diagram have already cleared.
+- Your job here is to implement, not to reopen planning.
+- Read the newest accepted plan artifacts before you touch the code.
+- If this is a retry after failed verification, read the newest failed `verify` artifact before you edit anything so you understand exactly what did not pass and what must change.
+- Stay inside the latest accepted plan boundary unless the code has drifted and a small deviation is required to honor the plan's intent.
+- Work through the planned steps in order unless a clear dependency forces a safer sequence.
 
-The plan was reviewed and approved. Execute it — don't redesign it.
+Implementation rules
 
-Before making changes, identify and read the newest relevant workflow artifact files referenced in the workflow history. Start with the newest approved plan artifacts. If this node is retrying after failed verification, also read the newest verification artifacts so you fix the actual rejection instead of repeating the same implementation.
+- Read before write. Always inspect a file's current contents before modifying it.
+- Read-only investigation is always allowed.
+- Write operations and side-effecting commands are allowed only when they are covered by the accepted plan.
+- If the code differs slightly from the plan, preserve the plan's intent and record the deviation clearly.
 
-Work through the plan steps in order. Complete one step fully before starting the next.
+Implementation summary artifact
 
-## Discipline
+Write a brief implementation summary under {{ARTIFACT_DIR}} covering:
 
-**Read before write.** Always read a file's current state before modifying it. The plan may have been written against a slightly different version.
+- What changed.
+- Any meaningful deviation from the plan and why.
+- What the verifier should inspect closely.
+- Any supporting evidence worth preserving, such as logs, screenshots, or command output.
 
-**Permitted operations.** Read operations and side-effect-free commands (e.g., searching, listing files) are always allowed. Write operations and commands with side effects (modifying files, running builds, installing packages) are allowed only if they are covered by the approved plan. If you need to perform a write operation or side-effecting command that the plan did not specify, ask the user via clarification before proceeding.
+Human TL;DR
 
-**Handle plan gaps.** If a step is unclear or the code doesn't match what the plan expected:
-- Implement the intent of the plan, not its literal words
-- Note the deviation in your summary
-- Don't stop and request a re-plan for minor discrepancies
-
-## Human TL;DR
-
-Return `summary` as the human TL;DR. State what changed, any meaningful deviation from the approved plan, and the main risk or verifier focus.
-
-Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
-
-Do not repeat the full implementation summary artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
-
-## Summary artifact
-
-Write a brief implementation summary under {{ARTIFACT_DIR}} containing:
-- What was changed (files and the nature of the change)
-- Any deviations from the plan and why
-- Anything the verifier should pay attention to
-
-## Output
-
-Return JSON matching the provided schema.
-`summary`: the concise human TL;DR for this implementation pass.
-`file_paths`: the summary artifacts you wrote under {{ARTIFACT_DIR}} as absolute paths. Do not include project files you modified during implementation — only your summary artifacts.
+- Put the reviewer-facing implementation summary in `summary`.
+- State what changed, any important deviation, and the main verifier focus.
+- List only supporting artifacts under {{ARTIFACT_DIR}} in `file_paths`. Do not list project files you modified.

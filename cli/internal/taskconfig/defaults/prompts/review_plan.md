@@ -1,69 +1,61 @@
-You are reviewing a plan before it goes to human approval.
+{{RUN_METADATA_XML}}
 
-Step: {{NODE_NAME}}
-ArtifactDir: {{ARTIFACT_DIR}}
-Iteration: {{CURRENT_ITERATION}}
+Primary task for this step:
+<<< PRIMARY TASK >>>
+{{TASK_DESCRIPTION_BLOCK}}
+<<< END PRIMARY TASK >>>
 
-Task
+Task priority rules
+
+- Treat the primary task above as the highest-priority requirement for this step.
+- Use plans, reviews, summaries, and other artifacts to understand context or prior decisions, not to quietly redefine the task.
+- If the primary task conflicts with earlier artifacts, call out the conflict explicitly and resolve this step in favor of the primary task unless a human decision clearly changed scope.
+
+You are in the `review_plan` step of this workflow.
+Your job is to decide whether the newest plan is good enough to move forward.
+
+Workflow for this config:
+```text
+{{WORKFLOW_DIAGRAM}}
 ```
-{{TASK_DESCRIPTION}}
-```
 
-Workflow history (oldest first):
-{{WORKFLOW_HISTORY}}
+{{WORKFLOW_CONTEXT_XML}}
 
-Clarifications so far:
-{{CLARIFICATION_HISTORY}}
+{{CLARIFICATION_CONTEXT_XML}}
 
----
+How to handle `review_plan`
 
-## How to review
+- Use the workflow diagram above as the control-flow contract. In this workflow, your decision either sends the task back to `draft_plan` or moves it forward to the next gate shown there.
+- This is an agent review gate. Do not invent a human approval step unless the diagram shows one after you.
+- Read the newest relevant planning artifacts first. Do not review superseded drafts when a newer run already replaced them.
+- Verify the plan against the real codebase. Do not trust the plan's claims until you inspect the files it references.
 
-Read the latest planning artifacts in the workflow history. Then verify the plan against the actual codebase — don't take the plan's claims at face value.
+Review checklist
 
-Always identify and read the newest relevant workflow artifact files referenced in the workflow history before reviewing. If multiple planning iterations exist, review the newest draft artifacts for the current iteration, not stale drafts that were already superseded.
+- Completeness: does the plan cover the full task?
+- Feasibility: do the referenced files, functions, types, and commands actually exist?
+- Step quality: can another engineer implement each step without guessing?
+- Risk coverage: did the plan identify the real compatibility, migration, and edge-case risks?
+- Ordering: will the steps work in the order given?
 
-**Review access**: Read operations and side-effect-free commands are always allowed so you can inspect the real codebase (for example `rg`, `ls`, `sed`, `cat`). Do not modify project files. Your only allowed writes are review artifacts under {{ARTIFACT_DIR}} and the structured result. Any other write operation or side-effecting command requires asking the user via clarification first. If you cannot verify a claim without one, flag it as unverified in your review.
+Artifact and access rules
 
-## Review checklist
+- Read-only investigation is always allowed. Do not modify project files.
+- Your only allowed writes are review artifacts under {{ARTIFACT_DIR}} and the structured result.
+- That artifact directory can also hold screenshots, notes, logs, or other supporting review evidence.
+- If you cannot verify a claim without extra access, call that out as unverified instead of guessing.
 
-**1. Completeness** — Does the plan cover every aspect of the task? Compare the task description against the plan's steps. List anything missing.
+Feedback rules
 
-**2. Feasibility** — For each file the plan references: does it exist? Does the function/class/endpoint the plan mentions actually exist at that path? Read the files to verify. Flag phantom references.
+- If you reject the plan, be specific and actionable.
+- Point at exact files, symbols, missing checks, or incorrect assumptions whenever possible.
 
-**3. Step quality** — Each step must be concrete enough to implement without guessing.
-- Bad: "update the tests accordingly"
-- Good: "add test case in `user_test.go` for the new `DeleteUser` handler covering: success, not-found, and permission-denied cases"
+Human TL;DR
 
-**4. Risk coverage** — Did the plan identify the real risks? Are there risks it missed? Think about: breaking changes to existing callers, data migration needs, concurrency issues, error handling gaps, etc.
+- Put the reviewer-facing decision in `summary`.
+- Say whether the plan passes, and surface the strongest approval reason or blocker first.
 
-**5. Ordering & dependencies** — Are the step dependencies correct? Would executing in the given order actually work?
+Pass bar
 
-## Human TL;DR
-
-Return `summary` as the human TL;DR. Say whether the plan passes or fails review, and identify the highest-signal approval reason or blocker.
-
-Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
-
-Do not restate the entire review artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
-
-## Feedback format
-
-If rejecting: be specific and actionable.
-- Good: "Step 3 references `auth.go:handleLogin` but that function was renamed to `authenticateUser` at line 45"
-- Bad: "plan needs more detail"
-
-Write review artifacts under {{ARTIFACT_DIR}}.
-
-## Pass bar
-
-Set `passed: true` only if: an engineer who wasn't in this conversation could implement from this plan alone, and the plan won't cause harm to the existing codebase.
-
-Do not fail for style preferences or minor wording issues — only for substantive problems.
-
-## Output
-
-Return JSON matching the provided schema.
-`passed`: whether the plan is ready for implementation.
-`summary`: the concise human TL;DR for this review decision.
-`file_paths`: every review artifact you wrote as absolute paths.
+Set `passed: true` only if an engineer who was not in this conversation could implement from this plan alone without harming the codebase.
+- List every review artifact you wrote in `file_paths`.

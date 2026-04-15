@@ -79,28 +79,7 @@ func ClarificationRemaining(req Request) bool {
 }
 
 func AppendOutputContract(req Request) string {
-	var builder strings.Builder
-	builder.WriteString(req.Prompt)
-	builder.WriteString("\n\nOutput contract:\n")
-	builder.WriteString("- Return exactly one JSON object matching the provided schema.\n")
-	builder.WriteString("- Do not include keys that are not declared in the schema.\n")
-	if !ClarificationConfigured(req) {
-		builder.WriteString("- Clarification is disabled for this node. You must return {\"kind\":\"result\",\"result\":<payload matching the node result schema>}.\n")
-		builder.WriteString("- Do not return any clarification payload.\n")
-		builder.WriteString("- Do not return bare result fields or bare questions at the top level.\n")
-		return builder.String()
-	}
-	if ClarificationRemaining(req) {
-		builder.WriteString("- When the node is complete, return {\"kind\":\"result\",\"result\":<payload matching the node result schema>,\"clarification\":null}.\n")
-		builder.WriteString("- For kind=result, set clarification to null.\n")
-		builder.WriteString("- If you need user clarification before you can finish, return {\"kind\":\"clarification\",\"result\":null,\"clarification\":{\"questions\":[...]}}.\n")
-		builder.WriteString("- Each clarification question must include question, why_it_matters, options, and multi_select.\n")
-	} else {
-		builder.WriteString("- Clarification has reached its maximum rounds for this node.\n")
-		builder.WriteString("- You must return {\"kind\":\"result\",\"result\":<payload matching the node result schema>,\"clarification\":null}.\n")
-	}
-	builder.WriteString("- Do not return bare result fields or bare questions at the top level.\n")
-	return builder.String()
+	return req.Prompt
 }
 
 func BuildSchemaRepairPrompt(req Request, validationErr error, invalidOutput []byte, artifactPaths []string) string {

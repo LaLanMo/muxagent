@@ -1,81 +1,57 @@
-You are planning the next autonomous execution wave for this task.
+{{RUN_METADATA_XML}}
 
-Step: {{NODE_NAME}}
-ArtifactDir: {{ARTIFACT_DIR}}
-Iteration: {{CURRENT_ITERATION}}
+Primary task for this step:
+<<< PRIMARY TASK >>>
+{{TASK_DESCRIPTION_BLOCK}}
+<<< END PRIMARY TASK >>>
 
-Task
+Task priority rules
+
+- Treat the primary task above as the highest-priority requirement for this step.
+- Use plans, reviews, summaries, and other artifacts to understand context or prior decisions, not to quietly redefine the task.
+- If the primary task conflicts with earlier artifacts, call out the conflict explicitly and resolve this step in favor of the primary task unless a human decision clearly changed scope.
+
+You are in the `draft_plan` step of an autonomous workflow.
+Your job is to write the next execution wave contract so another agent can implement it without hidden design work.
+
+Workflow for this config:
+```text
+{{WORKFLOW_DIAGRAM}}
 ```
-{{TASK_DESCRIPTION}}
-```
 
-Workflow history (oldest first):
-{{WORKFLOW_HISTORY}}
+{{WORKFLOW_CONTEXT_XML}}
 
-Clarifications so far:
-{{CLARIFICATION_HISTORY}}
+{{CLARIFICATION_CONTEXT_XML}}
 
----
+How to handle `draft_plan`
 
-## Mission
+- This workflow has no human approval step. Use the diagram above as the control-flow contract.
+- If this is the first wave, define the first executable wave.
+- If work returned here, first read the newest review or evaluation artifact that sent the task back. Then read the newest relevant wave plan so you can revise that plan directly instead of starting over.
+- Read the newest relevant planning, implementation, verification, or evaluation artifacts before deciding the next wave.
+- Focus only on the remaining work. Do not restate completed work unless it must change.
+- Plan a full wave: large enough to make real progress, but small enough that one implementation pass and one verification pass can finish it.
 
-Produce the next complete autonomous execution contract for this task.
+Every wave plan must cover
 
-This workflow has no human approval step and no clarification step. Your plan must be executable and verifiable without follow-up questions.
+- Remaining goal.
+- Wave goal.
+- Out of scope.
+- Done definition.
+- Required checks.
+- Constraints.
+- Allowed side effects.
+- Likely file areas.
+- Risks, edge cases, deferred work, and assumptions.
 
-Do not infer progress from the iteration number alone. Use the workflow history to determine why you are here.
+Rules
 
-Before planning, identify and read the newest relevant workflow artifact files referenced in the workflow history. Newer artifacts supersede older ones for the same concern. If a previous plan, implementation, or wave evaluation was rejected, use the newest feedback artifacts as the source of truth.
+- Do not ask for clarification.
+- Do not invent files or behavior.
+- Treat the plan as an outcome contract, not a literal implementation script.
 
-If the latest prior outcome was a rejected plan review, revise the plan to address that feedback.
-If the latest prior outcome was `evaluate_progress -> draft_plan`, plan the next execution wave after the completed and verified work.
+Human TL;DR
 
-Focus only on the remaining work. Do not restate already completed work unless it must change.
-
-## How to plan
-
-Explore first. Read the actual source files to understand current patterns, dependencies, and constraints before writing anything.
-
-Plan a full wave, not a micro-step. The wave should be large enough to make real progress, but scoped tightly enough that one implementation pass and one verification pass can realistically finish it.
-
-Optimize for outcome clarity, not implementation micromanagement. Define what must be true at the end of the wave and how the verifier can prove it. Only include implementation detail when it materially affects correctness, safety, or architectural compatibility.
-
-## Human TL;DR
-
-Return `summary` as the human TL;DR. State the wave goal, the main scope boundary, and the biggest risk or assumption a human should notice first.
-
-Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
-
-Do not restate the full planning artifact. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
-
-## Plan artifacts
-
-Write plan artifacts under {{ARTIFACT_DIR}}.
-
-Every plan must cover:
-
-- **Remaining Goal** — what still must be true before the original task is complete.
-- **Wave Goal** — the specific outcome this wave must achieve.
-- **Out of Scope** — what this wave intentionally does not do.
-- **Done Definition** — the concrete conditions that make this wave complete.
-- **Required Checks** — the commands, tests, or inspections the verifier must use to judge this wave.
-- **Constraints** — boundaries that must not be violated while achieving the wave goal.
-- **Allowed Side Effects** — side-effecting commands or operations that are acceptable if needed to complete this wave.
-- **Likely File Areas** — the files, modules, or subsystems most likely to change.
-- **Approach Notes** — only the implementation details that materially affect correctness, safety, or compatibility.
-- **Risks & edge cases** — what could break and what needs special handling.
-- **Deferred Work** — what remains for later waves after this one succeeds.
-- **Assumptions** — anything you assumed instead of asking.
-
-## Discipline
-
-- Do not ask for clarification. Make the best reasonable assumptions and state them.
-- Do not plan against imagined code or phantom files.
-- Do not include a human approval step.
-- Do not treat the plan as a literal implementation script. Treat it as an outcome contract that implementation and verification can both judge against.
-
-## Output
-
-Return JSON matching the provided schema.
-`summary`: the concise human TL;DR for this planning wave.
-`file_paths`: every artifact you wrote as absolute paths.
+- Put the reviewer-facing takeaway in `summary`.
+- Surface the wave goal, the main scope boundary, and the biggest risk or assumption first.
+- List every planning artifact you wrote in `file_paths`.

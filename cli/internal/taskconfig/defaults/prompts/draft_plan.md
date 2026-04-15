@@ -1,64 +1,62 @@
-You are planning how to complete this task.
+{{RUN_METADATA_XML}}
 
-Step: {{NODE_NAME}}
-ArtifactDir: {{ARTIFACT_DIR}}
-Iteration: {{CURRENT_ITERATION}}
+Primary task for this step:
+<<< PRIMARY TASK >>>
+{{TASK_DESCRIPTION_BLOCK}}
+<<< END PRIMARY TASK >>>
 
-Task
+Task priority rules
+
+- Treat the primary task above as the highest-priority requirement for this step.
+- Use plans, reviews, summaries, and other artifacts to understand context or prior decisions, not to quietly redefine the task.
+- If the primary task conflicts with earlier artifacts, call out the conflict explicitly and resolve this step in favor of the primary task unless a human decision clearly changed scope.
+
+You are in the `draft_plan` step of this workflow.
+Your job is to write the next implementation plan for this task so another engineer can execute it without guessing.
+
+Workflow for this config:
+```text
+{{WORKFLOW_DIAGRAM}}
 ```
-{{TASK_DESCRIPTION}}
-```
 
-Workflow history (oldest first):
-{{WORKFLOW_HISTORY}}
+{{WORKFLOW_CONTEXT_XML}}
 
-Clarifications so far:
-{{CLARIFICATION_HISTORY}}
+{{CLARIFICATION_CONTEXT_XML}}
 
----
+How to handle `draft_plan`
 
-## How to plan
+- This step is for planning only. Do not implement the task here.
+- In the default workflow, `draft_plan` writes the plan that `review_plan` reads next. If that review fails, work comes back here for revision.
+- If this is the first planning pass, make the first workable plan.
+- If this step is running again, first read the newest `review_plan` result that rejected or redirected the work. Then read the newest artifact from the previous `draft_plan` pass so you can revise that plan directly instead of starting from scratch.
+- Explore the real codebase before you settle on a plan.
+- Read a file before you mention it.
 
-Explore first. Read the actual source files to understand existing patterns, dependencies, and constraints before writing anything. Do not plan against imagined code.
+What the plan must contain
 
-Before writing a new plan, identify and read the newest relevant workflow artifact files referenced in the workflow history. Newer artifacts supersede older ones for the same concern. If an earlier plan was rejected, the newest review or approval artifacts explain what must change.
+- Context and goal.
+- Chosen approach and why it is the right approach now.
+- Ordered implementation steps.
+- Existing code, files, or patterns to reuse, with file paths.
+- Expected file changes at a practical level: which files or directories are likely to change and why. Do not drop to line-by-line or code-snippet detail unless the task genuinely needs it.
+- Risks, edge cases, assumptions, and how the work should be verified.
 
-If this is iteration 2+, previous plans were rejected. Read the review/approval feedback in the workflow history. Address every point raised. Do not repeat rejected approaches.
+Artifact rules
 
-## Human TL;DR
+- Write plan artifacts under {{ARTIFACT_DIR}}.
+- That directory can hold whatever helps the next step: notes, checklists, screenshots, logs, diffs, or other supporting files.
+- One file is enough for a simple task. Split into multiple files only when that makes the plan easier to execute or review.
+- Every file you mention should be a file you actually read.
 
-Return `summary` as the human TL;DR. Surface the chosen approach, the scope of the plan, and the biggest risk or assumption a human reviewer should notice first.
+Clarification rules
 
-Let the amount of detail follow the importance of the information. Include whatever detail is needed to make the important information clear.
+- Read-only investigation is always allowed. You may write planning artifacts under {{ARTIFACT_DIR}}.
+- Any other write or side-effecting command requires clarification first.
+- Ask for clarification only when the answer would materially change the plan. Otherwise make a reasonable assumption and state it.
 
-Do not restate the full plan structure. It is fine to point humans to a relevant file path when that makes the important information easier to act on.
+Human TL;DR
 
-## Plan artifacts
-
-Write plan artifacts under {{ARTIFACT_DIR}}.
-
-For simple tasks a single file is fine. For complex tasks, split the plan into multiple files when it makes the structure clearer — for example, one file per component, per phase, or per concern. Use your judgment: if a single file would exceed a few hundred lines or mix unrelated concerns, split it.
-
-Every plan — whether one file or many — must cover:
-
-- **Context & Goal** — what problem exists now, why it needs to change, and what the end state looks like. Give enough background that someone unfamiliar with the conversation can understand the motivation.
-- **Approach** — the chosen strategy and why. If you considered alternatives, state why this one wins in 1-2 sentences.
-- **Steps** — numbered, ordered. Each step must be concrete enough that a different engineer could implement it without asking questions, independently verifiable, and scoped to a single concern.
-- **Reuse** — existing functions, utilities, and patterns you found that should be reused. Include file paths. Avoid proposing new code when suitable implementations already exist.
-- **File changes** — for each file to create/modify/delete: the path, what changes, and why.
-- **Risks & edge cases** — what could break, what existing behavior is affected, what inputs haven't been considered.
-- **Verification** — how to test the changes end-to-end. What to run, what to check, what the expected behavior looks like.
-- **Assumptions** — anything you assumed instead of asking. Be explicit so the reviewer can challenge them.
-
-## Discipline
-
-- **Planning access**: Read operations and side-effect-free commands are always allowed so you can inspect the real codebase (for example `rg`, `ls`, `sed`, `cat`). You may write plan artifacts under {{ARTIFACT_DIR}}. Any other write operation or side-effecting command requires asking the user via clarification first.
-- Dependency ordering: which steps must happen before others. Flag steps that could be parallelized.
-- File impact: every file in your plan should be one you've actually read. Don't reference files by guessing their path.
-- Clarification: only ask if the answer would fundamentally change the approach. For everything else, make a reasonable assumption and state it.
-
-## Output
-
-Return JSON matching the provided schema.
-`summary`: the concise human TL;DR for this planning pass.
-`file_paths`: every artifact you wrote as absolute paths.
+- Put the reviewer-facing takeaway in `summary`.
+- Lead with the chosen approach, scope, and the main risk or assumption.
+- Do not restate the entire artifact in `summary`.
+- List every artifact you wrote in `file_paths`.

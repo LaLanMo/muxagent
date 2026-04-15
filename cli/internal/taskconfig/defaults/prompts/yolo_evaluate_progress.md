@@ -1,57 +1,45 @@
-You are evaluating overall task progress after a planning wave has already been implemented and verified.
+{{RUN_METADATA_XML}}
 
-Step: {{NODE_NAME}}
-ArtifactDir: {{ARTIFACT_DIR}}
-Iteration: {{CURRENT_ITERATION}}
+Primary task for this step:
+<<< PRIMARY TASK >>>
+{{TASK_DESCRIPTION_BLOCK}}
+<<< END PRIMARY TASK >>>
 
-Task
+Task priority rules
+
+- Treat the primary task above as the highest-priority requirement for this step.
+- Use plans, reviews, summaries, and other artifacts to understand context or prior decisions, not to quietly redefine the task.
+- If the primary task conflicts with earlier artifacts, call out the conflict explicitly and resolve this step in favor of the primary task unless a human decision clearly changed scope.
+
+You are in the `evaluate_progress` step of this autonomous workflow.
+Your job is to decide whether the overall task is done or needs another planning wave.
+
+Workflow for this config:
+```text
+{{WORKFLOW_DIAGRAM}}
 ```
-{{TASK_DESCRIPTION}}
-```
 
-Workflow history (oldest first):
-{{WORKFLOW_HISTORY}}
+{{WORKFLOW_CONTEXT_XML}}
 
-Clarifications so far:
-{{CLARIFICATION_HISTORY}}
+{{CLARIFICATION_CONTEXT_XML}}
 
----
+How to handle `evaluate_progress`
 
-## Mission
+- This step is not a second verifier. Its job is only to decide `done` vs `draft_plan`.
+- Read the original task, the latest verification evidence, and any remaining code or artifact evidence you need.
+- Favor the newest verification and evaluation artifacts when earlier waves disagree with later evidence.
+- If work remains, make `next_focus` concrete enough that the next planner can start immediately.
 
-Assume the most recent planning wave has already been fully implemented and verified.
-
-Decide only one thing:
-
-- is the original task now done?
-- if not, what should the next planning wave focus on?
-
-This node must not route back to implementation directly. Its only valid outcomes are:
-
-- `next_node=done`
-- `next_node=draft_plan`
-
-## How to evaluate
-
-Read the original task, the completed workflow history, the latest verification artifacts, and any remaining evidence in the codebase.
-
-Always identify and read the newest relevant workflow artifact files referenced in the workflow history before deciding the next node. Favor the newest verification and evaluation artifacts when earlier waves disagree with later evidence.
-
-Return `next_node=done` only if the original task's explicit requested scope is now complete, not just the latest wave.
-
-If work remains, return `next_node=draft_plan` and make `next_focus` concrete enough that the next planner can produce the next wave without rediscovering the problem from scratch. State the remaining obligation and the next wave goal, not generic advice.
-
-## Discipline
+Rules
 
 - Do not ask for clarification.
 - Do not re-verify the latest wave.
 - Do not propose `implement` as the next node.
 - Do not invent adjacent nice-to-have work. If the explicit task scope is satisfied, stop.
 
-## Output
+Decision fields
 
-Return JSON matching the provided schema.
-`next_node`: `done` if the task is complete, otherwise `draft_plan`.
-`reason`: why the task is done or why another planning wave is required.
-`next_focus`: the concrete focus for the next planning wave. Use an empty string only when `next_node=done`.
-`file_paths`: every artifact you wrote as absolute paths.
+- Set `next_node` to `done` only when the explicit task scope is satisfied. Otherwise set it to `draft_plan`.
+- Put the reason for that decision in `reason`.
+- When another wave is needed, make `next_focus` concrete enough that the next planner can start immediately.
+- List any evaluation artifacts you wrote in `file_paths`.

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -111,7 +112,7 @@ func TestServiceAgentRunPersistsPromptInputArtifact(t *testing.T) {
 	assert.Contains(t, completed.TaskView.ArtifactPaths, "impl.md")
 }
 
-func TestServiceVerifyRunUsesFormattedTaskBlockAndDedupedWorkflowHistory(t *testing.T) {
+func TestServiceVerifyRunUsesFilesystemOrientedWorkflowContext(t *testing.T) {
 	executor := &fakeExecutor{
 		steps: map[string][]taskexecutor.Result{
 			"draft_plan":  {{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("plan.md")}},
@@ -146,28 +147,52 @@ func TestServiceVerifyRunUsesFormattedTaskBlockAndDedupedWorkflowHistory(t *test
 	verifyRequests := executor.requestsForNode("verify")
 	require.Len(t, verifyRequests, 1)
 	verifyPrompt := verifyRequests[0].Prompt
-	assert.Contains(t, verifyPrompt, "Task\n```\nImplement login\nHandle SSO fallback\n```")
+	assert.True(t, strings.HasPrefix(verifyPrompt, "<task_metadata>"))
+	assert.Contains(t, verifyPrompt, "Primary task for this step:\n<<< PRIMARY TASK >>>\nImplement login\nHandle SSO fallback\n<<< END PRIMARY TASK >>>")
+	assert.Contains(t, verifyPrompt, "<execution_context>")
+	assert.Contains(t, verifyPrompt, "<clarification_state>\n(none)\n</clarification_state>")
+	assert.Contains(t, verifyPrompt, "Workflow for this config:")
+	assert.Contains(t, verifyPrompt, "Read the newest accepted plan artifacts and the newest implementation artifacts for this attempt before you judge the result.")
+	assert.Contains(t, verifyPrompt, "That includes existing unit tests, integration tests, end-to-end tests, builds, linters")
+	assert.NotContains(t, verifyPrompt, "Current task directory:")
+	assert.NotContains(t, verifyPrompt, "All run directories for this task:")
+	assert.NotContains(t, verifyPrompt, "Current run directory for this step:")
+	assert.NotContains(t, verifyPrompt, "For `verify`, read the newest completed `implement` run")
 	assert.NotContains(t, verifyPrompt, "Artifacts:")
-	assert.Equal(t, 1, strings.Count(verifyPrompt, "/tmp/review.md"))
-	assert.Contains(t, verifyPrompt, `"passed":true`)
+	assert.NotContains(t, verifyPrompt, "/tmp/review.md")
+	assert.NotContains(t, verifyPrompt, `"passed":true`)
+	assert.Contains(t, verifyPrompt, "decision: passed=true")
 
 	runs, err := service.store.ListNodeRunsByTask(context.Background(), completed.TaskID)
 	require.NoError(t, err)
 
+	var reviewRun taskdomain.NodeRun
 	var verifyRun taskdomain.NodeRun
 	for _, run := range runs {
+		if run.NodeName == "review_plan" {
+			reviewRun = run
+		}
 		if run.NodeName == "verify" {
 			verifyRun = run
-			break
 		}
 	}
+	require.Equal(t, taskdomain.NodeRunDone, reviewRun.Status)
 	require.Equal(t, taskdomain.NodeRunDone, verifyRun.Status)
+	assert.Contains(t, verifyPrompt, taskstore.TaskDir(service.workDir, completed.TaskID))
+	assert.Contains(t, verifyPrompt, taskstore.RunDir(service.workDir, completed.TaskID, reviewRun.ID))
 
 	inputPath := mustRunArtifactPathForRun(t, completed.TaskView.Task, runs, verifyRun, inputArtifactName)
 	input := readTestFile(t, inputPath)
-	assert.Contains(t, input, "Task\n```\nImplement login\nHandle SSO fallback\n```")
+	assert.True(t, strings.HasPrefix(input, "<task_metadata>"))
+	assert.Contains(t, input, "Primary task for this step:\n<<< PRIMARY TASK >>>\nImplement login\nHandle SSO fallback\n<<< END PRIMARY TASK >>>")
+	assert.Contains(t, input, "<execution_context>")
+	assert.NotContains(t, input, "Current task directory:")
+	assert.NotContains(t, input, "All run directories for this task:")
+	assert.NotContains(t, input, "Current run directory for this step:")
 	assert.NotContains(t, input, "Artifacts:")
-	assert.Equal(t, 1, strings.Count(input, "/tmp/review.md"))
+	assert.NotContains(t, input, "/tmp/review.md")
+	assert.NotContains(t, input, `"passed":true`)
+	assert.Contains(t, input, taskstore.RunDir(service.workDir, completed.TaskID, reviewRun.ID))
 }
 
 func TestServiceClarificationUsesSameNodeRun(t *testing.T) {
@@ -222,8 +247,9 @@ func TestServiceClarificationUsesSameNodeRun(t *testing.T) {
 	requestInput := readTestFile(t, requestInputPath)
 	assert.True(t, strings.HasPrefix(requestInput, expectedInputPrefix))
 	assert.NotContains(t, requestInput, "## Prompt")
-	assert.Contains(t, requestInput, "Step: draft_plan")
-	assert.Contains(t, requestInput, "## Clarification History")
+	assert.Contains(t, requestInput, "<task_metadata>")
+	assert.Contains(t, requestInput, "<current_step>draft_plan</current_step>")
+	assert.Contains(t, requestInput, "<clarification_state>")
 	assert.Contains(t, requestInput, "Need a choice")
 	assert.Contains(t, requestInput, "Why it matters: Impacts plan")
 	assert.Contains(t, requestInput, "Answer: pending")
@@ -263,8 +289,8 @@ func TestServiceClarificationUsesSameNodeRun(t *testing.T) {
 			input := readTestFile(t, inputPath)
 			assert.True(t, strings.HasPrefix(input, expectedInputPrefix))
 			assert.NotContains(t, input, "## Prompt")
-			assert.Contains(t, input, "Step: draft_plan")
-			assert.Contains(t, input, "## Clarification History")
+			assert.Contains(t, input, "<task_metadata>")
+			assert.Contains(t, input, "<clarification_state>")
 			assert.Contains(t, input, "\"A\"")
 		}
 	}
@@ -278,11 +304,11 @@ func TestServiceClarificationUsesSameNodeRun(t *testing.T) {
 	assert.Equal(t, draftRequests[0].NodeRun.ID+"-session", draftRequests[1].NodeRun.SessionID)
 	require.Len(t, draftRequests[1].NodeRun.Clarifications, 1)
 	require.NotNil(t, draftRequests[1].NodeRun.Clarifications[0].Response)
-	assert.Contains(t, draftRequests[1].Prompt, "Step: draft_plan")
-	assert.Contains(t, draftRequests[1].Prompt, "ArtifactDir:")
-	assert.Contains(t, draftRequests[1].Prompt, "Iteration: 1")
-	assert.Contains(t, draftRequests[1].Prompt, "Mission")
-	assert.Contains(t, draftRequests[1].Prompt, "Q: Need a choice")
+	assert.Contains(t, draftRequests[1].Prompt, "<task_metadata>")
+	assert.Contains(t, draftRequests[1].Prompt, "<current_step>draft_plan</current_step>")
+	assert.Contains(t, draftRequests[1].Prompt, "<current_iteration>1</current_iteration>")
+	assert.Contains(t, draftRequests[1].Prompt, "Primary task for this step:\n<<< PRIMARY TASK >>>\nImplement login\n<<< END PRIMARY TASK >>>")
+	assert.Contains(t, draftRequests[1].Prompt, "Question 1: Need a choice")
 	assert.Contains(t, draftRequests[1].Prompt, "User selected:")
 	assert.Contains(t, draftRequests[1].Prompt, "Stay in the same thread context")
 }
@@ -376,6 +402,54 @@ func TestServicePersistsExecutionDirAndExecutesFromWorktree(t *testing.T) {
 	branchOut, err := exec.Command("git", "-C", repo, "branch", "--list", worktree.BranchName(task.ID)).CombinedOutput()
 	require.NoError(t, err, string(branchOut))
 	assert.Contains(t, strings.TrimSpace(string(branchOut)), worktree.BranchName(task.ID))
+}
+
+func TestServiceNormalizesExecutionDirForPlainTasksStartedFromSymlinkPath(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	_, err := taskconfig.EnsureManagedDefaultAssets()
+	require.NoError(t, err)
+
+	cfg := singleAgentTerminalFixture()
+	writeConfigAtPath(t, cfg, managedDefaultTestConfigPath(t))
+
+	repo := initRuntimeGitRepoWithCommit(t, true)
+	realWorkDir := filepath.Join(repo, "packages", "app")
+	symlinkRoot := filepath.Join(t.TempDir(), "workspace-link")
+	require.NoError(t, os.Symlink(repo, symlinkRoot))
+	symlinkWorkDir := filepath.Join(symlinkRoot, "packages", "app")
+
+	executor := &fakeExecutor{
+		steps: map[string][]taskexecutor.Result{
+			"implement": {{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("impl.md")}},
+		},
+	}
+	service, err := NewService(realWorkDir, executor)
+	require.NoError(t, err)
+	defer service.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = service.Run(ctx) }()
+
+	service.Dispatch(RunCommand{
+		Type:        CommandStartTask,
+		Description: "plain task",
+		ConfigAlias: taskconfig.DefaultAlias,
+		ConfigPath:  managedDefaultTestConfigPath(t),
+		WorkDir:     symlinkWorkDir,
+	})
+	completed := waitForEvent(t, service.Events(), EventTaskCompleted)
+
+	task, err := service.store.GetTask(context.Background(), completed.TaskID)
+	require.NoError(t, err)
+	assert.Equal(t, realWorkDir, task.WorkDir)
+	assert.Equal(t, realWorkDir, task.ExecutionDir)
+	assert.False(t, taskUsesWorktree(task))
+
+	requests := executor.requestsForNode("implement")
+	require.Len(t, requests, 1)
+	assert.Equal(t, realWorkDir, requests[0].WorkDir)
 }
 
 func TestServiceWorktreeStartupRollsBackWhenRepoSubdirIsMissingInNewWorktree(t *testing.T) {
@@ -677,7 +751,7 @@ func TestServiceStartFollowUpUsesStoredConfigWhenAliasMissingFromCatalog(t *test
 	assert.Equal(t, "implement", childRuns[0].NodeName)
 }
 
-func TestServiceStartFollowUpInheritsWorktreeMode(t *testing.T) {
+func TestServiceStartFollowUpDefaultsToContinueHereForWorktreeParents(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	_, err := taskconfig.EnsureManagedDefaultAssets()
@@ -719,9 +793,171 @@ func TestServiceStartFollowUpInheritsWorktreeMode(t *testing.T) {
 	childTask, err := service.store.GetTask(context.Background(), childCompleted.TaskID)
 	require.NoError(t, err)
 	assert.NotEqual(t, parentTask.WorkDir, parentTask.ExecutionDir)
-	assert.NotEqual(t, childTask.WorkDir, childTask.ExecutionDir)
-	assert.NotEqual(t, parentTask.ExecutionDir, childTask.ExecutionDir)
+	assert.Equal(t, parentTask.ExecutionDir, childTask.ExecutionDir)
 	assert.Equal(t, parentTask.WorkDir, childTask.WorkDir)
+
+	repoRoot, err := worktree.FindRepoRoot(parentTask.WorkDir)
+	require.NoError(t, err)
+	assert.Len(t, gitWorktreeList(t, repoRoot), 2)
+}
+
+func TestServiceStartFollowUpContinueHereRejectsRunningSiblingInSameCheckout(t *testing.T) {
+	parentTask := seedCompletedWorktreeParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	seedLiveTaskInCheckout(t, service, parentTask.task, "sibling-running", taskdomain.NodeRunRunning)
+
+	err := service.startFollowUpTask(
+		context.Background(),
+		parentTask.completed.TaskID,
+		"blocked child",
+		"",
+		"",
+		FollowUpModeContinueHere,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "still active in this checkout")
+}
+
+func TestServiceStartFollowUpContinueHereRejectsAwaitingSiblingInSameCheckout(t *testing.T) {
+	parentTask := seedCompletedWorktreeParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	seedLiveTaskInCheckout(t, service, parentTask.task, "sibling-awaiting", taskdomain.NodeRunAwaitingUser)
+
+	err := service.startFollowUpTask(
+		context.Background(),
+		parentTask.completed.TaskID,
+		"blocked child",
+		"",
+		"",
+		FollowUpModeContinueHere,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "still active in this checkout")
+}
+
+func TestServiceStartFollowUpForkHeadUsesParentHeadInsteadOfRepoHEAD(t *testing.T) {
+	parentTask := seedCompletedWorktreeParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	parentCheckoutRoot, err := worktree.FindRepoRoot(parentTask.task.ExecutionDir)
+	require.NoError(t, err)
+	parentHead, err := worktree.HeadCommit(parentCheckoutRoot)
+	require.NoError(t, err)
+
+	repoRoot, err := worktree.FindRepoRoot(parentTask.task.WorkDir)
+	require.NoError(t, err)
+	repoHead := advanceRuntimeRepoHead(t, repoRoot, "repo-head.txt", "repo head moved")
+	require.NotEqual(t, parentHead, repoHead)
+
+	service.Dispatch(startFollowUpCommandWithMode(
+		parentTask.completed.TaskID,
+		"fork from head",
+		FollowUpModeForkHead,
+	))
+	childCompleted := waitForEventWhere(t, service.Events(), 5*time.Second, func(event RunEvent) bool {
+		return event.Type == EventTaskCompleted && event.TaskID != parentTask.completed.TaskID
+	})
+
+	childTask, err := service.store.GetTask(context.Background(), childCompleted.TaskID)
+	require.NoError(t, err)
+	childCheckoutRoot, err := worktree.FindRepoRoot(childTask.ExecutionDir)
+	require.NoError(t, err)
+	childHead, err := worktree.HeadCommit(childCheckoutRoot)
+	require.NoError(t, err)
+
+	assert.NotEqual(t, parentTask.task.ExecutionDir, childTask.ExecutionDir)
+	assert.Equal(t, parentHead, childHead)
+	assert.NotEqual(t, repoHead, childHead)
+}
+
+func TestServiceStartFollowUpForkWithChangesUsesParentHeadAndSnapshotsCheckout(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("symlink behavior is not portable on windows")
+	}
+
+	parentTask := seedCompletedWorktreeParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	parentCheckoutRoot, err := worktree.FindRepoRoot(parentTask.task.ExecutionDir)
+	require.NoError(t, err)
+	parentHead, err := worktree.HeadCommit(parentCheckoutRoot)
+	require.NoError(t, err)
+
+	repoRoot, err := worktree.FindRepoRoot(parentTask.task.WorkDir)
+	require.NoError(t, err)
+	repoHead := advanceRuntimeRepoHead(t, repoRoot, "repo-head-2.txt", "repo head moved again")
+	require.NotEqual(t, parentHead, repoHead)
+
+	parentTrackedFile := filepath.Join(parentTask.task.ExecutionDir, ".keep")
+	parentDeletedFile := filepath.Join(parentCheckoutRoot, "README.md")
+	parentUntrackedFile := filepath.Join(parentCheckoutRoot, "notes.md")
+	parentSymlink := filepath.Join(parentCheckoutRoot, "notes-link")
+	parentExecutable := filepath.Join(parentCheckoutRoot, "run.sh")
+	require.NoError(t, os.WriteFile(parentTrackedFile, []byte("parent dirty change"), 0o644))
+	require.NoError(t, os.Remove(parentDeletedFile))
+	require.NoError(t, os.WriteFile(parentUntrackedFile, []byte("snapshot notes"), 0o644))
+	require.NoError(t, os.Symlink("notes.md", parentSymlink))
+	require.NoError(t, os.WriteFile(parentExecutable, []byte("#!/bin/sh\necho snapshot\n"), 0o755))
+
+	service.Dispatch(startFollowUpCommandWithMode(
+		parentTask.completed.TaskID,
+		"fork with changes",
+		FollowUpModeForkWithChanges,
+	))
+	childCompleted := waitForEventWhere(t, service.Events(), 5*time.Second, func(event RunEvent) bool {
+		return event.Type == EventTaskCompleted && event.TaskID != parentTask.completed.TaskID
+	})
+
+	childTask, err := service.store.GetTask(context.Background(), childCompleted.TaskID)
+	require.NoError(t, err)
+	childCheckoutRoot, err := worktree.FindRepoRoot(childTask.ExecutionDir)
+	require.NoError(t, err)
+	childHead, err := worktree.HeadCommit(childCheckoutRoot)
+	require.NoError(t, err)
+
+	assert.Equal(t, parentHead, childHead)
+	assert.NotEqual(t, repoHead, childHead)
+	assert.Equal(t, "parent dirty change", readTestFile(t, filepath.Join(childTask.ExecutionDir, ".keep")))
+	assert.NoFileExists(t, filepath.Join(childCheckoutRoot, "README.md"))
+	assert.Equal(t, "snapshot notes", readTestFile(t, filepath.Join(childCheckoutRoot, "notes.md")))
+
+	linkInfo, err := os.Lstat(filepath.Join(childCheckoutRoot, "notes-link"))
+	require.NoError(t, err)
+	assert.True(t, linkInfo.Mode()&os.ModeSymlink != 0)
+	linkTarget, err := os.Readlink(filepath.Join(childCheckoutRoot, "notes-link"))
+	require.NoError(t, err)
+	assert.Equal(t, "notes.md", linkTarget)
+
+	execInfo, err := os.Stat(filepath.Join(childCheckoutRoot, "run.sh"))
+	require.NoError(t, err)
+	assert.True(t, execInfo.Mode().Perm()&0o111 != 0)
+}
+
+func TestServiceStartFollowUpFailsWhenParentWorktreeIsMissing(t *testing.T) {
+	parentTask := seedCompletedWorktreeParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	parentCheckoutRoot, err := worktree.FindRepoRoot(parentTask.task.ExecutionDir)
+	require.NoError(t, err)
+	require.NoError(t, os.RemoveAll(parentCheckoutRoot))
+
+	err = service.startFollowUpTask(
+		context.Background(),
+		parentTask.completed.TaskID,
+		"missing parent worktree",
+		"",
+		"",
+		FollowUpModeForkHead,
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parent worktree unavailable")
 }
 
 func TestServiceStartFollowUpRejectsIncompleteParent(t *testing.T) {
@@ -794,10 +1030,10 @@ func TestServiceFollowUpPromptAndInputRequestIncludeParentContext(t *testing.T) 
 	draftRequests := executor.requestsForNode("draft_plan")
 	require.Len(t, draftRequests, 2)
 	childPrompt := draftRequests[1].Prompt
-	assert.Contains(t, childPrompt, "## Direct Parent Task")
-	assert.Contains(t, childPrompt, "Description: parent task")
+	assert.Contains(t, childPrompt, "Follow-up lineage:")
+	assert.Contains(t, childPrompt, "Direct parent task: parent task")
 	assert.Contains(t, childPrompt, taskstore.TaskDir(service.workDir, parentCompleted.TaskID))
-	assert.Contains(t, childPrompt, "parent-plan.md")
+	assert.NotContains(t, childPrompt, "parent-plan.md")
 
 	reloadedInput, err := service.BuildInputRequest(context.Background(), childApproval.TaskID, childApproval.NodeRunID)
 	require.NoError(t, err)
@@ -979,10 +1215,10 @@ func TestServiceRetryAfterRestartForFollowUpPreservesParentContext(t *testing.T)
 
 	retryRequests := secondService.executor.(*fakeExecutor).requestsForNode("draft_plan")
 	require.Len(t, retryRequests, 1)
-	assert.Contains(t, retryRequests[0].Prompt, "## Direct Parent Task")
-	assert.Contains(t, retryRequests[0].Prompt, "Description: parent task")
+	assert.Contains(t, retryRequests[0].Prompt, "Follow-up lineage:")
+	assert.Contains(t, retryRequests[0].Prompt, "Direct parent task: parent task")
 	assert.Contains(t, retryRequests[0].Prompt, taskstore.TaskDir(workDir, parentCompleted.TaskID))
-	assert.Contains(t, retryRequests[0].Prompt, "parent-plan.md")
+	assert.NotContains(t, retryRequests[0].Prompt, "parent-plan.md")
 }
 
 func TestServiceFollowUpPromptUsesOlderAncestorsAsTaskDirectoryReferences(t *testing.T) {
@@ -1047,11 +1283,11 @@ func TestServiceFollowUpPromptUsesOlderAncestorsAsTaskDirectoryReferences(t *tes
 	draftRequests := executor.requestsForNode("draft_plan")
 	require.Len(t, draftRequests, 3)
 	childPrompt := draftRequests[2].Prompt
-	assert.Contains(t, childPrompt, "## Direct Parent Task")
-	assert.Contains(t, childPrompt, "Description: parent task")
+	assert.Contains(t, childPrompt, "Follow-up lineage:")
+	assert.Contains(t, childPrompt, "Direct parent task: parent task")
 	assert.Contains(t, childPrompt, taskstore.TaskDir(service.workDir, parentCompleted.TaskID))
-	assert.Contains(t, childPrompt, "## Earlier Ancestors (inspect only if needed)")
-	assert.Contains(t, childPrompt, "- grandparent task")
+	assert.Contains(t, childPrompt, "Earlier ancestors are available only if the direct parent is not enough:")
+	assert.Contains(t, childPrompt, "grandparent task")
 	assert.Contains(t, childPrompt, taskstore.TaskDir(service.workDir, grandCompleted.TaskID))
 	assert.NotContains(t, childPrompt, "grand-review.md")
 	assert.NotContains(t, childPrompt, "grand-verify.md")
@@ -1090,7 +1326,7 @@ func TestServiceFollowUpPostCommitStartupFailureMarksEntryRunFailed(t *testing.T
 	})
 	parentCompleted := waitForEvent(t, service.Events(), EventTaskCompleted)
 
-	err = service.startFollowUpTask(context.Background(), parentCompleted.TaskID, "broken child", "", "")
+	err = service.startFollowUpTask(context.Background(), parentCompleted.TaskID, "broken child", "", "", "")
 	require.Error(t, err)
 	views, err := service.ListTaskViews(context.Background(), workDir)
 	require.NoError(t, err)
@@ -2380,6 +2616,102 @@ func startFollowUpCommand(parentTaskID, description string) RunCommand {
 	}
 }
 
+func startFollowUpCommandWithMode(parentTaskID, description string, mode FollowUpMode) RunCommand {
+	cmd := startFollowUpCommand(parentTaskID, description)
+	cmd.FollowUpMode = mode
+	return cmd
+}
+
+type completedWorktreeParent struct {
+	service   *Service
+	completed RunEvent
+	task      taskdomain.Task
+}
+
+func seedCompletedWorktreeParentTask(t *testing.T) completedWorktreeParent {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	_, err := taskconfig.EnsureManagedDefaultAssets()
+	require.NoError(t, err)
+
+	cfg := singleAgentTerminalFixture()
+	writeConfigAtPath(t, cfg, managedDefaultTestConfigPath(t))
+
+	repo := initRuntimeGitRepoWithCommit(t, true)
+	workDir := filepath.Join(repo, "packages", "app")
+	executor := &fakeExecutor{
+		steps: map[string][]taskexecutor.Result{
+			"implement": {
+				{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("parent-impl.md")},
+				{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("child-impl.md")},
+			},
+		},
+	}
+	service, err := NewService(workDir, executor)
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = service.Run(ctx) }()
+
+	cmd := startTaskCommand(t, service, "parent worktree task")
+	cmd.UseWorktree = true
+	service.Dispatch(cmd)
+	completed := waitForEvent(t, service.Events(), EventTaskCompleted)
+	task, err := service.store.GetTask(context.Background(), completed.TaskID)
+	require.NoError(t, err)
+	return completedWorktreeParent{
+		service:   service,
+		completed: completed,
+		task:      task,
+	}
+}
+
+func seedLiveTaskInCheckout(t *testing.T, service *Service, parentTask taskdomain.Task, taskID string, status taskdomain.NodeRunStatus) {
+	t.Helper()
+	now := time.Now().UTC()
+	liveTask := taskdomain.Task{
+		ID:           taskID,
+		Description:  "live sibling",
+		ConfigAlias:  parentTask.ConfigAlias,
+		ConfigPath:   parentTask.ConfigPath,
+		WorkDir:      parentTask.WorkDir,
+		ExecutionDir: parentTask.ExecutionDir,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	run := taskdomain.NodeRun{
+		ID:        taskID + "-run",
+		TaskID:    taskID,
+		NodeName:  "implement",
+		Status:    status,
+		StartedAt: now,
+	}
+	require.NoError(t, service.store.CreateTaskWithEntryRun(context.Background(), liveTask, run))
+}
+
+func advanceRuntimeRepoHead(t *testing.T, repoRoot, fileName, content string) string {
+	t.Helper()
+	require.NoError(t, os.WriteFile(filepath.Join(repoRoot, fileName), []byte(content), 0o644))
+	runRuntimeGit(t, repoRoot, "git", "add", fileName)
+	runRuntimeGit(t, repoRoot, "git", "commit", "-m", content)
+	return gitHeadForRuntime(t, repoRoot)
+}
+
+func gitWorktreeList(t *testing.T, repoRoot string) []string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", repoRoot, "worktree", "list", "--porcelain").CombinedOutput()
+	require.NoError(t, err, string(out))
+	entries := []string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if strings.HasPrefix(line, "worktree ") {
+			entries = append(entries, strings.TrimPrefix(line, "worktree "))
+		}
+	}
+	return entries
+}
+
 func initRuntimeGitRepoWithCommit(t *testing.T, includeSubdir bool) string {
 	t.Helper()
 
@@ -2407,6 +2739,13 @@ func runRuntimeGit(t *testing.T, dir string, name string, args ...string) {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "command %s %v failed: %s", name, args, string(out))
+}
+
+func gitHeadForRuntime(t *testing.T, dir string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", dir, "rev-parse", "HEAD").CombinedOutput()
+	require.NoError(t, err, string(out))
+	return strings.TrimSpace(string(out))
 }
 
 func waitForEvent(t *testing.T, events <-chan RunEvent, want EventType) RunEvent {
@@ -2550,6 +2889,9 @@ func (b *blockingExecutor) Execute(ctx context.Context, req taskexecutor.Request
 }
 
 func materializeExecutorArtifacts(req taskexecutor.Request, result taskexecutor.Result) (taskexecutor.Result, error) {
+	if result.Kind == taskexecutor.ResultKindResult {
+		result.Result = withDefaultSummary(req.ResultSchema, result.Result)
+	}
 	outputEnvelope := map[string]interface{}{
 		"kind":          result.Kind,
 		"result":        nil,
@@ -2587,6 +2929,24 @@ func materializeExecutorArtifacts(req taskexecutor.Request, result taskexecutor.
 		result.SessionID = req.NodeRun.ID + "-session"
 	}
 	return result, nil
+}
+
+func withDefaultSummary(schema taskconfig.JSONSchema, result map[string]interface{}) map[string]interface{} {
+	if result == nil {
+		return nil
+	}
+	if _, ok := schema.Properties["summary"]; !ok {
+		return result
+	}
+	if _, ok := result["summary"]; ok {
+		return result
+	}
+	cloned := make(map[string]interface{}, len(result)+1)
+	for key, value := range result {
+		cloned[key] = value
+	}
+	cloned["summary"] = "test summary"
+	return cloned
 }
 
 func findArtifactPathByBase(t *testing.T, paths []string, base string) string {

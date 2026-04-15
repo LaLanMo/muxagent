@@ -116,7 +116,7 @@ func TestExecutorParsesResultAndProgress(t *testing.T) {
 	assert.Equal(t, "json_schema", asString(format["type"]))
 	parts := asSlice(prompt.Body["parts"])
 	require.Len(t, parts, 1)
-	assert.Contains(t, asString(asMap(parts[0])["text"]), "Output contract:")
+	assert.Equal(t, req.Prompt, asString(asMap(parts[0])["text"]))
 }
 
 func TestExecutorParsesClarificationAndResumesSameSession(t *testing.T) {

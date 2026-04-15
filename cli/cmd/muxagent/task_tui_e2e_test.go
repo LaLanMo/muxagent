@@ -659,9 +659,9 @@ func TestTaskTUIE2EPersistsExactCodexPromptInInputArtifact(t *testing.T) {
 
 	templatePath := filepath.Join(moduleRoot, "internal", "taskconfig", "defaults", "prompts", "draft_plan.md")
 	assertPromptContainsLiteralTemplateLines(t, string(inputBytes), templatePath)
-	assert.Contains(t, string(inputBytes), "Output contract:")
-	assert.Contains(t, string(inputBytes), "- Return exactly one JSON object matching the provided schema.")
-	assert.Contains(t, string(inputBytes), "- When the node is complete, return {\"kind\":\"result\",\"result\":<payload matching the node result schema>,\"clarification\":null}.")
+	assert.True(t, strings.HasPrefix(string(inputBytes), "<task_metadata>"))
+	assert.Contains(t, string(inputBytes), "Primary task for this step:\n<<< PRIMARY TASK >>>\nImplement login\n<<< END PRIMARY TASK >>>")
+	assert.NotContains(t, string(inputBytes), "Output contract:")
 	assert.NotContains(t, string(inputBytes), "# Input")
 	assert.NotContains(t, string(inputBytes), "## Prompt")
 	assert.NotContains(t, string(inputBytes), "{{")
@@ -669,8 +669,10 @@ func TestTaskTUIE2EPersistsExactCodexPromptInInputArtifact(t *testing.T) {
 	reviewRun := requireNodeRunByName(t, runs, "review_plan")
 	reviewPromptBytes, err := os.ReadFile(filepath.Join(stateDir, reviewRun.ID+".prompt.txt"))
 	require.NoError(t, err)
-	assert.NotContains(t, string(reviewPromptBytes), "input.md")
-	assert.NotContains(t, string(reviewPromptBytes), "output.json")
+	reviewPrompt := string(reviewPromptBytes)
+	assert.Contains(t, reviewPrompt, "Each run directory can contain `manifest.json`, `input.md`, `output.json`")
+	assert.NotContains(t, reviewPrompt, filepath.Join(taskstore.RunDir(workDir, view.Task.ID, draftRun.ID), "input.md"))
+	assert.NotContains(t, reviewPrompt, filepath.Join(taskstore.RunDir(workDir, view.Task.ID, draftRun.ID), "output.json"))
 
 	session.quit(t)
 }
