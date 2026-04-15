@@ -95,6 +95,28 @@ async function readHistoryGeometry(page: Page) {
   });
 }
 
+async function readCollapsedHistoryGeometry(page: Page) {
+  return page.evaluate(() => {
+    const topDivider = document.querySelector(".detail-main-divider");
+    const history = document.querySelector('[data-testid="detail-task-history"]');
+    const historyHeader = history?.querySelector(".detail-history__header");
+    const bottomDivider = document.querySelector(".detail-history-divider");
+    const feed = history?.querySelector(".detail-history__feed");
+    if (!topDivider || !history || !historyHeader || !bottomDivider || !feed) {
+      throw new Error("Expected the collapsed history section to be visible");
+    }
+    const topDividerRect = topDivider.getBoundingClientRect();
+    const historyHeaderRect = historyHeader.getBoundingClientRect();
+    const bottomDividerRect = bottomDivider.getBoundingClientRect();
+    return {
+      bottomGap: Math.round(bottomDividerRect.top - historyHeaderRect.bottom),
+      feedDisplay: getComputedStyle(feed).display,
+      feedHidden: feed.hasAttribute("hidden"),
+      topGap: Math.round(historyHeaderRect.top - topDividerRect.bottom),
+    };
+  });
+}
+
 async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
   await page.evaluate(async ({ workspaceId }) => {
     const [{ getRuntime }, { useTaskSnapshotStore }] = await Promise.all([
@@ -290,6 +312,28 @@ test("matches the follow-up history row geometry from the design frame", async (
   expect(geometry.titleFontSize).toBe("14px");
   expect(geometry.timeFontSize).toBe("12px");
   expect(geometry.metaFontSize).toBe("12px");
+});
+
+test("collapses follow-up history with symmetric header spacing", async ({ page }) => {
+  await connectFixtureWorkspace(page);
+  await openTaskFromBoard(page, "task-follow-up-history-fixture");
+
+  const historyToggle = page.getByTestId("detail-task-history-toggle");
+  const historyFeed = page.locator(".detail-history__feed");
+
+  await expect(historyToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(historyFeed).toBeVisible();
+
+  await historyToggle.click();
+
+  await expect(historyToggle).toHaveAttribute("aria-expanded", "false");
+  await expect(historyFeed).toBeHidden();
+
+  const geometry = await readCollapsedHistoryGeometry(page);
+  expect(geometry.topGap).toBe(16);
+  expect(geometry.bottomGap).toBe(16);
+  expect(geometry.feedHidden).toBe(true);
+  expect(geometry.feedDisplay).toBe("none");
 });
 
 test("shows running preview rows on the card and keeps the feed pinned on live updates", async ({

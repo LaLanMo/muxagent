@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Bot,
   Check,
@@ -657,6 +657,7 @@ export function TaskDetailScreen({
   const runsLabel = summarizeRuns(timelineRuns);
   const promptLead = task?.task.description ?? title;
   const showHistorySection = historyEntries.length > 0;
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
   const activityRef = useRef<HTMLElement | null>(null);
   const shouldStickActivityToBottomRef = useRef(true);
   const lastTaskIdRef = useRef<string | undefined>(undefined);
@@ -714,6 +715,10 @@ export function TaskDetailScreen({
         }
       />
     ) : null;
+
+  useEffect(() => {
+    setHistoryCollapsed(false);
+  }, [task?.task.id]);
 
   useEffect(() => {
     const activity = activityRef.current;
@@ -890,8 +895,19 @@ export function TaskDetailScreen({
             <div className="detail-main-content">
               {showHistorySection ? (
                 <>
-                  <section className="detail-history" data-testid="detail-task-history">
-                    <div className="detail-history__header">
+                  <section
+                    className="detail-history"
+                    data-collapsed={historyCollapsed ? "true" : "false"}
+                    data-testid="detail-task-history"
+                  >
+                    <button
+                      aria-controls="detail-task-history-feed"
+                      aria-expanded={!historyCollapsed}
+                      className="detail-history__header"
+                      data-testid="detail-task-history-toggle"
+                      onClick={() => setHistoryCollapsed((value) => !value)}
+                      type="button"
+                    >
                       <span aria-hidden="true" className="detail-history__header-icon">
                         <ChevronDown size={12} strokeWidth={1.9} />
                       </span>
@@ -907,9 +923,13 @@ export function TaskDetailScreen({
                           historyEntries.length === 1 ? "iteration" : "iterations"
                         }`}
                       </span>
-                    </div>
+                    </button>
 
-                    <div className="detail-history__feed">
+                    <div
+                      className="detail-history__feed"
+                      hidden={historyCollapsed}
+                      id="detail-task-history-feed"
+                    >
                       {historyEntries.map((entry) => (
                         <button
                           className="detail-history__row"
