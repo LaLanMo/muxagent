@@ -1,8 +1,9 @@
 import { buildTaskDetailPath } from "@/domain/routes";
 import {
+  type BoardMetaDetails,
   type BoardFilter,
   type ScopedTaskView,
-  buildBoardMetaSummary,
+  buildBoardMetaDetails,
   formatRelativeTime,
   groupScopedTasksIntoBoardColumns,
   statusTone,
@@ -44,8 +45,8 @@ function compactTaskPath(workDir?: string, fallbackLabel?: string): string {
   return `…/${parts.slice(-3).join("/")}`;
 }
 
-function buildBoardMeta(task: TaskViewDto, fallbackLabel?: string): string {
-  return buildBoardMetaSummary(task, fallbackLabel);
+function buildBoardMeta(task: TaskViewDto, fallbackLabel?: string): BoardMetaDetails {
+  return buildBoardMetaDetails(task, fallbackLabel);
 }
 
 function buildListSubtitle(task: TaskViewDto, fallbackLabel?: string): string {
@@ -83,13 +84,13 @@ export type EntryTaskBoardModel = {
       workspaceId?: string;
       href: string;
       title: string;
-      meta: string;
+      meta: BoardMetaDetails;
       tone: "running" | "awaiting" | "done" | "failed" | "neutral";
       ancestorCount: number;
       ancestors: Array<{
         id: string;
         title: string;
-        meta: string;
+        meta: BoardMetaDetails;
       }>;
     }>;
   }>;

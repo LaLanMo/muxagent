@@ -138,18 +138,27 @@ async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
 test("opens a workspace from the shell and drills into task detail", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
-  await expect(page.getByTestId("board-card-task-live-fixture")).toContainText(
+  await expect(page.getByTestId("board-card-title-task-live-fixture")).toHaveText(
     "Refactor auth middleware",
   );
-  await expect(page.getByTestId("board-card-task-live-fixture")).toContainText(
+  await expect(page.getByTestId("board-card-worktree-icon-task-live-fixture")).toBeVisible();
+  await expect(page.getByTestId("board-card-workspace-meta-task-live-fixture")).toContainText(
     "muxagent-workspace",
   );
+  const firstMetaProperty = await page
+    .getByTestId("board-card-task-live-fixture")
+    .locator(".task-board-card__meta")
+    .evaluate((element) => element.firstElementChild?.getAttribute("data-testid"));
+  expect(firstMetaProperty).toBe("board-card-worktree-icon-task-live-fixture");
 
   await openTaskFromBoard(page, "task-live-fixture");
 
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-live-fixture$/);
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await expect(page.getByText("Refactor auth middleware")).toBeVisible();
+  await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Launch mode");
+  await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Worktree");
+  await expect(page.getByTestId("detail-task-launch-mode-icon")).toBeVisible();
   await expect(page.getByTestId("detail-run-run-live-plan")).toBeVisible();
   await expect(page.getByTestId("detail-run-summary-run-live-plan")).toContainText(
     "Scope the middleware refactor around the anonymous bypass first",

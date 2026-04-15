@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildBoardMetaDetails,
   groupScopedTasksIntoBoardColumns,
+  isWorktreeTask,
   type ScopedTaskView,
 } from "@/domain/task-shell";
 import type { TaskViewDto } from "@/rpc/types";
@@ -272,4 +274,39 @@ test("groupScopedTasksIntoBoardColumns 区分全部叶任务和当前筛选下�
   assert.equal(grouped.allLeafTasks.length, 1);
   assert.equal(grouped.visibleLeafTasks.length, 0);
   assert.deepEqual(grouped.columns, []);
+});
+
+test("isWorktreeTask 用 execution_dir 和 work_dir 的差异识别 worktree 任务", () => {
+  const workspaceTask = makeTaskView({
+    taskId: "workspace-task",
+  });
+  const worktreeTask = makeTaskView({
+    taskId: "worktree-task",
+  });
+  worktreeTask.task.execution_dir = "/tmp/.muxagent/worktrees/worktree-task/workspace";
+
+  assert.equal(isWorktreeTask(workspaceTask), false);
+  assert.equal(isWorktreeTask(worktreeTask), true);
+});
+
+test("buildBoardMetaDetails 为 board 第二行返回 worktree 作为第一个属性的结构化数据", () => {
+  const task = makeTaskView({
+    taskId: "worktree-task",
+    status: "running",
+    updatedAt: iso(8),
+  });
+  task.task.execution_dir = "/tmp/.muxagent/worktrees/worktree-task/workspace";
+  const originalNow = Date.now;
+  Date.now = () => Date.parse(iso(16));
+
+  try {
+    assert.deepEqual(buildBoardMetaDetails(task, "Mux Workspace"), {
+      stage: "implement",
+      updatedAt: "8m",
+      workspace: "Mux Workspace",
+      isWorktree: true,
+    });
+  } finally {
+    Date.now = originalNow;
+  }
 });

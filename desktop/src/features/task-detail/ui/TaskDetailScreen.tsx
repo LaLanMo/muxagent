@@ -15,6 +15,7 @@ import {
 import {
   detailStatusLabel,
   formatRelativeTime,
+  taskLaunchModeLabel,
 } from "@/domain/task-shell";
 import {
   buildTranscriptSnapshot,
@@ -33,6 +34,7 @@ import { startWindowDrag } from "@/features/layout/ui/window-drag";
 import { DocumentContent } from "@/features/shared/ui/DocumentContent";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { Toast } from "@/features/shared/ui/Toast";
+import { WorktreeGlyph } from "@/features/shared/ui/WorktreeGlyph";
 import type {
   ActivityRunActorType,
   TaskDetailHistoryEntry,
@@ -660,6 +662,8 @@ export function TaskDetailScreen({
   const createdLabel = formatAbsoluteStamp(task?.task.created_at);
   const durationLabel = summarizeTaskDuration(task, timelineRuns);
   const runsLabel = summarizeRuns(timelineRuns);
+  const launchModeLabel = task ? taskLaunchModeLabel(task) : undefined;
+  const launchedInWorktree = launchModeLabel === "Worktree";
   const promptLead = task?.task.description ?? title;
   const showHistorySection = historyEntries.length > 0;
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
@@ -1239,6 +1243,28 @@ export function TaskDetailScreen({
                   {configLabel}
                 </span>
               </div>
+
+              {launchedInWorktree && launchModeLabel ? (
+                <div
+                  className="detail-properties__block"
+                  data-testid="detail-task-launch-mode"
+                >
+                  <span className="detail-properties__label">Launch mode</span>
+                  <span className="detail-properties__value detail-properties__launch-mode">
+                    <span
+                      className="detail-properties__launch-mode-icon-wrap"
+                      data-testid="detail-task-launch-mode-icon"
+                    >
+                      <WorktreeGlyph
+                        className="detail-properties__launch-mode-icon"
+                        size={12}
+                        strokeWidth={1.95}
+                      />
+                    </span>
+                    <span>{launchModeLabel}</span>
+                  </span>
+                </div>
+              ) : null}
 
               <div className="detail-properties__block">
                 <span className="detail-properties__label">Flow</span>

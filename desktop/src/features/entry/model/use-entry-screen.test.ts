@@ -80,3 +80,17 @@ test("buildEntryTaskBoardModel 在当前筛选没有可见卡片时仍保留 has
   assert.deepEqual(model.columns, []);
   assert.deepEqual(model.rows, []);
 });
+
+test("buildEntryTaskBoardModel 为 worktree 任务保留第二行第一个属性所需的结构化标记", () => {
+  const scopedTask = makeScopedTask({
+    taskId: "task-worktree",
+    status: "running",
+  });
+  scopedTask.task.task.execution_dir = "/tmp/.muxagent/worktrees/task-worktree/workspace";
+
+  const model = buildModel([scopedTask], "all");
+  const card = model.columns.flatMap((column) => column.cards)[0];
+
+  assert.equal(card?.meta.isWorktree, true);
+  assert.equal(card?.meta.workspace, "Workspace A");
+});

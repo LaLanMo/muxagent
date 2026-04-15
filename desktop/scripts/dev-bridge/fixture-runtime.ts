@@ -1781,6 +1781,7 @@ export class FixtureRuntime {
 
   private makeFixtureTask(params: {
     workspacePath: string;
+    executionDir?: string;
     taskId: string;
     description: string;
     configAlias: string;
@@ -1818,7 +1819,7 @@ export class FixtureRuntime {
           `${params.configAlias}.yaml`,
         ),
         work_dir: params.workspacePath,
-        execution_dir: params.workspacePath,
+        execution_dir: params.executionDir ?? params.workspacePath,
         created_at: params.createdAt,
         updated_at: params.updatedAt ?? params.createdAt,
       },
@@ -2280,6 +2281,13 @@ export class FixtureRuntime {
       })(),
       this.makeFixtureTask({
         workspacePath,
+        executionDir: path.join(
+          "/tmp",
+          ".muxagent",
+          "worktrees",
+          "task-live-fixture",
+          "muxagent-workspace",
+        ),
         taskId: "task-live-fixture",
         description: "Refactor auth middleware",
         configAlias: "default",

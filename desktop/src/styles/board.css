@@ -261,6 +261,9 @@
 }
 
 .task-board-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   min-width: 0;
   color: var(--color-text-tertiary);
   font-family: var(--font-mono);
@@ -269,8 +272,37 @@
   letter-spacing: 0;
   margin: 0;
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-board-card__ancestor-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.task-board-card__meta-item {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.task-board-card__meta-item--icon,
+.task-board-card__meta-separator {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.task-board-card__meta-item--workspace {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-board-card__worktree-icon {
+  color: currentColor;
 }
 
 .task-board-card__lineage-toggle {
@@ -336,7 +368,6 @@
   color: var(--color-text-tertiary);
   font-size: 11px;
   line-height: 1.35;
-  overflow-wrap: anywhere;
 }
 
 .task-board-card__meta--running,

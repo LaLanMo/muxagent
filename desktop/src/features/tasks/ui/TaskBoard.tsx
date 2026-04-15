@@ -5,14 +5,16 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import type { BoardMetaDetails } from "@/domain/task-shell";
 import type { TaskDetailLocationState } from "@/domain/routes";
+import { WorktreeGlyph } from "@/features/shared/ui/WorktreeGlyph";
 import { useNativeContextMenu } from "@/features/shared/ui/use-native-context-menu";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
 export type TaskBoardAncestorModel = {
   id: string;
   title: string;
-  meta: string;
+  meta: BoardMetaDetails;
 };
 
 export type TaskBoardCardModel = {
@@ -20,7 +22,7 @@ export type TaskBoardCardModel = {
   workspaceId?: string;
   href: string;
   title: string;
-  meta: string;
+  meta: BoardMetaDetails;
   tone: "running" | "awaiting" | "done" | "failed" | "neutral";
   ancestorCount: number;
   ancestors: TaskBoardAncestorModel[];
@@ -38,6 +40,57 @@ type TaskBoardProps = {
 
 function hasAttentionAccent(tone: TaskBoardCardModel["tone"]) {
   return tone === "awaiting" || tone === "failed";
+}
+
+function TaskBoardMetaRow({
+  meta,
+  className,
+  tone,
+  workspaceTestId,
+  worktreeIconTestId,
+}: {
+  meta: BoardMetaDetails;
+  className: string;
+  tone?: TaskBoardCardModel["tone"];
+  workspaceTestId?: string;
+  worktreeIconTestId?: string;
+}) {
+  const classNames = [className];
+  if (tone) {
+    classNames.push(`task-board-card__meta--${tone}`);
+  }
+
+  return (
+    <p className={classNames.join(" ")}>
+      {meta.isWorktree ? (
+        <>
+          <span
+            className="task-board-card__meta-item task-board-card__meta-item--icon"
+            data-testid={worktreeIconTestId}
+          >
+            <WorktreeGlyph className="task-board-card__worktree-icon" />
+          </span>
+          <span aria-hidden="true" className="task-board-card__meta-separator">
+            ·
+          </span>
+        </>
+      ) : null}
+      <span className="task-board-card__meta-item">{meta.stage}</span>
+      <span aria-hidden="true" className="task-board-card__meta-separator">
+        ·
+      </span>
+      <span className="task-board-card__meta-item">{meta.updatedAt}</span>
+      <span aria-hidden="true" className="task-board-card__meta-separator">
+        ·
+      </span>
+      <span
+        className="task-board-card__meta-item task-board-card__meta-item--workspace"
+        data-testid={workspaceTestId}
+      >
+        {meta.workspace}
+      </span>
+    </p>
+  );
 }
 
 function TaskBoardCard({ card }: { card: TaskBoardCardModel }) {
@@ -94,10 +147,14 @@ function TaskBoardCard({ card }: { card: TaskBoardCardModel }) {
         to={card.href}
       >
         <div className="task-board-card__body">
-          <h3>{card.title}</h3>
-          <p className={`task-board-card__meta task-board-card__meta--${card.tone}`}>
-            {card.meta}
-          </p>
+          <h3 data-testid={`board-card-title-${card.id}`}>{card.title}</h3>
+          <TaskBoardMetaRow
+            className="task-board-card__meta"
+            meta={card.meta}
+            tone={card.tone}
+            workspaceTestId={`board-card-workspace-meta-${card.id}`}
+            worktreeIconTestId={`board-card-worktree-icon-${card.id}`}
+          />
         </div>
       </Link>
       {hasAncestors ? (
@@ -132,7 +189,10 @@ function TaskBoardCard({ card }: { card: TaskBoardCardModel }) {
                   key={ancestor.id}
                 >
                   <p className="task-board-card__ancestor-title">{ancestor.title}</p>
-                  <p className="task-board-card__ancestor-meta">{ancestor.meta}</p>
+                  <TaskBoardMetaRow
+                    className="task-board-card__ancestor-meta"
+                    meta={ancestor.meta}
+                  />
                 </div>
               ))}
             </div>

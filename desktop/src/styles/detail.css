@@ -904,6 +904,22 @@
   overflow-wrap: anywhere;
 }
 
+.detail-properties__launch-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.detail-properties__launch-mode-icon-wrap {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.detail-properties__launch-mode-icon {
+  color: var(--color-text-tertiary);
+}
+
 .detail-properties__value--accent {
   color: #ff6a15;
   font-size: 13px;

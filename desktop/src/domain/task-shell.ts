@@ -58,6 +58,13 @@ export type ScopedTaskBoardGrouping = {
   columns: ScopedBoardColumn[];
 };
 
+export type BoardMetaDetails = {
+  stage: string;
+  updatedAt: string;
+  workspace: string;
+  isWorktree: boolean;
+};
+
 const boardColumnLabels: Record<BoardColumnBucket, string> = {
   attention: "Needs Attention",
   running: "Running",
@@ -353,6 +360,10 @@ export function formatBoardRelativeTime(iso: string | undefined): string {
   return formatRelativeTime(iso).replace(" ago", "");
 }
 
+function normalizeTaskPath(path: string | undefined): string {
+  return (path ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
 function normalizeBoardSummaryLabel(value: string): string {
   return value
     .replace(/[_-]+/g, " ")
@@ -368,15 +379,37 @@ export function boardStageLabel(task: TaskViewDto): string {
   return normalizeBoardSummaryLabel(detailStatusTitle(task.status)).toLowerCase();
 }
 
+export function isWorktreeTask(task: TaskViewDto): boolean {
+  const workDir = normalizeTaskPath(task.task.work_dir);
+  const executionDir = normalizeTaskPath(task.task.execution_dir);
+  return Boolean(workDir && executionDir && workDir !== executionDir);
+}
+
+export function taskLaunchModeLabel(task: TaskViewDto): "Worktree" | "Workspace" {
+  return isWorktreeTask(task) ? "Worktree" : "Workspace";
+}
+
+export function buildBoardMetaDetails(
+  task: TaskViewDto,
+  workspaceLabel?: string,
+): BoardMetaDetails {
+  return {
+    stage: boardStageLabel(task),
+    updatedAt: formatBoardRelativeTime(task.task.updated_at),
+    workspace: workspaceLabel?.trim() || displayWorkspaceName(task.task.work_dir),
+    isWorktree: isWorktreeTask(task),
+  };
+}
+
 export function buildBoardMetaSummary(
   task: TaskViewDto,
   workspaceLabel?: string,
 ): string {
-  const workspace = workspaceLabel?.trim() || displayWorkspaceName(task.task.work_dir);
+  const meta = buildBoardMetaDetails(task, workspaceLabel);
   return [
-    boardStageLabel(task),
-    formatBoardRelativeTime(task.task.updated_at),
-    workspace,
+    meta.stage,
+    meta.updatedAt,
+    meta.workspace,
   ]
     .filter(Boolean)
     .join(" · ");
