@@ -151,6 +151,16 @@ export function DesktopShellFrame({
   footerNav,
   workspaceRemoveDialog,
 }: DesktopShellFrameProps) {
+  const showWorkspacePrimaryAction = workspaceItems.length === 0 && Boolean(onAddWorkspace);
+  const primaryActionLabel = showWorkspacePrimaryAction ? "New Workspace" : "New Task";
+  const primaryActionTestId = showWorkspacePrimaryAction
+    ? "open-new-workspace"
+    : "open-new-task";
+  const primaryActionHandler = showWorkspacePrimaryAction ? onAddWorkspace : onPrimaryAction;
+  const sidebarPrimaryActionDisabled = showWorkspacePrimaryAction
+    ? addWorkspaceDisabled
+    : primaryActionDisabled;
+
   return (
     <>
       <main className="desktop-shell">
@@ -163,18 +173,18 @@ export function DesktopShellFrame({
             }}
           />
           <div className="desktop-shell__sidebar-top">
-            {onPrimaryAction ? (
+            {primaryActionHandler ? (
               <Button
-                data-testid="open-new-task"
-                disabled={primaryActionDisabled}
+                data-testid={primaryActionTestId}
+                disabled={sidebarPrimaryActionDisabled}
                 fullWidth
                 leadingIcon={<Plus strokeWidth={2.2} />}
-                onClick={onPrimaryAction}
+                onClick={primaryActionHandler}
                 size="md"
                 type="button"
                 variant="primary"
               >
-                New Task
+                {primaryActionLabel}
               </Button>
             ) : null}
 
