@@ -243,6 +243,177 @@ func taskUsesExecutionCheckout(task taskdomain.Task) bool {
 	return true
 }
 
+func (m *taskReadModel) BuildWorktreeCleanupInfo(ctx context.Context, taskID string) (worktreeCleanupInfoDTO, error) {
+	view, _, err := m.LoadTaskView(ctx, strings.TrimSpace(taskID))
+	if err != nil {
+		return worktreeCleanupInfoDTO{}, err
+	}
+	return m.buildWorktreeCleanupInfoFromView(ctx, view)
+}
+
+func (m *taskReadModel) CleanupTaskWorktree(ctx context.Context, taskID string) (worktreeCleanupOutcomeDTO, *worktreeCleanupInfoDTO, error) {
+	taskID = strings.TrimSpace(taskID)
+	info, err := m.BuildWorktreeCleanupInfo(ctx, taskID)
+	if err != nil {
+		return "", nil, err
+	}
+	switch info.State {
+	case worktreeCleanupStateNotApplicable:
+		return worktreeCleanupOutcomeNotApplicable, &info, nil
+	case worktreeCleanupStateMissing:
+		return worktreeCleanupOutcomeMissing, &info, nil
+	case worktreeCleanupStateBlocked:
+		return worktreeCleanupOutcomeBlocked, &info, nil
+	}
+
+	revalidatedInfo, err := m.BuildWorktreeCleanupInfo(ctx, taskID)
+	if err != nil {
+		return "", nil, err
+	}
+	switch revalidatedInfo.State {
+	case worktreeCleanupStateNotApplicable:
+		return worktreeCleanupOutcomeNotApplicable, &revalidatedInfo, nil
+	case worktreeCleanupStateMissing:
+		return worktreeCleanupOutcomeMissing, &revalidatedInfo, nil
+	case worktreeCleanupStateBlocked:
+		return worktreeCleanupOutcomeBlocked, &revalidatedInfo, nil
+	}
+
+	if err := worktree.Remove(revalidatedInfo.WorktreeRoot, revalidatedInfo.WorktreeRoot); err != nil {
+		refreshedInfo, infoErr := m.BuildWorktreeCleanupInfo(ctx, taskID)
+		if infoErr == nil {
+			if refreshedInfo.State == worktreeCleanupStateMissing {
+				return worktreeCleanupOutcomeMissing, &refreshedInfo, nil
+			}
+			refreshedInfo.Message = fmt.Sprintf("Failed to remove worktree: %v", err)
+			return worktreeCleanupOutcomeFailed, &refreshedInfo, nil
+		}
+		failedInfo := revalidatedInfo
+		failedInfo.Message = fmt.Sprintf("Failed to remove worktree: %v", err)
+		return worktreeCleanupOutcomeFailed, &failedInfo, nil
+	}
+
+	refreshedInfo, infoErr := m.BuildWorktreeCleanupInfo(ctx, taskID)
+	if infoErr == nil {
+		return worktreeCleanupOutcomeRemoved, &refreshedInfo, nil
+	}
+	return worktreeCleanupOutcomeRemoved, nil, nil
+}
+
+func (m *taskReadModel) buildWorktreeCleanupInfoFromView(ctx context.Context, view taskdomain.TaskView) (worktreeCleanupInfoDTO, error) {
+	if view.Status != taskdomain.TaskStatusDone {
+		return worktreeCleanupInfoDTO{
+			State:     worktreeCleanupStateNotApplicable,
+			CanRemove: false,
+			Message:   "Only completed worktree-backed tasks can be cleaned up.",
+		}, nil
+	}
+	if !taskUsesExecutionCheckout(view.Task) {
+		return worktreeCleanupInfoDTO{
+			State:     worktreeCleanupStateNotApplicable,
+			CanRemove: false,
+			Message:   "This task does not use a dedicated worktree.",
+		}, nil
+	}
+
+	worktreeRoot, err := worktree.FindRepoRoot(view.Task.ExecutionDir)
+	if err != nil {
+		return worktreeCleanupInfoDTO{
+			State:     worktreeCleanupStateMissing,
+			CanRemove: false,
+			Message:   "Worktree is already unavailable.",
+		}, nil
+	}
+
+	dirtyCount, err := worktree.DirtyChangeCount(worktreeRoot)
+	if err != nil {
+		return worktreeCleanupInfoDTO{}, err
+	}
+
+	views, err := m.loadTaskViewsStrict(ctx)
+	if err != nil {
+		return worktreeCleanupInfoDTO{}, err
+	}
+
+	sharedTaskCount := 0
+	blockedBy := make([]worktreeCleanupBlockerDTO, 0)
+	for _, candidate := range views {
+		if !taskUsesExecutionCheckout(candidate.Task) {
+			continue
+		}
+		candidateRoot, err := worktree.FindRepoRoot(candidate.Task.ExecutionDir)
+		if err != nil || candidateRoot != worktreeRoot {
+			continue
+		}
+		sharedTaskCount++
+		if candidate.Task.ID == view.Task.ID || !isLiveWorktreeCleanupStatus(candidate.Status) {
+			continue
+		}
+		blockedBy = append(blockedBy, worktreeCleanupBlockerDTO{
+			TaskID:      candidate.Task.ID,
+			Description: candidate.Task.Description,
+			Status:      string(candidate.Status),
+		})
+	}
+	if sharedTaskCount == 0 {
+		sharedTaskCount = 1
+	}
+
+	removalScope := worktreeRemovalScopeSingle
+	if sharedTaskCount > 1 {
+		removalScope = worktreeRemovalScopeShared
+	}
+
+	info := worktreeCleanupInfoDTO{
+		WorktreeGroupID: worktreeRoot,
+		WorktreeRoot:    worktreeRoot,
+		SharedTaskCount: sharedTaskCount,
+		DirtyCount:      dirtyCount,
+		BlockedBy:       blockedBy,
+		RemovalScope:    removalScope,
+		CanRemove:       len(blockedBy) == 0,
+	}
+	if len(blockedBy) > 0 {
+		info.State = worktreeCleanupStateBlocked
+		info.Message = fmt.Sprintf("Worktree is still in use by %d active task%s.", len(blockedBy), pluralSuffix(len(blockedBy)))
+		return info, nil
+	}
+	info.State = worktreeCleanupStateAvailable
+	if removalScope == worktreeRemovalScopeShared {
+		info.Message = fmt.Sprintf("Remove the shared worktree used by %d tasks.", sharedTaskCount)
+	} else {
+		info.Message = "Remove this worktree."
+	}
+	return info, nil
+}
+
+func (m *taskReadModel) loadTaskViewsStrict(ctx context.Context) ([]taskdomain.TaskView, error) {
+	tasks, err := m.store.ListTasksByWorkDir(ctx, m.workDir)
+	if err != nil {
+		return nil, err
+	}
+	views := make([]taskdomain.TaskView, 0, len(tasks))
+	for _, task := range tasks {
+		view, _, err := m.LoadTaskView(ctx, task.ID)
+		if err != nil {
+			return nil, err
+		}
+		views = append(views, view)
+	}
+	return views, nil
+}
+
+func isLiveWorktreeCleanupStatus(status taskdomain.TaskStatus) bool {
+	return status == taskdomain.TaskStatusRunning || status == taskdomain.TaskStatusAwaitingUser
+}
+
+func pluralSuffix(count int) string {
+	if count == 1 {
+		return ""
+	}
+	return "s"
+}
+
 func (m *taskReadModel) buildInputRequest(ctx context.Context, task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, run taskdomain.NodeRun) (*taskruntime.InputRequest, error) {
 	artifacts := completedArtifactPaths(runs)
 	inheritedArtifacts, err := m.loadInheritedInputArtifacts(ctx, task)

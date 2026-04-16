@@ -890,6 +890,10 @@
   gap: 6px;
 }
 
+.detail-properties__block--cleanup {
+  padding-top: var(--space-1);
+}
+
 .detail-properties__label {
   color: #756a63;
   font-size: 12px;
@@ -932,6 +936,27 @@
 
 .detail-properties__muted {
   color: var(--color-text-tertiary);
+}
+
+.detail-properties__cleanup {
+  display: grid;
+  gap: 8px;
+}
+
+.detail-properties__cleanup-message {
+  margin: 0;
+}
+
+.detail-properties__cleanup-meta {
+  color: var(--color-text-tertiary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.detail-properties__cleanup-button.button {
+  justify-self: start;
 }
 
 .detail-properties .status-badge {

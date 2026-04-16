@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   deriveFixtureFollowUpState,
+  deriveFixtureWorktreeCleanupInfo,
   type FixtureTask,
 } from "./fixture-runtime";
 
@@ -50,4 +51,64 @@ test("deriveFixtureFollowUpState returns refine when explicit follow-up metadata
 
 test("deriveFixtureFollowUpState returns basic for completed workspace tasks without follow-up metadata", () => {
   assert.equal(deriveFixtureFollowUpState(makeFixtureTask()), "basic");
+});
+
+test("deriveFixtureWorktreeCleanupInfo returns available for completed worktree tasks", () => {
+  const task = makeFixtureTask({
+    task: {
+      ...makeFixtureTask().task,
+      execution_dir: "/tmp/.muxagent/worktrees/task-1/workspace",
+    },
+    follow_up: {
+      default_mode: "continue_here",
+      available_modes: ["continue_here", "fork_head", "fork_with_changes"],
+      uncommitted_change_count: 2,
+    },
+  });
+
+  assert.deepEqual(deriveFixtureWorktreeCleanupInfo(task, [task]), {
+    state: "available",
+    worktree_group_id: "/tmp/.muxagent/worktrees/task-1/workspace",
+    worktree_root: "/tmp/.muxagent/worktrees/task-1/workspace",
+    shared_task_count: 1,
+    dirty_count: 2,
+    blocked_by: [],
+    removal_scope: "single_worktree",
+    can_remove: true,
+    message: "Remove this worktree.",
+  });
+});
+
+test("deriveFixtureWorktreeCleanupInfo returns blocked when a live sibling shares the worktree", () => {
+  const completedTask = makeFixtureTask({
+    task: {
+      ...makeFixtureTask().task,
+      execution_dir: "/tmp/.muxagent/worktrees/shared/workspace",
+    },
+  });
+  const runningTask = makeFixtureTask({
+    task: {
+      ...makeFixtureTask().task,
+      id: "task-2",
+      description: "Sibling task",
+      execution_dir: "/tmp/.muxagent/worktrees/shared/workspace",
+    },
+    status: "running",
+  });
+
+  const info = deriveFixtureWorktreeCleanupInfo(completedTask, [
+    completedTask,
+    runningTask,
+  ]);
+
+  assert.equal(info.state, "blocked");
+  assert.equal(info.shared_task_count, 2);
+  assert.equal(info.can_remove, false);
+  assert.deepEqual(info.blocked_by, [
+    {
+      task_id: "task-2",
+      description: "Sibling task",
+      status: "running",
+    },
+  ]);
 });

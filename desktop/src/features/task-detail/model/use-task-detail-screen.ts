@@ -31,6 +31,7 @@ import {
 } from "@/features/task-detail/model/follow-up-dock-state";
 import { canShowFollowUpSurface } from "@/features/task-detail/model/task-detail-action-surface";
 import { useTaskDetailData } from "@/features/task-detail/model/use-task-detail-data";
+import { useTaskWorktreeCleanup } from "@/features/task-detail/model/use-task-worktree-cleanup";
 import { useTaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
 import { useTaskRunHistory } from "@/features/task-detail/model/use-task-run-history";
 import type {
@@ -223,6 +224,9 @@ export function useTaskDetailScreen() {
   const serverMethods =
     useWorkspaceStore((state) => state.server?.capabilities.methods) ?? [];
   const supportsTaskAncestry = serverMethods.includes("task.get_ancestry");
+  const supportsWorktreeCleanup =
+    serverMethods.includes("task.get_worktree_cleanup_info") &&
+    serverMethods.includes("task.cleanup_worktree");
   const configEntries = useWorkspaceStore((state) => state.catalog?.entries) ?? emptyConfigEntries;
   const workspaceActorState = useWorkspaceStore(
     (state) =>
@@ -246,10 +250,21 @@ export function useTaskDetailScreen() {
   const artifacts = detailEntry?.artifacts ?? emptyArtifacts;
   const ancestry = detailEntry?.ancestry ?? emptyAncestry;
   const followUp = detailEntry?.followUp;
+  const {
+    cleanupInfo,
+    cleanupError,
+    loadCleanupInfo,
+  } = useTaskWorktreeCleanup({
+    workspaceId,
+    taskId,
+    connected: shell.phase === "connected",
+    supported: supportsWorktreeCleanup,
+    task: resolvedTask,
+  });
   const tasksById = useTaskSnapshotStore((state) => state.tasksById);
   const inputRequest = detailEntry?.inputRequest;
   const nodeActorTypes = resolveNodeActorTypes(detailEntry?.config);
-  const detailError = detailEntry?.error;
+  const detailError = detailEntry?.error ?? cleanupError;
   const loading = detailEntry?.loading ?? false;
   const latestBlockedStep = resolvedTask?.blocked_steps?.at(-1) as
     | BlockedStepDto
@@ -333,6 +348,8 @@ export function useTaskDetailScreen() {
     followUpMode,
     setFollowUpMode,
     submittingFollowUp,
+    worktreeCleanupDialogOpen,
+    submittingWorktreeCleanup,
     submittingRetry,
     submittingContinue,
     submittingRecovery,
@@ -340,6 +357,9 @@ export function useTaskDetailScreen() {
     submitReject,
     submitClarification,
     submitFollowUp,
+    openWorktreeCleanupDialog,
+    closeWorktreeCleanupDialog,
+    confirmWorktreeCleanup,
     retryTask,
     continueBlockedTask: continueBlocked,
     recoverRun,
@@ -352,6 +372,8 @@ export function useTaskDetailScreen() {
     inputRequest,
     latestFailedRunId: retryRun?.id,
     loadDetail,
+    worktreeCleanupInfo: cleanupInfo,
+    loadCleanupInfo,
   });
   const inputRequestRun = inputRequest?.node_run_id
     ? navigatorRuns.find((run) => run.id === inputRequest.node_run_id)
@@ -489,9 +511,12 @@ export function useTaskDetailScreen() {
     setFollowUpConfigAlias,
     followUp,
     followUpState,
+    worktreeCleanupInfo: cleanupInfo,
     followUpMode,
     setFollowUpMode,
     submittingFollowUp,
+    worktreeCleanupDialogOpen,
+    submittingWorktreeCleanup,
     submittingRetry,
     submittingContinue,
     submittingRecovery,
@@ -543,6 +568,9 @@ export function useTaskDetailScreen() {
     submitReject,
     submitClarification,
     submitFollowUp,
+    openWorktreeCleanupDialog,
+    closeWorktreeCleanupDialog,
+    confirmWorktreeCleanup,
     retryTask,
     continueBlockedTask: continueBlocked,
     recoverRun,

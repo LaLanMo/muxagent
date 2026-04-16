@@ -86,6 +86,50 @@ const (
 	followUpStateDisabled followUpStateDTO = "disabled"
 )
 
+type worktreeCleanupStateDTO string
+
+const (
+	worktreeCleanupStateAvailable     worktreeCleanupStateDTO = "available"
+	worktreeCleanupStateBlocked       worktreeCleanupStateDTO = "blocked"
+	worktreeCleanupStateMissing       worktreeCleanupStateDTO = "missing"
+	worktreeCleanupStateNotApplicable worktreeCleanupStateDTO = "not_applicable"
+)
+
+type worktreeRemovalScopeDTO string
+
+const (
+	worktreeRemovalScopeSingle worktreeRemovalScopeDTO = "single_worktree"
+	worktreeRemovalScopeShared worktreeRemovalScopeDTO = "shared_worktree"
+)
+
+type worktreeCleanupOutcomeDTO string
+
+const (
+	worktreeCleanupOutcomeRemoved       worktreeCleanupOutcomeDTO = "removed"
+	worktreeCleanupOutcomeBlocked       worktreeCleanupOutcomeDTO = "blocked"
+	worktreeCleanupOutcomeMissing       worktreeCleanupOutcomeDTO = "missing"
+	worktreeCleanupOutcomeNotApplicable worktreeCleanupOutcomeDTO = "not_applicable"
+	worktreeCleanupOutcomeFailed        worktreeCleanupOutcomeDTO = "failed"
+)
+
+type worktreeCleanupBlockerDTO struct {
+	TaskID      string `json:"task_id"`
+	Description string `json:"description"`
+	Status      string `json:"status"`
+}
+
+type worktreeCleanupInfoDTO struct {
+	State           worktreeCleanupStateDTO     `json:"state"`
+	WorktreeGroupID string                      `json:"worktree_group_id,omitempty"`
+	WorktreeRoot    string                      `json:"worktree_root,omitempty"`
+	SharedTaskCount int                         `json:"shared_task_count"`
+	DirtyCount      int                         `json:"dirty_count"`
+	BlockedBy       []worktreeCleanupBlockerDTO `json:"blocked_by,omitempty"`
+	RemovalScope    worktreeRemovalScopeDTO     `json:"removal_scope,omitempty"`
+	CanRemove       bool                        `json:"can_remove"`
+	Message         string                      `json:"message,omitempty"`
+}
+
 type taskAncestryItemDTO struct {
 	TaskID       string    `json:"task_id"`
 	Description  string    `json:"description"`

@@ -286,6 +286,58 @@ test("revalidates an open completed task on focus after its worktree checkout is
   });
 });
 
+test("removes a completed task worktree from task detail and disables follow-up", async ({
+  page,
+}) => {
+  test.slow();
+
+  await withSpawnedDesktopServer(async ({ url, workDir, seedWorkspace }) => {
+    const { taskId } = await seedWorkspace("completed-worktree-follow-up");
+
+    await page.goto(`${url}/`);
+    await addWorkspace(page, workDir);
+
+    const taskLink = page
+      .getByRole("link", { name: /Seeded completed worktree follow-up/i })
+      .first();
+    await expect(taskLink).toBeVisible();
+    await taskLink.click();
+
+    await expect(page).toHaveURL(new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`));
+    await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+      "data-follow-up-state",
+      "refine",
+    );
+    await expect(page.getByTestId("detail-worktree-cleanup")).toBeVisible();
+    await expect(
+      page.locator("[data-testid='complete-pane'] [data-testid='worktree-cleanup-trigger']"),
+    ).toHaveCount(0);
+    await expect(page.getByTestId("worktree-cleanup-trigger")).toBeVisible();
+
+    await page.getByTestId("worktree-cleanup-trigger").click();
+    await expect(page.getByTestId("confirm-dialog")).toBeVisible();
+    await expect(page.getByTestId("confirm-dialog")).toContainText("Remove worktree");
+    await page.getByTestId("confirm-dialog-submit").click();
+
+    await expect(page.getByTestId("confirm-dialog")).toHaveCount(0, {
+      timeout: 30_000,
+    });
+    await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+      "data-follow-up-state",
+      "disabled",
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId("follow-up-disabled-message")).toContainText(
+      "Worktree removed. Follow-up from this task is unavailable.",
+    );
+    await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-mode-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-send")).toHaveCount(0);
+    await expect(page.getByTestId("detail-worktree-cleanup")).toHaveCount(0);
+    await expect(page.getByTestId("worktree-cleanup-trigger")).toHaveCount(0);
+  });
+});
+
 test("shows pending then refine follow-up state for a repo-backed main-checkout task and launches a fork", async ({
   page,
 }) => {

@@ -69,6 +69,7 @@ export type FixtureTask = {
     uncommitted_change_count: number;
   };
   follow_up_state?: "basic" | "refine" | "disabled";
+  worktree_cleanup_state?: "available" | "blocked" | "missing" | "not_applicable";
   current_issue?: {
     kind: string;
     node_name: string;
@@ -200,6 +201,90 @@ export function deriveFixtureFollowUpState(
   const workDir = normalizeFixtureTaskPath(task.task.work_dir);
   const executionDir = normalizeFixtureTaskPath(task.task.execution_dir);
   return executionDir && workDir && executionDir !== workDir ? "disabled" : "basic";
+}
+
+export function deriveFixtureWorktreeCleanupInfo(
+  task: FixtureTask,
+  tasks: FixtureTask[],
+) {
+  const workDir = normalizeFixtureTaskPath(task.task.work_dir);
+  const executionDir = normalizeFixtureTaskPath(task.task.execution_dir);
+  const isWorktreeTask = Boolean(workDir && executionDir && workDir !== executionDir);
+
+  if (task.worktree_cleanup_state === "missing") {
+    return {
+      state: "missing",
+      shared_task_count: 0,
+      dirty_count: 0,
+      can_remove: false,
+      message: "Worktree is already unavailable.",
+    } as const;
+  }
+  if (task.status !== "done" || !isWorktreeTask) {
+    return {
+      state: "not_applicable",
+      shared_task_count: 0,
+      dirty_count: 0,
+      can_remove: false,
+      message: "This task does not use a dedicated worktree.",
+    } as const;
+  }
+
+  const group = tasks.filter((entry) => {
+    if (entry.worktree_cleanup_state === "missing") {
+      return false;
+    }
+    const entryWorkDir = normalizeFixtureTaskPath(entry.task.work_dir);
+    const entryExecutionDir = normalizeFixtureTaskPath(entry.task.execution_dir);
+    return Boolean(
+      entryWorkDir &&
+        entryExecutionDir &&
+        entryWorkDir !== entryExecutionDir &&
+        entryExecutionDir === executionDir,
+    );
+  });
+  const blockedBy = group
+    .filter(
+      (entry) =>
+        entry.task.id !== task.task.id &&
+        (entry.status === "running" || entry.status === "awaiting_user"),
+    )
+    .map((entry) => ({
+      task_id: entry.task.id,
+      description: entry.task.description,
+      status: entry.status,
+    }));
+  const sharedTaskCount = Math.max(group.length, 1);
+  const removalScope =
+    sharedTaskCount > 1 ? "shared_worktree" : "single_worktree";
+  const dirtyCount = task.follow_up?.uncommitted_change_count ?? 0;
+  if (blockedBy.length > 0) {
+    return {
+      state: "blocked",
+      worktree_group_id: executionDir,
+      worktree_root: executionDir,
+      shared_task_count: sharedTaskCount,
+      dirty_count: dirtyCount,
+      blocked_by: blockedBy,
+      removal_scope: removalScope,
+      can_remove: false,
+      message: `Worktree is still in use by ${blockedBy.length} active task${blockedBy.length === 1 ? "" : "s"}.`,
+    } as const;
+  }
+  return {
+    state: "available",
+    worktree_group_id: executionDir,
+    worktree_root: executionDir,
+    shared_task_count: sharedTaskCount,
+    dirty_count: dirtyCount,
+    blocked_by: [],
+    removal_scope: removalScope,
+    can_remove: true,
+    message:
+      removalScope === "shared_worktree"
+        ? `Remove the shared worktree used by ${sharedTaskCount} tasks.`
+        : "Remove this worktree.",
+  } as const;
 }
 
 export type FixtureWorkspace = {
@@ -523,9 +608,11 @@ export class FixtureRuntime {
               "task.list",
               "task.get",
               "task.get_ancestry",
+              "task.get_worktree_cleanup_info",
               "task.run_history",
               "task.input_request",
               "task.start",
+              "task.cleanup_worktree",
               "task.recover_stale",
               "artifact.list",
             ],
@@ -882,6 +969,24 @@ export class FixtureRuntime {
           ancestors: this.fixtureTaskAncestry(state, workspace.workspace_id, task),
         });
       }
+      case "task.get_worktree_cleanup_info": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const taskId = String(params.task_id ?? "");
+        const tasks = this.fixtureTasks(state, workspace.workspace_id);
+        const task = tasks.find((entry) => entry.task.id === taskId);
+        if (!task) {
+          return this.fail(id, -32602, "task not found");
+        }
+        return this.respond(id, {
+          info: deriveFixtureWorktreeCleanupInfo(task, tasks),
+        });
+      }
       case "task.run_history": {
         const workspace = this.requireWorkspace(
           state,
@@ -1010,6 +1115,46 @@ export class FixtureRuntime {
         return this.respond(id, {
           accepted: true,
           client_command_id: String(params.client_command_id ?? ""),
+        });
+      }
+      case "task.cleanup_worktree": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const taskId = String(params.task_id ?? "");
+        const tasks = this.fixtureTasks(state, workspace.workspace_id);
+        const task = tasks.find((entry) => entry.task.id === taskId);
+        if (!task) {
+          return this.fail(id, -32602, "task not found");
+        }
+        const info = deriveFixtureWorktreeCleanupInfo(task, tasks);
+        if (info.state === "not_applicable") {
+          return this.respond(id, { outcome: "not_applicable", info });
+        }
+        if (info.state === "missing") {
+          return this.respond(id, { outcome: "missing", info });
+        }
+        if (info.state === "blocked") {
+          return this.respond(id, { outcome: "blocked", info });
+        }
+        const executionDir = normalizeFixtureTaskPath(task.task.execution_dir);
+        const updatedAt = new Date().toISOString();
+        for (const entry of tasks) {
+          if (normalizeFixtureTaskPath(entry.task.execution_dir) !== executionDir) {
+            continue;
+          }
+          entry.worktree_cleanup_state = "missing";
+          entry.follow_up = undefined;
+          entry.follow_up_state = "disabled";
+          entry.task.updated_at = updatedAt;
+        }
+        return this.respond(id, {
+          outcome: "removed",
+          info: deriveFixtureWorktreeCleanupInfo(task, tasks),
         });
       }
       case "task.start_follow_up": {

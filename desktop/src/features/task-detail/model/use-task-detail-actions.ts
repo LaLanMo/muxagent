@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+  cleanupTaskWorktree,
   continueBlockedUntilResumed,
+  loadTaskList,
   recoverStaleTaskRun,
   retryTaskUntilResumed,
   startFollowUpAndReloadTaskList,
@@ -17,8 +19,10 @@ import type {
   InputRequestDto,
   TaskFollowUpDto,
   TaskViewDto,
+  WorktreeCleanupInfoDto,
 } from "@/rpc/types";
 import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
+import type { LoadTaskWorktreeCleanupInfoFn } from "@/features/task-detail/model/use-task-worktree-cleanup";
 
 function resolveFollowUpConfigEntry(args: {
   configEntries: ConfigCatalogEntryDto[];
@@ -46,6 +50,8 @@ type UseTaskDetailActionsArgs = {
   inputRequest: InputRequestDto | undefined;
   latestFailedRunId: string | undefined;
   loadDetail: LoadTaskDetailFn;
+  worktreeCleanupInfo: WorktreeCleanupInfoDto | undefined;
+  loadCleanupInfo: LoadTaskWorktreeCleanupInfoFn;
 };
 
 export function useTaskDetailActions({
@@ -57,6 +63,8 @@ export function useTaskDetailActions({
   inputRequest,
   latestFailedRunId,
   loadDetail,
+  worktreeCleanupInfo,
+  loadCleanupInfo,
 }: UseTaskDetailActionsArgs) {
   const navigate = useNavigate();
   const tasksById = useTaskSnapshotStore((state) => state.tasksById);
@@ -83,6 +91,8 @@ export function useTaskDetailActions({
   const [followUpConfigAlias, setFollowUpConfigAlias] = useState<string | undefined>();
   const [followUpMode, setFollowUpMode] = useState<FollowUpModeDto | undefined>();
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
+  const [worktreeCleanupDialogOpen, setWorktreeCleanupDialogOpen] = useState(false);
+  const [submittingWorktreeCleanup, setSubmittingWorktreeCleanup] = useState(false);
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
   const [recoveringNodeId, setRecoveringNodeId] = useState<string | undefined>();
@@ -101,6 +111,10 @@ export function useTaskDetailActions({
   useEffect(() => {
     setFollowUpConfigAlias(undefined);
   }, [taskId, task?.task.config_alias, task?.task.config_path]);
+
+  useEffect(() => {
+    setWorktreeCleanupDialogOpen(false);
+  }, [taskId]);
 
   useEffect(() => {
     if (!followUp) {
@@ -238,6 +252,35 @@ export function useTaskDetailActions({
     }
   }
 
+  async function confirmWorktreeCleanup(): Promise<void> {
+    if (!workspaceId || !taskId || !worktreeCleanupInfo?.can_remove) {
+      return;
+    }
+    setSubmittingWorktreeCleanup(true);
+    try {
+      await runTaskAction("Failed to remove worktree", async () => {
+        const result = await cleanupTaskWorktree(getRuntime(), {
+          workspace_id: workspaceId,
+          task_id: taskId,
+        });
+        const refreshes = [
+          loadDetail({ showLoading: false }),
+          loadCleanupInfo({ showLoading: false }),
+          loadTaskList(getRuntime(), workspaceId).then((nextTasks) =>
+            setTasks(workspaceId, nextTasks),
+          ),
+        ];
+        await Promise.all(refreshes);
+        if (result.outcome === "failed") {
+          throw new Error(result.info?.message ?? "Failed to remove worktree");
+        }
+        setWorktreeCleanupDialogOpen(false);
+      });
+    } finally {
+      setSubmittingWorktreeCleanup(false);
+    }
+  }
+
   async function retryNode(nodeRunId: string, force: boolean): Promise<void> {
     if (!workspaceId || !taskId || !nodeRunId) {
       return;
@@ -332,6 +375,8 @@ export function useTaskDetailActions({
     followUpMode,
     setFollowUpMode,
     submittingFollowUp,
+    worktreeCleanupDialogOpen,
+    submittingWorktreeCleanup,
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,
     submittingRecovery: Boolean(recoveringNodeId),
@@ -339,6 +384,9 @@ export function useTaskDetailActions({
     submitReject: () => submitDecision(false),
     submitClarification,
     submitFollowUp,
+    openWorktreeCleanupDialog: () => setWorktreeCleanupDialogOpen(true),
+    closeWorktreeCleanupDialog: () => setWorktreeCleanupDialogOpen(false),
+    confirmWorktreeCleanup,
     retryTask: (force = false) =>
       latestFailedRunId ? retryNode(latestFailedRunId, force) : Promise.resolve(),
     continueBlockedTask: continueBlockedAction,

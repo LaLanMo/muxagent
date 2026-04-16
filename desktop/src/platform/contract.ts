@@ -14,8 +14,11 @@ import type {
   RuntimeStatusResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
+  TaskCleanupWorktreeParams,
+  TaskCleanupWorktreeResult,
   TaskGetAncestryResult,
   TaskGetResult,
+  TaskGetWorktreeCleanupInfoResult,
   TaskInputRequestResult,
   TaskListResult,
   TaskRecoverStaleParams,
@@ -61,6 +64,10 @@ export interface TaskBackendClient {
     workspaceId: string,
     taskId: string,
   ): Promise<TaskGetAncestryResult>;
+  taskGetWorktreeCleanupInfo(
+    workspaceId: string,
+    taskId: string,
+  ): Promise<TaskGetWorktreeCleanupInfoResult>;
   taskRunHistory(
     workspaceId: string,
     taskId: string,
@@ -78,6 +85,9 @@ export interface TaskBackendClient {
   taskContinueBlocked(
     params: TaskContinueBlockedParams,
   ): Promise<CommandAcceptedResult>;
+  taskCleanupWorktree(
+    params: TaskCleanupWorktreeParams,
+  ): Promise<TaskCleanupWorktreeResult>;
   taskRecoverStale(
     params: TaskRecoverStaleParams,
   ): Promise<TaskRecoverStaleResult>;

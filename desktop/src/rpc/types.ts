@@ -397,6 +397,41 @@ export interface TaskFollowUpDto {
 
 export type TaskFollowUpStateDto = "basic" | "refine" | "disabled";
 
+export type WorktreeCleanupStateDto =
+  | "available"
+  | "blocked"
+  | "missing"
+  | "not_applicable";
+
+export type WorktreeRemovalScopeDto =
+  | "single_worktree"
+  | "shared_worktree";
+
+export type TaskCleanupWorktreeOutcomeDto =
+  | "removed"
+  | "blocked"
+  | "missing"
+  | "not_applicable"
+  | "failed";
+
+export interface WorktreeCleanupBlockerDto {
+  task_id: string;
+  description: string;
+  status: string;
+}
+
+export interface WorktreeCleanupInfoDto {
+  state: WorktreeCleanupStateDto;
+  worktree_group_id?: string;
+  worktree_root?: string;
+  shared_task_count: number;
+  dirty_count: number;
+  blocked_by?: WorktreeCleanupBlockerDto[];
+  removal_scope?: WorktreeRemovalScopeDto;
+  can_remove: boolean;
+  message?: string;
+}
+
 export interface TaskAncestryItemDto {
   task_id: string;
   description: string;
@@ -407,6 +442,10 @@ export interface TaskAncestryItemDto {
 
 export interface TaskGetAncestryResult {
   ancestors: TaskAncestryItemDto[];
+}
+
+export interface TaskGetWorktreeCleanupInfoResult {
+  info: WorktreeCleanupInfoDto;
 }
 
 export interface TaskInputRequestResult {
@@ -484,6 +523,21 @@ export interface TaskContinueBlockedParams {
   workspace_id: string;
   client_command_id?: string;
   task_id: string;
+}
+
+export interface TaskGetWorktreeCleanupInfoParams {
+  workspace_id: string;
+  task_id: string;
+}
+
+export interface TaskCleanupWorktreeParams {
+  workspace_id: string;
+  task_id: string;
+}
+
+export interface TaskCleanupWorktreeResult {
+  outcome: TaskCleanupWorktreeOutcomeDto;
+  info?: WorktreeCleanupInfoDto;
 }
 
 export interface TaskRecoverStaleParams {

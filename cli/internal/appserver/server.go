@@ -397,10 +397,12 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodTaskList,
 					methodTaskGet,
 					methodTaskGetAncestry,
+					methodTaskGetWorktreeCleanupInfo,
 					methodTaskRunHistory,
 					methodTaskInputRequest,
 					methodTaskStart,
 					methodTaskStartFollowUp,
+					methodTaskCleanupWorktree,
 					methodTaskSubmitInput,
 					methodTaskRetryNode,
 					methodTaskContinueBlocked,
@@ -620,6 +622,26 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 		}
 		return taskGetAncestryResult{Ancestors: ancestors}, nil, stopModeContinue, nil
 
+	case methodTaskGetWorktreeCleanupInfo:
+		params, err := decodeParams[taskGetWorktreeCleanupInfoParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		model, rpcErr := s.openWorkspaceReadModel(workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		defer func() { _ = model.Close() }()
+		info, err := model.BuildWorktreeCleanupInfo(ctx, strings.TrimSpace(params.TaskID))
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		return taskGetWorktreeCleanupInfoResult{Info: info}, nil, stopModeContinue, nil
+
 	case methodTaskRunHistory:
 		params, err := decodeParams[taskRunHistoryParams](req.Params)
 		if err != nil {
@@ -702,6 +724,26 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
 		}
 		return commandAcceptedResult{Accepted: true, ClientCommandID: params.ClientCommandID}, nil, stopModeContinue, nil
+
+	case methodTaskCleanupWorktree:
+		params, err := decodeParams[taskCleanupWorktreeParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		model, rpcErr := s.openWorkspaceReadModel(workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		defer func() { _ = model.Close() }()
+		outcome, info, err := model.CleanupTaskWorktree(ctx, strings.TrimSpace(params.TaskID))
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		return taskCleanupWorktreeResult{Outcome: outcome, Info: info}, nil, stopModeContinue, nil
 
 	case methodTaskStartFollowUp:
 		params, err := decodeParams[taskStartFollowUpParams](req.Params)

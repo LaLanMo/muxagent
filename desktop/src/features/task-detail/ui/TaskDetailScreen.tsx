@@ -31,7 +31,9 @@ import {
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
+import { Button } from "@/features/shared/ui/Button";
 import { DocumentContent } from "@/features/shared/ui/DocumentContent";
+import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
 import { StatusBadge } from "@/features/shared/ui/StatusBadge";
 import { Toast } from "@/features/shared/ui/Toast";
 import { WorktreeGlyph } from "@/features/shared/ui/WorktreeGlyph";
@@ -62,6 +64,7 @@ import type {
   NodeRunViewDto,
   TaskFollowUpDto,
   TaskViewDto,
+  WorktreeCleanupInfoDto,
 } from "@/rpc/types";
 import type { RunHistoryCacheEntry } from "@/state/task-snapshot-store";
 
@@ -529,10 +532,13 @@ type TaskDetailScreenProps = {
   setFollowUpConfigAlias: (alias: string) => void;
   followUp?: TaskFollowUpDto;
   followUpState?: FollowUpDockState;
+  worktreeCleanupInfo?: WorktreeCleanupInfoDto;
   followUpMode?: FollowUpModeDto;
   setFollowUpMode: (mode: FollowUpModeDto) => void;
   configEntries: ConfigCatalogEntryDto[];
   submittingFollowUp: boolean;
+  worktreeCleanupDialogOpen: boolean;
+  submittingWorktreeCleanup: boolean;
   submittingRetry: boolean;
   submittingContinue: boolean;
   submittingRecovery: boolean;
@@ -547,6 +553,9 @@ type TaskDetailScreenProps = {
   submitReject: () => Promise<void>;
   submitClarification: () => Promise<void>;
   submitFollowUp: () => Promise<void>;
+  openWorktreeCleanupDialog: () => void;
+  closeWorktreeCleanupDialog: () => void;
+  confirmWorktreeCleanup: () => Promise<void>;
   retryTask: (force?: boolean) => Promise<void>;
   continueBlockedTask: () => Promise<void>;
   recoverRun: (nodeRunId: string) => Promise<void>;
@@ -598,10 +607,13 @@ export function TaskDetailScreen({
   setFollowUpConfigAlias,
   followUp,
   followUpState,
+  worktreeCleanupInfo,
   followUpMode,
   setFollowUpMode,
   configEntries,
   submittingFollowUp,
+  worktreeCleanupDialogOpen,
+  submittingWorktreeCleanup,
   submittingRetry,
   submittingContinue,
   submittingRecovery,
@@ -616,6 +628,9 @@ export function TaskDetailScreen({
   submitReject,
   submitClarification,
   submitFollowUp,
+  openWorktreeCleanupDialog,
+  closeWorktreeCleanupDialog,
+  confirmWorktreeCleanup,
   retryTask,
   continueBlockedTask,
   recoverRun,
@@ -675,6 +690,23 @@ export function TaskDetailScreen({
   const runsLabel = summarizeRuns(timelineRuns);
   const launchModeLabel = task ? taskLaunchModeLabel(task) : undefined;
   const launchedInWorktree = launchModeLabel === "Worktree";
+  const cleanupTaskCount = worktreeCleanupInfo?.shared_task_count ?? 0;
+  const cleanupDirtyCount = worktreeCleanupInfo?.dirty_count ?? 0;
+  const cleanupBlockedBy = worktreeCleanupInfo?.blocked_by ?? [];
+  const showCleanupPropertyBlock =
+    worktreeCleanupInfo?.state === "available" ||
+    worktreeCleanupInfo?.state === "blocked";
+  const cleanupMeta = [
+    cleanupDirtyCount > 0
+      ? formatCount(cleanupDirtyCount, "uncommitted change", "uncommitted changes")
+      : undefined,
+    cleanupTaskCount > 1
+      ? `shared by ${formatCount(cleanupTaskCount, "task", "tasks")}`
+      : undefined,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" · ");
+  const showCleanupMessage = worktreeCleanupInfo?.state === "blocked";
   const promptLead = task?.task.description ?? title;
   const showHistorySection = historyEntries.length > 0;
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
@@ -1323,12 +1355,85 @@ export function TaskDetailScreen({
                 </span>
               </div>
 
+              {showCleanupPropertyBlock ? (
+                <div
+                  className="detail-properties__block detail-properties__block--cleanup"
+                  data-testid="detail-worktree-cleanup"
+                >
+                  <span className="detail-properties__label">Worktree cleanup</span>
+                  <div className="detail-properties__cleanup">
+                    {showCleanupMessage ? (
+                      <p
+                        className="detail-properties__value detail-properties__cleanup-message"
+                        data-testid="worktree-cleanup-message"
+                      >
+                        {worktreeCleanupInfo?.message ?? "Worktree cleanup unavailable."}
+                      </p>
+                    ) : null}
+                    {cleanupMeta ? (
+                      <p className="detail-properties__cleanup-meta">{cleanupMeta}</p>
+                    ) : null}
+                    {worktreeCleanupInfo?.state === "available" ? (
+                      <Button
+                        className="detail-properties__cleanup-button"
+                        data-testid="worktree-cleanup-trigger"
+                        disabled={submittingWorktreeCleanup}
+                        onClick={openWorktreeCleanupDialog}
+                        size="sm"
+                        type="button"
+                        variant="danger"
+                      >
+                        {submittingWorktreeCleanup ? "Removing…" : "Remove worktree"}
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
             </div>
           </aside>
         </div>
         {artifactModal}
         {transcriptModal}
       </section>
+      <ConfirmDialog
+        body={
+          worktreeCleanupInfo ? (
+            <>
+              <p>
+                {worktreeCleanupInfo.removal_scope === "shared_worktree"
+                  ? `Remove the shared worktree used by ${cleanupTaskCount} tasks?`
+                  : "Remove this worktree?"}
+              </p>
+              <p>
+                {cleanupDirtyCount > 0
+                  ? `This worktree currently has ${cleanupDirtyCount} uncommitted change${cleanupDirtyCount === 1 ? "" : "s"}.`
+                  : "This worktree has no uncommitted changes."}
+              </p>
+              {cleanupBlockedBy.length > 0 ? (
+                <p>
+                  Blocked by:{" "}
+                  {cleanupBlockedBy
+                    .map((entry) => `${entry.description || entry.task_id} (${entry.status})`)
+                    .join(", ")}
+                </p>
+              ) : null}
+            </>
+          ) : (
+            ""
+          )
+        }
+        confirmDisabled={!worktreeCleanupInfo?.can_remove || submittingWorktreeCleanup}
+        confirmLabel="Remove worktree"
+        onCancel={closeWorktreeCleanupDialog}
+        onConfirm={() => void confirmWorktreeCleanup()}
+        open={worktreeCleanupDialogOpen}
+        title={
+          worktreeCleanupInfo?.removal_scope === "shared_worktree"
+            ? "Remove shared worktree"
+            : "Remove worktree"
+        }
+      />
     </DesktopShellFrame>
   );
 }

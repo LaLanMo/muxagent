@@ -14,10 +14,13 @@ import type {
   FollowUpModeDto,
   InputRequestDto,
   TaskContinueBlockedParams,
+  TaskCleanupWorktreeParams,
+  TaskCleanupWorktreeResult,
   TaskRecoverStaleParams,
   TaskRecoverStaleResult,
   TaskFollowUpDto,
   TaskFollowUpStateDto,
+  TaskGetWorktreeCleanupInfoResult,
   TaskRetryNodeParams,
   TaskStartFollowUpParams,
   TaskStartParams,
@@ -25,6 +28,7 @@ import type {
   SessionHistoryEventDto,
   TaskAncestryItemDto,
   TaskViewDto,
+  WorktreeCleanupInfoDto,
 } from "@/rpc/types";
 import type { RuntimeNotification } from "@/platform/contract";
 
@@ -289,6 +293,16 @@ export async function loadTaskAncestry(
   return result.ancestors;
 }
 
+export async function loadTaskWorktreeCleanupInfo(
+  runtime: DesktopRuntime,
+  workspaceId: string,
+  taskId: string,
+): Promise<WorktreeCleanupInfoDto> {
+  const result: TaskGetWorktreeCleanupInfoResult =
+    await runtime.backend.taskGetWorktreeCleanupInfo(workspaceId, taskId);
+  return result.info;
+}
+
 export async function loadTaskRunHistory(
   runtime: DesktopRuntime,
   workspaceId: string,
@@ -341,6 +355,13 @@ export async function continueBlockedTask(
   params: TaskContinueBlockedParams,
 ): Promise<CommandAcceptedResult> {
   return runtime.backend.taskContinueBlocked(params);
+}
+
+export async function cleanupTaskWorktree(
+  runtime: DesktopRuntime,
+  params: TaskCleanupWorktreeParams,
+): Promise<TaskCleanupWorktreeResult> {
+  return runtime.backend.taskCleanupWorktree(params);
 }
 
 export async function recoverStaleTaskRun(

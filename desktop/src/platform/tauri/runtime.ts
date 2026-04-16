@@ -17,7 +17,10 @@ import type {
   RuntimeStatusResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
+  TaskCleanupWorktreeParams,
+  TaskCleanupWorktreeResult,
   TaskGetAncestryResult,
+  TaskGetWorktreeCleanupInfoResult,
   TaskRecoverStaleParams,
   TaskRecoverStaleResult,
   TaskRunHistoryResult,
@@ -140,6 +143,16 @@ class TauriTaskBackendClient implements TaskBackendClient {
     });
   }
 
+  taskGetWorktreeCleanupInfo(
+    workspaceId: string,
+    taskId: string,
+  ): Promise<TaskGetWorktreeCleanupInfoResult> {
+    return this.request("task.get_worktree_cleanup_info", {
+      workspace_id: workspaceId,
+      task_id: taskId,
+    });
+  }
+
   taskRunHistory(
     workspaceId: string,
     taskId: string,
@@ -184,6 +197,12 @@ class TauriTaskBackendClient implements TaskBackendClient {
     params: TaskContinueBlockedParams,
   ): Promise<CommandAcceptedResult> {
     return this.request("task.continue_blocked", params);
+  }
+
+  taskCleanupWorktree(
+    params: TaskCleanupWorktreeParams,
+  ): Promise<TaskCleanupWorktreeResult> {
+    return this.request("task.cleanup_worktree", params);
   }
 
   taskRecoverStale(params: TaskRecoverStaleParams): Promise<TaskRecoverStaleResult> {

@@ -117,9 +117,8 @@ func Cleanup(repoRoot, worktreePath, branchName string) error {
 	var cleanupErr error
 
 	if strings.TrimSpace(worktreePath) != "" {
-		cmd := exec.Command("git", "-C", repoRoot, "worktree", "remove", "--force", worktreePath)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("git worktree remove: %s: %w", strings.TrimSpace(string(out)), err))
+		if err := Remove(repoRoot, worktreePath); err != nil {
+			cleanupErr = errors.Join(cleanupErr, err)
 		}
 	}
 	if strings.TrimSpace(branchName) != "" {
@@ -129,6 +128,14 @@ func Cleanup(repoRoot, worktreePath, branchName string) error {
 		}
 	}
 	return cleanupErr
+}
+
+func Remove(repoRoot, worktreePath string) error {
+	cmd := exec.Command("git", "-C", repoRoot, "worktree", "remove", "--force", worktreePath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git worktree remove: %s: %w", strings.TrimSpace(string(out)), err)
+	}
+	return nil
 }
 
 func cleanRelativeCWD(relativeCWD string) (string, error) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"os/exec"
@@ -541,6 +542,247 @@ func TestServerTaskGetKeepsWorktreeTaskDisabledWhenWorkspaceRepoMetadataIsGone(t
 	}
 }
 
+func TestServerTaskGetWorktreeCleanupInfoReturnsNotApplicableForCompletedPlainTask(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	workspacePath := t.TempDir()
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedAppServerTask(t, workspacePath, "task-non-git-cleanup", "Completed plain task", workspacePath)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetWorktreeCleanupInfo,
+		Params: mustRawParams(t, taskGetWorktreeCleanupInfoParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_worktree_cleanup_info rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskGetWorktreeCleanupInfoResult)
+	if got := result.Info.State; got != worktreeCleanupStateNotApplicable {
+		t.Fatalf("cleanup info state = %q, want %q", got, worktreeCleanupStateNotApplicable)
+	}
+	if result.Info.CanRemove {
+		t.Fatal("cleanup info can_remove = true, want false")
+	}
+}
+
+func TestServerTaskGetWorktreeCleanupInfoReturnsAvailableForCompletedWorktreeTask(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedWorktreeTask(t, workspacePath)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetWorktreeCleanupInfo,
+		Params: mustRawParams(t, taskGetWorktreeCleanupInfoParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_worktree_cleanup_info rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskGetWorktreeCleanupInfoResult)
+	if got := result.Info.State; got != worktreeCleanupStateAvailable {
+		t.Fatalf("cleanup info state = %q, want %q", got, worktreeCleanupStateAvailable)
+	}
+	if got := result.Info.RemovalScope; got != worktreeRemovalScopeSingle {
+		t.Fatalf("cleanup info removal_scope = %q, want %q", got, worktreeRemovalScopeSingle)
+	}
+	if got := result.Info.SharedTaskCount; got != 1 {
+		t.Fatalf("cleanup info shared_task_count = %d, want 1", got)
+	}
+	if !result.Info.CanRemove {
+		t.Fatal("cleanup info can_remove = false, want true")
+	}
+}
+
+func TestServerTaskGetWorktreeCleanupInfoBlocksSharedWorktreeWithLiveSibling(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	completedTaskID, liveTaskID, _ := seedSharedWorktreeTasks(t, workspacePath)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetWorktreeCleanupInfo,
+		Params: mustRawParams(t, taskGetWorktreeCleanupInfoParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      completedTaskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_worktree_cleanup_info rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskGetWorktreeCleanupInfoResult)
+	if got := result.Info.State; got != worktreeCleanupStateBlocked {
+		t.Fatalf("cleanup info state = %q, want %q", got, worktreeCleanupStateBlocked)
+	}
+	if got := result.Info.RemovalScope; got != worktreeRemovalScopeShared {
+		t.Fatalf("cleanup info removal_scope = %q, want %q", got, worktreeRemovalScopeShared)
+	}
+	if got := result.Info.SharedTaskCount; got != 2 {
+		t.Fatalf("cleanup info shared_task_count = %d, want 2", got)
+	}
+	if result.Info.CanRemove {
+		t.Fatal("cleanup info can_remove = true, want false")
+	}
+	if got := len(result.Info.BlockedBy); got != 1 {
+		t.Fatalf("cleanup info blocked_by len = %d, want 1", got)
+	}
+	if got := result.Info.BlockedBy[0].TaskID; got != liveTaskID {
+		t.Fatalf("cleanup info blocked_by[0].task_id = %q, want %q", got, liveTaskID)
+	}
+
+	cleanupAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskCleanupWorktree,
+		Params: mustRawParams(t, taskCleanupWorktreeParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      completedTaskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.cleanup_worktree rpc error: %+v", rpcErr)
+	}
+	cleanupResult := cleanupAny.(taskCleanupWorktreeResult)
+	if got := cleanupResult.Outcome; got != worktreeCleanupOutcomeBlocked {
+		t.Fatalf("cleanup outcome = %q, want %q", got, worktreeCleanupOutcomeBlocked)
+	}
+}
+
+func TestServerTaskGetWorktreeCleanupInfoReturnsMissingAfterWorktreeRemoved(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedWorktreeTask(t, workspacePath)
+	server.markInitialized()
+
+	store, err := taskstore.Open(workspacePath)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	task, err := store.GetTask(context.Background(), taskID)
+	if closeErr := store.Close(); err == nil && closeErr != nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatalf("load task: %v", err)
+	}
+	worktreeRoot, err := worktree.FindRepoRoot(task.ExecutionDir)
+	if err != nil {
+		t.Fatalf("find worktree root: %v", err)
+	}
+	if err := os.RemoveAll(worktreeRoot); err != nil {
+		t.Fatalf("remove worktree root: %v", err)
+	}
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetWorktreeCleanupInfo,
+		Params: mustRawParams(t, taskGetWorktreeCleanupInfoParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_worktree_cleanup_info rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskGetWorktreeCleanupInfoResult)
+	if got := result.Info.State; got != worktreeCleanupStateMissing {
+		t.Fatalf("cleanup info state = %q, want %q", got, worktreeCleanupStateMissing)
+	}
+	if result.Info.CanRemove {
+		t.Fatal("cleanup info can_remove = true, want false")
+	}
+}
+
+func TestServerTaskCleanupWorktreeRemovesWorktreeButKeepsBranch(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedWorktreeTask(t, workspacePath)
+	server.markInitialized()
+
+	store, err := taskstore.Open(workspacePath)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	task, err := store.GetTask(context.Background(), taskID)
+	if closeErr := store.Close(); err == nil && closeErr != nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatalf("load task: %v", err)
+	}
+	worktreeRoot, err := worktree.FindRepoRoot(task.ExecutionDir)
+	if err != nil {
+		t.Fatalf("find worktree root: %v", err)
+	}
+
+	cleanupAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskCleanupWorktree,
+		Params: mustRawParams(t, taskCleanupWorktreeParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.cleanup_worktree rpc error: %+v", rpcErr)
+	}
+	cleanupResult := cleanupAny.(taskCleanupWorktreeResult)
+	if got := cleanupResult.Outcome; got != worktreeCleanupOutcomeRemoved {
+		t.Fatalf("cleanup outcome = %q, want %q", got, worktreeCleanupOutcomeRemoved)
+	}
+	if cleanupResult.Info == nil {
+		t.Fatal("cleanup result info = nil, want value")
+	}
+	if got := cleanupResult.Info.State; got != worktreeCleanupStateMissing {
+		t.Fatalf("cleanup result info.state = %q, want %q", got, worktreeCleanupStateMissing)
+	}
+	if _, err := os.Stat(worktreeRoot); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("worktree root still exists after cleanup: %v", err)
+	}
+
+	branchOutput, err := exec.Command("git", "-C", repoRoot, "branch", "--list", worktree.BranchName("appserver-follow-up-parent")).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git branch --list: %v (%s)", err, strings.TrimSpace(string(branchOutput)))
+	}
+	if got := strings.TrimSpace(string(branchOutput)); !strings.Contains(got, worktree.BranchName("appserver-follow-up-parent")) {
+		t.Fatalf("branch listing = %q, want worktree branch to remain", got)
+	}
+}
+
 func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
 	server := newTestServer(t)
 
@@ -554,6 +796,12 @@ func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
 	result := resultAny.(initializeResult)
 	if !slices.Contains(result.Capabilities.Methods, methodTaskGetAncestry) {
 		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskGetAncestry, result.Capabilities.Methods)
+	}
+	if !slices.Contains(result.Capabilities.Methods, methodTaskGetWorktreeCleanupInfo) {
+		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskGetWorktreeCleanupInfo, result.Capabilities.Methods)
+	}
+	if !slices.Contains(result.Capabilities.Methods, methodTaskCleanupWorktree) {
+		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskCleanupWorktree, result.Capabilities.Methods)
 	}
 	if !slices.Contains(result.Capabilities.Methods, methodRuntimeStatus) {
 		t.Fatalf("initialize capabilities missing %q: %#v", methodRuntimeStatus, result.Capabilities.Methods)
@@ -2877,6 +3125,89 @@ func seedCompletedWorktreeTask(t *testing.T, workDir string) string {
 		"Completed worktree task",
 		parentExecutionDir,
 	)
+}
+
+func seedRunningAppServerTask(t *testing.T, workDir, taskID, description, executionDir string) string {
+	t.Helper()
+	_, err := taskconfig.EnsureManagedDefaultAssets()
+	if err != nil {
+		t.Fatalf("ensure managed default assets: %v", err)
+	}
+	store, err := taskstore.Open(workDir)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	configPath, err := taskconfig.DefaultConfigPath()
+	if err != nil {
+		t.Fatalf("default config path: %v", err)
+	}
+	materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
+	if err != nil {
+		t.Fatalf("materialize config: %v", err)
+	}
+
+	now := time.Date(2026, 4, 12, 3, 0, 0, 0, time.UTC)
+	task := taskdomain.Task{
+		ID:           taskID,
+		Description:  description,
+		ConfigAlias:  "default",
+		ConfigPath:   materialized.ConfigPath,
+		WorkDir:      taskstore.NormalizeWorkDir(workDir),
+		ExecutionDir: taskstore.NormalizeWorkDir(executionDir),
+		CreatedAt:    now,
+		UpdatedAt:    now.Add(time.Minute),
+	}
+	entryRun := taskdomain.NodeRun{
+		ID:        "run-running-" + taskID,
+		TaskID:    taskID,
+		NodeName:  "handle_request",
+		Status:    taskdomain.NodeRunRunning,
+		StartedAt: now,
+	}
+	if err := store.CreateTaskWithEntryRun(context.Background(), task, entryRun); err != nil {
+		t.Fatalf("create running task with entry run: %v", err)
+	}
+	return taskID
+}
+
+func seedSharedWorktreeTasks(t *testing.T, workDir string) (completedTaskID, runningTaskID, branchID string) {
+	t.Helper()
+	repoRoot, err := worktree.FindRepoRoot(workDir)
+	if err != nil {
+		t.Fatalf("find repo root: %v", err)
+	}
+	branchID = "appserver-shared-worktree"
+	sharedWorktreeRoot, err := worktree.Create(repoRoot, branchID)
+	if err != nil {
+		t.Fatalf("create shared worktree: %v", err)
+	}
+	executionDir := filepath.Join(sharedWorktreeRoot, "packages", "app")
+	completedTaskID = seedCompletedAppServerTask(
+		t,
+		workDir,
+		"task-shared-worktree-completed",
+		"Completed shared worktree task",
+		executionDir,
+	)
+	runningTaskID = seedRunningAppServerTask(
+		t,
+		workDir,
+		"task-shared-worktree-running",
+		"Live shared worktree task",
+		executionDir,
+	)
+
+	store, err := taskstore.Open(workDir)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	if err := store.AttachFollowUpParent(context.Background(), completedTaskID, runningTaskID, time.Date(2026, 4, 12, 3, 5, 0, 0, time.UTC)); err != nil {
+		t.Fatalf("attach shared worktree lineage: %v", err)
+	}
+	return completedTaskID, runningTaskID, branchID
 }
 
 func runTestGit(t *testing.T, dir string, name string, args ...string) {

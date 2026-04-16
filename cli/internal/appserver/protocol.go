@@ -15,41 +15,43 @@ const (
 )
 
 const (
-	methodInitialize          = "initialize"
-	methodNotification        = "notification"
-	methodServiceStatus       = "service.status"
-	methodServiceShutdown     = "service.shutdown"
-	methodWorkspaceList       = "workspace.list"
-	methodWorkspaceAdd        = "workspace.add"
-	methodWorkspaceRemove     = "workspace.remove"
-	methodWorkspaceUpdate     = "workspace.update"
-	methodWorkspaceGet        = "workspace.get"
-	methodWorkspaceReconcile  = "workspace.reconcile_stale"
-	methodTaskList            = "task.list"
-	methodTaskGet             = "task.get"
-	methodTaskGetAncestry     = "task.get_ancestry"
-	methodTaskRunHistory      = "task.run_history"
-	methodTaskInputRequest    = "task.input_request"
-	methodTaskStart           = "task.start"
-	methodTaskStartFollowUp   = "task.start_follow_up"
-	methodTaskSubmitInput     = "task.submit_input"
-	methodTaskRetryNode       = "task.retry_node"
-	methodTaskContinueBlocked = "task.continue_blocked"
-	methodTaskRecoverStale    = "task.recover_stale"
-	methodArtifactList        = "artifact.list"
-	methodConfigCatalog       = "config.catalog"
-	methodConfigGet           = "config.get"
-	methodConfigClone         = "config.clone"
-	methodConfigRename        = "config.rename"
-	methodConfigDelete        = "config.delete"
-	methodConfigReset         = "config.reset"
-	methodConfigSetDefault    = "config.set_default"
-	methodConfigValidate      = "config.validate"
-	methodConfigSave          = "config.save"
-	methodConfigPromptGet     = "config.prompt.get"
-	methodConfigPromptSave    = "config.prompt.save"
-	methodRuntimeList         = "runtime.list"
-	methodRuntimeStatus       = "runtime.status"
+	methodInitialize                 = "initialize"
+	methodNotification               = "notification"
+	methodServiceStatus              = "service.status"
+	methodServiceShutdown            = "service.shutdown"
+	methodWorkspaceList              = "workspace.list"
+	methodWorkspaceAdd               = "workspace.add"
+	methodWorkspaceRemove            = "workspace.remove"
+	methodWorkspaceUpdate            = "workspace.update"
+	methodWorkspaceGet               = "workspace.get"
+	methodWorkspaceReconcile         = "workspace.reconcile_stale"
+	methodTaskList                   = "task.list"
+	methodTaskGet                    = "task.get"
+	methodTaskGetAncestry            = "task.get_ancestry"
+	methodTaskGetWorktreeCleanupInfo = "task.get_worktree_cleanup_info"
+	methodTaskRunHistory             = "task.run_history"
+	methodTaskInputRequest           = "task.input_request"
+	methodTaskStart                  = "task.start"
+	methodTaskStartFollowUp          = "task.start_follow_up"
+	methodTaskCleanupWorktree        = "task.cleanup_worktree"
+	methodTaskSubmitInput            = "task.submit_input"
+	methodTaskRetryNode              = "task.retry_node"
+	methodTaskContinueBlocked        = "task.continue_blocked"
+	methodTaskRecoverStale           = "task.recover_stale"
+	methodArtifactList               = "artifact.list"
+	methodConfigCatalog              = "config.catalog"
+	methodConfigGet                  = "config.get"
+	methodConfigClone                = "config.clone"
+	methodConfigRename               = "config.rename"
+	methodConfigDelete               = "config.delete"
+	methodConfigReset                = "config.reset"
+	methodConfigSetDefault           = "config.set_default"
+	methodConfigValidate             = "config.validate"
+	methodConfigSave                 = "config.save"
+	methodConfigPromptGet            = "config.prompt.get"
+	methodConfigPromptSave           = "config.prompt.save"
+	methodRuntimeList                = "runtime.list"
+	methodRuntimeStatus              = "runtime.status"
 )
 
 const (
@@ -326,6 +328,25 @@ type taskGetResult struct {
 
 type taskGetAncestryResult struct {
 	Ancestors []taskAncestryItemDTO `json:"ancestors"`
+}
+
+type taskGetWorktreeCleanupInfoParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	TaskID      string `json:"task_id"`
+}
+
+type taskGetWorktreeCleanupInfoResult struct {
+	Info worktreeCleanupInfoDTO `json:"info"`
+}
+
+type taskCleanupWorktreeParams struct {
+	WorkspaceID string `json:"workspace_id"`
+	TaskID      string `json:"task_id"`
+}
+
+type taskCleanupWorktreeResult struct {
+	Outcome worktreeCleanupOutcomeDTO `json:"outcome"`
+	Info    *worktreeCleanupInfoDTO   `json:"info,omitempty"`
 }
 
 type taskInputRequestResult struct {

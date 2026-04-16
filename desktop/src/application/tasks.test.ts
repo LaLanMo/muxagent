@@ -4,6 +4,7 @@ import {
   ARTIFACT_IMAGE_PREVIEW_MAX_BYTES,
   classifyArtifactPreview,
   hydrateTaskDetail,
+  loadTaskWorktreeCleanupInfo,
   loadTaskAncestry,
   readArtifactPreview,
   retryTaskUntilResumed,
@@ -18,6 +19,7 @@ import type {
   TaskFollowUpDto,
   TaskGetAncestryResult,
   TaskGetResult,
+  TaskGetWorktreeCleanupInfoResult,
   TaskViewDto,
 } from "@/rpc/types";
 
@@ -99,6 +101,7 @@ function makeRuntime(args: {
   artifactListResult?: ArtifactListResult;
   taskGetAncestryResult?: TaskGetAncestryResult;
   taskGetAncestryError?: Error;
+  taskGetWorktreeCleanupInfoResult?: TaskGetWorktreeCleanupInfoResult;
   onTaskGetAncestry?: () => void;
   onTaskStartFollowUp?: (params: unknown) => void;
   onTaskRetryNode?: (params: unknown) => void;
@@ -143,6 +146,19 @@ function makeRuntime(args: {
         ancestors: makeAncestry(),
       };
     },
+    taskGetWorktreeCleanupInfo: async () =>
+      args.taskGetWorktreeCleanupInfoResult ?? {
+        info: {
+          state: "available",
+          worktree_group_id: "/tmp/.muxagent/worktrees/task-1",
+          worktree_root: "/tmp/.muxagent/worktrees/task-1",
+          shared_task_count: 1,
+          dirty_count: 3,
+          can_remove: true,
+          removal_scope: "single_worktree",
+          message: "Remove this worktree.",
+        },
+      },
     taskStartFollowUp: async (params: unknown) => {
       args.onTaskStartFollowUp?.(params);
       return {
@@ -157,6 +173,16 @@ function makeRuntime(args: {
         client_command_id: "cmd-retry",
       } satisfies CommandAcceptedResult;
     },
+    taskCleanupWorktree: async () => ({
+      outcome: "removed",
+      info: {
+        state: "missing",
+        shared_task_count: 1,
+        dirty_count: 0,
+        can_remove: false,
+        message: "Worktree is already unavailable.",
+      },
+    }),
   } as unknown as TaskBackendClient;
   const shell = {
     pickDirectory: async () => null,
@@ -223,6 +249,18 @@ test("hydrateTaskDetail degrades to an empty ancestry chain when the lookup fail
   );
 
   assert.deepEqual(detail.ancestry, []);
+});
+
+test("loadTaskWorktreeCleanupInfo returns the backend cleanup payload", async () => {
+  const info = await loadTaskWorktreeCleanupInfo(
+    makeRuntime({}),
+    "workspace-1",
+    "task-1",
+  );
+
+  assert.equal(info.state, "available");
+  assert.equal(info.shared_task_count, 1);
+  assert.equal(info.can_remove, true);
 });
 
 test("startFollowUpFromTask forwards each supported follow-up mode", async () => {
