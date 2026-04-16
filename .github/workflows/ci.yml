@@ -16,6 +16,9 @@ jobs:
       desktop: ${{ steps.filter.outputs.desktop }}
       relay: ${{ steps.filter.outputs.relay }}
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Detect changed surfaces
         uses: dorny/paths-filter@v3
         id: filter
