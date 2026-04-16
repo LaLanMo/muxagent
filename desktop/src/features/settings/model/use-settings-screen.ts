@@ -16,7 +16,7 @@ export type SettingsRuntimeRowModel = {
 
 export type SettingsAboutRowModel =
   {
-    id: "version";
+    id: "desktop-version" | "service-version";
     label: string;
     value: string;
     monospace?: boolean;
@@ -112,8 +112,14 @@ function runtimeRows(
 function aboutRows(status?: ServiceStatusResult): SettingsAboutRowModel[] {
   return [
     {
-      id: "version",
-      label: "Version",
+      id: "desktop-version",
+      label: "Desktop Version",
+      value: __MUXAGENT_DESKTOP_VERSION__,
+      monospace: true,
+    },
+    {
+      id: "service-version",
+      label: "Service Version",
       value: status?.server_version ?? "Unavailable",
       monospace: true,
     },

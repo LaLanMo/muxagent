@@ -87,7 +87,7 @@ class BrowserTaskBackendClient implements TaskBackendClient {
       });
       const initializeResult = await rpcClient.request<InitializeResult>("initialize", {
         client_name: "muxagent-desktop-browser",
-        client_version: "0.1.1-rc.1",
+        client_version: __MUXAGENT_DESKTOP_VERSION__,
         protocol_version: PROTOCOL_VERSION,
       });
       this.unsubscribeNotifications = rpcClient.subscribe((notification) => {
