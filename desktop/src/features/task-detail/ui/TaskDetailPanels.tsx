@@ -2516,7 +2516,7 @@ export function TaskFollowUpDock({
       syncInputHeight(inputRef.current);
     }
     setFollowUpConfigAlias(undefined);
-  }, [syncInputHeight, taskKey]);
+  }, [taskKey]);
 
   useEffect(() => {
     if (!followUp) {
@@ -2539,7 +2539,7 @@ export function TaskFollowUpDock({
     return () => {
       window.removeEventListener("resize", handleWindowResize);
     };
-  }, [syncInputHeight]);
+  }, []);
 
   const closeOverlays = useEffectEvent(
     (focusTarget?: "config-trigger" | "mode-trigger" | "input") => {
@@ -2597,7 +2597,7 @@ export function TaskFollowUpDock({
       document.removeEventListener("pointerdown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [closeOverlays, configPickerOpen, modePickerOpen]);
+  }, [configPickerOpen, modePickerOpen]);
 
   async function startFollowUpSubmission() {
     const description = inputRef.current?.value ?? "";
