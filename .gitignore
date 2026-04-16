@@ -1,10 +1,14 @@
 .idea/
+/.vscode/
 
 # local binaries
 /muxagent
 /cli/muxagent
 /cli/cmd/muxagent/muxagent
 /workspaceseed
+/tmp/
+/cli/tmp/
+/desktop/tmp/
 
 # local notes
 tasks/
