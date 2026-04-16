@@ -51,7 +51,7 @@ the agent through the workflow for you.
 ![MuxAgent Remote Control](cli/og-image.png)
 
 1. Download the MuxAgent mobile app.
-   [Google Play](https://play.google.com/store/apps/details?id=ai.soloflux.muxagent) | iOS coming soon.
+   [Google Play](https://play.google.com/store/apps/details?id=ai.soloflux.muxagent) | [App Store](https://apps.apple.com/us/app/muxagent-remote-coding/id6761751534).
 2. Run:
 
    ```bash
