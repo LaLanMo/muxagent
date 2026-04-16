@@ -12,8 +12,9 @@ with Codex or Claude Code.
   planning, review, approval, implementation, and verification steps. Five
   ready-made configs cover different risk tolerances. Supports Codex and
   Claude Code runtimes.
-- **Remote Control** — Monitor and control Claude Code sessions from your
-  phone via a paired mobile app.
+- **Remote Control** — Monitor and control supported agent sessions from your
+  phone via a paired mobile app, including Claude Code, Codex, Gemini CLI,
+  GitHub Copilot, OpenCode, and Goose.
 
 ## Installation
 
@@ -65,6 +66,9 @@ code, waits for approval in the mobile app, and then starts the daemon.
 
 You can also run `muxagent auth login` manually if you want to pair before
 starting the daemon.
+
+After pairing, the mobile app can connect to supported runtimes such as Claude
+Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, and Goose.
 
 ## Workflow Graphs
 
