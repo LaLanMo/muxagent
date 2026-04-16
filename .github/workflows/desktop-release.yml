@@ -196,7 +196,8 @@ jobs:
           prerelease: ${{ steps.meta.outputs.prerelease }}
           releaseCommitish: ${{ steps.target.outputs.sha }}
           args: --target ${{ matrix.target }} --bundles dmg
-          releaseAssetNamePattern: "[name]_[version]_[platform]_[arch][ext]"
+          retryAttempts: 2
+          assetNamePattern: "[name]_[version]_[platform]_[arch][ext]"
 
       - name: Clean up signing material
         if: always()
