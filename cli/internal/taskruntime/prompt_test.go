@@ -138,10 +138,13 @@ func TestBuildPromptWorkflowContextUsesRunDirectoriesInsteadOfInliningArtifacts(
 	require.NoError(t, err)
 
 	assert.Contains(t, prompt, "<task_metadata>")
+	assert.Contains(t, prompt, "<task_dir>")
+	assert.Contains(t, prompt, "<execution_dir>")
 	assert.Contains(t, prompt, "<current_step>draft_plan</current_step>")
 	assert.Contains(t, prompt, "Primary task for this step:\n<<< PRIMARY TASK >>>\nchild task\n<<< END PRIMARY TASK >>>")
 	assert.Contains(t, prompt, "<execution_context>")
 	assert.Contains(t, prompt, "<clarification_state>\n(none)\n</clarification_state>")
+	assert.Contains(t, prompt, "Unless the user explicitly says otherwise, do all project reads, edits, builds, tests, and commands in `&lt;execution_dir&gt;`.")
 	assert.Contains(t, prompt, taskstore.TaskDir(workDir, "child"))
 	assert.Contains(t, prompt, "/tmp/task-artifacts/draft-2")
 	assert.Contains(t, prompt, taskstore.RunDir(workDir, "child", "draft-1"))
@@ -155,6 +158,54 @@ func TestBuildPromptWorkflowContextUsesRunDirectoriesInsteadOfInliningArtifacts(
 	assert.NotContains(t, prompt, "\"passed\":false")
 	assert.NotContains(t, prompt, "/tmp/current-plan.md")
 	assert.NotContains(t, prompt, "/tmp/parent-plan.md")
+}
+
+func TestBuildPromptWorktreeContextDirectsAgentToExecutionCheckout(t *testing.T) {
+	cfg := &taskconfig.Config{
+		Version: 1,
+		Clarification: taskconfig.ClarificationConfig{
+			MaxQuestions:          4,
+			MaxOptionsPerQuestion: 4,
+			MinOptionsPerQuestion: 2,
+		},
+		Topology: taskconfig.Topology{
+			MaxIterations: 3,
+			Entry:         "implement",
+			Nodes: []taskconfig.NodeRef{
+				{Name: "implement"},
+			},
+		},
+		NodeDefinitions: map[string]taskconfig.NodeDefinition{
+			"implement": func() taskconfig.NodeDefinition {
+				def := artifactAgentNode()
+				def.SystemPrompt = "./prompts/implement.md"
+				return def
+			}(),
+		},
+	}
+	configPath := writeOverrideConfig(t, cfg)
+	overwritePromptWithBuiltinTemplate(t, configPath, "implement.md")
+	sourceWorkDir := filepath.Join(t.TempDir(), "repo", "packages", "app")
+	executionDir := filepath.Join(t.TempDir(), "worktree", "packages", "app")
+	require.NoError(t, os.MkdirAll(sourceWorkDir, 0o755))
+	require.NoError(t, os.MkdirAll(executionDir, 0o755))
+
+	task := taskdomain.Task{
+		ID:           "task-1",
+		WorkDir:      sourceWorkDir,
+		ExecutionDir: executionDir,
+		Description:  "Ship the fix",
+	}
+	run := taskdomain.NodeRun{ID: "implement-1", NodeName: "implement", Status: taskdomain.NodeRunRunning}
+
+	prompt, err := buildPrompt(task, cfg, configPath, []taskdomain.NodeRun{run}, run, filepath.Join(t.TempDir(), "artifacts"))
+	require.NoError(t, err)
+
+	assert.Contains(t, prompt, "<execution_dir>"+executionDir+"</execution_dir>")
+	assert.Contains(t, prompt, "Unless the user explicitly says otherwise, do all project reads, edits, builds, tests, and commands in `&lt;execution_dir&gt;`.")
+	assert.NotContains(t, prompt, "<source_workdir>")
+	assert.NotContains(t, prompt, "<execution_workspace>")
+	assert.NotContains(t, prompt, "This task is running in a separate git worktree.")
 }
 
 func TestDefaultPromptTemplatesReadLikeStepInstructions(t *testing.T) {
@@ -393,6 +444,8 @@ func TestBuildClarificationResumePromptUsesStructuredContext(t *testing.T) {
 
 	assert.Contains(t, prompt, "<task_metadata>")
 	assert.Contains(t, prompt, "<config_alias>plan-only</config_alias>")
+	assert.Contains(t, prompt, "<task_dir>")
+	assert.Contains(t, prompt, "<execution_dir>/tmp/workdir</execution_dir>")
 	assert.Contains(t, prompt, "<current_step>draft_plan</current_step>")
 	assert.Contains(t, prompt, "<current_iteration>2</current_iteration>")
 	assert.True(t, strings.HasPrefix(prompt, "<task_metadata>"))
@@ -402,6 +455,7 @@ func TestBuildClarificationResumePromptUsesStructuredContext(t *testing.T) {
 	assert.Contains(t, prompt, "Workflow for this config:")
 	assert.Contains(t, prompt, "passed=true --> done (terminal)")
 	assert.Contains(t, prompt, "<execution_context>")
+	assert.Contains(t, prompt, "Unless the user explicitly says otherwise, do all project reads, edits, builds, tests, and commands in `&lt;execution_dir&gt;`.")
 	assert.Contains(t, prompt, "<clarification_state>")
 	assert.Contains(t, prompt, "<clarification_exchange>")
 	assert.Contains(t, prompt, "User selected:")

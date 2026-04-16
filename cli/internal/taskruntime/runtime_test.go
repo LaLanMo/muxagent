@@ -148,8 +148,11 @@ func TestServiceVerifyRunUsesFilesystemOrientedWorkflowContext(t *testing.T) {
 	require.Len(t, verifyRequests, 1)
 	verifyPrompt := verifyRequests[0].Prompt
 	assert.True(t, strings.HasPrefix(verifyPrompt, "<task_metadata>"))
+	assert.Contains(t, verifyPrompt, "<task_dir>")
+	assert.Contains(t, verifyPrompt, "<execution_dir>"+service.workDir+"</execution_dir>")
 	assert.Contains(t, verifyPrompt, "Primary task for this step:\n<<< PRIMARY TASK >>>\nImplement login\nHandle SSO fallback\n<<< END PRIMARY TASK >>>")
 	assert.Contains(t, verifyPrompt, "<execution_context>")
+	assert.Contains(t, verifyPrompt, "Unless the user explicitly says otherwise, do all project reads, edits, builds, tests, and commands in `&lt;execution_dir&gt;`.")
 	assert.Contains(t, verifyPrompt, "<clarification_state>\n(none)\n</clarification_state>")
 	assert.Contains(t, verifyPrompt, "Workflow for this config:")
 	assert.Contains(t, verifyPrompt, "Read the newest accepted plan artifacts and the newest implementation artifacts for this attempt before you judge the result.")
@@ -184,8 +187,10 @@ func TestServiceVerifyRunUsesFilesystemOrientedWorkflowContext(t *testing.T) {
 	inputPath := mustRunArtifactPathForRun(t, completed.TaskView.Task, runs, verifyRun, inputArtifactName)
 	input := readTestFile(t, inputPath)
 	assert.True(t, strings.HasPrefix(input, "<task_metadata>"))
+	assert.Contains(t, input, "<execution_dir>"+service.workDir+"</execution_dir>")
 	assert.Contains(t, input, "Primary task for this step:\n<<< PRIMARY TASK >>>\nImplement login\nHandle SSO fallback\n<<< END PRIMARY TASK >>>")
 	assert.Contains(t, input, "<execution_context>")
+	assert.Contains(t, input, "Unless the user explicitly says otherwise, do all project reads, edits, builds, tests, and commands in `&lt;execution_dir&gt;`.")
 	assert.NotContains(t, input, "Current task directory:")
 	assert.NotContains(t, input, "All run directories for this task:")
 	assert.NotContains(t, input, "Current run directory for this step:")
@@ -351,7 +356,11 @@ func TestServicePersistsExecutionDirAndExecutesFromWorktree(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := singleAgentTerminalFixture()
+	def := cfg.NodeDefinitions["implement"]
+	def.SystemPrompt = "./prompts/implement.md"
+	cfg.NodeDefinitions["implement"] = def
 	writeConfigAtPath(t, cfg, managedDefaultTestConfigPath(t))
+	overwritePromptWithBuiltinTemplate(t, managedDefaultTestConfigPath(t), "implement.md")
 
 	repo := initRuntimeGitRepoWithCommit(t, true)
 	workDir := filepath.Join(repo, "packages", "app")
@@ -398,6 +407,11 @@ func TestServicePersistsExecutionDirAndExecutesFromWorktree(t *testing.T) {
 	assert.Equal(t, task.ExecutionDir, requests[0].WorkDir)
 	assert.Equal(t, task.WorkDir, requests[0].Task.WorkDir)
 	assert.Equal(t, task.ExecutionDir, requests[0].Task.ExecutionDir)
+	assert.Contains(t, requests[0].Prompt, "<execution_dir>"+task.ExecutionDir+"</execution_dir>")
+	assert.Contains(t, requests[0].Prompt, "Unless the user explicitly says otherwise, do all project reads, edits, builds, tests, and commands in `&lt;execution_dir&gt;`.")
+	assert.NotContains(t, requests[0].Prompt, "<source_workdir>")
+	assert.NotContains(t, requests[0].Prompt, "<execution_workspace>")
+	assert.NotContains(t, requests[0].Prompt, "This task is running in a separate git worktree.")
 
 	branchOut, err := exec.Command("git", "-C", repo, "branch", "--list", worktree.BranchName(task.ID)).CombinedOutput()
 	require.NoError(t, err, string(branchOut))
@@ -3184,6 +3198,16 @@ func writeConfigAtPath(t *testing.T, cfg *taskconfig.Config, configPath string) 
 	data, err := yaml.Marshal(cfg)
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(configPath, data, 0o644))
+}
+
+func overwritePromptWithBuiltinTemplate(t *testing.T, configPath, promptName string) {
+	t.Helper()
+	sourcePath := filepath.Join("..", "taskconfig", "defaults", "prompts", promptName)
+	data, err := os.ReadFile(sourcePath)
+	require.NoError(t, err)
+	destPath := filepath.Join(filepath.Dir(configPath), "prompts", promptName)
+	require.NoError(t, os.MkdirAll(filepath.Dir(destPath), 0o755))
+	require.NoError(t, os.WriteFile(destPath, data, 0o644))
 }
 
 func joinAllRuntimeFixture() *taskconfig.Config {

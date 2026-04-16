@@ -139,6 +139,7 @@ func buildRunMetadataXML(task taskdomain.Task, cfg *taskconfig.Config, run taskd
 		xmlLine("runs_dir", runsDir),
 		xmlLine("current_run_dir", artifactDir),
 		xmlLine("artifact_dir", artifactDir),
+		xmlLine("execution_dir", task.ExecutionWorkDir()),
 		"</task_metadata>",
 	}
 	return strings.Join(lines, "\n")
@@ -234,6 +235,7 @@ func runIteration(runs []taskdomain.NodeRun, current taskdomain.NodeRun) int {
 func buildWorkflowContext(task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, current taskdomain.NodeRun, inherited *inheritedContext) string {
 	lines := []string{
 		"- Use the directory paths in `<task_metadata>` when you need to locate the task, run, or current artifact directories.",
+		"- Unless the user explicitly says otherwise, do all project edits, builds, tests, and commands in `<execution_dir>`.",
 		"- Use the filesystem as the detailed source of truth. Each run directory can contain `manifest.json`, `input.md`, `output.json`, plus any supporting files the node wrote for handoff, evidence, screenshots, logs, or notes.",
 		"- Run directories are ordered by creation via `manifest.json.sequence` and `started_at`.",
 		"- Do not replay the entire task history by default. Read only the runs that matter for this step.",
