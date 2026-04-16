@@ -240,6 +240,38 @@ func TestRootIgnoresMalformedTaskLaunchPreferences(t *testing.T) {
 	assert.True(t, called)
 }
 
+func TestRootUsesTaskHomeForTaskLaunchPreferences(t *testing.T) {
+	repo := initRootTestGitRepo(t)
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(appconfig.TaskHomeEnv, taskHome)
+
+	_, err := appconfig.SaveTaskLaunchPreferences(appconfig.TaskLaunchPreferences{UseWorktree: true})
+	require.NoError(t, err)
+
+	prevWD, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(repo))
+	t.Cleanup(func() {
+		require.NoError(t, os.Chdir(prevWD))
+	})
+
+	called := false
+	cmd := newRootCmd(rootOptions{
+		launchTUI: func(ctx context.Context, workDir string, launch taskTUILaunchOptions) error {
+			called = true
+			assert.True(t, launch.WorktreeAvailable)
+			assert.True(t, launch.DefaultUseWorktree)
+			return nil
+		},
+	})
+
+	err = cmd.Execute()
+	require.NoError(t, err)
+	assert.True(t, called)
+}
+
 func TestLoadTaskConfigCatalogUsesRegistryDefault(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

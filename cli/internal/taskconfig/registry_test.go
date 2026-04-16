@@ -74,6 +74,79 @@ func TestTaskConfigPathsHonorInjectedRoot(t *testing.T) {
 	assert.Equal(t, filepath.Join(root, "taskconfig.json"), registryPath)
 }
 
+func TestTaskConfigPathsDeriveFromTaskHome(t *testing.T) {
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(appconfig.TaskHomeEnv, taskHome)
+
+	taskConfigDir, err := TaskConfigDir()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(taskHome, "taskconfig", "taskconfigs"), taskConfigDir)
+
+	registryPath, err := RegistryPath()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(taskHome, "taskconfig", "taskconfig.json"), registryPath)
+}
+
+func TestTaskConfigRootEnvOverridesTaskHome(t *testing.T) {
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	root := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(appconfig.TaskHomeEnv, taskHome)
+	t.Setenv(taskConfigRootEnv, root)
+
+	taskConfigDir, err := TaskConfigDir()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "taskconfigs"), taskConfigDir)
+
+	registryPath, err := RegistryPath()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "taskconfig.json"), registryPath)
+}
+
+func TestLoadCatalogSeedsUserConfigsFromLegacyRoot(t *testing.T) {
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	t.Setenv("HOME", home)
+
+	configPath := writeSimpleUserBundle(t, "reviewer", "reviewer")
+	_, err := SaveRegistry(Registry{
+		DefaultAlias: "reviewer",
+		Configs: []RegistryEntry{
+			{Alias: DefaultAlias, Path: managedDefaultBundleDir},
+			{Alias: "reviewer", Path: mustBundlePathForConfigPath(t, configPath)},
+		},
+	})
+	require.NoError(t, err)
+
+	t.Setenv(appconfig.TaskHomeEnv, taskHome)
+
+	catalog, err := LoadCatalog()
+	require.NoError(t, err)
+	entry, ok := catalog.Entry("reviewer")
+	require.True(t, ok)
+	assert.Equal(t, "reviewer", catalog.DefaultAlias)
+
+	cfg, err := entry.LoadConfig()
+	require.NoError(t, err)
+	assert.Equal(t, "codex", string(cfg.Runtime))
+
+	targetRegistryPath := filepath.Join(taskHome, "taskconfig", "taskconfig.json")
+	assert.FileExists(t, targetRegistryPath)
+	assert.FileExists(t, filepath.Join(taskHome, "taskconfig", "taskconfigs", "reviewer", managedConfigFile))
+
+	reg, err := LoadRegistry()
+	require.NoError(t, err)
+	_, ok = registryEntryByAlias(reg.Configs, "reviewer")
+	require.True(t, ok)
+
+	defaultEntry, ok := registryEntryByBuiltinID(reg.Configs, BuiltinIDDefault)
+	require.True(t, ok)
+	assert.Equal(t, DefaultAlias, defaultEntry.Alias)
+}
+
 func TestLoadCatalogKeepsBuiltinsFirstAndAllowsBrokenUserBundles(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

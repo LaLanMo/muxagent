@@ -101,6 +101,69 @@ func TestLoadTaskLaunchPreferences_FallsBackToFalse(t *testing.T) {
 	}
 }
 
+func TestTaskLaunchPreferencesPathUsesTaskHomeOverride(t *testing.T) {
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(TaskHomeEnv, taskHome)
+
+	path, err := TaskLaunchPreferencesPath()
+	if err != nil {
+		t.Fatalf("TaskLaunchPreferencesPath: %v", err)
+	}
+
+	want := filepath.Join(taskHome, "task", "task-launch-preferences.json")
+	if path != want {
+		t.Fatalf("TaskLaunchPreferencesPath = %q, want %q", path, want)
+	}
+}
+
+func TestSaveAndLoadTaskLaunchPreferencesUseTaskHomeOverride(t *testing.T) {
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(TaskHomeEnv, taskHome)
+
+	path, err := SaveTaskLaunchPreferences(TaskLaunchPreferences{UseWorktree: true})
+	if err != nil {
+		t.Fatalf("SaveTaskLaunchPreferences: %v", err)
+	}
+	want := filepath.Join(taskHome, "task", "task-launch-preferences.json")
+	if path != want {
+		t.Fatalf("SaveTaskLaunchPreferences path = %q, want %q", path, want)
+	}
+
+	if got := LoadTaskLaunchPreferences(); !got.UseWorktree {
+		t.Fatalf("LoadTaskLaunchPreferences() = %#v, want use_worktree=true", got)
+	}
+}
+
+func TestLoadTaskLaunchPreferencesSeedsFromLegacyRoot(t *testing.T) {
+	home := t.TempDir()
+	taskHome := t.TempDir()
+	t.Setenv("HOME", home)
+
+	legacyPath := filepath.Join(home, ".muxagent", "task-launch-preferences.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(legacyPath, []byte("{\n  \"use_worktree\": true\n}\n"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	t.Setenv(TaskHomeEnv, taskHome)
+
+	got := LoadTaskLaunchPreferences()
+	if !got.UseWorktree {
+		t.Fatalf("LoadTaskLaunchPreferences() = %#v, want use_worktree=true", got)
+	}
+
+	targetPath := filepath.Join(taskHome, "task", "task-launch-preferences.json")
+	if _, err := os.Stat(targetPath); err != nil {
+		t.Fatalf("Stat(%q): %v", targetPath, err)
+	}
+}
+
 func TestSaveStartupUpdateState_RoundTrips(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

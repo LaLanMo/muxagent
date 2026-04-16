@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/privdir"
 )
 
@@ -70,6 +71,11 @@ func taskConfigRootDir() (string, error) {
 		}
 		return filepath.Clean(abs), nil
 	}
+	if override, ok, err := appconfig.TaskHomeOverrideDir(); err != nil {
+		return "", err
+	} else if ok {
+		return filepath.Join(override, "taskconfig"), nil
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -98,6 +104,10 @@ func LoadRegistry() (Registry, error) {
 	if err != nil {
 		return Registry{}, err
 	}
+	return loadRegistryFromPath(path)
+}
+
+func loadRegistryFromPath(path string) (Registry, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -407,6 +417,10 @@ func firstNonEmptyAlias(values ...string) string {
 }
 
 func ensureBuiltinDefaults() (Registry, error) {
+	if err := seedTaskConfigFromLegacyIfNeeded(); err != nil {
+		return Registry{}, err
+	}
+
 	taskConfigDir, err := TaskConfigDir()
 	if err != nil {
 		return Registry{}, err
@@ -471,6 +485,96 @@ func ensureBuiltinDefaults() (Registry, error) {
 		return LoadRegistry()
 	}
 	return normalizeRegistry(reg)
+}
+
+func seedTaskConfigFromLegacyIfNeeded() error {
+	if _, ok, err := appconfig.TaskHomeOverrideDir(); err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
+
+	targetRoot, err := taskConfigRootDir()
+	if err != nil {
+		return err
+	}
+	targetRegistryPath := filepath.Join(targetRoot, "taskconfig.json")
+	if _, err := os.Stat(targetRegistryPath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	legacyRoot, err := appconfig.LegacyMuxagentRootDir()
+	if err != nil {
+		return err
+	}
+	sourceRegistryPath := filepath.Join(legacyRoot, "taskconfig.json")
+	if filepath.Clean(sourceRegistryPath) == filepath.Clean(targetRegistryPath) {
+		return nil
+	}
+
+	sourceReg, err := loadRegistryFromPath(sourceRegistryPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+
+	targetTaskConfigDir := filepath.Join(targetRoot, "taskconfigs")
+	sourceTaskConfigDir := filepath.Join(legacyRoot, "taskconfigs")
+	seeded := Registry{
+		DefaultAlias: sourceReg.DefaultAlias,
+		Configs:      make([]RegistryEntry, 0, len(sourceReg.Configs)),
+	}
+	for _, entry := range sourceReg.Configs {
+		if isSeedableUserEntry(entry) {
+			seeded.Configs = append(seeded.Configs, entry)
+		}
+	}
+	if len(seeded.Configs) == 0 {
+		return nil
+	}
+
+	for _, entry := range seeded.Configs {
+		sourceBundlePath, err := normalizeRegistryBundlePath(entry.Path)
+		if err != nil {
+			continue
+		}
+		sourceBundleDir := filepath.Join(sourceTaskConfigDir, filepath.FromSlash(sourceBundlePath))
+		destBundleDir := filepath.Join(targetTaskConfigDir, filepath.FromSlash(sourceBundlePath))
+		if filepath.Clean(sourceBundleDir) == filepath.Clean(destBundleDir) {
+			continue
+		}
+		if _, err := os.Stat(sourceBundleDir); errors.Is(err, os.ErrNotExist) {
+			continue
+		} else if err != nil {
+			continue
+		}
+		if err := copyDir(sourceBundleDir, destBundleDir); err != nil {
+			return nil
+		}
+	}
+
+	_, err = SaveRegistry(seeded)
+	return err
+}
+
+func isSeedableUserEntry(entry RegistryEntry) bool {
+	if isBuiltinEntry(entry) {
+		return false
+	}
+	clean, err := normalizeRegistryBundlePath(entry.Path)
+	if err != nil {
+		return false
+	}
+	for _, def := range builtinDefs {
+		if clean == builtinBundlePath(def.ID) {
+			return false
+		}
+	}
+	return true
 }
 
 func syncBuiltinBundle(taskConfigDir, builtinID string) error {

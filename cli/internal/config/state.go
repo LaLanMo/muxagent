@@ -103,11 +103,11 @@ func StateLockPath() (string, error) {
 }
 
 func TaskLaunchPreferencesPath() (string, error) {
-	home, err := os.UserHomeDir()
+	root, err := taskStateRootDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".muxagent", "task-launch-preferences.json"), nil
+	return filepath.Join(root, "task-launch-preferences.json"), nil
 }
 
 func StartupUpdateStatePath() (string, error) {
@@ -204,6 +204,10 @@ func LoadState() (DaemonState, error) {
 }
 
 func LoadTaskLaunchPreferences() TaskLaunchPreferences {
+	if err := ensureTaskLaunchPreferencesSeeded(); err != nil {
+		return TaskLaunchPreferences{}
+	}
+
 	path, err := TaskLaunchPreferencesPath()
 	if err != nil {
 		return TaskLaunchPreferences{}
@@ -220,6 +224,62 @@ func LoadTaskLaunchPreferences() TaskLaunchPreferences {
 	}
 
 	return prefs
+}
+
+func taskStateRootDir() (string, error) {
+	if override, ok, err := TaskHomeOverrideDir(); err != nil {
+		return "", err
+	} else if ok {
+		return filepath.Join(override, "task"), nil
+	}
+	root, err := LegacyMuxagentRootDir()
+	if err != nil {
+		return "", err
+	}
+	return root, nil
+}
+
+func ensureTaskLaunchPreferencesSeeded() error {
+	if _, ok, err := TaskHomeOverrideDir(); err != nil {
+		return err
+	} else if !ok {
+		return nil
+	}
+
+	targetPath, err := TaskLaunchPreferencesPath()
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(targetPath); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+
+	legacyRoot, err := LegacyMuxagentRootDir()
+	if err != nil {
+		return err
+	}
+	sourcePath := filepath.Join(legacyRoot, "task-launch-preferences.json")
+	if filepath.Clean(sourcePath) == filepath.Clean(targetPath) {
+		return nil
+	}
+
+	payload, err := os.ReadFile(sourcePath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return nil
+	}
+
+	var prefs TaskLaunchPreferences
+	if err := json.Unmarshal(payload, &prefs); err != nil {
+		return nil
+	}
+
+	_, err = SaveTaskLaunchPreferences(prefs)
+	return err
 }
 
 func LoadStartupUpdateState() StartupUpdateState {
