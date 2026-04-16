@@ -578,11 +578,12 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			Task:         taskViewToDTO(view),
 			InputRequest: inputRequestToDTO(input),
 		}
-		followUp, err := model.BuildFollowUpInfo(view.Task, view.Status)
+		followUpState, followUp, err := model.BuildFollowUpInfo(view.Task, view.Status)
 		if err != nil {
 			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
 		}
 		result.FollowUp = followUp
+		result.FollowUpState = followUpState
 		if runID, events := s.liveEventSnapshot(params.WorkspaceID, params.TaskID); runID != "" || len(events) > 0 {
 			result.LiveOutputRunID = runID
 			result.LiveEvents = events

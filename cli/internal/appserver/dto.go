@@ -78,6 +78,14 @@ type followUpDTO struct {
 	UncommittedChangeCount int                        `json:"uncommitted_change_count"`
 }
 
+type followUpStateDTO string
+
+const (
+	followUpStateBasic    followUpStateDTO = "basic"
+	followUpStateRefine   followUpStateDTO = "refine"
+	followUpStateDisabled followUpStateDTO = "disabled"
+)
+
 type taskAncestryItemDTO struct {
 	TaskID       string    `json:"task_id"`
 	Description  string    `json:"description"`

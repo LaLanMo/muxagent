@@ -1109,7 +1109,29 @@ func TestServiceStartFollowUpFailsWhenParentWorktreeIsMissing(t *testing.T) {
 		FollowUpModeForkHead,
 	)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "parent checkout unavailable")
+	assert.Contains(t, err.Error(), "follow-up parent worktree unavailable")
+}
+
+func TestServiceStartFollowUpFailsWhenParentWorktreeAndWorkspaceRepoMetadataAreMissing(t *testing.T) {
+	parentTask := seedCompletedWorktreeParentTask(t)
+	service := parentTask.service
+	defer service.Close()
+
+	parentCheckoutRoot, err := worktree.FindRepoRoot(parentTask.task.ExecutionDir)
+	require.NoError(t, err)
+	require.NoError(t, os.RemoveAll(parentCheckoutRoot))
+	require.NoError(t, os.RemoveAll(filepath.Join(parentTask.task.WorkDir, ".git")))
+
+	err = service.startFollowUpTask(
+		context.Background(),
+		parentTask.completed.TaskID,
+		"missing parent worktree and repo metadata",
+		"",
+		"",
+		"",
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "follow-up parent worktree unavailable")
 }
 
 func TestServiceStartFollowUpRejectsIncompleteParent(t *testing.T) {

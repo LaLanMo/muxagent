@@ -185,7 +185,7 @@ func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, descripti
 
 	parentExecutionDir, parentCheckoutRoot, relativeCWD, err := resolveTaskCheckout(parentTask)
 	if err != nil {
-		if taskIsRepoBacked(parentTask) {
+		if taskUsesWorktree(parentTask) {
 			return err
 		}
 		if strings.TrimSpace(string(requestedMode)) != "" {
@@ -377,14 +377,6 @@ func taskUsesWorktree(task taskdomain.Task) bool {
 	return taskstore.NormalizeWorkDir(executionDir) != taskstore.NormalizeWorkDir(workDir)
 }
 
-func taskIsRepoBacked(task taskdomain.Task) bool {
-	if _, err := worktree.FindRepoRoot(task.ExecutionDir); err == nil {
-		return true
-	}
-	_, err := worktree.FindRepoRoot(task.WorkDir)
-	return err == nil
-}
-
 func resolveFollowUpMode(requestedMode FollowUpMode) (FollowUpMode, error) {
 	switch requestedMode {
 	case "", FollowUpModeContinueHere:
@@ -399,15 +391,15 @@ func resolveFollowUpMode(requestedMode FollowUpMode) (FollowUpMode, error) {
 func resolveTaskCheckout(task taskdomain.Task) (string, string, string, error) {
 	checkoutRoot, err := worktree.FindRepoRoot(task.ExecutionDir)
 	if err != nil {
-		return "", "", "", fmt.Errorf("parent checkout unavailable: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", ErrFollowUpParentWorktreeMissing, err)
 	}
 	relativeCWD, err := worktree.NormalizeRepoRelativePath(checkoutRoot, task.ExecutionDir)
 	if err != nil {
-		return "", "", "", fmt.Errorf("parent checkout unavailable: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", ErrFollowUpParentWorktreeMissing, err)
 	}
 	executionDir, err := worktree.ResolveWorktreeCWD(checkoutRoot, relativeCWD)
 	if err != nil {
-		return "", "", "", fmt.Errorf("parent checkout unavailable: %w", err)
+		return "", "", "", fmt.Errorf("%w: %w", ErrFollowUpParentWorktreeMissing, err)
 	}
 	return executionDir, checkoutRoot, relativeCWD, nil
 }

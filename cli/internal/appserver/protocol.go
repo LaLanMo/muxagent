@@ -319,6 +319,7 @@ type taskGetResult struct {
 	Config          *configViewDTO           `json:"config,omitempty"`
 	InputRequest    *inputRequestDTO         `json:"input_request,omitempty"`
 	FollowUp        *followUpDTO             `json:"follow_up,omitempty"`
+	FollowUpState   followUpStateDTO         `json:"follow_up_state,omitempty"`
 	LiveEvents      []sessionHistoryEventDTO `json:"live_events,omitempty"`
 	LiveOutputRunID string                   `json:"live_output_run_id,omitempty"`
 }

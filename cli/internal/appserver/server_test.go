@@ -404,6 +404,9 @@ func TestServerTaskGetOmitsFollowUpMetadataForCompletedNonGitTask(t *testing.T) 
 	if getResult.FollowUp != nil {
 		t.Fatalf("task.get follow_up = %#v, want nil", getResult.FollowUp)
 	}
+	if got := getResult.FollowUpState; got != followUpStateBasic {
+		t.Fatalf("task.get follow_up_state = %q, want %q", got, followUpStateBasic)
+	}
 }
 
 func TestServerTaskGetIncludesFollowUpMetadataForCompletedRepoBackedMainCheckoutTask(t *testing.T) {
@@ -437,6 +440,105 @@ func TestServerTaskGetIncludesFollowUpMetadataForCompletedWorktreeTask(t *testin
 	server.markInitialized()
 
 	assertTaskGetFollowUpMetadata(t, server, workspace.WorkspaceID, taskID, 3)
+}
+
+func TestServerTaskGetDisablesFollowUpForCompletedTaskWithMissingWorktree(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedWorktreeTask(t, workspacePath)
+	server.markInitialized()
+
+	store, err := taskstore.Open(workspacePath)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	task, err := store.GetTask(context.Background(), taskID)
+	if closeErr := store.Close(); err == nil && closeErr != nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatalf("load task: %v", err)
+	}
+	parentWorktreeRoot, err := worktree.FindRepoRoot(task.ExecutionDir)
+	if err != nil {
+		t.Fatalf("find parent worktree root: %v", err)
+	}
+	if err := os.RemoveAll(parentWorktreeRoot); err != nil {
+		t.Fatalf("remove parent worktree root: %v", err)
+	}
+
+	getResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGet,
+		Params: mustRawParams(t, taskGetParams{WorkspaceID: workspace.WorkspaceID, TaskID: taskID}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get rpc error: %+v", rpcErr)
+	}
+	getResult := getResultAny.(taskGetResult)
+	if getResult.FollowUp != nil {
+		t.Fatalf("task.get follow_up = %#v, want nil", getResult.FollowUp)
+	}
+	if got := getResult.FollowUpState; got != followUpStateDisabled {
+		t.Fatalf("task.get follow_up_state = %q, want %q", got, followUpStateDisabled)
+	}
+}
+
+func TestServerTaskGetKeepsWorktreeTaskDisabledWhenWorkspaceRepoMetadataIsGone(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	taskID := seedCompletedWorktreeTask(t, workspacePath)
+	server.markInitialized()
+
+	store, err := taskstore.Open(workspacePath)
+	if err != nil {
+		t.Fatalf("open task store: %v", err)
+	}
+	task, err := store.GetTask(context.Background(), taskID)
+	if closeErr := store.Close(); err == nil && closeErr != nil {
+		err = closeErr
+	}
+	if err != nil {
+		t.Fatalf("load task: %v", err)
+	}
+	parentWorktreeRoot, err := worktree.FindRepoRoot(task.ExecutionDir)
+	if err != nil {
+		t.Fatalf("find parent worktree root: %v", err)
+	}
+	if err := os.RemoveAll(parentWorktreeRoot); err != nil {
+		t.Fatalf("remove parent worktree root: %v", err)
+	}
+	if err := os.RemoveAll(filepath.Join(repoRoot, ".git")); err != nil {
+		t.Fatalf("remove repo metadata: %v", err)
+	}
+
+	getResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGet,
+		Params: mustRawParams(t, taskGetParams{WorkspaceID: workspace.WorkspaceID, TaskID: taskID}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get rpc error: %+v", rpcErr)
+	}
+	getResult := getResultAny.(taskGetResult)
+	if getResult.FollowUp != nil {
+		t.Fatalf("task.get follow_up = %#v, want nil", getResult.FollowUp)
+	}
+	if got := getResult.FollowUpState; got != followUpStateDisabled {
+		t.Fatalf("task.get follow_up_state = %q, want %q", got, followUpStateDisabled)
+	}
 }
 
 func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
@@ -2647,6 +2749,9 @@ func assertTaskGetFollowUpMetadata(t *testing.T, server *Server, workspaceID, ta
 	getResult := getResultAny.(taskGetResult)
 	if getResult.FollowUp == nil {
 		t.Fatal("task.get follow_up = nil, want value")
+	}
+	if got := getResult.FollowUpState; got != followUpStateRefine {
+		t.Fatalf("task.get follow_up_state = %q, want %q", got, followUpStateRefine)
 	}
 	if got := getResult.FollowUp.DefaultMode; got != taskruntime.FollowUpModeContinueHere {
 		t.Fatalf("task.get follow_up.default_mode = %q, want %q", got, taskruntime.FollowUpModeContinueHere)

@@ -192,32 +192,38 @@ func (m *taskReadModel) loadTaskLineage(ctx context.Context, view *taskdomain.Ta
 	return nil
 }
 
-func (m *taskReadModel) BuildFollowUpInfo(task taskdomain.Task, status taskdomain.TaskStatus) (*followUpDTO, error) {
+func (m *taskReadModel) BuildFollowUpInfo(task taskdomain.Task, status taskdomain.TaskStatus) (followUpStateDTO, *followUpDTO, error) {
 	if status != taskdomain.TaskStatusDone {
-		return nil, nil
+		return "", nil, nil
 	}
-	executionDir := taskstore.NormalizeWorkDir(strings.TrimSpace(task.ExecutionDir))
+	executionDir := taskstore.NormalizeWorkDir(strings.TrimSpace(task.ExecutionWorkDir()))
 	if executionDir == "" {
-		return nil, nil
+		return followUpStateBasic, nil, nil
 	}
 
 	checkoutRoot, err := worktree.FindRepoRoot(executionDir)
 	if err != nil {
-		return nil, nil
+		if taskUsesExecutionCheckout(task) {
+			return followUpStateDisabled, nil, nil
+		}
+		return followUpStateBasic, nil, nil
 	}
 	relativeCWD, err := worktree.NormalizeRepoRelativePath(checkoutRoot, executionDir)
 	if err != nil {
-		return nil, nil
+		if taskUsesExecutionCheckout(task) {
+			return followUpStateDisabled, nil, nil
+		}
+		return followUpStateBasic, nil, nil
 	}
 	if _, err := worktree.ResolveWorktreeCWD(checkoutRoot, relativeCWD); err != nil {
-		return nil, nil
+		return followUpStateDisabled, nil, nil
 	}
 
 	dirtyCount, err := worktree.DirtyChangeCount(checkoutRoot)
 	if err != nil {
-		return nil, err
+		return "", nil, err
 	}
-	return &followUpDTO{
+	return followUpStateRefine, &followUpDTO{
 		DefaultMode: taskruntime.FollowUpModeContinueHere,
 		AvailableModes: []taskruntime.FollowUpMode{
 			taskruntime.FollowUpModeContinueHere,
@@ -226,6 +232,15 @@ func (m *taskReadModel) BuildFollowUpInfo(task taskdomain.Task, status taskdomai
 		},
 		UncommittedChangeCount: dirtyCount,
 	}, nil
+}
+
+func taskUsesExecutionCheckout(task taskdomain.Task) bool {
+	executionDir := taskstore.NormalizeWorkDir(strings.TrimSpace(task.ExecutionDir))
+	workDir := taskstore.NormalizeWorkDir(strings.TrimSpace(task.WorkDir))
+	if executionDir == "" || workDir == "" || executionDir == workDir {
+		return false
+	}
+	return true
 }
 
 func (m *taskReadModel) buildInputRequest(ctx context.Context, task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, run taskdomain.NodeRun) (*taskruntime.InputRequest, error) {
@@ -368,6 +383,7 @@ func runtimeLookupRPCError(err error) *rpcError {
 	}
 	if errors.Is(err, taskruntime.ErrNodeRunTaskMismatch) ||
 		errors.Is(err, taskruntime.ErrNodeRunNotAwaitingUser) ||
+		errors.Is(err, taskruntime.ErrFollowUpParentWorktreeMissing) ||
 		errors.Is(err, sql.ErrNoRows) {
 		return &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
 	}

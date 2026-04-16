@@ -129,8 +129,9 @@ node_definitions:
 `
 
 type seedResult struct {
-	TaskID      string `json:"task_id"`
-	Description string `json:"description"`
+	TaskID       string `json:"task_id"`
+	Description  string `json:"description"`
+	ExecutionDir string `json:"execution_dir"`
 }
 
 func main() {
@@ -299,8 +300,9 @@ func seed(workDir, kind string) (*seedResult, error) {
 	}
 
 	return &seedResult{
-		TaskID:      taskID,
-		Description: description,
+		TaskID:       taskID,
+		Description:  description,
+		ExecutionDir: task.ExecutionDir,
 	}, nil
 }
 

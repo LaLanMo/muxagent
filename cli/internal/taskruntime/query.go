@@ -12,8 +12,9 @@ import (
 )
 
 var (
-	ErrNodeRunTaskMismatch    = errors.New("node run does not belong to task")
-	ErrNodeRunNotAwaitingUser = errors.New("node run is not awaiting user input")
+	ErrNodeRunTaskMismatch           = errors.New("node run does not belong to task")
+	ErrNodeRunNotAwaitingUser        = errors.New("node run is not awaiting user input")
+	ErrFollowUpParentWorktreeMissing = errors.New("follow-up parent worktree unavailable")
 )
 
 func (s *Service) ListTaskViews(ctx context.Context, workDir string) ([]taskdomain.TaskView, error) {
