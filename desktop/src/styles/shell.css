@@ -114,12 +114,18 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
   border-radius: var(--radius-sm);
   color: var(--color-text-tertiary);
   font-size: var(--font-size-sm);
   line-height: 1;
+}
+
+.shell-section__add svg {
+  display: block;
 }
 
 .shell-section__add:hover {

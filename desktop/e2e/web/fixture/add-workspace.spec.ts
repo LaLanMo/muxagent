@@ -8,6 +8,9 @@ test("keeps the entry shell unchanged when add workspace is cancelled", async ({
   await expect(page.getByTestId("open-new-workspace")).toBeEnabled();
   await expect(page.getByTestId("open-new-task")).toHaveCount(0);
   await expect(page.getByTestId("workspace-picker-button")).toBeEnabled();
+  await expect(page.getByTestId("workspace-picker-button")).toHaveAccessibleName(
+    "Add workspace",
+  );
 
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByTestId("open-new-workspace").click();

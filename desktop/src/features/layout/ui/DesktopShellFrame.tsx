@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { FolderPlus, Plus, Trash2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { ShellIcon, type ShellIconName } from "@/features/layout/ui/ShellIcon";
 import { Button } from "@/features/shared/ui/Button";
@@ -199,13 +199,15 @@ export function DesktopShellFrame({
                 <span className="shell-section__title">Workspaces</span>
                 {onAddWorkspace ? (
                   <button
+                    aria-label="Add workspace"
                     className="shell-section__add"
                     data-testid="workspace-picker-button"
                     disabled={addWorkspaceDisabled}
                     onClick={onAddWorkspace}
+                    title="Add workspace"
                     type="button"
                   >
-                    <Plus aria-hidden="true" size={12} strokeWidth={2.2} />
+                    <FolderPlus aria-hidden="true" size={14} strokeWidth={1.8} />
                   </button>
                 ) : null}
               </div>
