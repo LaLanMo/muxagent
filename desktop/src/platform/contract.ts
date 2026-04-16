@@ -73,6 +73,11 @@ export interface TaskBackendClient {
     taskId: string,
     nodeRunId: string,
   ): Promise<TaskRunHistoryResult>;
+  taskRunHistoryFull(
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+  ): Promise<TaskRunHistoryResult>;
   taskInputRequest(
     workspaceId: string,
     taskId: string,

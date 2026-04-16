@@ -66,15 +66,11 @@ export function useTaskWorktreeCleanup({
   );
 
   useEffect(() => {
-    if (!eligible) {
-      latestRequestIdRef.current += 1;
-      setCleanupInfo(undefined);
-      setCleanupLoading(false);
-      setCleanupError(undefined);
-      return;
-    }
-    void loadCleanupInfo();
-  }, [eligible, loadCleanupInfo, taskId, taskSnapshotKey, workspaceId]);
+    latestRequestIdRef.current += 1;
+    setCleanupInfo(undefined);
+    setCleanupLoading(false);
+    setCleanupError(undefined);
+  }, [eligible, taskId, taskSnapshotKey, workspaceId]);
 
   return {
     cleanupInfo,

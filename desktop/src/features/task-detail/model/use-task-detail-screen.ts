@@ -33,7 +33,10 @@ import { canShowFollowUpSurface } from "@/features/task-detail/model/task-detail
 import { useTaskDetailData } from "@/features/task-detail/model/use-task-detail-data";
 import { useTaskWorktreeCleanup } from "@/features/task-detail/model/use-task-worktree-cleanup";
 import { useTaskDetailSelection } from "@/features/task-detail/model/use-task-detail-selection";
-import { useTaskRunHistory } from "@/features/task-detail/model/use-task-run-history";
+import {
+  useTaskRunFullHistory,
+  useTaskRunHistory,
+} from "@/features/task-detail/model/use-task-run-history";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
@@ -252,6 +255,7 @@ export function useTaskDetailScreen() {
   const followUp = detailEntry?.followUp;
   const {
     cleanupInfo,
+    cleanupLoading,
     cleanupError,
     loadCleanupInfo,
   } = useTaskWorktreeCleanup({
@@ -290,12 +294,22 @@ export function useTaskDetailScreen() {
   const { artifactPreview, artifactError } =
     useTaskDetailArtifactPreview(selectedArtifact);
   const [artifactActionError, setArtifactActionError] = useState<string | undefined>();
+  const shouldLoadSelectedRunSummary = selectedRun ? isOpenRun(selectedRun) : false;
   const selectedRunHistory = useTaskRunHistory({
     workspaceId,
     taskId,
     connected: shell.phase === "connected",
     selectedRun,
     detailEntry,
+    shouldLoad: shouldLoadSelectedRunSummary,
+  });
+  const selectedRunFullHistory = useTaskRunFullHistory({
+    workspaceId,
+    taskId,
+    connected: shell.phase === "connected",
+    selectedRun,
+    detailEntry,
+    shouldLoad: modal.kind === "transcript",
   });
 
   useEffect(() => {
@@ -354,20 +368,11 @@ export function useTaskDetailScreen() {
     [resolvedTask?.current_issue?.reason, retryRun?.failure_reason],
   );
   const {
-    feedback,
-    setFeedback,
-    clarificationAnswers,
-    setClarificationAnswer,
     submittingDecision,
     submittingClarification,
-    followUpDescription,
-    setFollowUpDescription,
-    followUpConfigAlias,
-    setFollowUpConfigAlias,
-    followUpMode,
-    setFollowUpMode,
     submittingFollowUp,
     worktreeCleanupDialogOpen,
+    loadingWorktreeCleanupDialog,
     submittingWorktreeCleanup,
     submittingRetry,
     submittingContinue,
@@ -386,7 +391,6 @@ export function useTaskDetailScreen() {
     workspaceId,
     taskId,
     task: resolvedTask,
-    followUp,
     configEntries,
     inputRequest,
     latestFailedRunId: retryRun?.id,
@@ -577,6 +581,7 @@ export function useTaskDetailScreen() {
     liveEvents,
     liveEventsRunId,
     selectedRunHistory,
+    selectedRunFullHistory,
     workspaceActorState,
     staleReconcilePending: resolvedTask
       ? workspaceReconcilePending &&
@@ -586,21 +591,12 @@ export function useTaskDetailScreen() {
     supportsRunRecovery: serverMethods.includes("task.recover_stale"),
     ancestry,
     historyEntries,
-    feedback,
-    setFeedback,
-    clarificationAnswers,
-    setClarificationAnswer,
     submittingDecision,
     submittingClarification,
-    followUpDescription,
-    setFollowUpDescription,
-    followUpConfigAlias,
-    setFollowUpConfigAlias,
     followUp,
     followUpState,
     worktreeCleanupInfo: cleanupInfo,
-    followUpMode,
-    setFollowUpMode,
+    worktreeCleanupLoading: cleanupLoading || loadingWorktreeCleanupDialog,
     submittingFollowUp,
     worktreeCleanupDialogOpen,
     submittingWorktreeCleanup,

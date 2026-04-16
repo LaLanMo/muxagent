@@ -43,22 +43,17 @@ function makeFollowUp(defaultMode: FollowUpModeDto = "continue_here"): TaskFollo
 function renderDock(props: {
   followUp?: TaskFollowUpDto;
   followUpState?: "basic" | "pending" | "refine" | "disabled";
-  followUpMode?: FollowUpModeDto;
+  taskKey?: string;
 }) {
   return renderToStaticMarkup(
     <TaskFollowUpDock
       configEntries={makeConfigEntries()}
       defaultConfigAlias="default"
       followUp={props.followUp}
-      followUpConfigAlias={undefined}
-      followUpDescription=""
-      followUpMode={props.followUpMode}
       followUpState={props.followUpState}
-      onConfigChange={() => {}}
-      onModeChange={() => {}}
-      onStartFollowUp={async () => {}}
-      setFollowUpDescription={() => {}}
+      onStartFollowUp={async () => true}
       submittingFollowUp={false}
+      taskKey={props.taskKey ?? "task-1"}
     />,
   );
 }
@@ -73,8 +68,7 @@ test("basic dock hides the fixed continue-here control for non-repo tasks", () =
 
 test("refine dock renders the repo-backed mode trigger and dirty hint", () => {
   const markup = renderDock({
-    followUp: makeFollowUp(),
-    followUpMode: "fork_head",
+    followUp: makeFollowUp("fork_head"),
     followUpState: "refine",
   });
 
@@ -86,7 +80,6 @@ test("refine dock renders the repo-backed mode trigger and dirty hint", () => {
 test("refine dock renders continue-here without an uncommitted hint", () => {
   const markup = renderDock({
     followUp: makeFollowUp(),
-    followUpMode: "continue_here",
     followUpState: "refine",
   });
 
@@ -98,8 +91,7 @@ test("refine dock renders continue-here without an uncommitted hint", () => {
 
 test("refine dock renders fork-with-changes with the dirty hint", () => {
   const markup = renderDock({
-    followUp: makeFollowUp(),
-    followUpMode: "fork_with_changes",
+    followUp: makeFollowUp("fork_with_changes"),
     followUpState: "refine",
   });
 
@@ -127,4 +119,14 @@ test("disabled dock renders passive copy without submit-capable controls", () =>
   assert.doesNotMatch(markup, /follow-up-description/);
   assert.doesNotMatch(markup, /follow-up-mode-trigger/);
   assert.doesNotMatch(markup, /follow-up-send/);
+});
+
+test("follow-up composer starts as a single-row textarea", () => {
+  const markup = renderDock({
+    followUp: makeFollowUp(),
+    followUpState: "refine",
+  });
+
+  assert.match(markup, /data-testid="follow-up-description"/);
+  assert.match(markup, /rows="1"/);
 });

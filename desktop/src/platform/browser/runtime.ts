@@ -218,6 +218,18 @@ class BrowserTaskBackendClient implements TaskBackendClient {
     });
   }
 
+  taskRunHistoryFull(
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+  ): Promise<TaskRunHistoryResult> {
+    return this.request("task.run_history_full", {
+      workspace_id: workspaceId,
+      task_id: taskId,
+      node_run_id: nodeRunId,
+    });
+  }
+
   taskInputRequest(
     workspaceId: string,
     taskId: string,

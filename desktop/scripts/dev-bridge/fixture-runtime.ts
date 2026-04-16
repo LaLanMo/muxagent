@@ -409,6 +409,10 @@ type HandleFixtureRpcOptions = {
   emitNotification: FixtureNotificationEmitter;
 };
 
+type FixtureHistoryEvent = NonNullable<
+  NonNullable<FixtureTask["run_history_by_run_id"]>[string]
+>[number];
+
 function fixtureHistoryProvenance(
   events:
     | NonNullable<FixtureTask["run_history_by_run_id"]>[string]
@@ -422,6 +426,43 @@ function fixtureHistoryProvenance(
     return values[0] ?? "none";
   }
   return "mixed_recovered";
+}
+
+function compactFixtureHistoryText(
+  value: string | undefined,
+  limit: number,
+): string | undefined {
+  const trimmed = value?.replace(/\s+/g, " ").trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  if (limit <= 0 || trimmed.length <= limit) {
+    return trimmed;
+  }
+  if (limit <= 1) {
+    return trimmed.slice(0, limit);
+  }
+  return `${trimmed.slice(0, limit - 1)}…`;
+}
+
+function summarizeFixtureHistoryEvent(event: FixtureHistoryEvent): FixtureHistoryEvent {
+  return {
+    ...event,
+    raw: event.kind === "raw" ? compactFixtureHistoryText(event.raw, 600) : undefined,
+    text: compactFixtureHistoryText(event.text, 600),
+    input_summary: compactFixtureHistoryText(event.input_summary, 240),
+    output_text: compactFixtureHistoryText(event.output_text, 600),
+    error_text: compactFixtureHistoryText(event.error_text, 400),
+    raw_input_json: undefined,
+    raw_output_json: undefined,
+    mcp: undefined,
+    diffs: undefined,
+    paths: undefined,
+    steps: event.steps?.map((step) => ({
+      ...step,
+      text: compactFixtureHistoryText(step.text, 240) ?? "",
+    })),
+  };
 }
 
 const encoder = new TextEncoder();
@@ -610,6 +651,7 @@ export class FixtureRuntime {
               "task.get_ancestry",
               "task.get_worktree_cleanup_info",
               "task.run_history",
+              "task.run_history_full",
               "task.input_request",
               "task.start",
               "task.cleanup_worktree",
@@ -988,6 +1030,44 @@ export class FixtureRuntime {
         });
       }
       case "task.run_history": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const taskId = String(params.task_id ?? "");
+        const nodeRunId = String(params.node_run_id ?? "");
+        const task = this.fixtureTasks(state, workspace.workspace_id).find(
+          (entry) => entry.task.id === taskId,
+        );
+        if (!task) {
+          return this.fail(id, -32602, "task not found");
+        }
+        const run = task.node_runs.find((entry) => entry.id === nodeRunId);
+        if (!run) {
+          return this.fail(id, -32602, "node run not found");
+        }
+        const events = task.run_history_by_run_id?.[nodeRunId] ?? [];
+        return this.respond(id, {
+          task_id: taskId,
+          node_run_id: nodeRunId,
+          session_id:
+            run.session_id ??
+            events.find((event) => event.session_id?.trim())?.session_id,
+          provenance: fixtureHistoryProvenance(events),
+          completeness:
+            run.status !== "running" && run.status !== "awaiting_user"
+              ? "complete"
+              : events.length
+              ? "open"
+              : "none",
+          last_seq: events[(events.length || 1) - 1]?.seq ?? 0,
+          events: events.map((event) => summarizeFixtureHistoryEvent(event)),
+        });
+      }
+      case "task.run_history_full": {
         const workspace = this.requireWorkspace(
           state,
           String(params.workspace_id ?? ""),

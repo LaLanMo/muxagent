@@ -5,6 +5,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type FormEvent as ReactFormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
@@ -80,20 +81,17 @@ type ArtifactPaneProps = {
 };
 
 type ApprovalDockProps = {
-  feedback: string;
-  setFeedback: (value: string) => void;
+  requestKey: string;
   submittingDecision: boolean;
-  submitApprove: () => Promise<void>;
-  submitReject: () => Promise<void>;
+  submitApprove: (feedback: string) => Promise<void>;
+  submitReject: (feedback: string) => Promise<void>;
 };
 
 type ClarificationDockProps = {
   requestKey?: string;
   questions: InputQuestionDto[];
-  answers: Array<string | string[]>;
-  setAnswer: (index: number, value: string | string[]) => void;
   submittingClarification: boolean;
-  submitClarification: () => Promise<void>;
+  submitClarification: (answers: Array<string | string[]>) => Promise<void>;
 };
 
 type RetryDockProps = {
@@ -104,18 +102,17 @@ type RetryDockProps = {
 };
 
 type FollowUpDockProps = {
+  taskKey: string;
   configEntries: ConfigCatalogEntryDto[];
   defaultConfigAlias?: string;
   followUp?: TaskFollowUpDto;
   followUpState?: FollowUpDockState;
-  followUpConfigAlias?: string;
-  followUpDescription: string;
-  followUpMode?: FollowUpModeDto;
-  setFollowUpDescription: (value: string) => void;
-  onConfigChange: (alias: string) => void;
-  onModeChange: (mode: FollowUpModeDto) => void;
   submittingFollowUp: boolean;
-  onStartFollowUp: () => Promise<void>;
+  onStartFollowUp: (args: {
+    description: string;
+    followUpConfigAlias?: string;
+    followUpMode?: FollowUpModeDto;
+  }) => Promise<boolean>;
 };
 
 type BlockedDockProps = {
@@ -2126,12 +2123,17 @@ export function TaskArtifactModal({
 }
 
 export function TaskApprovalDock({
-  feedback,
-  setFeedback,
+  requestKey,
   submittingDecision,
   submitApprove,
   submitReject,
 }: ApprovalDockProps) {
+  const [feedback, setFeedback] = useState("");
+
+  useEffect(() => {
+    setFeedback("");
+  }, [requestKey]);
+
   return (
     <section className="detail-inline-action detail-inline-action--approval" data-testid="approval-pane">
       <p className="detail-inline-action__intro">
@@ -2153,7 +2155,7 @@ export function TaskApprovalDock({
         <Button
           data-testid="approval-reject"
           disabled={submittingDecision}
-          onClick={() => void submitReject()}
+          onClick={() => void submitReject(feedback)}
           size="md"
           type="button"
           variant="secondary"
@@ -2163,7 +2165,7 @@ export function TaskApprovalDock({
         <Button
           data-testid="approval-approve"
           disabled={submittingDecision}
-          onClick={() => void submitApprove()}
+          onClick={() => void submitApprove(feedback)}
           size="md"
           type="button"
           variant="primary"
@@ -2290,12 +2292,19 @@ function ClarificationQuestionField({
 export function TaskClarificationDock({
   requestKey,
   questions,
-  answers,
-  setAnswer,
   submittingClarification,
   submitClarification,
 }: ClarificationDockProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [answers, setAnswers] = useState<Array<string | string[]>>(
+    () => questions.map((question) => (question.multi_select ? [] : "")),
+  );
+
+  useEffect(() => {
+    setAnswers(
+      questions.map((question) => (question.multi_select ? [] : "")),
+    );
+  }, [questions, requestKey]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -2310,6 +2319,12 @@ export function TaskClarificationDock({
   const activeQuestion = questions[activeIndex];
   const activeAnswer = answers[activeIndex] ?? (activeQuestion?.multi_select ? [] : "");
   const questionId = `clarification-question-${requestKey ?? "task"}-${activeIndex}`;
+  const setAnswer = (index: number, value: string | string[]) =>
+    setAnswers((current) =>
+      current.map((entry, entryIndex) =>
+        entryIndex === index ? value : entry,
+      ),
+    );
 
   return (
     <section className="detail-inline-action detail-inline-action--clarification" data-testid="clarification-pane">
@@ -2358,7 +2373,7 @@ export function TaskClarificationDock({
           <div className="detail-inline-action__footer">
             <Button
               disabled={submittingClarification}
-              onClick={() => void submitClarification()}
+              onClick={() => void submitClarification(answers)}
               size="md"
               type="button"
               variant="primary"
@@ -2438,21 +2453,43 @@ function FollowUpModeGlyph({ mode }: { mode: FollowUpModeDto }) {
   return <Icon aria-hidden="true" size={14} strokeWidth={1.8} />;
 }
 
+const FOLLOW_UP_MIN_ROWS = 1;
+const FOLLOW_UP_MAX_ROWS = 8;
+
+function resizeFollowUpTextarea(textarea: HTMLTextAreaElement) {
+  const styles = window.getComputedStyle(textarea);
+  const lineHeight = Number.parseFloat(styles.lineHeight);
+  const paddingTop = Number.parseFloat(styles.paddingTop);
+  const paddingBottom = Number.parseFloat(styles.paddingBottom);
+  const borderTop = Number.parseFloat(styles.borderTopWidth);
+  const borderBottom = Number.parseFloat(styles.borderBottomWidth);
+  const safeLineHeight = Number.isFinite(lineHeight) ? lineHeight : 19;
+  const verticalChrome =
+    (Number.isFinite(paddingTop) ? paddingTop : 0) +
+    (Number.isFinite(paddingBottom) ? paddingBottom : 0) +
+    (Number.isFinite(borderTop) ? borderTop : 0) +
+    (Number.isFinite(borderBottom) ? borderBottom : 0);
+  const minHeight = Math.ceil(safeLineHeight * FOLLOW_UP_MIN_ROWS + verticalChrome);
+  const maxHeight = Math.ceil(safeLineHeight * FOLLOW_UP_MAX_ROWS + verticalChrome);
+
+  textarea.style.height = "0px";
+  const nextHeight = Math.min(Math.max(textarea.scrollHeight, minHeight), maxHeight);
+  textarea.style.height = `${nextHeight}px`;
+  textarea.style.overflowY = textarea.scrollHeight > maxHeight ? "auto" : "hidden";
+}
+
 export function TaskFollowUpDock({
+  taskKey,
   configEntries,
   defaultConfigAlias,
   followUp,
   followUpState,
-  followUpConfigAlias,
-  followUpDescription,
-  followUpMode,
-  setFollowUpDescription,
-  onConfigChange,
-  onModeChange,
   submittingFollowUp,
   onStartFollowUp,
 }: FollowUpDockProps) {
   const launchable = configEntries.filter((entry) => entry.launchable);
+  const [followUpConfigAlias, setFollowUpConfigAlias] = useState<string | undefined>();
+  const [followUpMode, setFollowUpMode] = useState<FollowUpModeDto | undefined>();
   const selectedEntry =
     launchable.find((entry) => entry.alias === followUpConfigAlias) ??
     launchable.find((entry) => entry.alias === defaultConfigAlias) ??
@@ -2466,6 +2503,43 @@ export function TaskFollowUpDock({
   const [configPickerOpen, setConfigPickerOpen] = useState(false);
   const [modePickerOpen, setModePickerOpen] = useState(false);
   const dockState = followUpState ?? (followUp ? "refine" : "basic");
+  const syncInputHeight = useEffectEvent((target?: HTMLTextAreaElement | null) => {
+    if (!target) {
+      return;
+    }
+    resizeFollowUpTextarea(target);
+  });
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.value = "";
+      syncInputHeight(inputRef.current);
+    }
+    setFollowUpConfigAlias(undefined);
+  }, [syncInputHeight, taskKey]);
+
+  useEffect(() => {
+    if (!followUp) {
+      setFollowUpMode(undefined);
+      return;
+    }
+    setFollowUpMode((current) =>
+      current && followUp.available_modes.includes(current)
+        ? current
+        : followUp.default_mode,
+    );
+  }, [followUp, taskKey]);
+
+  useEffect(() => {
+    function handleWindowResize() {
+      syncInputHeight(inputRef.current);
+    }
+
+    window.addEventListener("resize", handleWindowResize);
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+    };
+  }, [syncInputHeight]);
 
   const closeOverlays = useEffectEvent(
     (focusTarget?: "config-trigger" | "mode-trigger" | "input") => {
@@ -2525,14 +2599,18 @@ export function TaskFollowUpDock({
     };
   }, [closeOverlays, configPickerOpen, modePickerOpen]);
 
-  useLayoutEffect(() => {
-    const input = inputRef.current;
-    if (!input) {
-      return;
+  async function startFollowUpSubmission() {
+    const description = inputRef.current?.value ?? "";
+    const started = await onStartFollowUp({
+      description,
+      followUpConfigAlias,
+      followUpMode,
+    });
+    if (started && inputRef.current) {
+      inputRef.current.value = "";
+      syncInputHeight(inputRef.current);
     }
-    input.style.height = "0px";
-    input.style.height = `${input.scrollHeight}px`;
-  }, [followUpDescription]);
+  }
 
   function handleDescriptionKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (
@@ -2549,8 +2627,12 @@ export function TaskFollowUpDock({
     }
     event.preventDefault();
     if (dockState !== "pending" && !submittingFollowUp) {
-      void onStartFollowUp();
+      void startFollowUpSubmission();
     }
+  }
+
+  function handleDescriptionInput(event: ReactFormEvent<HTMLTextAreaElement>) {
+    syncInputHeight(event.currentTarget);
   }
 
   const selectedAlias = selectedEntry?.alias ?? followUpConfigAlias ?? defaultConfigAlias ?? "";
@@ -2598,7 +2680,7 @@ export function TaskFollowUpDock({
         onSubmit={(event) => {
           event.preventDefault();
           if (dockState !== "pending") {
-            void onStartFollowUp();
+            void startFollowUpSubmission();
           }
         }}
       >
@@ -2607,12 +2689,11 @@ export function TaskFollowUpDock({
           className="detail-follow-up-rail__input"
           data-testid="follow-up-description"
           disabled={submittingFollowUp}
-          onChange={(event) => setFollowUpDescription(event.target.value)}
+          onInput={handleDescriptionInput}
           onKeyDown={handleDescriptionKeyDown}
           placeholder="Send a follow-up request..."
           ref={inputRef}
           rows={1}
-          value={followUpDescription}
         />
         <div className="detail-follow-up-rail__divider" />
         <div className="detail-follow-up-rail__footer">
@@ -2661,7 +2742,7 @@ export function TaskFollowUpDock({
                           data-testid={`follow-up-config-option-${entry.alias}`}
                           key={entry.alias}
                           onClick={() => {
-                            onConfigChange(entry.alias);
+                            setFollowUpConfigAlias(entry.alias);
                             closeOverlays("input");
                           }}
                           role="option"
@@ -2744,7 +2825,7 @@ export function TaskFollowUpDock({
                           data-testid={`follow-up-mode-option-${mode}`}
                           key={mode}
                           onClick={() => {
-                            onModeChange(mode);
+                            setFollowUpMode(mode);
                             closeOverlays("input");
                           }}
                           role="option"

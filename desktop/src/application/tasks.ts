@@ -314,6 +314,17 @@ export async function loadTaskRunHistory(
   );
 }
 
+export async function loadTaskRunFullHistory(
+  runtime: DesktopRuntime,
+  workspaceId: string,
+  taskId: string,
+  nodeRunId: string,
+): Promise<NormalizedTaskRunHistoryResult> {
+  return normalizeTaskRunHistoryResult(
+    await runtime.backend.taskRunHistoryFull(workspaceId, taskId, nodeRunId),
+  );
+}
+
 export async function loadTaskList(
   runtime: DesktopRuntime,
   workspaceId: string,

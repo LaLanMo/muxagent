@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { hydrateTaskDetail } from "@/application/tasks";
 import { getRuntime } from "@/app/runtime";
 import type { TaskViewDto } from "@/rpc/types";
@@ -44,8 +44,6 @@ export function useTaskDetailHydration({
   const failTaskDetailLoad = useTaskSnapshotStore(
     (state) => state.failTaskDetailLoad,
   );
-  const initialFollowUpRefreshKeyRef = useRef<string | undefined>(undefined);
-
   const loadDetail = useEffectEvent<LoadTaskDetailFn>(
     async (options = {}) => {
       if (!taskId || !workspaceId || !connected) {
@@ -165,12 +163,6 @@ export function useTaskDetailHydration({
     }
 
     function handleWindowFocus() {
-      void refresh();
-    }
-
-    const refreshKey = `${workspaceId}:${taskId}:${currentSnapshotKey}`;
-    if (initialFollowUpRefreshKeyRef.current !== refreshKey) {
-      initialFollowUpRefreshKeyRef.current = refreshKey;
       void refresh();
     }
 

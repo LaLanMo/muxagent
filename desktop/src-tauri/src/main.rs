@@ -258,19 +258,26 @@ fn app_server_disconnect(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn app_server_request(
+async fn app_server_request(
     state: State<'_, AppState>,
     method: String,
     params: Option<Value>,
 ) -> Result<Value, String> {
-    let session = state.manager.current()?;
-    match session.request(&method, params.unwrap_or(Value::Object(Default::default()))) {
-        Ok(result) => Ok(result),
-        Err(error) => {
-            eprintln!("app_server_request {method} failed: {error}");
-            Err(error)
+    let manager = state.manager.clone();
+    let request_method = method.clone();
+    let request_params = params.unwrap_or(Value::Object(Default::default()));
+    tauri::async_runtime::spawn_blocking(move || {
+        let session = manager.current()?;
+        match session.request(&method, request_params) {
+            Ok(result) => Ok(result),
+            Err(error) => {
+                eprintln!("app_server_request {method} failed: {error}");
+                Err(error)
+            }
         }
-    }
+    })
+    .await
+    .map_err(|error| format!("join app_server_request {request_method}: {error}"))?
 }
 
 #[tauri::command]
@@ -299,7 +306,8 @@ fn read_binary_file(
     }
     let _session = state.manager.current()?;
     let requested = resolve_absolute_path(&path)?;
-    let metadata = fs::metadata(&requested).map_err(|error| format!("read file metadata: {error}"))?;
+    let metadata =
+        fs::metadata(&requested).map_err(|error| format!("read file metadata: {error}"))?;
     if metadata.len() > max_bytes {
         return Err(format!(
             "Artifact preview exceeds the {} inline limit. Open externally to inspect the full file.",
@@ -338,8 +346,14 @@ fn show_context_menu(
     let built_items = items
         .iter()
         .map(|item| {
-            MenuItem::with_id(&window, item.id.clone(), item.label.clone(), true, None::<&str>)
-                .map_err(|error| format!("create context menu item: {error}"))
+            MenuItem::with_id(
+                &window,
+                item.id.clone(),
+                item.label.clone(),
+                true,
+                None::<&str>,
+            )
+            .map_err(|error| format!("create context menu item: {error}"))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -609,33 +623,27 @@ fn main() {
         .expect("failed to build tauri application");
 
     let manager = app.state::<AppState>().manager.clone();
-    app.run(move |app_handle, event| {
-        match event {
-            tauri::RunEvent::ExitRequested { .. } => {
-                let _ = manager.disconnect_current();
-            }
-            tauri::RunEvent::MenuEvent(menu_event) => {
-                let menu_id = menu_event.id().0.clone();
-                if let Ok(mut pending) = app_handle
-                    .state::<AppState>()
-                    .pending_context_menus
-                    .lock()
+    app.run(move |app_handle, event| match event {
+        tauri::RunEvent::ExitRequested { .. } => {
+            let _ = manager.disconnect_current();
+        }
+        tauri::RunEvent::MenuEvent(menu_event) => {
+            let menu_id = menu_event.id().0.clone();
+            if let Ok(mut pending) = app_handle.state::<AppState>().pending_context_menus.lock() {
+                if let Some(index) = pending
+                    .iter()
+                    .position(|entry| entry.item_ids.iter().any(|item_id| item_id == &menu_id))
                 {
-                    if let Some(index) = pending
-                        .iter()
-                        .position(|entry| entry.item_ids.iter().any(|item_id| item_id == &menu_id))
-                    {
-                        let entry = pending.remove(index);
-                        if let Some(window) = app_handle.get_webview_window(&entry.window_label) {
-                            let _ = window.emit(
-                                NATIVE_CONTEXT_MENU_ACTION_EVENT,
-                                json!({ "itemId": menu_id }),
-                            );
-                        }
+                    let entry = pending.remove(index);
+                    if let Some(window) = app_handle.get_webview_window(&entry.window_label) {
+                        let _ = window.emit(
+                            NATIVE_CONTEXT_MENU_ACTION_EVENT,
+                            json!({ "itemId": menu_id }),
+                        );
                     }
                 }
             }
-            _ => {}
         }
+        _ => {}
     });
 }

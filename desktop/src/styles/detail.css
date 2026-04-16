@@ -3311,7 +3311,8 @@
 .detail-follow-up-rail__input {
   display: block;
   min-width: 0;
-  min-height: calc(var(--font-size-sm) * 1.35 + (var(--space-3) * 2));
+  min-height: calc((14px * 1.35 * 1) + (var(--space-3) * 2));
+  max-height: calc((14px * 1.35 * 8) + (var(--space-3) * 2));
   resize: none;
   overflow-y: hidden;
   border: 0;

@@ -17,7 +17,6 @@ import type {
   ConfigCatalogEntryDto,
   FollowUpModeDto,
   InputRequestDto,
-  TaskFollowUpDto,
   TaskViewDto,
   WorktreeCleanupInfoDto,
 } from "@/rpc/types";
@@ -45,7 +44,6 @@ type UseTaskDetailActionsArgs = {
   workspaceId: string;
   taskId: string;
   task: TaskViewDto | undefined;
-  followUp: TaskFollowUpDto | undefined;
   configEntries: ConfigCatalogEntryDto[];
   inputRequest: InputRequestDto | undefined;
   latestFailedRunId: string | undefined;
@@ -58,7 +56,6 @@ export function useTaskDetailActions({
   workspaceId,
   taskId,
   task,
-  followUp,
   configEntries,
   inputRequest,
   latestFailedRunId,
@@ -81,17 +78,11 @@ export function useTaskDetailActions({
   const invalidateTaskDetail = useTaskSnapshotStore(
     (state) => state.invalidateTaskDetail,
   );
-  const [feedback, setFeedback] = useState("");
-  const [clarificationAnswers, setClarificationAnswers] = useState<
-    Array<string | string[]>
-  >([]);
   const [submittingDecision, setSubmittingDecision] = useState(false);
   const [submittingClarification, setSubmittingClarification] = useState(false);
-  const [followUpDescription, setFollowUpDescription] = useState("");
-  const [followUpConfigAlias, setFollowUpConfigAlias] = useState<string | undefined>();
-  const [followUpMode, setFollowUpMode] = useState<FollowUpModeDto | undefined>();
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [worktreeCleanupDialogOpen, setWorktreeCleanupDialogOpen] = useState(false);
+  const [loadingWorktreeCleanupDialog, setLoadingWorktreeCleanupDialog] = useState(false);
   const [submittingWorktreeCleanup, setSubmittingWorktreeCleanup] = useState(false);
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
@@ -99,42 +90,18 @@ export function useTaskDetailActions({
   const tasks = tasksForWorkspace(taskIdsByWorkspaceId, tasksById, workspaceId);
 
   useEffect(() => {
-    setFeedback("");
-    setFollowUpDescription("");
-    setClarificationAnswers(
-      (inputRequest?.questions ?? []).map((question) =>
-        question.multi_select ? [] : "",
-      ),
-    );
-  }, [inputRequest?.node_run_id, inputRequest?.questions, taskId]);
-
-  useEffect(() => {
-    setFollowUpConfigAlias(undefined);
-  }, [taskId, task?.task.config_alias, task?.task.config_path]);
-
-  useEffect(() => {
     setWorktreeCleanupDialogOpen(false);
+    setLoadingWorktreeCleanupDialog(false);
   }, [taskId]);
-
-  useEffect(() => {
-    if (!followUp) {
-      setFollowUpMode(undefined);
-      return;
-    }
-    setFollowUpMode((current) =>
-      current && followUp.available_modes.includes(current)
-        ? current
-        : followUp.default_mode,
-    );
-  }, [taskId, followUp]);
 
   async function runTaskAction(
     fallbackMessage: string,
     action: () => Promise<void>,
-  ): Promise<void> {
+  ): Promise<boolean> {
     clearTaskDetailIssue(workspaceId, taskId);
     try {
       await action();
+      return true;
     } catch (error) {
       const message =
         error instanceof Error
@@ -147,10 +114,11 @@ export function useTaskDetailActions({
         taskId,
         message,
       );
+      return false;
     }
   }
 
-  async function submitDecision(approved: boolean): Promise<void> {
+  async function submitDecision(approved: boolean, feedback: string): Promise<void> {
     if (!inputRequest || !taskId || !workspaceId) {
       return;
     }
@@ -164,7 +132,6 @@ export function useTaskDetailActions({
           approved,
           feedback,
         });
-        setFeedback("");
         invalidateTaskDetail(workspaceId, taskId);
       });
     } finally {
@@ -172,7 +139,9 @@ export function useTaskDetailActions({
     }
   }
 
-  async function submitClarification(): Promise<void> {
+  async function submitClarification(
+    clarificationAnswers: Array<string | string[]>,
+  ): Promise<void> {
     if (!inputRequest || inputRequest.kind !== "clarification" || !taskId || !workspaceId) {
       return;
     }
@@ -195,9 +164,6 @@ export function useTaskDetailActions({
             return typeof answer === "string" ? answer.trim() : "";
           }),
         });
-        setClarificationAnswers(
-          questions.map((question) => (question.multi_select ? [] : "")),
-        );
         invalidateTaskDetail(workspaceId, taskId);
       });
     } finally {
@@ -205,27 +171,32 @@ export function useTaskDetailActions({
     }
   }
 
-  async function submitFollowUp(): Promise<void> {
+  async function submitFollowUp(args: {
+    description: string;
+    followUpConfigAlias?: string;
+    followUpMode?: FollowUpModeDto;
+  }): Promise<boolean> {
     if (!task || !workspaceId || !taskId) {
-      return;
+      return false;
     }
+    const { description, followUpConfigAlias, followUpMode } = args;
     const selectedConfig = resolveFollowUpConfigEntry({
       configEntries,
       task,
       followUpConfigAlias,
     });
-    const trimmed = followUpDescription.trim();
+    const trimmed = description.trim();
     if (!trimmed) {
       failTaskDetail(
         workspaceId,
         taskId,
         "Follow-up description is required",
       );
-      return;
+      return false;
     }
     setSubmittingFollowUp(true);
     try {
-      await runTaskAction("Failed to start follow-up task", async () => {
+      return await runTaskAction("Failed to start follow-up task", async () => {
         const { tasks: nextTasks, followUpTaskId } =
           await startFollowUpAndReloadTaskList(getRuntime(), {
             workspaceId,
@@ -242,7 +213,6 @@ export function useTaskDetailActions({
             existingTaskIds: new Set(tasks.map((entry) => entry.task.id)),
           });
         setTasks(workspaceId, nextTasks);
-        setFollowUpDescription("");
         if (followUpTaskId) {
           navigate(buildTaskDetailPath(workspaceId, followUpTaskId));
         }
@@ -278,6 +248,25 @@ export function useTaskDetailActions({
       });
     } finally {
       setSubmittingWorktreeCleanup(false);
+    }
+  }
+
+  async function openWorktreeCleanupDialog(): Promise<void> {
+    if (!workspaceId || !taskId) {
+      return;
+    }
+    if (worktreeCleanupInfo) {
+      setWorktreeCleanupDialogOpen(true);
+      return;
+    }
+    setLoadingWorktreeCleanupDialog(true);
+    try {
+      const info = await loadCleanupInfo();
+      if (info) {
+        setWorktreeCleanupDialogOpen(true);
+      }
+    } finally {
+      setLoadingWorktreeCleanupDialog(false);
     }
   }
 
@@ -357,34 +346,20 @@ export function useTaskDetailActions({
   }
 
   return {
-    feedback,
-    setFeedback,
-    clarificationAnswers,
-    setClarificationAnswer: (index: number, value: string | string[]) =>
-      setClarificationAnswers((current) =>
-        current.map((entry, entryIndex) =>
-          entryIndex === index ? value : entry,
-        ),
-      ),
     submittingDecision,
     submittingClarification,
-    followUpDescription,
-    setFollowUpDescription,
-    followUpConfigAlias,
-    setFollowUpConfigAlias,
-    followUpMode,
-    setFollowUpMode,
     submittingFollowUp,
     worktreeCleanupDialogOpen,
+    loadingWorktreeCleanupDialog,
     submittingWorktreeCleanup,
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,
     submittingRecovery: Boolean(recoveringNodeId),
-    submitApprove: () => submitDecision(true),
-    submitReject: () => submitDecision(false),
+    submitApprove: (feedback: string) => submitDecision(true, feedback),
+    submitReject: (feedback: string) => submitDecision(false, feedback),
     submitClarification,
     submitFollowUp,
-    openWorktreeCleanupDialog: () => setWorktreeCleanupDialogOpen(true),
+    openWorktreeCleanupDialog,
     closeWorktreeCleanupDialog: () => setWorktreeCleanupDialogOpen(false),
     confirmWorktreeCleanup,
     retryTask: (force = false) =>

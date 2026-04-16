@@ -15,6 +15,7 @@ import {
 import {
   detailStatusLabel,
   formatRelativeTime,
+  isWorktreeTask,
   taskLaunchModeLabel,
 } from "@/domain/task-shell";
 import {
@@ -514,27 +515,19 @@ type TaskDetailScreenProps = {
   liveEvents: SessionHistoryEvent[];
   liveEventsRunId?: string;
   selectedRunHistory?: RunHistoryCacheEntry;
+  selectedRunFullHistory?: RunHistoryCacheEntry;
   workspaceActorState: string;
   staleReconcilePending: boolean;
   supportsRunRecovery: boolean;
   actionSurface: TaskDetailActionSurface;
   inputRequest?: InputRequestDto;
   blockedStep?: BlockedStepDto;
-  feedback: string;
-  setFeedback: (value: string) => void;
-  clarificationAnswers: Array<string | string[]>;
-  setClarificationAnswer: (index: number, value: string | string[]) => void;
   submittingClarification: boolean;
   submittingDecision: boolean;
-  followUpDescription: string;
-  setFollowUpDescription: (value: string) => void;
-  followUpConfigAlias?: string;
-  setFollowUpConfigAlias: (alias: string) => void;
   followUp?: TaskFollowUpDto;
   followUpState?: FollowUpDockState;
   worktreeCleanupInfo?: WorktreeCleanupInfoDto;
-  followUpMode?: FollowUpModeDto;
-  setFollowUpMode: (mode: FollowUpModeDto) => void;
+  worktreeCleanupLoading: boolean;
   configEntries: ConfigCatalogEntryDto[];
   submittingFollowUp: boolean;
   worktreeCleanupDialogOpen: boolean;
@@ -549,11 +542,15 @@ type TaskDetailScreenProps = {
   openTranscript: (runId: string) => void;
   openArtifact: (artifact: ArtifactRefDto) => void;
   openArtifactExternally: () => Promise<void>;
-  submitApprove: () => Promise<void>;
-  submitReject: () => Promise<void>;
-  submitClarification: () => Promise<void>;
-  submitFollowUp: () => Promise<void>;
-  openWorktreeCleanupDialog: () => void;
+  submitApprove: (feedback: string) => Promise<void>;
+  submitReject: (feedback: string) => Promise<void>;
+  submitClarification: (answers: Array<string | string[]>) => Promise<void>;
+  submitFollowUp: (args: {
+    description: string;
+    followUpConfigAlias?: string;
+    followUpMode?: FollowUpModeDto;
+  }) => Promise<boolean>;
+  openWorktreeCleanupDialog: () => Promise<void>;
   closeWorktreeCleanupDialog: () => void;
   confirmWorktreeCleanup: () => Promise<void>;
   retryTask: (force?: boolean) => Promise<void>;
@@ -589,27 +586,19 @@ export function TaskDetailScreen({
   liveEvents,
   liveEventsRunId,
   selectedRunHistory,
+  selectedRunFullHistory,
   workspaceActorState,
   staleReconcilePending,
   supportsRunRecovery,
   actionSurface,
   inputRequest,
   blockedStep,
-  feedback,
-  setFeedback,
-  clarificationAnswers,
-  setClarificationAnswer,
   submittingClarification,
   submittingDecision,
-  followUpDescription,
-  setFollowUpDescription,
-  followUpConfigAlias,
-  setFollowUpConfigAlias,
   followUp,
   followUpState,
   worktreeCleanupInfo,
-  followUpMode,
-  setFollowUpMode,
+  worktreeCleanupLoading,
   configEntries,
   submittingFollowUp,
   worktreeCleanupDialogOpen,
@@ -662,18 +651,28 @@ export function TaskDetailScreen({
   } = useMemo(() => {
     const currentLiveSelectedRunEvents =
       selectedRun?.id && liveEventsRunId === selectedRun.id ? liveEvents : [];
+    const currentReplay =
+      selectedRunFullHistory?.fullResult ?? selectedRunHistory?.result;
     const currentTranscript = buildTranscriptSnapshot({
-      replay: selectedRunHistory?.result,
+      replay: currentReplay,
       liveEvents: currentLiveSelectedRunEvents,
     });
     const currentRawTranscriptItems = deriveTranscriptTimelineItems(currentTranscript);
     const currentSelectedRunStreamLines = timelineItemsToLines(currentRawTranscriptItems);
+    const currentTranscriptLoading =
+      modal.kind === "transcript"
+        ? Boolean(
+            selectedRunFullHistory?.fullLoading &&
+              !selectedRunFullHistory?.fullResult &&
+              currentLiveSelectedRunEvents.length === 0,
+          )
+        : Boolean(selectedRunHistory?.loading);
     const currentSelectedRunStreamSource: "live" | "replay" | "loading" | "none" =
       currentLiveSelectedRunEvents.length > 0
         ? "live"
         : currentSelectedRunStreamLines.length > 0
           ? "replay"
-          : selectedRunHistory?.loading
+          : currentTranscriptLoading
             ? "loading"
             : "none";
     const currentCanRecoverSelectedRun = Boolean(
@@ -712,7 +711,9 @@ export function TaskDetailScreen({
     currentRunId,
     liveEvents,
     liveEventsRunId,
+    modal.kind,
     selectedRun,
+    selectedRunFullHistory,
     selectedRunHistory,
     supportsRunRecovery,
     workspaceActorState,
@@ -722,12 +723,11 @@ export function TaskDetailScreen({
   const runsLabel = summarizeRuns(timelineRuns);
   const launchModeLabel = task ? taskLaunchModeLabel(task) : undefined;
   const launchedInWorktree = launchModeLabel === "Worktree";
+  const cleanupEligible = Boolean(task && task.status === "done" && isWorktreeTask(task));
   const cleanupTaskCount = worktreeCleanupInfo?.shared_task_count ?? 0;
   const cleanupDirtyCount = worktreeCleanupInfo?.dirty_count ?? 0;
   const cleanupBlockedBy = worktreeCleanupInfo?.blocked_by ?? [];
-  const showCleanupPropertyBlock =
-    worktreeCleanupInfo?.state === "available" ||
-    worktreeCleanupInfo?.state === "blocked";
+  const showCleanupPropertyBlock = cleanupEligible;
   const cleanupMeta = [
     cleanupDirtyCount > 0
       ? formatCount(cleanupDirtyCount, "uncommitted change", "uncommitted changes")
@@ -856,8 +856,7 @@ export function TaskDetailScreen({
   if (actionSurface.kind === "approval") {
     actionPanel = (
       <TaskApprovalDock
-        feedback={feedback}
-        setFeedback={setFeedback}
+        requestKey={`${inputRequest?.task_id ?? "task"}:${inputRequest?.node_run_id ?? "run"}`}
         submitApprove={submitApprove}
         submitReject={submitReject}
         submittingDecision={submittingDecision}
@@ -866,10 +865,8 @@ export function TaskDetailScreen({
   } else if (actionSurface.kind === "clarification") {
     actionPanel = (
       <TaskClarificationDock
-        answers={clarificationAnswers}
         questions={inputRequest?.questions ?? []}
         requestKey={`${inputRequest?.task_id ?? "task"}:${inputRequest?.node_run_id ?? "run"}`}
-        setAnswer={setClarificationAnswer}
         submitClarification={submitClarification}
         submittingClarification={submittingClarification}
       />
@@ -898,13 +895,8 @@ export function TaskDetailScreen({
         defaultConfigAlias={task?.task.config_alias}
         followUp={followUp}
         followUpState={followUpState}
-        followUpConfigAlias={followUpConfigAlias}
-        followUpDescription={followUpDescription}
-        onConfigChange={setFollowUpConfigAlias}
-        followUpMode={followUpMode}
-        onModeChange={setFollowUpMode}
+        taskKey={task?.task.id ?? "task"}
         onStartFollowUp={submitFollowUp}
-        setFollowUpDescription={setFollowUpDescription}
         submittingFollowUp={submittingFollowUp}
       />
     );
@@ -1412,14 +1404,30 @@ export function TaskDetailScreen({
                         className="detail-properties__cleanup-button"
                         data-testid="worktree-cleanup-trigger"
                         disabled={submittingWorktreeCleanup}
-                        onClick={openWorktreeCleanupDialog}
+                        onClick={() => {
+                          void openWorktreeCleanupDialog();
+                        }}
                         size="sm"
                         type="button"
                         variant="danger"
                       >
                         {submittingWorktreeCleanup ? "Removing…" : "Remove worktree"}
                       </Button>
-                    ) : null}
+                    ) : (
+                      <Button
+                        className="detail-properties__cleanup-button"
+                        data-testid="worktree-cleanup-trigger"
+                        disabled={worktreeCleanupLoading}
+                        onClick={() => {
+                          void openWorktreeCleanupDialog();
+                        }}
+                        size="sm"
+                        type="button"
+                        variant="secondary"
+                      >
+                        {worktreeCleanupLoading ? "Checking…" : "Check cleanup status"}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : null}

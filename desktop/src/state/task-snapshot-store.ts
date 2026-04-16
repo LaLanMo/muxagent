@@ -99,6 +99,10 @@ export type RunHistoryCacheEntry = {
   signature?: string;
   result?: NormalizedTaskRunHistoryResult;
   error?: string;
+  fullLoading?: boolean;
+  fullSignature?: string;
+  fullResult?: NormalizedTaskRunHistoryResult;
+  fullError?: string;
 };
 
 export type TaskDetailCacheEntry = {
@@ -181,6 +185,26 @@ interface TaskSnapshotState {
     result: NormalizedTaskRunHistoryResult,
   ) => void;
   failRunHistory: (
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+    signature: string,
+    error: string,
+  ) => void;
+  beginFullRunHistoryLoad: (
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+    signature: string,
+  ) => void;
+  resolveFullRunHistory: (
+    workspaceId: string,
+    taskId: string,
+    nodeRunId: string,
+    signature: string,
+    result: NormalizedTaskRunHistoryResult,
+  ) => void;
+  failFullRunHistory: (
     workspaceId: string,
     taskId: string,
     nodeRunId: string,
@@ -432,6 +456,10 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
                 signature,
                 result: base.runHistoryByRunId?.[nodeRunId]?.result,
                 error: undefined,
+                fullLoading: base.runHistoryByRunId?.[nodeRunId]?.fullLoading,
+                fullSignature: base.runHistoryByRunId?.[nodeRunId]?.fullSignature,
+                fullResult: base.runHistoryByRunId?.[nodeRunId]?.fullResult,
+                fullError: base.runHistoryByRunId?.[nodeRunId]?.fullError,
               },
             },
           };
@@ -455,6 +483,10 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
                 signature,
                 result,
                 error: undefined,
+                fullLoading: base.runHistoryByRunId?.[nodeRunId]?.fullLoading,
+                fullSignature: base.runHistoryByRunId?.[nodeRunId]?.fullSignature,
+                fullResult: base.runHistoryByRunId?.[nodeRunId]?.fullResult,
+                fullError: base.runHistoryByRunId?.[nodeRunId]?.fullError,
               },
             },
           };
@@ -478,6 +510,91 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
                 signature,
                 result: base.runHistoryByRunId?.[nodeRunId]?.result,
                 error,
+                fullLoading: base.runHistoryByRunId?.[nodeRunId]?.fullLoading,
+                fullSignature: base.runHistoryByRunId?.[nodeRunId]?.fullSignature,
+                fullResult: base.runHistoryByRunId?.[nodeRunId]?.fullResult,
+                fullError: base.runHistoryByRunId?.[nodeRunId]?.fullError,
+              },
+            },
+          };
+        },
+      ),
+    })),
+  beginFullRunHistoryLoad: (workspaceId, taskId, nodeRunId, signature) =>
+    set((state) => ({
+      taskDetailsByWorkspaceId: updateTaskDetailEntry(
+        state,
+        workspaceId,
+        taskId,
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          return {
+            ...base,
+            runHistoryByRunId: {
+              ...base.runHistoryByRunId,
+              [nodeRunId]: {
+                loading: base.runHistoryByRunId?.[nodeRunId]?.loading ?? false,
+                signature: base.runHistoryByRunId?.[nodeRunId]?.signature,
+                result: base.runHistoryByRunId?.[nodeRunId]?.result,
+                error: base.runHistoryByRunId?.[nodeRunId]?.error,
+                fullLoading: true,
+                fullSignature: signature,
+                fullResult: base.runHistoryByRunId?.[nodeRunId]?.fullResult,
+                fullError: undefined,
+              },
+            },
+          };
+        },
+      ),
+    })),
+  resolveFullRunHistory: (workspaceId, taskId, nodeRunId, signature, result) =>
+    set((state) => ({
+      taskDetailsByWorkspaceId: updateTaskDetailEntry(
+        state,
+        workspaceId,
+        taskId,
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          return {
+            ...base,
+            runHistoryByRunId: {
+              ...base.runHistoryByRunId,
+              [nodeRunId]: {
+                loading: base.runHistoryByRunId?.[nodeRunId]?.loading ?? false,
+                signature: base.runHistoryByRunId?.[nodeRunId]?.signature,
+                result: base.runHistoryByRunId?.[nodeRunId]?.result,
+                error: base.runHistoryByRunId?.[nodeRunId]?.error,
+                fullLoading: false,
+                fullSignature: signature,
+                fullResult: result,
+                fullError: undefined,
+              },
+            },
+          };
+        },
+      ),
+    })),
+  failFullRunHistory: (workspaceId, taskId, nodeRunId, signature, error) =>
+    set((state) => ({
+      taskDetailsByWorkspaceId: updateTaskDetailEntry(
+        state,
+        workspaceId,
+        taskId,
+        (current) => {
+          const base = baseTaskDetailEntry(current);
+          return {
+            ...base,
+            runHistoryByRunId: {
+              ...base.runHistoryByRunId,
+              [nodeRunId]: {
+                loading: base.runHistoryByRunId?.[nodeRunId]?.loading ?? false,
+                signature: base.runHistoryByRunId?.[nodeRunId]?.signature,
+                result: base.runHistoryByRunId?.[nodeRunId]?.result,
+                error: base.runHistoryByRunId?.[nodeRunId]?.error,
+                fullLoading: false,
+                fullSignature: signature,
+                fullResult: base.runHistoryByRunId?.[nodeRunId]?.fullResult,
+                fullError: error,
               },
             },
           };
