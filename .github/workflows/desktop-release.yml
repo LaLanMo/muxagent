@@ -23,6 +23,7 @@ concurrency:
 
 jobs:
   release:
+    environment: desktop-release-signing
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -60,7 +61,7 @@ jobs:
           echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
 
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ steps.meta.outputs.ref_name }}
 
@@ -89,19 +90,19 @@ jobs:
           fi
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@9fd676a19091d4595eefd76e4bd31c97133911f1
         with:
           version: 10.18.3
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
 
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
@@ -113,11 +114,73 @@ jobs:
         working-directory: desktop
         run: pnpm typecheck
 
+      - name: Import Apple Developer ID certificate
+        id: signing
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          certificate_path="$RUNNER_TEMP/muxagent-developer-id.p12"
+          keychain_path="$RUNNER_TEMP/muxagent-build.keychain-db"
+
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security default-keychain -s "$keychain_path"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security \
+            -T /usr/bin/productbuild
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$keychain_path"
+
+          signing_identity="$(
+            security find-identity -v -p codesigning "$keychain_path" \
+              | grep 'Developer ID Application' \
+              | head -n 1 \
+              | sed -E 's/.*"([^"]+)".*/\1/'
+          )"
+
+          if [ -z "$signing_identity" ]; then
+            echo "failed to resolve Developer ID Application signing identity" >&2
+            exit 1
+          fi
+
+          echo "certificate_path=$certificate_path" >> "$GITHUB_OUTPUT"
+          echo "keychain_path=$keychain_path" >> "$GITHUB_OUTPUT"
+          echo "identity=$signing_identity" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare App Store Connect API key
+        id: notary
+        shell: bash
+        env:
+          APPLE_API_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_API_PRIVATE_KEY_BASE64 }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          echo "$APPLE_API_PRIVATE_KEY_BASE64" | base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+
+          echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
+
       - name: Build and upload desktop bundle
-        uses: tauri-apps/tauri-action@v1
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APPLE_SIGNING_IDENTITY: "-"
+          APPLE_SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ steps.notary.outputs.api_key_path }}
         with:
           projectPath: desktop
           tagName: ${{ steps.meta.outputs.release_tag }}
@@ -127,3 +190,18 @@ jobs:
           releaseCommitish: ${{ steps.target.outputs.sha }}
           args: --target ${{ matrix.target }} --bundles dmg
           releaseAssetNamePattern: "[name]_[version]_[platform]_[arch][ext]"
+
+      - name: Clean up signing material
+        if: always()
+        shell: bash
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          rm -f "${{ steps.signing.outputs.certificate_path }}"
+          rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+
+          if [ -n "${{ steps.signing.outputs.keychain_path }}" ]; then
+            security delete-keychain "${{ steps.signing.outputs.keychain_path }}" || true
+          fi
