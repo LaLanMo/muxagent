@@ -3,7 +3,7 @@ set -eu
 
 REPO="${MUXAGENT_REPO:-LaLanMo/muxagent}"
 BASE_URL="${MUXAGENT_RELEASE_BASE_URL:-https://github.com/$REPO/releases/download}"
-LATEST_BASE_URL="${MUXAGENT_RELEASE_LATEST_BASE_URL:-https://github.com/$REPO/releases/latest/download}"
+RELEASES_API_URL="${MUXAGENT_RELEASES_API_URL:-https://api.github.com/repos/$REPO/releases?per_page=100}"
 VERSION="${MUXAGENT_VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 
@@ -87,11 +87,86 @@ download_asset() {
   fi
 }
 
+api_get() {
+  url="$1"
+  if ! curl -fsSL --retry 3 --connect-timeout 15 "$url"; then
+    return 1
+  fi
+}
+
+legacy_tag_fallback() {
+  tag="$1"
+  case "$tag" in
+    cli/*) printf '%s\n' "${tag#cli/}" ;;
+    *) return 1 ;;
+  esac
+}
+
+resolve_latest_release_tag() {
+  asset_name="$1"
+  releases_json="$(api_get "$RELEASES_API_URL")" || {
+    echo "failed to query releases from $RELEASES_API_URL" >&2
+    return 1
+  }
+
+  # Select the newest non-draft, non-prerelease release that actually contains
+  # the CLI bundle for this platform so repo-level desktop releases are ignored.
+  tag="$(
+    printf '%s\n' "$releases_json" |
+      awk -v asset_name="$asset_name" '
+        function read_value(line) {
+          sub(/^[^:]*:[[:space:]]*/, "", line)
+          sub(/,$/, "", line)
+          gsub(/^"/, "", line)
+          gsub(/"$/, "", line)
+          return line
+        }
+        function emit_match() {
+          if (found == 0 && tag != "" && draft == "false" && prerelease == "false" && has_asset == 1) {
+            found = 1
+            print tag
+            exit
+          }
+        }
+        /^[[:space:]]*"tag_name":[[:space:]]*"/ {
+          emit_match()
+          tag = read_value($0)
+          draft = ""
+          prerelease = ""
+          has_asset = 0
+          next
+        }
+        tag != "" && /^[[:space:]]*"draft":[[:space:]]*(true|false),?$/ {
+          draft = read_value($0)
+          next
+        }
+        tag != "" && /^[[:space:]]*"prerelease":[[:space:]]*(true|false),?$/ {
+          prerelease = read_value($0)
+          next
+        }
+        tag != "" && index($0, "\"name\": \"" asset_name "\"") {
+          has_asset = 1
+        }
+        END {
+          emit_match()
+        }
+      '
+  )"
+
+  if [ -z "$tag" ]; then
+    echo "failed to resolve latest CLI release for $asset_name from $RELEASES_API_URL" >&2
+    return 1
+  fi
+
+  printf '%s\n' "$tag"
+}
+
 need_cmd uname
 need_cmd mktemp
 need_cmd chmod
 need_cmd mv
 need_cmd mkdir
+need_cmd curl
 need_cmd grep
 need_cmd tar
 
@@ -109,8 +184,9 @@ DOWNLOAD_BASE="$BASE_URL/$TAG"
 DISPLAY_VERSION="$TAG"
 
 if [ "$TAG" = "latest" ]; then
-  DOWNLOAD_BASE="$LATEST_BASE_URL"
-  DISPLAY_VERSION="latest"
+  TAG="$(resolve_latest_release_tag "$BUNDLE_ASSET")"
+  DOWNLOAD_BASE="$BASE_URL/$TAG"
+  DISPLAY_VERSION="${TAG#cli/}"
 else
   DISPLAY_VERSION="${TAG#cli/}"
 fi
@@ -126,8 +202,15 @@ echo "Installing muxagent $DISPLAY_VERSION to $TARGET_DIR"
 
 BUNDLE_TMP="$TMP_DIR/muxagent.tar.gz"
 if ! download_asset "$DOWNLOAD_BASE/$BUNDLE_ASSET" "$BUNDLE_TMP"; then
-  echo "failed to download $BUNDLE_ASSET from $DOWNLOAD_BASE/" >&2
-  exit 1
+  if legacy_tag="$(legacy_tag_fallback "$TAG" 2>/dev/null)" &&
+    download_asset "$BASE_URL/$legacy_tag/$BUNDLE_ASSET" "$BUNDLE_TMP"; then
+    TAG="$legacy_tag"
+    DOWNLOAD_BASE="$BASE_URL/$TAG"
+    DISPLAY_VERSION="${TAG#cli/}"
+  else
+    echo "failed to download $BUNDLE_ASSET from $DOWNLOAD_BASE/" >&2
+    exit 1
+  fi
 fi
 
 EXTRACT_DIR="$TMP_DIR/extract"
