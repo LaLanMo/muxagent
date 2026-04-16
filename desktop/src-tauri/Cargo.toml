@@ -1,6 +1,6 @@
 [package]
 name = "muxagent-desktop"
-version = "0.1.0"
+version = "0.1.1-rc.1"
 description = "Desktop shell for muxagent task workflows"
 edition = "2021"
 rust-version = "1.77"
