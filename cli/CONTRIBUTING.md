@@ -68,19 +68,6 @@ messages make review easier.
 - If you find a security issue, follow [SECURITY.md](SECURITY.md) instead of
   opening a public issue with exploit details.
 
-## Task TUI E2E
-
-The repository includes a checked-in end-to-end smoke test for the
-task-first TUI. It launches the real `muxagent` binary in a PTY, swaps in a
-fake `codex` executable, drives the Bubble Tea UI, and verifies SQLite plus
-artifact persistence in the current working directory.
-
-Run just the task TUI E2E:
-
-```bash
-go test ./cmd/muxagent -run TestTaskTUIEndToEndScenarios -count=1
-```
-
 ## Task TUI Visual Guidance
 
 The current approved task-first TUI uses a few explicit visual rules.
