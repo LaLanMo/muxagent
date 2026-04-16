@@ -163,8 +163,7 @@ function SettingsRoute() {
   const model = useSettingsScreen();
   return (
     <SettingsScreen
-      appServerRows={model.appServerRows}
-      automaticRuntime={model.automaticRuntime}
+      aboutRows={model.aboutRows}
       runtimeRows={model.runtimeRows}
       shell={model.shell}
     />

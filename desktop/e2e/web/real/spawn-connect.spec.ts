@@ -130,14 +130,10 @@ test("renders runtime status in settings through the real app-server", async ({ 
 
     await page.getByRole("link", { name: /^Settings$/i }).click();
     await expect(page.getByTestId("settings-screen")).toBeVisible();
-    await expect(page.getByTestId("settings-app-server-section")).toContainText(
-      "App Server",
-    );
-    await expect(page.getByTestId("settings-runtime-section")).toContainText(
-      "Task Runtime",
-    );
-    await expect(page.getByTestId("settings-runtime-automatic")).toBeVisible();
+    await expect(page.getByTestId("settings-runtime-section")).toContainText("Runtimes");
     await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
+    await expect(page.getByTestId("settings-about-section")).toContainText("About");
+    await expect(page.getByTestId("settings-version-row")).toBeVisible();
     await expect(page.getByTestId("settings-workspace-row")).toHaveCount(0);
     await expect(page.getByTestId("workspace-rename-button")).toHaveCount(0);
     await expect(page.getByTestId("workspace-remove-button")).toHaveCount(0);

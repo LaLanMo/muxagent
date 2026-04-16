@@ -36,15 +36,16 @@ test("keeps settings sparse and removes legacy workspace management controls", a
   await expect(page.getByTestId("workspace-rename-button")).toHaveCount(0);
   await expect(page.getByTestId("workspace-remove-button")).toHaveCount(0);
   await expect(page.getByText("Protocol")).toHaveCount(0);
-  await expect(page.getByText("Version")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
-  await expect(page.getByTestId("settings-app-server-section")).toContainText("App Server");
-  await expect(page.getByTestId("settings-runtime-section")).toContainText("Task Runtime");
-  await expect(page.getByTestId("settings-runtime-automatic")).toContainText("Codex");
-  await expect(page.getByTestId("settings-runtime-automatic")).toContainText("Detected");
+  await expect(page.getByTestId("settings-runtime-section")).toContainText("Runtimes");
   await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
+  await expect(page.getByTestId("settings-about-section")).toContainText("About");
+  await expect(page.getByTestId("settings-version-row")).toContainText("fixture");
+  await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
+  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "Codex" })).toContainText(
+    "Detected",
+  );
   await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "Claude Code" })).toContainText("Available");
-  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "OpenCode" })).toContainText("Unavailable");
+  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "OpenCode" })).toContainText("Not found");
 });
 
 test("uses a single active destination state between Tasks and workspace rows", async ({ page }) => {

@@ -1,42 +1,44 @@
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { useShellModel } from "@/features/app/model/use-shell-model";
-import type { RuntimeStatusResult } from "@/rpc/types";
+import type { RuntimeStatusResult, ServiceStatusResult } from "@/rpc/types";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
 export type SettingsStatusTone = "default" | "available" | "warning";
 
-export type SettingsRowModel = {
+export type SettingsRuntimeRowModel = {
   id: string;
-  label: string;
-  value: string;
+  name: string;
   detail?: string;
-  statusLabel?: string;
-  statusTone?: SettingsStatusTone;
-  monospace?: boolean;
+  detailMonospace?: boolean;
+  statusLabel: string;
+  statusTone: SettingsStatusTone;
 };
 
-function connectionRow(
+export type SettingsAboutRowModel =
+  {
+    id: "version";
+    label: string;
+    value: string;
+    monospace?: boolean;
+  };
+
+function offlineRuntimeRow(
   phase: ShellChromeModel["phase"],
   error?: string,
-): Pick<SettingsRowModel, "value" | "detail" | "statusLabel" | "statusTone"> {
+): SettingsRuntimeRowModel {
   switch (phase) {
-    case "connected":
-      return {
-        value: "Connected",
-        detail: "Desktop is attached to the app-server and receiving live runtime status.",
-        statusLabel: "Connected",
-        statusTone: "available",
-      };
     case "connecting":
       return {
-        value: "Connecting",
+        id: "runtime-status-connecting",
+        name: "Runtime status",
         detail: "Desktop is opening a fresh app-server session.",
         statusLabel: "Connecting",
         statusTone: "warning",
       };
     case "failed":
       return {
-        value: "Failed",
+        id: "runtime-status-failed",
+        name: "Runtime status",
         detail: error ?? "Desktop could not bootstrap the app-server session.",
         statusLabel: "Failed",
         statusTone: "warning",
@@ -44,97 +46,88 @@ function connectionRow(
     case "idle":
     default:
       return {
-        value: "Disconnected",
-        detail: "Connect to the app-server to inspect runtime availability.",
-        statusLabel: "Disconnected",
+        id: "runtime-status-offline",
+        name: "Runtime status",
+        detail: "Connect to the app-server to inspect launcher availability.",
+        statusLabel: "Offline",
         statusTone: "default",
       };
   }
 }
 
-function automaticRuntimeRow(runtimeStatus?: RuntimeStatusResult): SettingsRowModel {
+function runtimeRows(
+  phase: ShellChromeModel["phase"],
+  runtimeStatus: RuntimeStatusResult | undefined,
+  error?: string,
+): SettingsRuntimeRowModel[] {
   if (!runtimeStatus) {
-    return {
-      id: "automatic-runtime",
-      label: "Automatic default",
-      value: "Unavailable",
-      detail: "Connect to the app-server to inspect automatic runtime detection.",
-      statusLabel: "Unavailable",
-      statusTone: "default",
-    };
+    return [offlineRuntimeRow(phase, error)];
   }
 
   const automatic = runtimeStatus.automatic;
-  const launcher = automatic.launcher?.trim();
-  if (automatic.detected) {
+  const rows = runtimeStatus.runtimes.map((runtime) => {
+    const launcher = runtime.launcher?.trim();
+    const automaticRow = runtime.runtime_id === automatic.runtime_id;
+
     return {
-      id: "automatic-runtime",
-      label: "Automatic default",
-      value: automatic.runtime_name,
-      detail: launcher
-        ? `Detected via ${launcher} on PATH.`
-        : "Detected on this machine.",
-      statusLabel: "Detected",
-      statusTone: "available",
-    };
+      id: runtime.runtime_id,
+      name: runtime.runtime_name,
+      detail: launcher ?? "Not configured",
+      detailMonospace: Boolean(launcher),
+      statusLabel: automaticRow
+        ? automatic.detected
+          ? "Detected"
+          : "Fallback"
+        : runtime.available
+          ? "Available"
+          : "Not found",
+      statusTone: automaticRow
+        ? automatic.detected
+          ? "available"
+          : "warning"
+        : runtime.available
+          ? "available"
+          : "default",
+    } satisfies SettingsRuntimeRowModel;
+  });
+
+  if (rows.some((row) => row.id === automatic.runtime_id)) {
+    return rows;
   }
 
-  return {
-    id: "automatic-runtime",
-    label: "Automatic default",
-    value: automatic.runtime_name,
-    detail: launcher
-      ? `No preferred runtime binary was detected, so app-server falls back to ${automatic.runtime_name} via ${launcher}.`
-      : `No preferred runtime binary was detected, so app-server falls back to ${automatic.runtime_name}.`,
-    statusLabel: "Fallback",
-    statusTone: "warning",
-  };
+  const launcher = automatic.launcher?.trim();
+  return [
+    {
+      id: automatic.runtime_id,
+      name: automatic.runtime_name,
+      detail: launcher ?? "Detected on this machine",
+      detailMonospace: Boolean(launcher),
+      statusLabel: automatic.detected ? "Detected" : "Fallback",
+      statusTone: automatic.detected ? "available" : "warning",
+    },
+    ...rows,
+  ];
 }
 
-function taskRuntimeRows(runtimeStatus?: RuntimeStatusResult): SettingsRowModel[] {
-  return (runtimeStatus?.runtimes ?? []).map((runtime) => ({
-    id: runtime.runtime_id,
-    label: "Task runtime",
-    value: runtime.runtime_name,
-    detail: runtime.launcher
-      ? `Launcher: ${runtime.launcher}`
-      : "No launcher metadata reported.",
-    statusLabel: runtime.available ? "Available" : "Unavailable",
-    statusTone: runtime.available ? "available" : "default",
-  }));
+function aboutRows(status?: ServiceStatusResult): SettingsAboutRowModel[] {
+  return [
+    {
+      id: "version",
+      label: "Version",
+      value: status?.server_version ?? "Unavailable",
+      monospace: true,
+    },
+  ];
 }
 
 export function useSettingsScreen() {
   const shell = useShellModel();
-  const server = useWorkspaceStore((state) => state.server);
   const status = useWorkspaceStore((state) => state.status);
   const runtimeStatus = useWorkspaceStore((state) => state.runtimeStatus);
 
-  const appServerRows: SettingsRowModel[] = [
-    {
-      id: "server",
-      label: "Server",
-      value: server?.server_name ?? "muxagent app-server",
-      detail: "Authoritative app-server metadata for this desktop session.",
-    },
-    {
-      id: "state-dir",
-      label: "State directory",
-      value: status?.state_dir ?? "Unavailable",
-      detail: "Workspace registry and app-server local state live here.",
-      monospace: true,
-    },
-    {
-      id: "connection",
-      label: "Connection",
-      ...connectionRow(shell.phase, shell.error),
-    },
-  ];
-
   return {
     shell,
-    appServerRows,
-    automaticRuntime: automaticRuntimeRow(runtimeStatus),
-    runtimeRows: taskRuntimeRows(runtimeStatus),
+    runtimeRows: runtimeRows(shell.phase, runtimeStatus, shell.error),
+    aboutRows: aboutRows(status),
   };
 }

@@ -239,10 +239,13 @@ test("renders configs and settings from the desktop shell", async ({ page }) => 
 
   await page.getByRole("link", { name: /^Settings$/i }).click();
   await expect(page.getByTestId("settings-screen")).toBeVisible();
-  await expect(page.getByTestId("settings-app-server-section")).toContainText("App Server");
-  await expect(page.getByTestId("settings-runtime-section")).toContainText("Task Runtime");
-  await expect(page.getByTestId("settings-runtime-automatic")).toContainText("Codex");
+  await expect(page.getByTestId("settings-runtime-section")).toContainText("Runtimes");
   await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
+  await expect(
+    page.getByTestId("settings-runtime-row").filter({ hasText: "Codex" }),
+  ).toContainText("Detected");
+  await expect(page.getByTestId("settings-about-section")).toContainText("About");
+  await expect(page.getByTestId("settings-version-row")).toContainText("fixture");
   await expect(page.getByText("Protocol")).toHaveCount(0);
-  await expect(page.getByText("Version")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
 });
