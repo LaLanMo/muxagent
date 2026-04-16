@@ -27,8 +27,9 @@ local stable desktop artifact under `.muxagent/desktop-stable`.
   still uses the default `~/.muxagent` state instead of a separate stable
   profile.
 - Before launch, `stable` checks the default `~/.muxagent/appserver`; if the
-  existing daemon was not started by the current pinned stable CLI, it is
-  stopped first and then replaced by the pinned CLI.
+  existing daemon was not started by the current pinned stable CLI revision, or
+  if `--refresh` just rewrote the pinned CLI in place, it is stopped first and
+  then replaced by the pinned CLI.
 
 Within `desktop/`, keep the Tauri scripts surface-local:
 
@@ -42,5 +43,5 @@ Within `desktop/`, keep the Tauri scripts surface-local:
 - Local app state and generated artifacts are ignored and should not be committed.
 - The built desktop app still resolves the muxagent CLI at runtime via `MUXAGENT_CLI_PATH` or the host `PATH`; bundling the CLI as a desktop sidecar is not wired yet.
 - `scripts/stable-desktop.sh` keeps its pinned desktop/CLI artifacts under `.muxagent/desktop-stable` and clears dev-only task profile overrides before launch.
-- `scripts/stable-desktop.sh` also preflights the default app-server daemon and restarts it when the existing daemon PID does not belong to the pinned stable CLI path.
+- `scripts/stable-desktop.sh` also preflights the default app-server daemon and restarts it when the existing daemon does not match the pinned stable CLI path/version, including after `--refresh` rewrites the pinned binary in place.
 - Set `MUXAGENT_STABLE_BUILD_MODE=release` if you want the pinned stable artifact built from a release profile instead of the default debug profile.

@@ -146,7 +146,7 @@ stop_pid_for_stable_restart() {
 }
 
 maybe_restart_default_app_server() {
-  local state_path pid daemon_cli_path daemon_cli_version pinned_cli_version
+  local state_path pid daemon_cli_path daemon_cli_version pinned_cli_version restart_reason
 
   if [[ "${OS:-}" == "Windows_NT" ]]; then
     return 0
@@ -164,17 +164,28 @@ maybe_restart_default_app_server() {
   fi
 
   daemon_cli_path="$(process_command_path "$pid")"
-  if [[ -n "$daemon_cli_path" && "$daemon_cli_path" == "$CLI_BIN" ]]; then
-    return 0
-  fi
-
   daemon_cli_version="$(json_string_field "$state_path" "started_with_cli_version")"
   pinned_cli_version="$(current_cli_version)"
-  if [[ -z "$daemon_cli_path" && -n "$daemon_cli_version" && -n "$pinned_cli_version" && "$daemon_cli_version" == "$pinned_cli_version" ]]; then
+
+  restart_reason=""
+  if [[ "$REFRESH" -eq 1 ]]; then
+    restart_reason="stable artifacts were refreshed"
+  elif [[ -n "$daemon_cli_path" && "$daemon_cli_path" != "$CLI_BIN" ]]; then
+    restart_reason="existing daemon uses a different CLI path"
+  elif [[ -n "$daemon_cli_path" && "$daemon_cli_path" == "$CLI_BIN" ]]; then
+    if [[ -n "$daemon_cli_version" && -n "$pinned_cli_version" && "$daemon_cli_version" != "$pinned_cli_version" ]]; then
+      restart_reason="existing daemon version does not match the pinned stable CLI"
+    else
+      return 0
+    fi
+  elif [[ -n "$daemon_cli_version" && -n "$pinned_cli_version" && "$daemon_cli_version" == "$pinned_cli_version" ]]; then
     return 0
+  else
+    restart_reason="existing daemon identity could not be verified"
   fi
 
   echo "Restarting default app-server so stable desktop can use the pinned CLI:"
+  echo "  reason:  $restart_reason"
   echo "  pid:     $pid"
   if [[ -n "$daemon_cli_path" ]]; then
     echo "  current: $daemon_cli_path"
@@ -184,6 +195,12 @@ maybe_restart_default_app_server() {
     echo "  current: <unknown>"
   fi
   echo "  target:  $CLI_BIN"
+  if [[ -n "$daemon_cli_version" ]]; then
+    echo "  current version: $daemon_cli_version"
+  fi
+  if [[ -n "$pinned_cli_version" ]]; then
+    echo "  target version:  $pinned_cli_version"
+  fi
 
   stop_pid_for_stable_restart "$pid"
 
