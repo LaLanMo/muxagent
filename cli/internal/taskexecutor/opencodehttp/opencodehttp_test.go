@@ -22,7 +22,7 @@ import (
 func TestExecutorParsesResultAndProgress(t *testing.T) {
 	server := newFakeOpenCodeServer(t)
 	server.onPrompt = func(sessionID string, body map[string]any, w http.ResponseWriter, _ *http.Request) {
-		server.publish(map[string]any{
+		server.publishAndWait(t, map[string]any{
 			"type": "message.part.delta",
 			"properties": map[string]any{
 				"sessionID": sessionID,
@@ -32,7 +32,7 @@ func TestExecutorParsesResultAndProgress(t *testing.T) {
 				"delta":     "Working through the repo",
 			},
 		})
-		server.publish(map[string]any{
+		server.publishAndWait(t, map[string]any{
 			"type": "message.part.updated",
 			"properties": map[string]any{
 				"part": map[string]any{
@@ -52,7 +52,7 @@ func TestExecutorParsesResultAndProgress(t *testing.T) {
 				},
 			},
 		})
-		server.publish(map[string]any{
+		server.publishAndWait(t, map[string]any{
 			"type": "todo.updated",
 			"properties": map[string]any{
 				"sessionID": sessionID,
@@ -184,7 +184,7 @@ func TestExecutorParsesClarificationAndResumesSameSession(t *testing.T) {
 func TestExecutorAutoRepliesPermissionRequests(t *testing.T) {
 	server := newFakeOpenCodeServer(t)
 	server.onPrompt = func(sessionID string, _ map[string]any, w http.ResponseWriter, _ *http.Request) {
-		server.publish(map[string]any{
+		server.publishAndWait(t, map[string]any{
 			"type": "permission.asked",
 			"properties": map[string]any{
 				"id":         "perm-1",
@@ -391,6 +391,11 @@ type fakePermissionReply struct {
 	Message   string
 }
 
+type publishedEvent struct {
+	payload map[string]any
+	flushed chan struct{}
+}
+
 type fakeOpenCodeServer struct {
 	t *testing.T
 
@@ -401,7 +406,7 @@ type fakeOpenCodeServer struct {
 	createRequests []map[string]any
 	promptRequests []fakePromptCall
 
-	subscribers map[chan map[string]any]struct{}
+	subscribers map[chan publishedEvent]struct{}
 
 	onPrompt func(sessionID string, body map[string]any, w http.ResponseWriter, r *http.Request)
 
@@ -413,7 +418,7 @@ func newFakeOpenCodeServer(t *testing.T) *fakeOpenCodeServer {
 	t.Helper()
 	fake := &fakeOpenCodeServer{
 		t:                 t,
-		subscribers:       map[chan map[string]any]struct{}{},
+		subscribers:       map[chan publishedEvent]struct{}{},
 		permissionReplies: make(chan fakePermissionReply, 4),
 		abortCalls:        make(chan string, 4),
 	}
@@ -454,8 +459,39 @@ func (f *fakeOpenCodeServer) publish(event map[string]any) {
 	defer f.mu.Unlock()
 	for ch := range f.subscribers {
 		select {
-		case ch <- event:
+		case ch <- publishedEvent{payload: event}:
 		default:
+		}
+	}
+}
+
+func (f *fakeOpenCodeServer) publishAndWait(t *testing.T, event map[string]any) {
+	t.Helper()
+
+	f.mu.Lock()
+	events := make([]struct {
+		ch  chan publishedEvent
+		ack chan struct{}
+	}, 0, len(f.subscribers))
+	for ch := range f.subscribers {
+		events = append(events, struct {
+			ch  chan publishedEvent
+			ack chan struct{}
+		}{
+			ch:  ch,
+			ack: make(chan struct{}),
+		})
+	}
+	f.mu.Unlock()
+
+	for _, item := range events {
+		item.ch <- publishedEvent{payload: event, flushed: item.ack}
+	}
+	for _, item := range events {
+		select {
+		case <-item.ack:
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for SSE event flush")
 		}
 	}
 }
@@ -514,7 +550,7 @@ func (f *fakeOpenCodeServer) handleEvents(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 
-	ch := make(chan map[string]any, 16)
+	ch := make(chan publishedEvent, 16)
 	f.mu.Lock()
 	f.subscribers[ch] = struct{}{}
 	f.mu.Unlock()
@@ -528,7 +564,10 @@ func (f *fakeOpenCodeServer) handleEvents(w http.ResponseWriter, r *http.Request
 	for {
 		select {
 		case event := <-ch:
-			writeSSE(w, flusher, event)
+			writeSSE(w, flusher, event.payload)
+			if event.flushed != nil {
+				close(event.flushed)
+			}
 		case <-r.Context().Done():
 			return
 		}
