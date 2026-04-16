@@ -1,6 +1,7 @@
 import http from "node:http";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { mkdirSync, realpathSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { spawn } from "node:child_process";
@@ -22,11 +23,27 @@ type Session = {
 
 const bridgePort = Number(process.env.MUXAGENT_BRIDGE_PORT ?? "4174");
 const fixtureMode = process.env.MUXAGENT_BRIDGE_MODE !== "spawn";
+const desktopRoot = realpathSync(process.cwd());
+const defaultTaskHome = path.join(desktopRoot, ".muxagent-dev");
 const cliPath = process.env.MUXAGENT_CLI_PATH?.trim() || "muxagent";
-const appServerStateDir = process.env.MUXAGENT_APP_SERVER_STATE_DIR?.trim() ?? "";
+const taskHome = path.resolve(
+  process.env.MUXAGENT_TASK_HOME?.trim() || defaultTaskHome,
+);
+const appServerStateDir = path.resolve(
+  process.env.MUXAGENT_APP_SERVER_STATE_DIR?.trim() ||
+    path.join(taskHome, "appserver"),
+);
+const taskConfigRoot = path.resolve(
+  process.env.MUXAGENT_TASKCONFIG_ROOT?.trim() ||
+    path.join(taskHome, "taskconfig"),
+);
 const sessions = new Map<string, Session>();
 const fixtureRuntime = new FixtureRuntime();
 let sharedSpawnSessionId: string | null = null;
+
+mkdirSync(taskHome, { recursive: true });
+mkdirSync(appServerStateDir, { recursive: true });
+mkdirSync(taskConfigRoot, { recursive: true });
 
 function encodeFrame(payload: string): Buffer {
   const body = Buffer.from(payload, "utf8");
@@ -250,7 +267,12 @@ async function createSession(): Promise<Session> {
 
   const child = spawn(cliPath, args, {
     stdio: ["pipe", "pipe", "pipe"],
-    env: process.env,
+    env: {
+      ...process.env,
+      MUXAGENT_TASK_HOME: taskHome,
+      MUXAGENT_TASKCONFIG_ROOT: taskConfigRoot,
+      MUXAGENT_APP_SERVER_STATE_DIR: appServerStateDir,
+    },
   });
   attachSpawnSession(session, child);
   await new Promise<void>((resolve, reject) => {

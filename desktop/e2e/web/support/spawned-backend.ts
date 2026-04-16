@@ -144,6 +144,7 @@ export type SpawnedDesktopServerContext = {
   workDir: string;
   altWorkDir: string;
   appServerStateDir: string;
+  taskHomeDir: string;
   taskConfigRootDir: string;
   stop: () => Promise<void>;
   seedWorkspace: (
@@ -163,6 +164,7 @@ export async function withSpawnedDesktopServer(
 ) {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "muxagent-desktop-spawn-"));
   const appServerStateDir = path.join(tempRoot, "appserver-state");
+  const taskHomeDir = path.join(tempRoot, "task-home");
   const taskConfigRootDir = path.join(tempRoot, "taskconfig-root");
   const workDir = path.join(tempRoot, "workspace");
   const altWorkDir = path.join(tempRoot, "workspace-alt");
@@ -172,6 +174,7 @@ export async function withSpawnedDesktopServer(
   const bridgePort = String(await getAvailablePort());
 
   await mkdir(appServerStateDir, { recursive: true });
+  await mkdir(taskHomeDir, { recursive: true });
   await mkdir(taskConfigRootDir, { recursive: true });
   await mkdir(workDir, { recursive: true });
   await mkdir(altWorkDir, { recursive: true });
@@ -195,6 +198,7 @@ export async function withSpawnedDesktopServer(
       MUXAGENT_BRIDGE_MODE: "spawn",
       MUXAGENT_CLI_PATH: cliBinary,
       MUXAGENT_APP_SERVER_STATE_DIR: appServerStateDir,
+      MUXAGENT_TASK_HOME: taskHomeDir,
       MUXAGENT_TASKCONFIG_ROOT: taskConfigRootDir,
       MUXAGENT_WEB_PORT: webPort,
       MUXAGENT_BRIDGE_PORT: bridgePort,
@@ -216,6 +220,7 @@ export async function withSpawnedDesktopServer(
       workDir,
       altWorkDir,
       appServerStateDir,
+      taskHomeDir,
       taskConfigRootDir,
       stop: async () => {
         await stopProcess(server);
