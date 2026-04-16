@@ -53,7 +53,7 @@ jobs:
 
       - name: Run CLI tests
         working-directory: cli
-        run: go test ./...
+        run: go test -short ./...
 
   mobile:
     needs: changes

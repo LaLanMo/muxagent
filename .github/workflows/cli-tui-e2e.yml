@@ -1,0 +1,25 @@
+name: CLI TUI E2E
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  cli-tui:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+
+      - name: Run CLI TUI end-to-end tests
+        working-directory: cli
+        run: go test ./cmd/muxagent -count=1

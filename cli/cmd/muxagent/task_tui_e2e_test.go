@@ -702,10 +702,19 @@ func TestTaskTUICanCreateTasksWithDifferentConfigsInOneSession(t *testing.T) {
 
 	defaultSourcePath := writeOverrideConfig(t, t.TempDir(), "default.yaml", singleAgentTerminalConfig(appconfig.RuntimeCodex))
 	reviewerSourcePath := writeOverrideConfig(t, t.TempDir(), "reviewer.yaml", singleAgentTerminalConfig(appconfig.RuntimeClaudeCode))
-	defaultInstalledPath := installManagedDefaultConfig(t, homeDir, defaultSourcePath)
-	installed := installTaskConfigRegistryEntries(t, homeDir, taskconfig.DefaultAlias, map[string]string{
-		"reviewer": reviewerSourcePath,
+	taskConfigDir, err := taskconfig.TaskConfigDir()
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(taskConfigDir, homeDir))
+	defaultInstalledPath := installConfigBundle(t, defaultSourcePath, filepath.Join(taskConfigDir, "default-custom"))
+	reviewerInstalledPath := installConfigBundle(t, reviewerSourcePath, filepath.Join(taskConfigDir, "reviewer"))
+	_, err = taskconfig.SaveRegistry(taskconfig.Registry{
+		DefaultAlias: taskconfig.DefaultAlias,
+		Configs: []taskconfig.RegistryEntry{
+			{Alias: taskconfig.DefaultAlias, Path: "default-custom"},
+			{Alias: "reviewer", Path: "reviewer"},
+		},
 	})
+	require.NoError(t, err)
 
 	session := startTUISession(t, binaryPath, workDir)
 	session.waitForAll(t, 10*time.Second, "No tasks in this working directory yet.", "config default")
@@ -721,10 +730,18 @@ func TestTaskTUICanCreateTasksWithDifferentConfigsInOneSession(t *testing.T) {
 	session.sendAndWait(t, "\x1b[A", 5*time.Second)
 	session.send(t, "\r")
 	session.waitForAll(t, 5*time.Second, "New Task", "config default")
-	session.send(t, "\x10")
-	before = session.markOutput()
 	session.resize(t, 140, 40)
-	session.waitForFreshAll(t, 5*time.Second, before, "reviewer", "runtime claude-code")
+	foundReviewer := false
+	for range 8 {
+		before = session.markOutput()
+		session.send(t, "\x10")
+		output := session.waitForOutputChange(t, 5*time.Second, before)
+		if strings.Contains(output, "reviewer") && strings.Contains(output, "runtime claude-code") {
+			foundReviewer = true
+			break
+		}
+	}
+	require.Truef(t, foundReviewer, "expected reviewer config after cycling\n%s", session.output())
 	session.submitNewTask(t, "Reviewer config task")
 	session.waitForAll(t, 10*time.Second, "Task completed successfully")
 	session.quit(t)
@@ -749,7 +766,7 @@ func TestTaskTUICanCreateTasksWithDifferentConfigsInOneSession(t *testing.T) {
 	reviewerTask, ok := byDescription["Reviewer config task"]
 	require.True(t, ok)
 	assert.Equal(t, "reviewer", reviewerTask.ConfigAlias)
-	assert.Equal(t, installed["reviewer"], reviewerTask.ConfigPath)
+	assert.Equal(t, reviewerInstalledPath, reviewerTask.ConfigPath)
 	reviewerCfg, err := taskconfig.Load(taskstore.ConfigPath(workDir, reviewerTask.ID))
 	require.NoError(t, err)
 	assert.Equal(t, appconfig.RuntimeClaudeCode, reviewerCfg.Runtime)
@@ -1312,26 +1329,24 @@ func TestTaskTUICompletedTaskCanStartFollowUpEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, parentTask.ID, parentTaskID)
 
-	parentTask, parentRuns, parentView, err := loadTaskStateByID(workDir, parentTask.ID)
+	parentTask, _, parentView, err := loadTaskStateByID(workDir, parentTask.ID)
 	require.NoError(t, err)
 	childTask, childRuns, childView, err := loadTaskStateByID(workDir, childTask.ID)
 	require.NoError(t, err)
 	assert.Equal(t, taskdomain.TaskStatusDone, parentView.Status)
 	assert.Equal(t, taskdomain.TaskStatusDone, childView.Status)
 
-	parentDraftRun := requireNodeRunByName(t, parentRuns, "draft_plan")
-	parentPlanPath := findArtifactPathByBase(t, taskdomain.ArtifactPaths(parentDraftRun.Result), "plan-1.md")
 	childDraftRun := requireNodeRunByName(t, childRuns, "draft_plan")
 	childInputPath := mustRunAuditPath(t, workDir, childTask, childRuns, childDraftRun, "input.md")
 	childInputBytes, err := os.ReadFile(childInputPath)
 	require.NoError(t, err)
 	childInput := string(childInputBytes)
 
-	assert.Contains(t, childInput, "## Direct Parent Task")
-	assert.Contains(t, childInput, "Description: Parent follow-up task")
+	assert.Contains(t, childInput, "Follow-up lineage:")
+	assert.Contains(t, childInput, "- Direct parent task: Parent follow-up task")
 	assert.Contains(t, childInput, taskstore.TaskDir(workDir, parentTask.ID))
-	assert.Contains(t, childInput, parentPlanPath)
-	assert.NotContains(t, childInput, "## Earlier Ancestors")
+	assert.Contains(t, childInput, filepath.Join(taskstore.TaskDir(workDir, parentTask.ID), "runs"))
+	assert.NotContains(t, childInput, "Earlier ancestors are available only if the direct parent is not enough")
 
 	session.quit(t)
 }
@@ -1411,18 +1426,16 @@ func TestTaskTUISingleRunFollowUpUsesHandleRequestEndToEnd(t *testing.T) {
 		"done":           1,
 	})
 
-	parentHandleRun := requireNodeRunByName(t, parentRuns, "handle_request")
-	parentResultPath := findArtifactPathByBase(t, taskdomain.ArtifactPaths(parentHandleRun.Result), "result-1.md")
 	childHandleRun := requireNodeRunByName(t, childRuns, "handle_request")
 	childInputPath := mustRunAuditPath(t, workDir, childTask, childRuns, childHandleRun, "input.md")
 	childInputBytes, err := os.ReadFile(childInputPath)
 	require.NoError(t, err)
 	childInput := string(childInputBytes)
 
-	assert.Contains(t, childInput, "## Direct Parent Task")
-	assert.Contains(t, childInput, "Description: Parent single-run task")
+	assert.Contains(t, childInput, "Follow-up lineage:")
+	assert.Contains(t, childInput, "- Direct parent task: Parent single-run task")
 	assert.Contains(t, childInput, taskstore.TaskDir(workDir, parentTask.ID))
-	assert.Contains(t, childInput, parentResultPath)
+	assert.Contains(t, childInput, filepath.Join(taskstore.TaskDir(workDir, parentTask.ID), "runs"))
 
 	session.quit(t)
 }
@@ -1771,8 +1784,8 @@ func TestTaskTUIStartupUpdatePromptScenarios(t *testing.T) {
 		assert.False(t, state.LastCheckedAt.IsZero())
 		assert.True(t, state.LastFailedAt.IsZero())
 		assert.Equal(t, 1, reqs.count("/latest/download/"+startupReleaseManifestName))
-		assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+startupReleaseManifestName))
-		assert.Equal(t, 1, reqs.count("/download/v0.0.2/"+assetName))
+		assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+startupReleaseManifestName))
+		assert.Equal(t, 1, reqs.count("/download/cli/v0.0.2/"+assetName))
 
 		out, err := exec.Command(binaryPath, "version").CombinedOutput()
 		require.NoError(t, err, string(out))
@@ -1782,6 +1795,9 @@ func TestTaskTUIStartupUpdatePromptScenarios(t *testing.T) {
 
 func startTUISession(t *testing.T, binaryPath, workDir string, args ...string) *tuiSession {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("CLI TUI E2E run only in the dedicated workflow")
+	}
 
 	cmdArgs := append([]string(nil), args...)
 	cmd := exec.Command(binaryPath, cmdArgs...)
@@ -1899,6 +1915,7 @@ func startStartupUpdateReleaseServer(t *testing.T, version, assetName string, bu
 	manifest := []byte(fmt.Sprintf("# muxagent %s\n%s  %s\n", version, hex.EncodeToString(hash[:]), assetName))
 	signature := ed25519.Sign(signer, manifest)
 	sigBase64 := []byte(base64.StdEncoding.EncodeToString(signature))
+	releaseTag := "cli/" + strings.TrimPrefix(version, "cli/")
 
 	reqs := &startupReleaseRequests{counts: make(map[string]int)}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1913,6 +1930,12 @@ func startStartupUpdateReleaseServer(t *testing.T, version, assetName string, bu
 		case "/download/" + version + "/" + startupReleaseManifestName + ".sig":
 			_, _ = w.Write(sigBase64)
 		case "/download/" + version + "/" + assetName:
+			_, _ = w.Write(bundleBytes)
+		case "/download/" + releaseTag + "/" + startupReleaseManifestName:
+			_, _ = w.Write(manifest)
+		case "/download/" + releaseTag + "/" + startupReleaseManifestName + ".sig":
+			_, _ = w.Write(sigBase64)
+		case "/download/" + releaseTag + "/" + assetName:
 			_, _ = w.Write(bundleBytes)
 		default:
 			http.NotFound(w, r)
@@ -2961,12 +2984,13 @@ func singleAgentTerminalConfig(runtime appconfig.RuntimeID) *taskconfig.Config {
 				ResultSchema: taskconfig.JSONSchema{
 					Type:                 "object",
 					AdditionalProperties: &deny,
-					Required:             []string{"file_paths"},
+					Required:             []string{"summary", "file_paths"},
 					Properties: map[string]*taskconfig.JSONSchema{
 						"file_paths": {
 							Type:  "array",
 							Items: &taskconfig.JSONSchema{Type: "string"},
 						},
+						"summary": {Type: "string"},
 					},
 				},
 			},
