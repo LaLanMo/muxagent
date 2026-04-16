@@ -27,8 +27,8 @@ Release tags are namespaced per surface:
 - `desktop/v0.1.0`
 - `relay/v0.1.0`
 
-Only the CLI release workflow is automated today. The monorepo keeps the
-surface-specific namespaces so the products can release independently.
+The CLI and desktop release workflows are automated today. The monorepo keeps
+the surface-specific namespaces so the products can release independently.
 
 ## Surface Docs
 

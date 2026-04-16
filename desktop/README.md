@@ -39,6 +39,7 @@ Within `desktop/`, keep the Tauri scripts surface-local:
 
 ## Notes
 
+- The desktop app version is sourced from `src-tauri/Cargo.toml`; do not add duplicate version fields back to `package.json` or `src-tauri/tauri.conf.json`.
 - The E2E helper supports both the monorepo layout and the legacy standalone CLI checkout.
 - Local app state and generated artifacts are ignored and should not be committed.
 - The built desktop app still resolves the muxagent CLI at runtime via `MUXAGENT_CLI_PATH` or the host `PATH`; bundling the CLI as a desktop sidecar is not wired yet.

@@ -1,0 +1,129 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - "desktop/v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Desktop release version (for example 0.1.0 or v0.1.0)"
+        required: true
+      ref:
+        description: "Git ref to release from"
+        required: false
+        default: "main"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.event_name }}-${{ github.ref_name || inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+          - target: x86_64-apple-darwin
+
+    steps:
+      - name: Resolve release metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            raw_version="${{ inputs.version }}"
+            ref_name="${{ inputs.ref }}"
+          else
+            raw_version="${GITHUB_REF_NAME}"
+            ref_name="${GITHUB_REF}"
+          fi
+
+          case "$raw_version" in
+            desktop/v*) version="${raw_version#desktop/}" ;;
+            desktop/*) version="v${raw_version#desktop/}" ;;
+            v*) version="$raw_version" ;;
+            *) version="v$raw_version" ;;
+          esac
+
+          release_tag="desktop/$version"
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.meta.outputs.ref_name }}
+
+      - name: Resolve release target SHA
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify desktop version matches release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cargo_version="$(sed -n 's/^version = "\(.*\)"$/\1/p' desktop/src-tauri/Cargo.toml | head -n 1)"
+          if [ -z "$cargo_version" ]; then
+            echo "failed to read desktop version from desktop/src-tauri/Cargo.toml" >&2
+            exit 1
+          fi
+
+          expected_version="${{ steps.meta.outputs.version }}"
+          if [ "v$cargo_version" != "$expected_version" ]; then
+            echo "desktop version mismatch: Cargo.toml has v$cargo_version but release requested $expected_version" >&2
+            exit 1
+          fi
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.3
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: desktop/pnpm-lock.yaml
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: Run desktop typecheck
+        working-directory: desktop
+        run: pnpm typecheck
+
+      - name: Build and upload desktop bundle
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APPLE_SIGNING_IDENTITY: "-"
+        with:
+          projectPath: desktop
+          tagName: ${{ steps.meta.outputs.release_tag }}
+          releaseName: ${{ steps.meta.outputs.version }}
+          releaseBody: "See the assets to download this desktop release."
+          releaseDraft: true
+          releaseCommitish: ${{ steps.target.outputs.sha }}
+          args: --target ${{ matrix.target }} --bundles dmg
+          releaseAssetNamePattern: "[name]_[version]_[platform]_[arch][ext]"
