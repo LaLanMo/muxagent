@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
@@ -204,7 +205,7 @@ func TestLoadCatalogClassifiesMissingLegacyDefaultRowAsBuiltin(t *testing.T) {
 	assert.Equal(t, BuiltinIDDefault, entry.BuiltinID)
 }
 
-func TestLoadCatalogStampsLegacyDefaultAsBuiltinAndPreservesCustomFiles(t *testing.T) {
+func TestLoadCatalogStampsLegacyDefaultAsBuiltinAndBacksUpCustomFiles(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
@@ -222,13 +223,16 @@ func TestLoadCatalogStampsLegacyDefaultAsBuiltinAndPreservesCustomFiles(t *testi
 	catalog, err := LoadCatalog()
 	require.NoError(t, err)
 	require.Len(t, catalog.Entries, 5)
+	taskConfigDir, err := TaskConfigDir()
+	require.NoError(t, err)
 
 	defaultEntry, ok := catalog.Entry(DefaultAlias)
 	require.True(t, ok)
 	assert.True(t, defaultEntry.Builtin)
-	data, err := os.ReadFile(promptPath)
+	data, err := os.ReadFile(filepath.Join(taskConfigDir, "backup-default", "prompt.md"))
 	require.NoError(t, err)
 	assert.Equal(t, "# custom default prompt", string(data))
+	assert.FileExists(t, filepath.Join(filepath.Dir(defaultEntry.Path), managedBuiltinRevisionFile))
 
 	reg, err := LoadRegistry()
 	require.NoError(t, err)
@@ -271,6 +275,80 @@ func TestLoadCatalogSeedsMissingBuiltinConfigAndFollowsPATH(t *testing.T) {
 	reloadedCfg, err := reloadedEntry.LoadConfig()
 	require.NoError(t, err)
 	assert.Equal(t, appconfig.RuntimeCodex, reloadedCfg.Runtime)
+}
+
+func TestLoadCatalogBacksUpLegacyBuiltinBundleAndRefreshesAssets(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	taskConfigDir, err := TaskConfigDir()
+	require.NoError(t, err)
+	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	writeEmbeddedBuiltinBundleForTest(t, defaultDir, BuiltinIDDefault, nil)
+	legacyPrompt := []byte("legacy draft prompt\n")
+	require.NoError(t, os.WriteFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"), legacyPrompt, 0o644))
+
+	catalog, err := LoadCatalog()
+	require.NoError(t, err)
+	_, ok := catalog.Entry(DefaultAlias)
+	require.True(t, ok)
+
+	currentPrompt, err := defaultsFS.ReadFile("defaults/prompts/draft_plan.md")
+	require.NoError(t, err)
+	actualPrompt, err := os.ReadFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"))
+	require.NoError(t, err)
+	assert.Equal(t, string(currentPrompt), string(actualPrompt))
+
+	backupPrompt, err := os.ReadFile(filepath.Join(taskConfigDir, "backup-default", "prompts", "draft_plan.md"))
+	require.NoError(t, err)
+	assert.Equal(t, string(legacyPrompt), string(backupPrompt))
+
+	revision, err := os.ReadFile(filepath.Join(defaultDir, managedBuiltinRevisionFile))
+	require.NoError(t, err)
+	assert.NotEmpty(t, strings.TrimSpace(string(revision)))
+}
+
+func TestLoadCatalogSeedsRevisionWithoutBackingUpCurrentBuiltinBundle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	taskConfigDir, err := TaskConfigDir()
+	require.NoError(t, err)
+	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	runtimeID := appconfig.RuntimeClaudeCode
+	writeEmbeddedBuiltinBundleForTest(t, defaultDir, BuiltinIDDefault, &runtimeID)
+
+	_, err = LoadCatalog()
+	require.NoError(t, err)
+
+	assert.NoDirExists(t, filepath.Join(taskConfigDir, "backup-default"))
+	revision, err := os.ReadFile(filepath.Join(defaultDir, managedBuiltinRevisionFile))
+	require.NoError(t, err)
+	assert.NotEmpty(t, strings.TrimSpace(string(revision)))
+
+	configBytes, err := os.ReadFile(filepath.Join(defaultDir, managedConfigFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(configBytes), "runtime: claude-code")
+}
+
+func TestLoadCatalogPreservesExplicitRuntimeWhenRefreshingBuiltinBundle(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	taskConfigDir, err := TaskConfigDir()
+	require.NoError(t, err)
+	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	runtimeID := appconfig.RuntimeClaudeCode
+	writeEmbeddedBuiltinBundleForTest(t, defaultDir, BuiltinIDDefault, &runtimeID)
+	require.NoError(t, os.WriteFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"), []byte("legacy draft prompt\n"), 0o644))
+
+	_, err = LoadCatalog()
+	require.NoError(t, err)
+
+	configBytes, err := os.ReadFile(filepath.Join(defaultDir, managedConfigFile))
+	require.NoError(t, err)
+	assert.Contains(t, string(configBytes), "runtime: claude-code")
+	assert.DirExists(t, filepath.Join(taskConfigDir, "backup-default"))
 }
 
 func TestLoadCatalogFallsBackWhenBuiltinAliasIsAlreadyUserOwned(t *testing.T) {
@@ -722,4 +800,19 @@ func mustBundlePathForConfigPath(t *testing.T, configPath string) string {
 	bundlePath, err := BundlePathForConfigPath(configPath)
 	require.NoError(t, err)
 	return bundlePath
+}
+
+func writeEmbeddedBuiltinBundleForTest(t *testing.T, bundleDir, builtinID string, runtime *appconfig.RuntimeID) {
+	t.Helper()
+	assetFiles, err := builtinAssetFiles(builtinID)
+	require.NoError(t, err)
+	for _, assetPath := range assetFiles {
+		destRelPath, err := builtinPromptDestPath(builtinID, assetPath)
+		require.NoError(t, err)
+		data, err := builtinAssetDataForWrite(assetPath, builtinID, runtime)
+		require.NoError(t, err)
+		destPath := filepath.Join(bundleDir, filepath.FromSlash(destRelPath))
+		require.NoError(t, os.MkdirAll(filepath.Dir(destPath), 0o755))
+		require.NoError(t, os.WriteFile(destPath, data, 0o644))
+	}
 }

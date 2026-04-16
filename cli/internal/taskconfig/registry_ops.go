@@ -245,7 +245,7 @@ func ResetBuiltinConfig(alias string) (*Catalog, error) {
 	if err := os.RemoveAll(bundleDir); err != nil {
 		return nil, err
 	}
-	if err := writeBuiltinBundle(taskConfigDir, cleanBundlePath, entry.BuiltinID, true); err != nil {
+	if err := writeBuiltinBundle(taskConfigDir, cleanBundlePath, entry.BuiltinID, true, nil); err != nil {
 		return nil, err
 	}
 	return LoadCatalog()

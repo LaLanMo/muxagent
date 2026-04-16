@@ -1,21 +1,27 @@
 package taskconfig
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/privdir"
+	"gopkg.in/yaml.v3"
 )
 
 const builtinDefaultAlias = "default"
 const managedConfigFile = "config.yaml"
 const managedDefaultBundleDir = builtinDefaultAlias
+const managedBuiltinRevisionFile = ".muxagent-builtin-revision"
 const taskConfigRootEnv = "MUXAGENT_TASKCONFIG_ROOT"
 
 const DefaultAlias = builtinDefaultAlias
@@ -386,14 +392,10 @@ func canonicalRegistryBundlePathKey(path string) string {
 	return strings.ToLower(filepath.ToSlash(strings.TrimSpace(path)))
 }
 
-func ensureManagedAssetFile(destPath, assetPath string) error {
+func ensureManagedAssetFile(destPath string, data []byte) error {
 	if _, err := os.Stat(destPath); err == nil {
 		return nil
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	data, err := defaultsFS.ReadFile(assetPath)
-	if err != nil {
 		return err
 	}
 	return writeManagedAssetFile(destPath, data)
@@ -578,12 +580,247 @@ func isSeedableUserEntry(entry RegistryEntry) bool {
 }
 
 func syncBuiltinBundle(taskConfigDir, builtinID string) error {
-	return writeBuiltinBundle(taskConfigDir, builtinBundlePath(builtinID), builtinID, false)
+	bundlePath := builtinBundlePath(builtinID)
+	bundleDir := filepath.Join(taskConfigDir, filepath.FromSlash(bundlePath))
+	revision, err := builtinBundleRevision(builtinID)
+	if err != nil {
+		return err
+	}
+	currentRevision, err := readBuiltinBundleRevision(bundleDir)
+	if err != nil {
+		return err
+	}
+	if currentRevision == revision {
+		return writeBuiltinBundle(taskConfigDir, bundlePath, builtinID, false, nil)
+	}
+	matchesCurrent, err := builtinBundleMatchesCurrentAssets(bundleDir, builtinID)
+	if err != nil {
+		return err
+	}
+	if matchesCurrent {
+		return writeBuiltinBundle(taskConfigDir, bundlePath, builtinID, false, nil)
+	}
+	pinnedRuntime, err := loadExplicitBuiltinRuntime(bundleDir)
+	if err != nil {
+		return err
+	}
+	if err := backupBuiltinBundle(taskConfigDir, builtinID, bundleDir); err != nil {
+		return err
+	}
+	return writeBuiltinBundle(taskConfigDir, bundlePath, builtinID, true, pinnedRuntime)
 }
 
-func writeBuiltinBundle(taskConfigDir, bundlePath, builtinID string, overwrite bool) error {
+func builtinBundleRevision(builtinID string) (string, error) {
+	assetFiles, err := builtinAssetFiles(builtinID)
+	if err != nil {
+		return "", err
+	}
+	hasher := sha256.New()
+	for _, assetPath := range assetFiles {
+		data, err := defaultsFS.ReadFile(assetPath)
+		if err != nil {
+			return "", err
+		}
+		_, _ = hasher.Write([]byte(assetPath))
+		_, _ = hasher.Write([]byte{0})
+		_, _ = hasher.Write(data)
+		_, _ = hasher.Write([]byte{0})
+	}
+	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func readBuiltinBundleRevision(bundleDir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(bundleDir, managedBuiltinRevisionFile))
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func writeBuiltinBundleRevision(bundleDir, revision string) error {
+	return writeManagedAssetFile(filepath.Join(bundleDir, managedBuiltinRevisionFile), []byte(revision+"\n"))
+}
+
+func builtinBundleMatchesCurrentAssets(bundleDir, builtinID string) (bool, error) {
+	assetFiles, err := builtinAssetFiles(builtinID)
+	if err != nil {
+		return false, err
+	}
+	for _, assetPath := range assetFiles {
+		destRelPath, err := builtinPromptDestPath(builtinID, assetPath)
+		if err != nil {
+			return false, err
+		}
+		destPath := filepath.Join(bundleDir, filepath.FromSlash(destRelPath))
+		currentData, err := os.ReadFile(destPath)
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		expectedData, err := defaultsFS.ReadFile(assetPath)
+		if err != nil {
+			return false, err
+		}
+		if destRelPath == managedConfigFile {
+			match, err := builtinConfigMatchesEmbedded(currentData, expectedData)
+			if err != nil {
+				return false, err
+			}
+			if !match {
+				return false, nil
+			}
+			continue
+		}
+		if !bytes.Equal(currentData, expectedData) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func builtinConfigMatchesEmbedded(currentData, expectedData []byte) (bool, error) {
+	if bytes.Equal(currentData, expectedData) {
+		return true, nil
+	}
+	currentRaw, err := decodeRawConfig(currentData)
+	if err != nil {
+		return false, nil
+	}
+	expectedRaw, err := decodeRawConfig(expectedData)
+	if err != nil {
+		return false, err
+	}
+	currentRaw.Runtime = nil
+	expectedRaw.Runtime = nil
+	return reflect.DeepEqual(currentRaw, expectedRaw), nil
+}
+
+func loadExplicitBuiltinRuntime(bundleDir string) (*appconfig.RuntimeID, error) {
+	configPath := filepath.Join(bundleDir, managedConfigFile)
+	data, err := os.ReadFile(configPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	raw, err := decodeRawConfig(data)
+	if err != nil || raw.Runtime == nil {
+		return nil, nil
+	}
+	runtime := appconfig.RuntimeID(strings.TrimSpace(string(*raw.Runtime)))
+	if !appconfig.IsSupportedRuntime(runtime) {
+		return nil, nil
+	}
+	return &runtime, nil
+}
+
+func backupBuiltinBundle(taskConfigDir, builtinID, bundleDir string) error {
+	info, err := os.Stat(bundleDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("builtin bundle %q is not a directory", bundleDir)
+	}
+	backupDir, err := nextAvailableBuiltinBackupDir(taskConfigDir, builtinID)
+	if err != nil {
+		return err
+	}
+	return os.Rename(bundleDir, backupDir)
+}
+
+func nextAvailableBuiltinBackupDir(taskConfigDir, builtinID string) (string, error) {
+	base := "backup-" + builtinID
+	candidate := filepath.Join(taskConfigDir, base)
+	for suffix := 2; ; suffix++ {
+		if _, err := os.Stat(candidate); errors.Is(err, os.ErrNotExist) {
+			return candidate, nil
+		} else if err != nil {
+			return "", err
+		}
+		candidate = filepath.Join(taskConfigDir, fmt.Sprintf("%s-%d", base, suffix))
+	}
+}
+
+func builtinAssetDataForWrite(assetPath, builtinID string, pinnedRuntime *appconfig.RuntimeID) ([]byte, error) {
+	if assetPath != builtinConfigAsset(builtinID) {
+		return defaultsFS.ReadFile(assetPath)
+	}
+	data, err := builtinConfigBytes(builtinID)
+	if err != nil {
+		return nil, err
+	}
+	if pinnedRuntime == nil {
+		return data, nil
+	}
+	return applyRuntimeToConfigYAML(data, *pinnedRuntime)
+}
+
+func applyRuntimeToConfigYAML(data []byte, runtimeID appconfig.RuntimeID) ([]byte, error) {
+	var doc yaml.Node
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	if err := dec.Decode(&doc); err != nil {
+		return nil, err
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, fmt.Errorf("config yaml must decode to a mapping document")
+	}
+	root := doc.Content[0]
+	for i := 0; i < len(root.Content); i += 2 {
+		if root.Content[i].Value != "runtime" {
+			continue
+		}
+		root.Content[i+1].Kind = yaml.ScalarNode
+		root.Content[i+1].Tag = "!!str"
+		root.Content[i+1].Value = string(runtimeID)
+		return encodeYAMLDocument(&doc)
+	}
+	keyNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: "runtime"}
+	valueNode := &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: string(runtimeID)}
+	insertAt := len(root.Content)
+	for i := 0; i < len(root.Content); i += 2 {
+		switch root.Content[i].Value {
+		case "description", "version":
+			insertAt = i + 2
+		}
+	}
+	root.Content = append(root.Content, nil, nil)
+	copy(root.Content[insertAt+2:], root.Content[insertAt:])
+	root.Content[insertAt] = keyNode
+	root.Content[insertAt+1] = valueNode
+	return encodeYAMLDocument(&doc)
+}
+
+func encodeYAMLDocument(doc *yaml.Node) ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := yaml.NewEncoder(&buffer)
+	encoder.SetIndent(2)
+	if err := encoder.Encode(doc); err != nil {
+		_ = encoder.Close()
+		return nil, err
+	}
+	if err := encoder.Close(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
+}
+
+func writeBuiltinBundle(taskConfigDir, bundlePath, builtinID string, overwrite bool, pinnedRuntime *appconfig.RuntimeID) error {
 	bundleDir := filepath.Join(taskConfigDir, filepath.FromSlash(bundlePath))
 	assetFiles, err := builtinAssetFiles(builtinID)
+	if err != nil {
+		return err
+	}
+	revision, err := builtinBundleRevision(builtinID)
 	if err != nil {
 		return err
 	}
@@ -593,24 +830,21 @@ func writeBuiltinBundle(taskConfigDir, bundlePath, builtinID string, overwrite b
 			return err
 		}
 		destPath := filepath.Join(bundleDir, filepath.FromSlash(destRelPath))
-		if destRelPath == managedConfigFile {
-			assetPath = builtinConfigAsset(builtinID)
+		data, err := builtinAssetDataForWrite(assetPath, builtinID, pinnedRuntime)
+		if err != nil {
+			return err
 		}
 		if overwrite {
-			data, err := defaultsFS.ReadFile(assetPath)
-			if err != nil {
-				return err
-			}
 			if err := writeManagedAssetFile(destPath, data); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := ensureManagedAssetFile(destPath, assetPath); err != nil {
+		if err := ensureManagedAssetFile(destPath, data); err != nil {
 			return err
 		}
 	}
-	return nil
+	return writeBuiltinBundleRevision(bundleDir, revision)
 }
 
 func registryHasAlias(entries []RegistryEntry, alias string) bool {
