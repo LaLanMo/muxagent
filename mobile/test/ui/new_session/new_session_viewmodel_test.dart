@@ -1,8 +1,31 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:muxagent/data/local/session_database.dart';
+import 'package:muxagent/data/repositories/event_repository.dart';
+import 'package:muxagent/data/repositories/runtime_preference_repository.dart';
+import 'package:muxagent/data/repositories/session_chat_cache_repository.dart';
+import 'package:muxagent/data/repositories/session_manager.dart';
+import 'package:muxagent/data/repositories/stt_repository.dart';
+import 'package:muxagent/data/repositories/ws_session_repository.dart';
+import 'package:muxagent/data/services/api/stt_service.dart';
+import 'package:muxagent/data/services/local/crypto_service.dart';
+import 'package:muxagent/data/services/ws/models/acp_session_models.dart';
+import 'package:muxagent/data/services/ws/relay_ws_client.dart';
+import 'package:muxagent/data/services/ws/token_service.dart';
+import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/mode_option.dart';
 import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/domain/runtime_option.dart';
 import 'package:muxagent/ui/new_session/new_session_viewmodel.dart';
+import 'package:muxagent/usecases/transcribe_audio.dart';
+
+import '../../support/fake_paired_machine_repository.dart';
 
 const _copilotModeAgentId =
     'https://agentclientprotocol.com/protocol/session-modes#agent';
@@ -10,6 +33,78 @@ const _copilotModePlanId =
     'https://agentclientprotocol.com/protocol/session-modes#plan';
 const _copilotModeAutopilotId =
     'https://agentclientprotocol.com/protocol/session-modes#autopilot';
+
+class _NoopRelayWsClient extends RelayWsClient {
+  _NoopRelayWsClient()
+    : super(
+        crypto: CryptoService(),
+        tokens: TokenService(crypto: CryptoService()),
+        sessions: SessionManager(),
+      );
+}
+
+class _FakeWsSessionRepository extends WsSessionRepository {
+  final relayConnectedValue = true.obs;
+  final connectionStateValue = ConnState.connected.obs;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
+  final Set<String> _activeIds;
+  final AppRuntimeListResponseDto runtimeListResponse;
+  final List<String> listedRuntimeMachineIds = [];
+
+  _FakeWsSessionRepository({
+    required Set<String> initialActiveIds,
+    required this.runtimeListResponse,
+  }) : _activeIds = {...initialActiveIds},
+       _activeSessionIdsNotifier = ValueNotifier(
+         Set.unmodifiable({...initialActiveIds}),
+       ),
+       super(relay: _NoopRelayWsClient(), sessions: SessionManager());
+
+  @override
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+
+  @override
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
+
+  @override
+  bool hasSession(String machineId) => _activeIds.contains(machineId);
+
+  @override
+  RxBool get relayConnected => relayConnectedValue;
+
+  @override
+  Rx<ConnState> get connectionState => connectionStateValue;
+
+  @override
+  Future<void> ensureConnected({required String relayHttpUrl}) async {}
+
+  @override
+  Future<void> startSession({required PairedMachine machine}) async {
+    _activeIds.add(machine.machineId);
+    _activeSessionIdsNotifier.value = Set.unmodifiable(_activeIds);
+  }
+
+  @override
+  Future<AppRuntimeListResponseDto> listRuntimes({
+    required String machineId,
+  }) async {
+    listedRuntimeMachineIds.add(machineId);
+    return runtimeListResponse;
+  }
+
+  void dispose() {
+    _activeSessionIdsNotifier.dispose();
+  }
+}
+
+class _FakeTranscribeAudioUseCase extends TranscribeAudioUseCase {
+  _FakeTranscribeAudioUseCase()
+    : super(repo: SttRepository(service: SttService()));
+
+  @override
+  Future<bool> hasConfig() async => false;
+}
 
 ModeOption buildMode(String id) {
   return ModeOption(id: id, label: id);
@@ -40,6 +135,80 @@ PairedMachine buildMachine(String id, {String? hostname}) {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
+  group('NewSessionViewModel lifecycle', () {
+    late String dbPath;
+    late _FakeWsSessionRepository wsRepo;
+    late FakePairedMachineRepository machineRepo;
+    late EventRepository eventRepo;
+    late NewSessionViewModel viewModel;
+
+    setUp(() async {
+      Get.testMode = true;
+      SharedPreferences.setMockInitialValues({});
+      dbPath = p.join(
+        Directory.systemTemp.path,
+        'muxagent-new-session-vm-test.db',
+      );
+      final dbFile = File(dbPath);
+      if (await dbFile.exists()) {
+        await dbFile.delete();
+      }
+      await SessionDatabase.resetForTest(databasePathOverride: dbPath);
+
+      wsRepo = _FakeWsSessionRepository(
+        initialActiveIds: const {'machine-1'},
+        runtimeListResponse: const AppRuntimeListResponseDto(
+          runtimes: [
+            AppRuntimeInfoDto(id: 'codex', label: 'Codex', ready: true),
+          ],
+        ),
+      );
+      machineRepo = FakePairedMachineRepository([buildMachine('machine-1')]);
+      eventRepo = EventRepository(wsRepo: wsRepo);
+      viewModel = NewSessionViewModel(
+        machineRepo: machineRepo,
+        wsRepo: wsRepo,
+        eventRepo: eventRepo,
+        runtimePrefs: RuntimePreferenceRepository(),
+        chatCacheRepo: SessionChatCacheRepository(),
+        transcribe: _FakeTranscribeAudioUseCase(),
+      );
+    });
+
+    tearDown(() async {
+      viewModel.onClose();
+      eventRepo.dispose();
+      machineRepo.dispose();
+      wsRepo.dispose();
+      await SessionDatabase.resetForTest();
+      final dbFile = File(dbPath);
+      if (await dbFile.exists()) {
+        await dbFile.delete();
+      }
+      Get.reset();
+    });
+
+    testWidgets(
+      'loads runtimes when the initial machine selection happens during onInit',
+      (tester) async {
+        viewModel.onInit();
+        await tester.pump();
+        await tester.pump();
+
+        expect(viewModel.selectedMachine.value?.machineId, 'machine-1');
+        expect(wsRepo.listedRuntimeMachineIds, ['machine-1']);
+        expect(viewModel.availableRuntimes.map((runtime) => runtime.id), [
+          'codex',
+        ]);
+        expect(viewModel.selectedRuntime.value?.id, 'codex');
+      },
+    );
+  });
+
   group('NewSessionViewModel.resolveSelectedRuntime', () {
     test('preserves the current runtime when it is still available', () {
       final codex = buildRuntime('codex');

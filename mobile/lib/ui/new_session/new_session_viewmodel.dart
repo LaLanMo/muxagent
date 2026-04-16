@@ -194,12 +194,6 @@ class NewSessionViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _subscribeToMachineCatalog();
-    _subscribeToSessionPresence();
-    _subscribeToRelayConnection();
-    unawaited(_machineRepo.refresh());
-    _checkSttConfig();
-
     cwdController.addListener(_filterCwds);
 
     ever(selectedMachine, (machine) {
@@ -207,6 +201,12 @@ class NewSessionViewModel extends GetxController {
       _loadRuntimes(machine);
     });
     ever(selectedRuntime, _syncModesForRuntime);
+
+    _subscribeToMachineCatalog();
+    _subscribeToSessionPresence();
+    _subscribeToRelayConnection();
+    unawaited(_machineRepo.refresh());
+    _checkSttConfig();
   }
 
   @override
