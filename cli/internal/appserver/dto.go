@@ -621,6 +621,78 @@ func historyStreamEventToDTO(event taskhistory.EventRecord) sessionHistoryEventD
 	return dto
 }
 
+func historyStreamEventToSummaryDTO(event taskhistory.EventRecord) sessionHistoryEventDTO {
+	dto := sessionHistoryEventDTO{
+		EventID:          event.EventID,
+		Seq:              event.Seq,
+		SessionID:        event.SessionID,
+		ProviderRecordID: event.ProviderRecordID,
+		ProviderSubindex: event.ProviderSubindex,
+		Provenance:       event.Provenance,
+		Kind:             event.Kind,
+	}
+	if !event.EmittedAt.IsZero() {
+		emittedAt := event.EmittedAt.UTC()
+		dto.EmittedAt = &emittedAt
+	}
+	if !event.RecordedAt.IsZero() {
+		recordedAt := event.RecordedAt.UTC()
+		dto.RecordedAt = &recordedAt
+	}
+	if event.Message != nil {
+		dto.MessageID = event.Message.MessageID
+		dto.PartID = event.Message.PartID
+		dto.Role = event.Message.Role
+		dto.PartType = event.Message.Type
+		dto.Text = compactHistoryPreviewText(event.Message.Text, 600)
+	}
+	if event.Tool != nil {
+		dto.CallID = event.Tool.CallID
+		dto.ParentCallID = event.Tool.ParentCallID
+		dto.Name = event.Tool.Name
+		dto.ToolKind = event.Tool.Kind
+		dto.Title = event.Tool.Title
+		dto.Status = event.Tool.Status
+		dto.DurationMS = event.Tool.DurationMS
+		dto.InputSummary = compactHistoryPreviewText(event.Tool.InputSummary, 240)
+		dto.OutputText = compactHistoryPreviewText(event.Tool.OutputText, 600)
+		dto.ErrorText = compactHistoryPreviewText(event.Tool.ErrorText, 400)
+	}
+	if event.Plan != nil {
+		steps := make([]sessionHistoryPlanStepDTO, 0, len(event.Plan.Steps))
+		for _, step := range event.Plan.Steps {
+			steps = append(steps, sessionHistoryPlanStepDTO{
+				Text:   compactHistoryPreviewText(step.Text, 240),
+				Status: step.Status,
+			})
+		}
+		dto.PlanID = event.Plan.PlanID
+		dto.Steps = steps
+	}
+	if event.Usage != nil {
+		dto.InputTokens = event.Usage.InputTokens
+		dto.CachedInputTokens = event.Usage.CachedInputTokens
+		dto.OutputTokens = event.Usage.OutputTokens
+		dto.TotalTokens = event.Usage.TotalTokens
+		dto.DurationMS = event.Usage.DurationMS
+	}
+	if event.Kind == string(taskexecutor.StreamEventKindRaw) {
+		dto.Raw = compactHistoryPreviewText(event.Raw, 600)
+	}
+	return dto
+}
+
+func compactHistoryPreviewText(value string, limit int) string {
+	trimmed := strings.Join(strings.Fields(value), " ")
+	if limit <= 0 || len(trimmed) <= limit {
+		return trimmed
+	}
+	if limit <= 1 {
+		return trimmed[:limit]
+	}
+	return trimmed[:limit-1] + "…"
+}
+
 func buildConfigCatalogResult(catalog *taskconfig.Catalog, reg taskconfig.Registry, runtimeCfg appconfig.Config, defaultUseWorktree bool) configCatalogResult {
 	if catalog == nil {
 		return configCatalogResult{DefaultUseWorktree: defaultUseWorktree}

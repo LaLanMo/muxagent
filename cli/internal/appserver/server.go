@@ -399,6 +399,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodTaskGetAncestry,
 					methodTaskGetWorktreeCleanupInfo,
 					methodTaskRunHistory,
+					methodTaskRunHistoryFull,
 					methodTaskInputRequest,
 					methodTaskStart,
 					methodTaskStartFollowUp,
@@ -643,6 +644,40 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 		return taskGetWorktreeCleanupInfoResult{Info: info}, nil, stopModeContinue, nil
 
 	case methodTaskRunHistory:
+		params, err := decodeParams[taskRunHistoryParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		model, rpcErr := s.openWorkspaceReadModel(workspace)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		defer func() { _ = model.Close() }()
+		run, history, err := model.LoadRunHistory(ctx, strings.TrimSpace(params.TaskID), strings.TrimSpace(params.NodeRunID))
+		if err != nil {
+			return nil, nil, stopModeContinue, runtimeLookupRPCError(err)
+		}
+		result := taskRunHistoryResult{
+			TaskID:       strings.TrimSpace(params.TaskID),
+			NodeRunID:    run.ID,
+			SessionID:    firstNonEmpty(strings.TrimSpace(run.SessionID), strings.TrimSpace(history.SessionID)),
+			Provenance:   history.Provenance,
+			Completeness: history.Completeness,
+			LastSeq:      history.LastSeq,
+		}
+		if len(history.Events) > 0 {
+			result.Events = make([]sessionHistoryEventDTO, 0, len(history.Events))
+			for _, event := range history.Events {
+				result.Events = append(result.Events, historyStreamEventToSummaryDTO(event))
+			}
+		}
+		return result, nil, stopModeContinue, nil
+
+	case methodTaskRunHistoryFull:
 		params, err := decodeParams[taskRunHistoryParams](req.Params)
 		if err != nil {
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}

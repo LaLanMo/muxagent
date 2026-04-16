@@ -30,6 +30,7 @@ const (
 	methodTaskGetAncestry            = "task.get_ancestry"
 	methodTaskGetWorktreeCleanupInfo = "task.get_worktree_cleanup_info"
 	methodTaskRunHistory             = "task.run_history"
+	methodTaskRunHistoryFull         = "task.run_history_full"
 	methodTaskInputRequest           = "task.input_request"
 	methodTaskStart                  = "task.start"
 	methodTaskStartFollowUp          = "task.start_follow_up"

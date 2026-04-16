@@ -803,6 +803,9 @@ func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
 	if !slices.Contains(result.Capabilities.Methods, methodTaskCleanupWorktree) {
 		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskCleanupWorktree, result.Capabilities.Methods)
 	}
+	if !slices.Contains(result.Capabilities.Methods, methodTaskRunHistoryFull) {
+		t.Fatalf("initialize capabilities missing %q: %#v", methodTaskRunHistoryFull, result.Capabilities.Methods)
+	}
 	if !slices.Contains(result.Capabilities.Methods, methodRuntimeStatus) {
 		t.Fatalf("initialize capabilities missing %q: %#v", methodRuntimeStatus, result.Capabilities.Methods)
 	}
@@ -1318,7 +1321,7 @@ func TestServerTaskRunHistoryExposesTypedMCPPayloadWithoutDuplicatingImageDebugD
 		t.Fatalf("append mcp history: %v", err)
 	}
 
-	historyResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+	summaryResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
 		Method: methodTaskRunHistory,
 		Params: mustRawParams(t, taskRunHistoryParams{
 			WorkspaceID: workspace.WorkspaceID,
@@ -1329,9 +1332,32 @@ func TestServerTaskRunHistoryExposesTypedMCPPayloadWithoutDuplicatingImageDebugD
 	if rpcErr != nil {
 		t.Fatalf("task.run_history rpc error: %+v", rpcErr)
 	}
+	summaryResult := summaryResultAny.(taskRunHistoryResult)
+	if got := len(summaryResult.Events); got != 1 {
+		t.Fatalf("task.run_history event count = %d, want 1", got)
+	}
+	summaryEvent := summaryResult.Events[0]
+	if summaryEvent.MCP != nil {
+		t.Fatalf("task.run_history summary mcp payload = %#v, want nil", summaryEvent.MCP)
+	}
+	if summaryEvent.RawOutputJSON != "" {
+		t.Fatalf("task.run_history summary raw_output_json = %q, want empty", summaryEvent.RawOutputJSON)
+	}
+
+	historyResultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskRunHistoryFull,
+		Params: mustRawParams(t, taskRunHistoryParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      taskID,
+			NodeRunID:   nodeRunID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.run_history_full rpc error: %+v", rpcErr)
+	}
 	historyResult := historyResultAny.(taskRunHistoryResult)
 	if got := len(historyResult.Events); got != 1 {
-		t.Fatalf("task.run_history event count = %d, want 1", got)
+		t.Fatalf("task.run_history_full event count = %d, want 1", got)
 	}
 	event := historyResult.Events[0]
 	if got := event.ToolKind; got != string(taskexecutor.ToolKindMCP) {
