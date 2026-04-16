@@ -1063,14 +1063,7 @@ func TestServerTaskRunHistoryFallsBackToProviderTranscript(t *testing.T) {
 	defer func() { _ = store.Close() }()
 
 	taskID := "task-provider-history"
-	configPath, err := taskconfig.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("default config path: %v", err)
-	}
-	materialized, err := taskconfig.Materialize(workspacePath, taskID, configPath)
-	if err != nil {
-		t.Fatalf("materialize config: %v", err)
-	}
+	materialized := materializeEmbeddedDefaultTestConfig(t, workspacePath, taskID)
 	configBytes, err := os.ReadFile(materialized.ConfigPath)
 	if err != nil {
 		t.Fatalf("read materialized config: %v", err)
@@ -1168,14 +1161,7 @@ func TestServerTaskRunHistoryKeepsProviderBackfillAfterLocalHistoryStarts(t *tes
 	defer func() { _ = store.Close() }()
 
 	taskID := "task-provider-merged-history"
-	configPath, err := taskconfig.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("default config path: %v", err)
-	}
-	materialized, err := taskconfig.Materialize(workspacePath, taskID, configPath)
-	if err != nil {
-		t.Fatalf("materialize config: %v", err)
-	}
+	materialized := materializeEmbeddedDefaultTestConfig(t, workspacePath, taskID)
 	configBytes, err := os.ReadFile(materialized.ConfigPath)
 	if err != nil {
 		t.Fatalf("read materialized config: %v", err)
@@ -2918,6 +2904,15 @@ func mustRawParams(t *testing.T, params any) json.RawMessage {
 	return payload
 }
 
+func materializeEmbeddedDefaultTestConfig(t *testing.T, workDir, taskID string) *taskconfig.MaterializedConfig {
+	t.Helper()
+	materialized, err := taskconfig.Materialize(workDir, taskID, "")
+	if err != nil {
+		t.Fatalf("materialize config: %v", err)
+	}
+	return materialized
+}
+
 func seedAwaitingTask(t *testing.T, workDir string) (taskID string, awaitingRunID string) {
 	t.Helper()
 	store, err := taskstore.Open(workDir)
@@ -2927,14 +2922,7 @@ func seedAwaitingTask(t *testing.T, workDir string) (taskID string, awaitingRunI
 	defer func() { _ = store.Close() }()
 
 	taskID = "task-awaiting"
-	configPath, err := taskconfig.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("default config path: %v", err)
-	}
-	materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
-	if err != nil {
-		t.Fatalf("materialize config: %v", err)
-	}
+	materialized := materializeEmbeddedDefaultTestConfig(t, workDir, taskID)
 
 	now := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
 	completedAt := now.Add(30 * time.Second)
@@ -3040,24 +3028,13 @@ func assertTaskGetFollowUpMetadata(t *testing.T, server *Server, workspaceID, ta
 
 func seedCompletedAppServerTask(t *testing.T, workDir, taskID, description, executionDir string) string {
 	t.Helper()
-	_, err := taskconfig.EnsureManagedDefaultAssets()
-	if err != nil {
-		t.Fatalf("ensure managed default assets: %v", err)
-	}
 	store, err := taskstore.Open(workDir)
 	if err != nil {
 		t.Fatalf("open task store: %v", err)
 	}
 	defer func() { _ = store.Close() }()
 
-	configPath, err := taskconfig.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("default config path: %v", err)
-	}
-	materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
-	if err != nil {
-		t.Fatalf("materialize config: %v", err)
-	}
+	materialized := materializeEmbeddedDefaultTestConfig(t, workDir, taskID)
 
 	now := time.Date(2026, 4, 12, 2, 0, 0, 0, time.UTC)
 	task := taskdomain.Task{
@@ -3155,24 +3132,13 @@ func seedCompletedWorktreeTask(t *testing.T, workDir string) string {
 
 func seedRunningAppServerTask(t *testing.T, workDir, taskID, description, executionDir string) string {
 	t.Helper()
-	_, err := taskconfig.EnsureManagedDefaultAssets()
-	if err != nil {
-		t.Fatalf("ensure managed default assets: %v", err)
-	}
 	store, err := taskstore.Open(workDir)
 	if err != nil {
 		t.Fatalf("open task store: %v", err)
 	}
 	defer func() { _ = store.Close() }()
 
-	configPath, err := taskconfig.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("default config path: %v", err)
-	}
-	materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
-	if err != nil {
-		t.Fatalf("materialize config: %v", err)
-	}
+	materialized := materializeEmbeddedDefaultTestConfig(t, workDir, taskID)
 
 	now := time.Date(2026, 4, 12, 3, 0, 0, 0, time.UTC)
 	task := taskdomain.Task{
@@ -3254,20 +3220,13 @@ func seedTaskAncestryChain(t *testing.T, workDir string) (rootTaskID, parentTask
 	}
 	defer func() { _ = store.Close() }()
 
-	configPath, err := taskconfig.DefaultConfigPath()
-	if err != nil {
-		t.Fatalf("default config path: %v", err)
-	}
 	normalizedWorkDir := taskstore.NormalizeWorkDir(workDir)
 	ctx := context.Background()
 	baseTime := time.Date(2026, 4, 3, 12, 0, 0, 0, time.UTC)
 
 	createTask := func(taskID, description, nodeName string, status taskdomain.NodeRunStatus, createdAt, updatedAt time.Time, completedAt *time.Time) {
 		t.Helper()
-		materialized, err := taskconfig.Materialize(workDir, taskID, configPath)
-		if err != nil {
-			t.Fatalf("materialize config for %s: %v", taskID, err)
-		}
+		materialized := materializeEmbeddedDefaultTestConfig(t, workDir, taskID)
 		task := taskdomain.Task{
 			ID:           taskID,
 			Description:  description,

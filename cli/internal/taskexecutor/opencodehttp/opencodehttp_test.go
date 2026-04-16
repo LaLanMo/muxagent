@@ -298,7 +298,7 @@ func TestExecutorRendersSchemaRepairPromptAsUserMessage(t *testing.T) {
 
 	req := requestFixture(t.TempDir())
 	writtenPath := filepath.Join(req.ArtifactDir, "summary.md")
-	var progress []taskexecutor.Progress
+	var repairPrompt string
 	server.onPrompt = func(sessionID string, body map[string]any, w http.ResponseWriter, _ *http.Request) {
 		switch len(server.prompts()) {
 		case 1:
@@ -311,27 +311,7 @@ func TestExecutorRendersSchemaRepairPromptAsUserMessage(t *testing.T) {
 			parts := asSlice(body["parts"])
 			require.Len(t, parts, 1)
 			promptText := asString(asMap(parts[0])["text"])
-			server.publish(map[string]any{
-				"type": "message.updated",
-				"properties": map[string]any{
-					"sessionID": sessionID,
-					"info": map[string]any{
-						"id":        "msg-repair",
-						"sessionID": sessionID,
-						"role":      "user",
-					},
-				},
-			})
-			server.publish(map[string]any{
-				"type": "message.part.delta",
-				"properties": map[string]any{
-					"sessionID": sessionID,
-					"messageID": "msg-repair",
-					"partID":    "part-repair",
-					"field":     "text",
-					"delta":     promptText,
-				},
-			})
+			repairPrompt = promptText
 			writeJSON(w, assistantResponse(sessionID, map[string]any{
 				"kind":   "result",
 				"result": map[string]any{"file_paths": []string{writtenPath}},
@@ -342,23 +322,28 @@ func TestExecutorRendersSchemaRepairPromptAsUserMessage(t *testing.T) {
 	}
 
 	executor := &Executor{BaseURL: server.url(), HTTPClient: server.client()}
-	_, err := executor.Execute(context.Background(), req, func(item taskexecutor.Progress) {
-		progress = append(progress, item)
-	})
+	_, err := executor.Execute(context.Background(), req, nil)
 	require.NoError(t, err)
+	assert.Contains(t, repairPrompt, "Your previous structured output did not match the required schema.")
+	assert.Contains(t, repairPrompt, "$.file_paths is required")
+	assert.Contains(t, repairPrompt, writtenPath)
+}
 
-	var sawUserRepair bool
-	for _, item := range progress {
-		for _, event := range item.Events {
-			if event.Kind != taskexecutor.StreamEventKindMessage || event.Message == nil {
-				continue
-			}
-			if event.Message.Role == taskexecutor.MessageRoleUser && strings.Contains(event.Message.Text, "Your previous structured output did not match the required schema.") {
-				sawUserRepair = true
-			}
-		}
-	}
-	assert.True(t, sawUserRepair)
+func TestParseEventAssignsUserRoleToTextDeltasAfterMessageUpdate(t *testing.T) {
+	executor := &Executor{}
+	partTypes := map[string]partState{}
+	msgRoles := map[string]taskexecutor.MessageRole{}
+
+	progress, _, err := executor.parseEvent(`{"type":"message.updated","properties":{"info":{"id":"msg-repair","sessionID":"session-1","role":"user"}}}`, "http://example.test", "/tmp/work", "session-1", partTypes, msgRoles)
+	require.NoError(t, err)
+	assert.Empty(t, progress.Events)
+
+	progress, _, err = executor.parseEvent(`{"type":"message.part.delta","properties":{"sessionID":"session-1","messageID":"msg-repair","partID":"part-repair","field":"text","delta":"repair prompt"}}`, "http://example.test", "/tmp/work", "session-1", partTypes, msgRoles)
+	require.NoError(t, err)
+	require.Len(t, progress.Events, 1)
+	require.NotNil(t, progress.Events[0].Message)
+	assert.Equal(t, taskexecutor.MessageRoleUser, progress.Events[0].Message.Role)
+	assert.Equal(t, "repair prompt", progress.Events[0].Message.Text)
 }
 
 func TestExecutorAbortsSessionOnCancellation(t *testing.T) {
