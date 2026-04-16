@@ -38,6 +38,12 @@ function makeTask(status: string): TaskViewDto {
   };
 }
 
+function makeWorktreeTask(status: string): TaskViewDto {
+  const task = makeTask(status);
+  task.task.execution_dir = "/tmp/.muxagent/worktrees/task-done/workspace";
+  return task;
+}
+
 function makeInputRequest(kind: InputRequestDto["kind"]): InputRequestDto {
   return {
     kind,
@@ -158,6 +164,7 @@ test("deriveFollowUpDockState returns refine for completed repo-backed tasks onc
       task,
       detailEntry: {
         followUp: makeFollowUp(),
+        followUpState: "refine",
         artifacts: [],
         ancestry: [],
         runHistoryByRunId: {},
@@ -168,6 +175,26 @@ test("deriveFollowUpDockState returns refine for completed repo-backed tasks onc
       },
     }),
     "refine",
+  );
+});
+
+test("deriveFollowUpDockState returns disabled for completed tasks whose worktree is unavailable", () => {
+  const task = makeWorktreeTask("done");
+  assert.equal(
+    deriveFollowUpDockState({
+      task,
+      detailEntry: {
+        followUpState: "disabled",
+        artifacts: [],
+        ancestry: [],
+        runHistoryByRunId: {},
+        loading: false,
+        stale: false,
+        latestRequestGeneration: 3,
+        lastAppliedSnapshotKey: "done|2026-04-14T06:05:00.000Z",
+      },
+    }),
+    "disabled",
   );
 });
 

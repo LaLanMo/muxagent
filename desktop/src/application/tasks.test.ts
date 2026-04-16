@@ -111,6 +111,7 @@ function makeRuntime(args: {
       args.taskGetResult ?? {
         task: makeTaskView(),
         follow_up: makeFollowUp(),
+        follow_up_state: "refine",
         live_output_run_id: "run-implement",
         live_events: [
           {
@@ -188,6 +189,7 @@ test("hydrateTaskDetail includes ancestry when requested", async () => {
   assert.deepEqual(detail.ancestry, makeAncestry());
   assert.equal(detail.artifacts[0]?.preview_name, "plan.md");
   assert.equal(detail.followUp?.default_mode, "continue_here");
+  assert.equal(detail.followUpState, "refine");
   assert.equal(detail.liveEventsRunId, "run-implement");
   assert.equal(detail.liveEvents[0]?.kind, "message");
   assert.equal(detail.liveEvents[0]?.text, "Tracing task ancestry for the new header.");

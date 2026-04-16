@@ -17,6 +17,7 @@ import type {
   TaskRecoverStaleParams,
   TaskRecoverStaleResult,
   TaskFollowUpDto,
+  TaskFollowUpStateDto,
   TaskRetryNodeParams,
   TaskStartFollowUpParams,
   TaskStartParams,
@@ -32,6 +33,7 @@ export type HydratedTaskDetail = {
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
   followUp?: TaskFollowUpDto;
+  followUpState?: TaskFollowUpStateDto;
   artifacts: ArtifactRefDto[];
   ancestry: TaskAncestryItemDto[];
   liveEvents: SessionHistoryEvent[];
@@ -268,6 +270,7 @@ export async function hydrateTaskDetail(
     config: taskResult.config,
     inputRequest: taskResult.input_request,
     followUp: taskResult.follow_up,
+    followUpState: taskResult.follow_up_state,
     artifacts: artifactResult.artifacts,
     ancestry,
     liveEvents: (taskResult.live_events ?? []).map((event, index) =>

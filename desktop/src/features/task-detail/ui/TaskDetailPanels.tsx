@@ -2486,10 +2486,13 @@ export function TaskFollowUpDock({
   );
 
   useEffect(() => {
+    if ((dockState === "disabled" || dockState === "pending") && configPickerOpen) {
+      setConfigPickerOpen(false);
+    }
     if (dockState !== "refine" && modePickerOpen) {
       setModePickerOpen(false);
     }
-  }, [dockState, modePickerOpen]);
+  }, [configPickerOpen, dockState, modePickerOpen]);
 
   useEffect(() => {
     if (!configPickerOpen && !modePickerOpen) {
@@ -2555,9 +2558,31 @@ export function TaskFollowUpDock({
     followUpMode && followUp?.available_modes.includes(followUpMode)
       ? followUpMode
       : followUp?.default_mode ?? "continue_here";
-  const modeTriggerMeta = followUp ? followUpTriggerMeta(selectedMode, followUp.uncommitted_change_count) : undefined;
-  const canSubmit = dockState !== "pending" && !submittingFollowUp;
+  const modeTriggerMeta = followUp
+    ? followUpTriggerMeta(selectedMode, followUp.uncommitted_change_count)
+    : undefined;
+  const canSubmit = dockState !== "pending" && dockState !== "disabled" && !submittingFollowUp;
   const configSelectable = launchable.length > 1;
+
+  if (dockState === "disabled") {
+    return (
+      <section
+        className="detail-follow-up-rail"
+        data-follow-up-state={dockState}
+        data-testid="complete-pane"
+        ref={rootRef}
+      >
+        <div className="detail-follow-up-rail__box detail-follow-up-rail__box--disabled">
+          <p
+            className="detail-follow-up-rail__disabled-copy"
+            data-testid="follow-up-disabled-message"
+          >
+            Worktree removed. Follow-up from this task is unavailable.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section

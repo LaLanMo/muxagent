@@ -3279,6 +3279,10 @@
   background: color-mix(in srgb, #fbf8f6 84%, #f4e8c1);
 }
 
+.detail-follow-up-rail__box--disabled {
+  background: color-mix(in srgb, #fbf8f6 82%, #efe6de);
+}
+
 .detail-follow-up-rail__input {
   display: block;
   min-width: 0;
@@ -3311,6 +3315,15 @@
 .detail-follow-up-rail__divider {
   height: 1px;
   background: #d1c8c2;
+}
+
+.detail-follow-up-rail__disabled-copy {
+  margin: 0;
+  padding: var(--space-3);
+  color: var(--color-text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  line-height: 1.45;
 }
 
 .detail-follow-up-rail__footer {

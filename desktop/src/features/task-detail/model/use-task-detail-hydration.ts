@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 import { hydrateTaskDetail } from "@/application/tasks";
 import { getRuntime } from "@/app/runtime";
 import type { TaskViewDto } from "@/rpc/types";
@@ -44,6 +44,7 @@ export function useTaskDetailHydration({
   const failTaskDetailLoad = useTaskSnapshotStore(
     (state) => state.failTaskDetailLoad,
   );
+  const initialFollowUpRefreshKeyRef = useRef<string | undefined>(undefined);
 
   const loadDetail = useEffectEvent<LoadTaskDetailFn>(
     async (options = {}) => {
@@ -85,12 +86,13 @@ export function useTaskDetailHydration({
           taskSnapshotKey(detail.task),
           generation,
           {
-          config: detail.config,
-          inputRequest: detail.inputRequest,
-          followUp: detail.followUp,
-          artifacts: detail.artifacts,
-          ancestry: detail.ancestry,
-          liveEventsRunId: detail.liveEventsRunId,
+            config: detail.config,
+            inputRequest: detail.inputRequest,
+            followUp: detail.followUp,
+            followUpState: detail.followUpState,
+            artifacts: detail.artifacts,
+            ancestry: detail.ancestry,
+            liveEventsRunId: detail.liveEventsRunId,
           },
         );
         return detail;
@@ -119,6 +121,76 @@ export function useTaskDetailHydration({
       void hydrate();
     }
   }, [connected, detailEntry, hydrate, task, taskId]);
+
+  const revalidateFollowUpAvailability = useEffectEvent(async () => {
+    if (!taskId || !connected || task?.status !== "done") {
+      return;
+    }
+    await loadDetail({ showLoading: false });
+  });
+  const currentSnapshotKey = taskSnapshotKey(task);
+  const lastAppliedSnapshotKey = detailEntry?.lastAppliedSnapshotKey;
+  const detailIsCurrent =
+    Boolean(currentSnapshotKey) &&
+    !detailEntry?.stale &&
+    lastAppliedSnapshotKey === currentSnapshotKey;
+
+  useEffect(() => {
+    if (!taskId || !connected || task?.status !== "done" || !currentSnapshotKey) {
+      return;
+    }
+    if (!detailIsCurrent) {
+      return;
+    }
+
+    let disposed = false;
+    let inFlight = false;
+
+    async function refresh() {
+      if (disposed || inFlight) {
+        return;
+      }
+      inFlight = true;
+      try {
+        await revalidateFollowUpAvailability();
+      } finally {
+        inFlight = false;
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    }
+
+    function handleWindowFocus() {
+      void refresh();
+    }
+
+    const refreshKey = `${workspaceId}:${taskId}:${currentSnapshotKey}`;
+    if (initialFollowUpRefreshKeyRef.current !== refreshKey) {
+      initialFollowUpRefreshKeyRef.current = refreshKey;
+      void refresh();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [
+    connected,
+    currentSnapshotKey,
+    detailIsCurrent,
+    lastAppliedSnapshotKey,
+    revalidateFollowUpAvailability,
+    task?.status,
+    taskId,
+    workspaceId,
+  ]);
 
   return { loadDetail };
 }

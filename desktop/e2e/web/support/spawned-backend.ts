@@ -155,7 +155,7 @@ export type SpawnedDesktopServerContext = {
       | "failed-retry"
       | "blocked-continue"
       | "stale-recover",
-  ) => Promise<{ taskId: string; description: string }>;
+  ) => Promise<{ taskId: string; description: string; executionDir: string }>;
 };
 
 export async function withSpawnedDesktopServer(
@@ -235,10 +235,12 @@ export async function withSpawnedDesktopServer(
         const parsed = JSON.parse(result.stdout) as {
           task_id: string;
           description: string;
+          execution_dir: string;
         };
         return {
           taskId: parsed.task_id,
           description: parsed.description,
+          executionDir: parsed.execution_dir,
         };
       },
     });

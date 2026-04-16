@@ -354,6 +354,7 @@ test("late task detail loads cannot overwrite a newer done-state hydrate", () =>
     config: { path: "/tmp/workspace/.muxagent/configs/default.yaml" },
     inputRequest: undefined,
     followUp: makeFollowUp(),
+    followUpState: "refine",
     artifacts: [makeArtifact()],
     ancestry: [],
     liveEventsRunId: "run-done",
@@ -377,6 +378,7 @@ test("late task detail loads cannot overwrite a newer done-state hydrate", () =>
   assert.equal(entry?.lastAppliedSnapshotKey, taskSnapshotKey(doneTask));
   assert.equal(entry?.latestRequestedSnapshotKey, taskSnapshotKey(doneTask));
   assert.equal(entry?.followUp?.default_mode, "continue_here");
+  assert.equal(entry?.followUpState, "refine");
   assert.equal(entry?.error, undefined);
 });
 

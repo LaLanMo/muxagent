@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import {
   addWorkspace,
@@ -22,6 +23,7 @@ async function delayNextTaskGetForTask(
             config?: unknown;
             inputRequest?: unknown;
             followUp?: unknown;
+            followUpState?: unknown;
             artifacts: unknown[];
             ancestry: unknown[];
             liveEventsRunId?: string;
@@ -39,6 +41,7 @@ async function delayNextTaskGetForTask(
               config?: unknown;
               inputRequest?: unknown;
               followUp?: unknown;
+              followUpState?: unknown;
               artifacts: unknown[];
               ancestry: unknown[];
               liveEventsRunId?: string;
@@ -204,6 +207,82 @@ test("shows explicit follow-up modes for a seeded worktree task and launches a f
     await expect(
       page.locator(".detail-properties__block").filter({ hasText: /^Config/ }),
     ).toContainText("default");
+  });
+});
+
+test("disables follow-up when the seeded worktree checkout has been removed", async ({
+  page,
+}) => {
+  test.slow();
+
+  await withSpawnedDesktopServer(async ({ url, workDir, seedWorkspace }) => {
+    const { taskId, executionDir } = await seedWorkspace("completed-worktree-follow-up");
+    await rm(executionDir, { recursive: true, force: true });
+
+    await page.goto(`${url}/`);
+    await addWorkspace(page, workDir);
+
+    const taskLink = page
+      .getByRole("link", { name: /Seeded completed worktree follow-up/i })
+      .first();
+    await expect(taskLink).toBeVisible();
+    await taskLink.click();
+
+    await expect(page).toHaveURL(new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`));
+    await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+      "data-follow-up-state",
+      "disabled",
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId("follow-up-disabled-message")).toContainText(
+      "Worktree removed. Follow-up from this task is unavailable.",
+    );
+    await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-mode-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-send")).toHaveCount(0);
+  });
+});
+
+test("revalidates an open completed task on focus after its worktree checkout is removed", async ({
+  page,
+}) => {
+  test.slow();
+
+  await withSpawnedDesktopServer(async ({ url, workDir, seedWorkspace }) => {
+    const { taskId, executionDir } = await seedWorkspace("completed-worktree-follow-up");
+
+    await page.goto(`${url}/`);
+    await addWorkspace(page, workDir);
+
+    const taskLink = page
+      .getByRole("link", { name: /Seeded completed worktree follow-up/i })
+      .first();
+    await expect(taskLink).toBeVisible();
+    await taskLink.click();
+
+    await expect(page).toHaveURL(new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`));
+    await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+      "data-follow-up-state",
+      "refine",
+    );
+    await expect(page.getByTestId("follow-up-send")).toBeVisible();
+
+    await rm(executionDir, { recursive: true, force: true });
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    await expect(page.getByTestId("complete-pane")).toHaveAttribute(
+      "data-follow-up-state",
+      "disabled",
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId("follow-up-disabled-message")).toContainText(
+      "Worktree removed. Follow-up from this task is unavailable.",
+    );
+    await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-mode-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("follow-up-send")).toHaveCount(0);
   });
 });
 

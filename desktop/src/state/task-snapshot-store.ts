@@ -10,6 +10,7 @@ import type {
   ConfigViewDto,
   InputRequestDto,
   TaskFollowUpDto,
+  TaskFollowUpStateDto,
   TaskAncestryItemDto,
   TaskViewDto,
 } from "@/rpc/types";
@@ -104,6 +105,7 @@ export type TaskDetailCacheEntry = {
   config?: ConfigViewDto;
   inputRequest?: InputRequestDto;
   followUp?: TaskFollowUpDto;
+  followUpState?: TaskFollowUpStateDto;
   artifacts: ArtifactRefDto[];
   ancestry: TaskAncestryItemDto[];
   liveEventsRunId?: string;
@@ -148,10 +150,11 @@ interface TaskSnapshotState {
     taskId: string,
     snapshotKey: string | undefined,
     generation: number,
-    detail: {
+      detail: {
       config?: ConfigViewDto;
       inputRequest?: InputRequestDto;
       followUp?: TaskFollowUpDto;
+      followUpState?: TaskFollowUpStateDto;
       artifacts: ArtifactRefDto[];
       ancestry: TaskAncestryItemDto[];
       liveEventsRunId?: string;
@@ -220,6 +223,7 @@ function baseTaskDetailEntry(current?: TaskDetailCacheEntry): TaskDetailCacheEnt
     config: current?.config,
     inputRequest: current?.inputRequest,
     followUp: current?.followUp,
+    followUpState: current?.followUpState,
     artifacts: current?.artifacts ?? [],
     ancestry: current?.ancestry ?? [],
     liveEventsRunId: current?.liveEventsRunId,
@@ -377,6 +381,7 @@ export const useTaskSnapshotStore = create<TaskSnapshotState>((set) => ({
             config: detail.config,
             inputRequest: detail.inputRequest,
             followUp: detail.followUp,
+            followUpState: detail.followUpState,
             artifacts: detail.artifacts,
             ancestry: detail.ancestry,
             liveEventsRunId: detail.liveEventsRunId,

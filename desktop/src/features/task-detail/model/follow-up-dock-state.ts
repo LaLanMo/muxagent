@@ -1,3 +1,4 @@
+import { isWorktreeTask } from "@/domain/task-shell";
 import { canShowFollowUpSurface } from "@/features/task-detail/model/task-detail-action-surface";
 import type {
   BlockedStepDto,
@@ -10,7 +11,7 @@ import {
   type TaskDetailCacheEntry,
 } from "@/state/task-snapshot-store";
 
-export type FollowUpDockState = "pending" | "basic" | "refine";
+export type FollowUpDockState = "pending" | "basic" | "refine" | "disabled";
 
 export function deriveFollowUpDockState(args: {
   task?: TaskViewDto;
@@ -34,5 +35,11 @@ export function deriveFollowUpDockState(args: {
   if (!currentSnapshotKey || detailEntry?.lastAppliedSnapshotKey !== currentSnapshotKey) {
     return "pending";
   }
-  return detailEntry.followUp ? "refine" : "basic";
+  if (detailEntry.followUpState) {
+    return detailEntry.followUpState;
+  }
+  if (detailEntry.followUp) {
+    return "refine";
+  }
+  return task && isWorktreeTask(task) ? "disabled" : "basic";
 }

@@ -42,7 +42,7 @@ function makeFollowUp(defaultMode: FollowUpModeDto = "continue_here"): TaskFollo
 
 function renderDock(props: {
   followUp?: TaskFollowUpDto;
-  followUpState?: "basic" | "pending" | "refine";
+  followUpState?: "basic" | "pending" | "refine" | "disabled";
   followUpMode?: FollowUpModeDto;
 }) {
   return renderToStaticMarkup(
@@ -115,4 +115,16 @@ test("pending dock shows a resolving pill while follow-up detail loads", () => {
 
   assert.match(markup, /follow-up-mode-pending/);
   assert.match(markup, /Resolving follow-up modes…/);
+});
+
+test("disabled dock renders passive copy without submit-capable controls", () => {
+  const markup = renderDock({
+    followUpState: "disabled",
+  });
+
+  assert.match(markup, /follow-up-disabled-message/);
+  assert.match(markup, /Worktree removed\. Follow-up from this task is unavailable\./);
+  assert.doesNotMatch(markup, /follow-up-description/);
+  assert.doesNotMatch(markup, /follow-up-mode-trigger/);
+  assert.doesNotMatch(markup, /follow-up-send/);
 });

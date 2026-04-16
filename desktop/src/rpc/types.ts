@@ -379,6 +379,7 @@ export interface TaskGetResult {
   config?: ConfigViewDto;
   input_request?: InputRequestDto;
   follow_up?: TaskFollowUpDto;
+  follow_up_state?: TaskFollowUpStateDto;
   live_events?: SessionHistoryEventDto[];
   live_output_run_id?: string;
 }
@@ -393,6 +394,8 @@ export interface TaskFollowUpDto {
   available_modes: FollowUpModeDto[];
   uncommitted_change_count: number;
 }
+
+export type TaskFollowUpStateDto = "basic" | "refine" | "disabled";
 
 export interface TaskAncestryItemDto {
   task_id: string;

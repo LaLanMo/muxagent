@@ -68,6 +68,7 @@ export type FixtureTask = {
     available_modes: Array<"continue_here" | "fork_head" | "fork_with_changes">;
     uncommitted_change_count: number;
   };
+  follow_up_state?: "basic" | "refine" | "disabled";
   current_issue?: {
     kind: string;
     node_name: string;
@@ -179,6 +180,27 @@ export type FixtureTask = {
     }>
   >;
 };
+
+function normalizeFixtureTaskPath(pathValue: string | undefined): string {
+  return (pathValue ?? "").replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+export function deriveFixtureFollowUpState(
+  task: FixtureTask,
+): FixtureTask["follow_up_state"] | undefined {
+  if (task.follow_up_state) {
+    return task.follow_up_state;
+  }
+  if (task.status !== "done") {
+    return undefined;
+  }
+  if (task.follow_up) {
+    return "refine";
+  }
+  const workDir = normalizeFixtureTaskPath(task.task.work_dir);
+  const executionDir = normalizeFixtureTaskPath(task.task.execution_dir);
+  return executionDir && workDir && executionDir !== workDir ? "disabled" : "basic";
+}
 
 export type FixtureWorkspace = {
   workspace_id: string;
@@ -836,6 +858,7 @@ export class FixtureRuntime {
           task,
           input_request: task.input_request,
           follow_up: task.follow_up,
+          follow_up_state: deriveFixtureFollowUpState(task),
           live_events: task.live_events,
           live_output_run_id: task.live_output_run_id,
         });
@@ -1802,6 +1825,7 @@ export class FixtureRuntime {
     nodeRuns: FixtureNodeRun[];
     taskArtifactPaths?: string[];
     followUp?: FixtureTask["follow_up"];
+    followUpState?: FixtureTask["follow_up_state"];
     currentIssue?: FixtureTask["current_issue"];
     inputRequest?: FixtureTask["input_request"];
     blockedSteps?: FixtureTask["blocked_steps"];
@@ -1837,6 +1861,7 @@ export class FixtureRuntime {
       current_node_name: params.currentNodeName,
       current_node_type: params.currentNodeType,
       follow_up: params.followUp,
+      follow_up_state: params.followUpState,
       current_issue: params.currentIssue,
       input_request: params.inputRequest,
       node_runs: params.nodeRuns,
