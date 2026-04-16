@@ -55,8 +55,13 @@ jobs:
           esac
 
           release_tag="desktop/$version"
+          prerelease=false
+          if [[ "$version" == *-* ]]; then
+            prerelease=true
+          fi
 
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
           echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
           echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
 
@@ -187,6 +192,7 @@ jobs:
           releaseName: ${{ steps.meta.outputs.version }}
           releaseBody: "See the assets to download this desktop release."
           releaseDraft: true
+          prerelease: ${{ steps.meta.outputs.prerelease }}
           releaseCommitish: ${{ steps.target.outputs.sha }}
           args: --target ${{ matrix.target }} --bundles dmg
           releaseAssetNamePattern: "[name]_[version]_[platform]_[arch][ext]"
