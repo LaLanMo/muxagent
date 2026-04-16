@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
   Check,
@@ -639,52 +639,84 @@ export function TaskDetailScreen({
     actionSurface.kind !== "none" && "run" in actionSurface
       ? actionSurface.run?.id
       : undefined;
-  const realRunIds = new Set(timelineRuns.map((run) => run.id));
-  const displayedActivityRuns =
-    actionSurface.kind === "blocked" &&
-    actionSurface.run &&
-    !realRunIds.has(actionSurface.run.id)
+  const realRunIds = useMemo(
+    () => new Set(timelineRuns.map((run) => run.id)),
+    [timelineRuns],
+  );
+  const displayedActivityRuns = useMemo(() => {
+    return actionSurface.kind === "blocked" &&
+      actionSurface.run &&
+      !realRunIds.has(actionSurface.run.id)
       ? [...timelineRuns, actionSurface.run]
       : timelineRuns;
+  }, [actionSurface, realRunIds, timelineRuns]);
   const currentRunId = currentRun?.id;
-  const liveSelectedRunEvents =
-    selectedRun?.id && liveEventsRunId === selectedRun.id ? liveEvents : [];
-  const transcript = buildTranscriptSnapshot({
-    replay: selectedRunHistory?.result,
-    liveEvents: liveSelectedRunEvents,
-  });
-  const rawTranscriptItems = deriveTranscriptTimelineItems(transcript);
-  const selectedRunStreamLines = timelineItemsToLines(rawTranscriptItems);
-  const selectedRunStreamSource =
-    liveSelectedRunEvents.length > 0
-      ? "live"
-      : selectedRunStreamLines.length > 0
-        ? "replay"
-        : selectedRunHistory?.loading
-          ? "loading"
-          : "none";
-  const canRecoverSelectedRun = Boolean(
-    selectedRun &&
-      selectedRun.id === currentRunId &&
-      detailStatusLabel(selectedRun.status) === "running" &&
-      selectedRunStreamSource !== "live" &&
-      selectedRunStreamSource !== "loading" &&
-      selectedRunHistory &&
-      !selectedRunHistory.loading &&
-      !selectedRunHistory.error &&
-      !selectedRun.result &&
-      supportsRunRecovery &&
-      workspaceActorState !== "active",
-  );
-  const selectedRunClarificationItems = clarificationTranscriptItems({
-    rawTranscriptItems,
-    run: selectedRun,
-  });
-  const displayTranscriptItems = mergeDisplayTranscriptItems({
-    clarificationItems: selectedRunClarificationItems,
-    rawTranscriptItems,
+  const {
     transcript,
-  });
+    rawTranscriptItems,
+    selectedRunStreamLines,
+    selectedRunStreamSource,
+    canRecoverSelectedRun,
+    selectedRunClarificationItems,
+    displayTranscriptItems,
+  } = useMemo(() => {
+    const currentLiveSelectedRunEvents =
+      selectedRun?.id && liveEventsRunId === selectedRun.id ? liveEvents : [];
+    const currentTranscript = buildTranscriptSnapshot({
+      replay: selectedRunHistory?.result,
+      liveEvents: currentLiveSelectedRunEvents,
+    });
+    const currentRawTranscriptItems = deriveTranscriptTimelineItems(currentTranscript);
+    const currentSelectedRunStreamLines = timelineItemsToLines(currentRawTranscriptItems);
+    const currentSelectedRunStreamSource: "live" | "replay" | "loading" | "none" =
+      currentLiveSelectedRunEvents.length > 0
+        ? "live"
+        : currentSelectedRunStreamLines.length > 0
+          ? "replay"
+          : selectedRunHistory?.loading
+            ? "loading"
+            : "none";
+    const currentCanRecoverSelectedRun = Boolean(
+      selectedRun &&
+        selectedRun.id === currentRunId &&
+        detailStatusLabel(selectedRun.status) === "running" &&
+        currentSelectedRunStreamSource !== "live" &&
+        currentSelectedRunStreamSource !== "loading" &&
+        selectedRunHistory &&
+        !selectedRunHistory.loading &&
+        !selectedRunHistory.error &&
+        !selectedRun.result &&
+        supportsRunRecovery &&
+        workspaceActorState !== "active",
+    );
+    const currentSelectedRunClarificationItems = clarificationTranscriptItems({
+      rawTranscriptItems: currentRawTranscriptItems,
+      run: selectedRun,
+    });
+    const currentDisplayTranscriptItems = mergeDisplayTranscriptItems({
+      clarificationItems: currentSelectedRunClarificationItems,
+      rawTranscriptItems: currentRawTranscriptItems,
+      transcript: currentTranscript,
+    });
+
+    return {
+      transcript: currentTranscript,
+      rawTranscriptItems: currentRawTranscriptItems,
+      selectedRunStreamLines: currentSelectedRunStreamLines,
+      selectedRunStreamSource: currentSelectedRunStreamSource,
+      canRecoverSelectedRun: currentCanRecoverSelectedRun,
+      selectedRunClarificationItems: currentSelectedRunClarificationItems,
+      displayTranscriptItems: currentDisplayTranscriptItems,
+    };
+  }, [
+    currentRunId,
+    liveEvents,
+    liveEventsRunId,
+    selectedRun,
+    selectedRunHistory,
+    supportsRunRecovery,
+    workspaceActorState,
+  ]);
   const createdLabel = formatAbsoluteStamp(task?.task.created_at);
   const durationLabel = summarizeTaskDuration(task, timelineRuns);
   const runsLabel = summarizeRuns(timelineRuns);
@@ -713,14 +745,16 @@ export function TaskDetailScreen({
   const activityRef = useRef<HTMLElement | null>(null);
   const shouldStickActivityToBottomRef = useRef(true);
   const lastTaskIdRef = useRef<string | undefined>(undefined);
-  const groupedArtifactPaths = new Set(
-    timelineRuns.flatMap((run) =>
-      artifactsForRun(run, artifacts).map((artifact) => artifact.resolved_path),
-    ),
-  );
-  const ungroupedArtifacts = artifacts.filter(
-    (artifact) => !groupedArtifactPaths.has(artifact.resolved_path),
-  );
+  const ungroupedArtifacts = useMemo(() => {
+    const groupedArtifactPaths = new Set(
+      timelineRuns.flatMap((run) =>
+        artifactsForRun(run, artifacts).map((artifact) => artifact.resolved_path),
+      ),
+    );
+    return artifacts.filter(
+      (artifact) => !groupedArtifactPaths.has(artifact.resolved_path),
+    );
+  }, [artifacts, timelineRuns]);
 
   const artifactModal =
     modal.kind === "artifact" ? (

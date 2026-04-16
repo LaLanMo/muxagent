@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getRuntime } from "@/app/runtime";
 import { buildTaskDetailPath } from "@/domain/routes";
@@ -318,22 +318,41 @@ export function useTaskDetailScreen() {
     }
   }
 
-  const stageNodes = resolvedTask ? buildStageNodes(resolvedTask) : [];
-  const latest = resolvedTask ? latestRun(resolvedTask) : undefined;
-  const currentRun = navigatorRuns.length
-    ? [...navigatorRuns].reverse().find((run) => isOpenRun(run))
-    : undefined;
-  const latestFailedRun = navigatorRuns.length
-    ? [...navigatorRuns]
-        .reverse()
-        .find((run) => run.status.toLowerCase().includes("fail"))
-    : undefined;
-  const retryRun =
-    resolvedTask && taskBucket(resolvedTask) === "failed"
-      ? latestFailedRun
-      : undefined;
-  const failureReason =
-    retryRun?.failure_reason || resolvedTask?.current_issue?.reason || undefined;
+  const stageNodes = useMemo(
+    () => (resolvedTask ? buildStageNodes(resolvedTask) : []),
+    [resolvedTask],
+  );
+  const latest = useMemo(
+    () => (resolvedTask ? latestRun(resolvedTask) : undefined),
+    [resolvedTask],
+  );
+  const currentRun = useMemo(
+    () =>
+      navigatorRuns.length
+        ? [...navigatorRuns].reverse().find((run) => isOpenRun(run))
+        : undefined,
+    [navigatorRuns],
+  );
+  const latestFailedRun = useMemo(
+    () =>
+      navigatorRuns.length
+        ? [...navigatorRuns]
+            .reverse()
+            .find((run) => run.status.toLowerCase().includes("fail"))
+        : undefined,
+    [navigatorRuns],
+  );
+  const retryRun = useMemo(
+    () =>
+      resolvedTask && taskBucket(resolvedTask) === "failed"
+        ? latestFailedRun
+        : undefined,
+    [latestFailedRun, resolvedTask],
+  );
+  const failureReason = useMemo(
+    () => retryRun?.failure_reason || resolvedTask?.current_issue?.reason || undefined,
+    [resolvedTask?.current_issue?.reason, retryRun?.failure_reason],
+  );
   const {
     feedback,
     setFeedback,
@@ -382,90 +401,158 @@ export function useTaskDetailScreen() {
     navigatorRuns,
     latestBlockedStep,
   );
-  const blockedActivityRun =
-    resolvedTask?.task.id && latestBlockedStep
-      ? realBlockedRun ?? buildSyntheticBlockedRun(resolvedTask.task.id, latestBlockedStep)
-      : undefined;
+  const blockedActivityRun = useMemo(
+    () =>
+      resolvedTask?.task.id && latestBlockedStep
+        ? realBlockedRun ?? buildSyntheticBlockedRun(resolvedTask.task.id, latestBlockedStep)
+        : undefined,
+    [latestBlockedStep, realBlockedRun, resolvedTask?.task.id],
+  );
   const retrySurfaceRun = retryRun;
-  const showFollowUpSurface = canShowFollowUpSurface({
-    task: resolvedTask,
-    inputRequest,
-    latestBlockedStep,
-    retryRun: retrySurfaceRun,
-  });
-  const followUpState = deriveFollowUpDockState({
-    task: resolvedTask,
-    detailEntry,
-    inputRequest,
-    latestBlockedStep,
-    retryRun: retrySurfaceRun,
-  });
-  const actionSurface: TaskDetailActionSurface = inputRequest
-    ? inputRequest.kind === "clarification"
-      ? {
-          kind: "clarification",
-          inputRequest,
-          run: inputRequestRun,
-        }
-      : {
-          kind: "approval",
-          inputRequest,
-          run: inputRequestRun,
-        }
-    : latestBlockedStep
-      ? {
-          kind: "blocked",
-          blockedStep: latestBlockedStep,
-          run: blockedActivityRun,
-        }
-      : retrySurfaceRun
+  const showFollowUpSurface = useMemo(
+    () =>
+      canShowFollowUpSurface({
+        task: resolvedTask,
+        inputRequest,
+        latestBlockedStep,
+        retryRun: retrySurfaceRun,
+      }),
+    [inputRequest, latestBlockedStep, resolvedTask, retrySurfaceRun],
+  );
+  const followUpState = useMemo(
+    () =>
+      deriveFollowUpDockState({
+        task: resolvedTask,
+        detailEntry,
+        inputRequest,
+        latestBlockedStep,
+        retryRun: retrySurfaceRun,
+      }),
+    [detailEntry, inputRequest, latestBlockedStep, resolvedTask, retrySurfaceRun],
+  );
+  const actionSurface = useMemo<TaskDetailActionSurface>(() => {
+    if (inputRequest) {
+      return inputRequest.kind === "clarification"
         ? {
-            kind: "retry",
-            run: retrySurfaceRun,
-            failureReason,
+            kind: "clarification",
+            inputRequest,
+            run: inputRequestRun,
           }
-        : showFollowUpSurface
-          ? { kind: "follow_up" }
-          : { kind: "none" };
-  const runningActivityPreviewByRunId: Record<string, RunningActivityPreviewRow[]> = {};
-  const activityPreviewParts: string[] = [];
-  for (const run of navigatorRuns) {
-    if (detailStatusLabel(run.status) !== "running") {
-      continue;
-    }
-    const liveRunEvents = liveEventsRunId === run.id ? liveEvents : [];
-    const replay = detailEntry?.runHistoryByRunId?.[run.id]?.result;
-    if (liveRunEvents.length === 0 && !replay) {
-      continue;
-    }
-    const preview = deriveRunningActivityPreview(
-      deriveTranscriptTimelineItems(
-        buildTranscriptSnapshot({
-          replay,
-          liveEvents: liveRunEvents,
-        }),
-      ),
-    );
-    if (preview.length === 0) {
-      continue;
-    }
-    runningActivityPreviewByRunId[run.id] = preview;
-    activityPreviewParts.push(
-      `${run.id}:${preview.map((row) => `${row.id}:${row.text}`).join("|")}`,
-    );
-  }
-  const historyEntries =
-    ancestry.length > 0
-      ? ancestry.map((entry) => {
-          const task = taskForWorkspace(tasksById, workspaceId, entry.task_id);
-          return {
-            taskId: entry.task_id,
-            description: entry.description.trim() || entry.task_id,
-            relativeUpdatedAt: formatHistoryRelativeTime(task?.task.updated_at ?? entry.updated_at),
-            metaLabel: summarizeHistoryMeta(task),
+        : {
+            kind: "approval",
+            inputRequest,
+            run: inputRequestRun,
           };
-        })
-      : emptyHistoryEntries;
+    }
+    if (latestBlockedStep) {
+      return {
+        kind: "blocked",
+        blockedStep: latestBlockedStep,
+        run: blockedActivityRun,
+      };
+    }
+    if (retrySurfaceRun) {
+      return {
+        kind: "retry",
+        run: retrySurfaceRun,
+        failureReason,
+      };
+    }
+    if (showFollowUpSurface) {
+      return { kind: "follow_up" };
+    }
+    return { kind: "none" };
+  }, [
+    blockedActivityRun,
+    failureReason,
+    inputRequest,
+    inputRequestRun,
+    latestBlockedStep,
+    retrySurfaceRun,
+    showFollowUpSurface,
+  ]);
+  const { runningActivityPreviewByRunId, activityPreviewSignature } = useMemo(() => {
+    const previewsByRunId: Record<string, RunningActivityPreviewRow[]> = {};
+    const previewParts: string[] = [];
+    for (const run of navigatorRuns) {
+      if (detailStatusLabel(run.status) !== "running") {
+        continue;
+      }
+      const liveRunEvents = liveEventsRunId === run.id ? liveEvents : [];
+      const replay = detailEntry?.runHistoryByRunId?.[run.id]?.result;
+      if (liveRunEvents.length === 0 && !replay) {
+        continue;
+      }
+      const preview = deriveRunningActivityPreview(
+        deriveTranscriptTimelineItems(
+          buildTranscriptSnapshot({
+            replay,
+            liveEvents: liveRunEvents,
+          }),
+        ),
+      );
+      if (preview.length === 0) {
+        continue;
+      }
+      previewsByRunId[run.id] = preview;
+      previewParts.push(
+        `${run.id}:${preview.map((row) => `${row.id}:${row.text}`).join("|")}`,
+      );
+    }
+    return {
+      runningActivityPreviewByRunId: previewsByRunId,
+      activityPreviewSignature: previewParts.join("||"),
+    };
+  }, [detailEntry?.runHistoryByRunId, liveEvents, liveEventsRunId, navigatorRuns]);
+  const historyEntries = useMemo(
+    () =>
+      ancestry.length > 0
+        ? ancestry.map((entry) => {
+            const task = taskForWorkspace(tasksById, workspaceId, entry.task_id);
+            return {
+              taskId: entry.task_id,
+              description: entry.description.trim() || entry.task_id,
+              relativeUpdatedAt: formatHistoryRelativeTime(
+                task?.task.updated_at ?? entry.updated_at,
+              ),
+              metaLabel: summarizeHistoryMeta(task),
+            };
+          })
+        : emptyHistoryEntries,
+    [ancestry, tasksById, workspaceId],
+  );
+  const activityRunActorTypes = useMemo(
+    () =>
+      Object.fromEntries(
+        [
+          ...navigatorRuns,
+          ...(actionSurface.kind === "blocked" &&
+          actionSurface.run &&
+          !navigatorRuns.some((run) => run.id === actionSurface.run?.id)
+            ? [actionSurface.run]
+            : []),
+        ].map((run) => [
+          run.id,
+          resolveRunActorType({
+            run,
+            task: resolvedTask,
+            inputRequest,
+            nodeActorTypes,
+          }),
+        ]),
+      ) as Record<string, ActivityRunActorType>,
+    [actionSurface, inputRequest, navigatorRuns, nodeActorTypes, resolvedTask],
+  );
+  const stageNodeStatuses = useMemo(
+    () =>
+      resolvedTask
+        ? stageNodes.map((node) => ({
+            name: node,
+            status: stageStatusForNode(resolvedTask, node),
+          }))
+        : [],
+    [resolvedTask, stageNodes],
+  );
 
   return {
     shell,
@@ -523,12 +610,7 @@ export function useTaskDetailScreen() {
     blockedStep: latestBlockedStep,
     failureReason,
     actionSurface,
-    stageNodes: resolvedTask
-      ? stageNodes.map((node) => ({
-          name: node,
-          status: stageStatusForNode(resolvedTask, node),
-        }))
-      : [],
+    stageNodes: stageNodeStatuses,
     title: resolvedTask?.task.description || resolvedTask?.task.id || "Task detail",
     statusLabel: resolvedTask ? detailStatusTitle(resolvedTask.status) : "Running",
     statusTone: resolvedTask ? statusTone(resolvedTask.status) : "neutral",
@@ -537,25 +619,8 @@ export function useTaskDetailScreen() {
     elapsedLabel: latest?.started_at ? latest.started_at : "",
     timelineRuns: navigatorRuns,
     runningActivityPreviewByRunId,
-    activityPreviewSignature: activityPreviewParts.join("||"),
-    activityRunActorTypes: Object.fromEntries(
-      [
-        ...navigatorRuns,
-        ...(actionSurface.kind === "blocked" &&
-        actionSurface.run &&
-        !navigatorRuns.some((run) => run.id === actionSurface.run?.id)
-          ? [actionSurface.run]
-          : []),
-      ].map((run) => [
-        run.id,
-        resolveRunActorType({
-          run,
-          task: resolvedTask,
-          inputRequest,
-          nodeActorTypes,
-        }),
-      ]),
-    ) as Record<string, ActivityRunActorType>,
+    activityPreviewSignature,
+    activityRunActorTypes,
     currentRun,
     latestRun: latest,
     selectOverview,
