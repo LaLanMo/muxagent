@@ -823,3 +823,61 @@ func cloneMap(input map[string]interface{}) map[string]interface{} {
 	}
 	return cloned
 }
+
+type gitCheckoutRoleDTO string
+
+const (
+	gitCheckoutRoleMain            gitCheckoutRoleDTO = "main"
+	gitCheckoutRoleMuxagentManaged gitCheckoutRoleDTO = "muxagent_managed"
+	gitCheckoutRoleExternal        gitCheckoutRoleDTO = "external"
+)
+
+type gitCheckoutSummaryDTO struct {
+	Role              gitCheckoutRoleDTO `json:"role"`
+	Path              string             `json:"path"`
+	Reachable         bool               `json:"reachable"`
+	UnreachableReason string             `json:"unreachable_reason,omitempty"`
+	Locked            bool               `json:"locked,omitempty"`
+	Prunable          bool               `json:"prunable,omitempty"`
+	Branch            string             `json:"branch,omitempty"`
+	DetachedHead      bool               `json:"detached_head,omitempty"`
+	Upstream          string             `json:"upstream,omitempty"`
+	AheadCount        int                `json:"ahead_count"`
+	BehindCount       int                `json:"behind_count"`
+	HeadCommit        string             `json:"head_commit,omitempty"`
+	HeadSubject       string             `json:"head_subject,omitempty"`
+	HeadAuthoredAt    *time.Time         `json:"head_authored_at,omitempty"`
+	StagedCount       int                `json:"staged_count"`
+	UnstagedCount     int                `json:"unstaged_count"`
+	UntrackedCount    int                `json:"untracked_count"`
+	ConflictedCount   int                `json:"conflicted_count"`
+	TotalChangeCount  int                `json:"total_change_count"`
+}
+
+type gitCheckoutDetailDTO struct {
+	gitCheckoutSummaryDTO
+	Files          []gitFileChangeDTO `json:"files"`
+	FilesTotal     int                `json:"files_total"`
+	NextFileCursor string             `json:"next_file_cursor,omitempty"`
+}
+
+type gitFileChangeDTO struct {
+	Path     string `json:"path"`
+	OrigPath string `json:"orig_path,omitempty"`
+	XY       string `json:"xy"`
+	Bucket   string `json:"bucket"`
+}
+
+type gitDiffDTO struct {
+	Reachable         bool       `json:"reachable"`
+	UnreachableReason string     `json:"unreachable_reason,omitempty"`
+	Patch             string     `json:"patch,omitempty"`
+	Truncated         bool       `json:"truncated,omitempty"`
+	Binary            bool       `json:"binary,omitempty"`
+	FileCount         int        `json:"file_count,omitempty"`
+	Subject           string     `json:"subject,omitempty"`
+	Author            string     `json:"author,omitempty"`
+	AuthorMail        string     `json:"author_mail,omitempty"`
+	AuthoredAt        *time.Time `json:"authored_at,omitempty"`
+	Hash              string     `json:"hash,omitempty"`
+}

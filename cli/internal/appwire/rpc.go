@@ -118,6 +118,12 @@ type FsSearchParams struct {
 	Query     string `json:"query"`
 }
 
+type SessionGitStatusParams struct {
+	SessionID  string `json:"sessionId"`
+	FileCursor string `json:"fileCursor,omitempty"`
+	FileLimit  int    `json:"fileLimit,omitempty"`
+}
+
 func DecodeCreateSessionParams(raw json.RawMessage) (CreateSessionParams, error) {
 	return decodeRPCParams[CreateSessionParams](raw)
 }
@@ -164,6 +170,10 @@ func DecodeFsListParams(raw json.RawMessage) (FsListParams, error) {
 
 func DecodeFsSearchParams(raw json.RawMessage) (FsSearchParams, error) {
 	return decodeRPCParams[FsSearchParams](raw)
+}
+
+func DecodeSessionGitStatusParams(raw json.RawMessage) (SessionGitStatusParams, error) {
+	return decodeRPCParams[SessionGitStatusParams](raw)
 }
 
 func DecodeEchoParams(raw json.RawMessage) (map[string]any, error) {
@@ -287,4 +297,33 @@ type FsSearchEntry struct {
 
 type FsSearchResult struct {
 	Results []FsSearchEntry `json:"results"`
+}
+
+type SessionGitFile struct {
+	Path     string `json:"path"`
+	OrigPath string `json:"origPath,omitempty"`
+	XY       string `json:"xy"`
+	Bucket   string `json:"bucket"`
+}
+
+type SessionGitStatusResult struct {
+	Reachable         bool             `json:"reachable"`
+	UnreachableReason string           `json:"unreachableReason,omitempty"`
+	Branch            string           `json:"branch,omitempty"`
+	DetachedHead     bool              `json:"detachedHead,omitempty"`
+	Upstream          string           `json:"upstream,omitempty"`
+	AheadCount        int              `json:"aheadCount"`
+	BehindCount       int              `json:"behindCount"`
+	HeadCommit        string           `json:"headCommit,omitempty"`
+	HeadSubject       string           `json:"headSubject,omitempty"`
+	HeadAuthoredAt    *time.Time       `json:"headAuthoredAt,omitempty"`
+	StagedCount       int              `json:"stagedCount"`
+	UnstagedCount     int              `json:"unstagedCount"`
+	UntrackedCount    int              `json:"untrackedCount"`
+	ConflictedCount   int              `json:"conflictedCount"`
+	TotalChangeCount  int              `json:"totalChangeCount"`
+	Files             []SessionGitFile `json:"files"`
+	FilesTotal        int              `json:"filesTotal"`
+	NextFileCursor    string           `json:"nextFileCursor,omitempty"`
+	CollectedAt       time.Time        `json:"collectedAt"`
 }

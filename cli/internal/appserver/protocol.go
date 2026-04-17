@@ -25,6 +25,10 @@ const (
 	methodWorkspaceUpdate            = "workspace.update"
 	methodWorkspaceGet               = "workspace.get"
 	methodWorkspaceReconcile         = "workspace.reconcile_stale"
+	methodWorkspaceGitStatus         = "workspace.git_status"
+	methodWorkspaceCheckoutStatus    = "workspace.checkout_status"
+	methodWorkspaceFileDiff          = "workspace.file_diff"
+	methodWorkspaceCommitDiff        = "workspace.commit_diff"
 	methodTaskList                   = "task.list"
 	methodTaskGet                    = "task.get"
 	methodTaskGetAncestry            = "task.get_ancestry"
@@ -180,6 +184,53 @@ const (
 
 type workspaceReconcileResult struct {
 	Outcome workspaceReconcileOutcome `json:"outcome"`
+}
+
+type workspaceGitStatusParams struct {
+	WorkspaceID string `json:"workspace_id"`
+}
+
+type workspaceGitStatusResult struct {
+	Main                gitCheckoutSummaryDTO   `json:"main"`
+	Worktrees           []gitCheckoutSummaryDTO `json:"worktrees"`
+	WorktreesTruncated  bool                    `json:"worktrees_truncated,omitempty"`
+	WorktreesTotalCount int                     `json:"worktrees_total_count"`
+	CollectedAt         time.Time               `json:"collected_at"`
+}
+
+type workspaceCheckoutStatusParams struct {
+	WorkspaceID  string `json:"workspace_id"`
+	CheckoutPath string `json:"checkout_path"`
+	FileCursor   string `json:"file_cursor,omitempty"`
+	FileLimit    int    `json:"file_limit,omitempty"`
+}
+
+type workspaceCheckoutStatusResult struct {
+	Checkout    gitCheckoutDetailDTO `json:"checkout"`
+	CollectedAt time.Time            `json:"collected_at"`
+}
+
+type workspaceFileDiffParams struct {
+	WorkspaceID  string `json:"workspace_id"`
+	CheckoutPath string `json:"checkout_path"`
+	FilePath     string `json:"file_path"`
+	Bucket       string `json:"bucket,omitempty"`
+}
+
+type workspaceFileDiffResult struct {
+	Diff        gitDiffDTO `json:"diff"`
+	CollectedAt time.Time  `json:"collected_at"`
+}
+
+type workspaceCommitDiffParams struct {
+	WorkspaceID  string `json:"workspace_id"`
+	CheckoutPath string `json:"checkout_path"`
+	CommitHash   string `json:"commit_hash"`
+}
+
+type workspaceCommitDiffResult struct {
+	Diff        gitDiffDTO `json:"diff"`
+	CollectedAt time.Time  `json:"collected_at"`
 }
 
 type workspaceAddParams struct {

@@ -461,6 +461,13 @@ func (c *Client) handleRPC(connEpoch uint64, enc EncryptedMessage) {
 			break
 		}
 		result, respErr = c.rpcFsSearch(ctx, params)
+	case "session.git_status":
+		params, err := appwire.DecodeSessionGitStatusParams(payload.Params)
+		if err != nil {
+			respErr = "invalid session.git_status params: " + err.Error()
+			break
+		}
+		result, respErr = c.rpcSessionGitStatus(ctx, params)
 	case "echo":
 		params, err := appwire.DecodeEchoParams(payload.Params)
 		if err != nil {

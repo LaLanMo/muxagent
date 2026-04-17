@@ -394,6 +394,10 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodWorkspaceUpdate,
 					methodWorkspaceGet,
 					methodWorkspaceReconcile,
+					methodWorkspaceGitStatus,
+					methodWorkspaceCheckoutStatus,
+					methodWorkspaceFileDiff,
+					methodWorkspaceCommitDiff,
 					methodTaskList,
 					methodTaskGet,
 					methodTaskGetAncestry,
@@ -526,6 +530,66 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, rpcErr
 		}
 		return workspaceReconcileResult{Outcome: outcome}, nil, stopModeContinue, nil
+
+	case methodWorkspaceGitStatus:
+		params, err := decodeParams[workspaceGitStatusParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		result, err := buildWorkspaceGitStatus(ctx, workspace, s.now)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+		}
+		return result, nil, stopModeContinue, nil
+
+	case methodWorkspaceCheckoutStatus:
+		params, err := decodeParams[workspaceCheckoutStatusParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		result, rpcErr := buildCheckoutStatus(ctx, workspace, params.CheckoutPath, params.FileCursor, params.FileLimit, s.now)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		return result, nil, stopModeContinue, nil
+
+	case methodWorkspaceFileDiff:
+		params, err := decodeParams[workspaceFileDiffParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		result, rpcErr := buildFileDiff(ctx, workspace, params.CheckoutPath, params.FilePath, params.Bucket, s.now)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		return result, nil, stopModeContinue, nil
+
+	case methodWorkspaceCommitDiff:
+		params, err := decodeParams[workspaceCommitDiffParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		workspace, rpcErr := s.requireWorkspace(params.WorkspaceID)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		result, rpcErr := buildCommitDiff(ctx, workspace, params.CheckoutPath, params.CommitHash, s.now)
+		if rpcErr != nil {
+			return nil, nil, stopModeContinue, rpcErr
+		}
+		return result, nil, stopModeContinue, nil
 
 	case methodTaskList:
 		params, err := decodeParams[taskListParams](req.Params)
