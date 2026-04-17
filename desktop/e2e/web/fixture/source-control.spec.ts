@@ -1,9 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
+import { skipOnboarding } from "./_helpers";
 
 async function connectFixtureWorkspace(
   page: Page,
   workDir = "/tmp/muxagent-source-control",
 ) {
+  await skipOnboarding(page);
   await page.setViewportSize({ width: 1500, height: 980 });
   await page.goto("/");
   await expect(page.getByTestId("workspace-picker-button")).toBeEnabled();
