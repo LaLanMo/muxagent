@@ -18,6 +18,7 @@ import {
 } from "@/domain/routes";
 
 export type WorkbenchPanelId = "tasks" | "source-control" | "configs";
+type WorkbenchActivityId = WorkbenchPanelId | "settings";
 
 export function defaultPanelForPath(pathname: string): WorkbenchPanelId {
   if (isSourceControlPath(pathname)) {
@@ -46,26 +47,23 @@ function activityButtonClass(active: boolean): string {
 }
 
 function ActivityBarIcon({
-  id,
   label,
-  activePanel,
+  active,
   onSelect,
   children,
 }: {
-  id: WorkbenchPanelId;
   label: string;
-  activePanel: WorkbenchPanelId;
-  onSelect: (id: WorkbenchPanelId) => void;
+  active: boolean;
+  onSelect: () => void;
   children: ReactNode;
 }) {
-  const isActive = activePanel === id;
   return (
     <button
       aria-label={label}
-      aria-pressed={isActive}
-      className={activityButtonClass(isActive)}
-      data-testid={`workbench-activity-${id}`}
-      onClick={() => onSelect(id)}
+      aria-pressed={active}
+      className={activityButtonClass(active)}
+      data-testid={`workbench-activity-${label.toLowerCase().replace(/\s+/g, "-")}`}
+      onClick={onSelect}
       type="button"
     >
       {children}
@@ -78,6 +76,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   const activePanel = useActivePanelId();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
+  const activeActivity: WorkbenchActivityId = location.pathname.startsWith("/settings")
+    ? "settings"
+    : activePanel;
 
   function setPanel(id: WorkbenchPanelId) {
     const next = new URLSearchParams(searchParams);
@@ -113,34 +114,25 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
             }}
           />
           <div className="workbench__activity-top">
-            <div className="workbench__traffic-lights" aria-hidden="true">
-              <span className="workbench__traffic-light is-red" />
-              <span className="workbench__traffic-light is-yellow" />
-              <span className="workbench__traffic-light is-green" />
-            </div>
-
             <nav className="workbench__activity-nav" aria-label="Primary">
               <ActivityBarIcon
-                id="tasks"
                 label="Tasks"
-                activePanel={activePanel}
-                onSelect={setPanel}
+                active={activeActivity === "tasks"}
+                onSelect={() => setPanel("tasks")}
               >
                 <ListTodo size={18} strokeWidth={1.9} />
               </ActivityBarIcon>
               <ActivityBarIcon
-                id="source-control"
                 label="Source Control"
-                activePanel={activePanel}
-                onSelect={setPanel}
+                active={activeActivity === "source-control"}
+                onSelect={() => setPanel("source-control")}
               >
                 <GitBranch size={18} strokeWidth={1.9} />
               </ActivityBarIcon>
               <ActivityBarIcon
-                id="configs"
                 label="Configs"
-                activePanel={activePanel}
-                onSelect={setPanel}
+                active={activeActivity === "configs"}
+                onSelect={() => setPanel("configs")}
               >
                 <SlidersHorizontal size={18} strokeWidth={1.9} />
               </ActivityBarIcon>
@@ -149,7 +141,8 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
 
           <NavLink
             aria-label="Settings"
-            className={({ isActive }) => activityButtonClass(isActive)}
+            className={activityButtonClass(activeActivity === "settings")}
+            data-testid="workbench-activity-settings"
             to="/settings"
           >
             <Settings size={18} strokeWidth={1.9} />

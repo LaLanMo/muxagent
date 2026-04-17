@@ -33,9 +33,20 @@ async function removeWorkspaceFromSidebar(page: Page, label: string) {
 test("keeps settings sparse and removes legacy workspace management controls", async ({ page }) => {
   await connectPrimaryWorkspace(page);
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
+  await expect(page.locator(".workbench__traffic-lights")).toHaveCount(0);
 
   await page.getByRole("link", { name: /^Settings$/i }).click();
   await expect(page.getByTestId("settings-screen")).toBeVisible();
+  await expect(page.getByTestId("workbench-activity-settings")).toHaveClass(/is-active/);
+  await expect(page.getByTestId("workbench-activity-tasks")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("workbench-activity-source-control")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(page.getByTestId("workbench-activity-configs")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
 
   await expect(page.getByTestId("settings-workspace-row")).toHaveCount(0);
   await expect(page.getByTestId("workspace-rename-button")).toHaveCount(0);

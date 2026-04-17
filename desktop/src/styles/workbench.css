@@ -43,29 +43,6 @@ body.platform-tauri-macos .workbench__activity-drag-strip {
   width: 100%;
 }
 
-.workbench__traffic-lights {
-  display: none;
-  gap: 6px;
-  width: 100%;
-  justify-content: center;
-  padding-bottom: var(--space-1);
-}
-
-body.platform-tauri-macos .workbench__traffic-lights {
-  display: flex;
-}
-
-.workbench__traffic-light {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--color-surface-2);
-}
-
-.workbench__traffic-light.is-red { background: #ff5f57; }
-.workbench__traffic-light.is-yellow { background: #febc2e; }
-.workbench__traffic-light.is-green { background: #28c840; }
-
 .workbench__activity-nav {
   display: flex;
   flex-direction: column;
