@@ -294,6 +294,10 @@ body.platform-tauri-macos .desktop-shell__sidebar-drag-strip {
   background: var(--color-bg-page);
 }
 
+.desktop-shell__main--chromeless {
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .desktop-shell__topbar {
   display: flex;
   align-items: center;

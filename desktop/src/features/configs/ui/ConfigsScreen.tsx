@@ -1,8 +1,6 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { Button } from "@/features/shared/ui/Button";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
-import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 import type { KeyboardEvent } from "react";
 
@@ -13,7 +11,6 @@ type ConfigCardModel = ConfigCatalogEntryDto & {
 };
 
 type ConfigsScreenProps = {
-  shell: ShellChromeModel;
   count: number;
   entries: ConfigCardModel[];
   actionError?: string;
@@ -25,7 +22,6 @@ type ConfigsScreenProps = {
 };
 
 export function ConfigsScreen({
-  shell,
   count,
   entries,
   actionError,
@@ -71,24 +67,11 @@ export function ConfigsScreen({
 
   return (
     <>
-      <DesktopShellFrame
-        addWorkspaceDisabled={shell.phase !== "connected"}
-        footerNav={shell.footerNav}
-        onPrimaryAction={shell.openNewTask}
-        primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
-        primaryNav={shell.primaryNav}
-        workspaceRemoveDialog={shell.workspaceRemoveDialog}
-        workspaceItems={shell.workspaceItems}
-        onAddWorkspace={() => void shell.addWorkspace()}
-        topBarLeft={
-          <h1 className="screen-title">Configs</h1>
-        }
+      <section
+        aria-label={`Configs (${count})`}
+        className="configs-screen"
+        data-testid="configs-screen"
       >
-        <section
-          aria-label={`Configs (${count})`}
-          className="configs-screen"
-          data-testid="configs-screen"
-        >
           {actionError ? <div className="config-banner config-banner--error">{actionError}</div> : null}
 
           {entries.length === 0 ? (
@@ -197,9 +180,8 @@ export function ConfigsScreen({
                 </article>
               ))}
             </div>
-          )}
-        </section>
-      </DesktopShellFrame>
+        )}
+      </section>
 
       <ConfirmDialog
         body={

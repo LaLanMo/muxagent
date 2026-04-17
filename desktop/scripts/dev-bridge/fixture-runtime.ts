@@ -631,6 +631,10 @@ export class FixtureRuntime {
               "workspace.list",
               "workspace.add",
               "workspace.get",
+              "workspace.git_status",
+              "workspace.checkout_status",
+              "workspace.file_diff",
+              "workspace.commit_diff",
               "workspace.reconcile_stale",
               "workspace.update",
               "workspace.remove",
@@ -712,6 +716,71 @@ export class FixtureRuntime {
           return this.fail(id, -32010, "workspace not found");
         }
         return this.respond(id, { workspace });
+      }
+      case "workspace.git_status": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        return this.respond(id, this.fixtureWorkspaceGitStatus(workspace));
+      }
+      case "workspace.checkout_status": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const checkoutPath = String(params.checkout_path ?? "").trim();
+        if (!checkoutPath) {
+          return this.fail(id, -32602, "checkout_path is required");
+        }
+        const result = this.fixtureWorkspaceCheckoutStatus(workspace, checkoutPath);
+        if (!result) {
+          return this.fail(id, -32602, "checkout_path is not part of this workspace");
+        }
+        return this.respond(id, result);
+      }
+      case "workspace.file_diff": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const checkoutPath = String(params.checkout_path ?? "").trim();
+        const filePath = String(params.file_path ?? "").trim();
+        if (!checkoutPath) {
+          return this.fail(id, -32602, "checkout_path is required");
+        }
+        if (!filePath) {
+          return this.fail(id, -32602, "file_path is required");
+        }
+        const bucket = String(params.bucket ?? "").trim();
+        return this.respond(id, this.fixtureFileDiff(filePath, bucket));
+      }
+      case "workspace.commit_diff": {
+        const workspace = this.requireWorkspace(
+          state,
+          String(params.workspace_id ?? ""),
+        );
+        if (!workspace) {
+          return this.fail(id, -32010, "workspace not found");
+        }
+        const checkoutPath = String(params.checkout_path ?? "").trim();
+        const commitHash = String(params.commit_hash ?? "").trim();
+        if (!checkoutPath) {
+          return this.fail(id, -32602, "checkout_path is required");
+        }
+        if (!commitHash) {
+          return this.fail(id, -32602, "commit_hash is required");
+        }
+        return this.respond(id, this.fixtureCommitDiff(commitHash));
       }
       case "workspace.reconcile_stale": {
         const workspace = this.requireWorkspace(
@@ -1919,6 +1988,277 @@ export class FixtureRuntime {
     };
   }
 
+  private fixtureWorkspaceGitStatus(workspace: FixtureWorkspace) {
+    const now = new Date().toISOString();
+    if (path.basename(workspace.path) === "muxagent-source-control") {
+      const managedRoot = path.join("/tmp", ".muxagent", "worktrees", "fixture-repo");
+      const featPath = path.join(managedRoot, "feat-auth-refactor");
+      const fixPath = path.join(managedRoot, "fix-session-ttl");
+      const pocPath = path.join("/tmp", "poc-experiment");
+      return {
+        main: {
+          role: "main",
+          path: workspace.path,
+          reachable: true,
+          branch: "main",
+          upstream: "origin/main",
+          ahead_count: 0,
+          behind_count: 0,
+          staged_count: 0,
+          unstaged_count: 0,
+          untracked_count: 0,
+          conflicted_count: 0,
+          total_change_count: 0,
+          head_commit: "main1234567",
+          head_subject: "Stabilize source control fixtures",
+          head_authored_at: now,
+        },
+        worktrees: [
+          {
+            role: "muxagent_managed",
+            path: featPath,
+            reachable: true,
+            branch: "feat/auth-refactor",
+            upstream: "origin/main",
+            ahead_count: 2,
+            behind_count: 0,
+            staged_count: 1,
+            unstaged_count: 2,
+            untracked_count: 1,
+            conflicted_count: 0,
+            total_change_count: 4,
+            head_commit: "fa3b2c1d4e",
+            head_subject: "Wire middleware into app",
+            head_authored_at: now,
+          },
+          {
+            role: "muxagent_managed",
+            path: fixPath,
+            reachable: true,
+            branch: "fix/session-ttl",
+            upstream: "origin/main",
+            ahead_count: 0,
+            behind_count: 0,
+            staged_count: 0,
+            unstaged_count: 1,
+            untracked_count: 0,
+            conflicted_count: 0,
+            total_change_count: 1,
+            head_commit: "be83d21a00",
+            head_subject: "Tighten session TTL handling",
+            head_authored_at: now,
+          },
+          {
+            role: "external",
+            path: pocPath,
+            reachable: true,
+            branch: "poc/experiment",
+            ahead_count: 0,
+            behind_count: 0,
+            staged_count: 0,
+            unstaged_count: 2,
+            untracked_count: 0,
+            conflicted_count: 0,
+            total_change_count: 2,
+            head_commit: "cafe098765",
+            head_subject: "Prototype experiment branch",
+            head_authored_at: now,
+          },
+        ],
+        worktrees_total_count: 3,
+        collected_at: now,
+      };
+    }
+
+    return {
+      main: {
+        role: "main",
+        path: workspace.path,
+        reachable: true,
+        branch: "main",
+        upstream: "origin/main",
+        ahead_count: 0,
+        behind_count: 0,
+        staged_count: 0,
+        unstaged_count: 0,
+        untracked_count: 0,
+        conflicted_count: 0,
+        total_change_count: 0,
+        head_commit: "fixturemain",
+        head_subject: "Fixture HEAD",
+        head_authored_at: now,
+      },
+      worktrees: [],
+      worktrees_total_count: 0,
+      collected_at: now,
+    };
+  }
+
+  private fixtureWorkspaceCheckoutStatus(
+    workspace: FixtureWorkspace,
+    checkoutPath: string,
+  ) {
+    const status = this.fixtureWorkspaceGitStatus(workspace);
+    const summary = [status.main, ...status.worktrees].find(
+      (entry) => entry.path === checkoutPath,
+    );
+    if (!summary) {
+      return null;
+    }
+
+    let files: Array<{
+      path: string;
+      xy: string;
+      bucket: string;
+      orig_path?: string;
+    }> = [];
+    let commits: Array<{
+      short_hash: string;
+      subject: string;
+      authored_at?: string;
+    }> = [];
+
+    if (path.basename(workspace.path) === "muxagent-source-control") {
+      switch (summary.branch) {
+        case "feat/auth-refactor":
+          files = [
+            { path: "src/auth.ts", xy: ".M", bucket: "unstaged" },
+            { path: "src/session.ts", xy: ".M", bucket: "unstaged" },
+            { path: "tests/auth.test.ts", xy: "??", bucket: "untracked" },
+            { path: "src/types.ts", xy: "M.", bucket: "staged" },
+          ];
+          commits = [
+            {
+              short_hash: "fa3b2",
+              subject: "Add JWT validation",
+              authored_at: summary.head_authored_at,
+            },
+            {
+              short_hash: "e9c1d",
+              subject: "Wire middleware into app",
+              authored_at: summary.head_authored_at,
+            },
+          ];
+          break;
+        case "fix/session-ttl":
+          files = [{ path: "src/session.ts", xy: ".M", bucket: "unstaged" }];
+          break;
+        case "poc/experiment":
+          files = [
+            { path: "docs/notes.md", xy: ".M", bucket: "unstaged" },
+            { path: "scratch/demo.ts", xy: ".M", bucket: "unstaged" },
+          ];
+          break;
+        default:
+          files = [];
+      }
+    }
+
+    return {
+      checkout: {
+        ...summary,
+        files,
+        files_total: files.length,
+        commits,
+      },
+      collected_at: new Date().toISOString(),
+    };
+  }
+
+  private fixtureFileDiff(filePath: string, bucket: string) {
+    const isUntracked = bucket === "untracked";
+    const shortName = filePath.split("/").at(-1) ?? filePath;
+    const patch = isUntracked
+      ? [
+          `diff --git a/${filePath} b/${filePath}`,
+          "new file mode 100644",
+          "--- /dev/null",
+          `+++ b/${filePath}`,
+          "@@ -0,0 +1,4 @@",
+          `+// Fixture: new file ${shortName}`,
+          "+export function placeholder() {",
+          "+  return \"fixture\";",
+          "+}",
+          "",
+        ].join("\n")
+      : [
+          `diff --git a/${filePath} b/${filePath}`,
+          "index 1111111..2222222 100644",
+          `--- a/${filePath}`,
+          `+++ b/${filePath}`,
+          "@@ -1,6 +1,8 @@",
+          " import { Logger } from \"./logger\";",
+          " ",
+          " export function configure(options: Options) {",
+          "-  Logger.configure(options);",
+          "+  const logger = Logger.configure(options);",
+          "+  logger.info(\"fixture configured\");",
+          "+  return logger;",
+          " }",
+          "",
+        ].join("\n");
+    return {
+      diff: {
+        reachable: true,
+        patch,
+        truncated: false,
+        binary: false,
+        file_count: 1,
+      },
+      collected_at: new Date().toISOString(),
+    };
+  }
+
+  private fixtureCommitDiff(commitHash: string) {
+    const shortHash = commitHash.slice(0, 7) || "abc1234";
+    const patch = [
+      `commit ${shortHash}`,
+      "Author: Fixture Author <fixture@example.com>",
+      "Date:   Mon Jan 01 12:00:00 2026 +0000",
+      "",
+      "    Fixture commit diff",
+      "",
+      " src/auth.ts     | 4 ++++",
+      " src/session.ts  | 2 +-",
+      " 2 files changed, 5 insertions(+), 1 deletion(-)",
+      "",
+      "diff --git a/src/auth.ts b/src/auth.ts",
+      "index aaaaaaa..bbbbbbb 100644",
+      "--- a/src/auth.ts",
+      "+++ b/src/auth.ts",
+      "@@ -10,3 +10,7 @@ export function signIn() {",
+      "   return session;",
+      " }",
+      "+",
+      "+export function signOut() {",
+      "+  session.clear();",
+      "+}",
+      "diff --git a/src/session.ts b/src/session.ts",
+      "index ccccccc..ddddddd 100644",
+      "--- a/src/session.ts",
+      "+++ b/src/session.ts",
+      "@@ -5,2 +5,2 @@",
+      "-export const TTL = 3600;",
+      "+export const TTL = 7200;",
+      "",
+    ].join("\n");
+    return {
+      diff: {
+        reachable: true,
+        patch,
+        truncated: false,
+        binary: false,
+        file_count: 2,
+        hash: commitHash,
+        subject: "Fixture commit diff",
+        author: "Fixture Author",
+        author_mail: "fixture@example.com",
+        authored_at: "2026-01-01T12:00:00Z",
+      },
+      collected_at: new Date().toISOString(),
+    };
+  }
+
   private artifactDirectory(
     workspacePath: string,
     taskId: string,
@@ -2146,6 +2486,102 @@ export class FixtureRuntime {
     const second = 1_000;
     const minute = 60 * second;
     const day = 24 * 60 * minute;
+
+    if (path.basename(workspacePath) === "muxagent-source-control") {
+      const managedRoot = path.join("/tmp", ".muxagent", "worktrees", "fixture-repo");
+      const featPath = path.join(managedRoot, "feat-auth-refactor");
+      const fixPath = path.join(managedRoot, "fix-session-ttl");
+      return [
+        this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-scm-wire-jwt",
+          description: "Wire JWT middleware into app",
+          configAlias: "default",
+          createdAt: makeTime(-42),
+          updatedAt: makeTime(-8),
+          status: "running",
+          currentNodeName: "implement",
+          currentNodeType: "agent",
+          executionDir: featPath,
+          nodeRuns: [
+            {
+              id: "run-scm-wire-jwt",
+              task_id: "task-scm-wire-jwt",
+              node_name: "implement",
+              status: "running",
+              started_at: makeTime(-12),
+              session_id: "session-scm-wire-jwt",
+            },
+          ],
+        }),
+        this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-scm-refresh-endpoint",
+          description: "Add refresh-token endpoint",
+          configAlias: "default",
+          createdAt: makeTime(-40),
+          updatedAt: makeTime(-10),
+          status: "running",
+          currentNodeName: "implement",
+          currentNodeType: "agent",
+          executionDir: featPath,
+          nodeRuns: [
+            {
+              id: "run-scm-refresh-endpoint",
+              task_id: "task-scm-refresh-endpoint",
+              node_name: "implement",
+              status: "running",
+              started_at: makeTime(-15),
+              session_id: "session-scm-refresh-endpoint",
+            },
+          ],
+        }),
+        this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-scm-fix-ttl-edge",
+          description: "Fix edge case in session TTL",
+          configAlias: "default",
+          createdAt: makeTime(-32),
+          updatedAt: makeTime(-5),
+          status: "awaiting_user",
+          currentNodeName: "verify",
+          currentNodeType: "agent",
+          executionDir: featPath,
+          nodeRuns: [
+            {
+              id: "run-scm-fix-ttl-edge",
+              task_id: "task-scm-fix-ttl-edge",
+              node_name: "verify",
+              status: "awaiting_user",
+              started_at: makeTime(-6),
+              session_id: "session-scm-fix-ttl-edge",
+            },
+          ],
+        }),
+        this.makeFixtureTask({
+          workspacePath,
+          taskId: "task-scm-fix-ttl-branch",
+          description: "Validate TTL rollback on retry",
+          configAlias: "default",
+          createdAt: makeTime(-28),
+          updatedAt: makeTime(-7),
+          status: "awaiting_user",
+          currentNodeName: "verify",
+          currentNodeType: "agent",
+          executionDir: fixPath,
+          nodeRuns: [
+            {
+              id: "run-scm-fix-ttl-branch",
+              task_id: "task-scm-fix-ttl-branch",
+              node_name: "verify",
+              status: "awaiting_user",
+              started_at: makeTime(-8),
+              session_id: "session-scm-fix-ttl-branch",
+            },
+          ],
+        }),
+      ];
+    }
 
     if (path.basename(workspacePath) === "muxagent-stale-workspace") {
       return [

@@ -35,7 +35,15 @@ import {
   type TaskRetryNodeParams,
   type WorkspaceAddParams,
   type WorkspaceAddResult,
+  type WorkspaceCheckoutStatusParams,
+  type WorkspaceCheckoutStatusResult,
+  type WorkspaceCommitDiffParams,
+  type WorkspaceCommitDiffResult,
+  type WorkspaceFileDiffParams,
+  type WorkspaceFileDiffResult,
   type WorkspaceGetResult,
+  type WorkspaceGitStatusParams,
+  type WorkspaceGitStatusResult,
   type WorkspaceReconcileParams,
   type WorkspaceReconcileResult,
   type WorkspaceListResult,
@@ -143,6 +151,30 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult> {
     return this.request("workspace.get", { workspace_id: workspaceId });
+  }
+
+  workspaceGitStatus(
+    params: WorkspaceGitStatusParams,
+  ): Promise<WorkspaceGitStatusResult> {
+    return this.request("workspace.git_status", params);
+  }
+
+  workspaceCheckoutStatus(
+    params: WorkspaceCheckoutStatusParams,
+  ): Promise<WorkspaceCheckoutStatusResult> {
+    return this.request("workspace.checkout_status", params);
+  }
+
+  workspaceFileDiff(
+    params: WorkspaceFileDiffParams,
+  ): Promise<WorkspaceFileDiffResult> {
+    return this.request("workspace.file_diff", params);
+  }
+
+  workspaceCommitDiff(
+    params: WorkspaceCommitDiffParams,
+  ): Promise<WorkspaceCommitDiffResult> {
+    return this.request("workspace.commit_diff", params);
   }
 
   workspaceReconcileStale(

@@ -110,6 +110,116 @@ export interface WorkspaceGetResult {
   workspace: WorkspaceSummaryDto;
 }
 
+export type GitCheckoutRoleDto = "main" | "muxagent_managed" | "external";
+export type GitFileBucketDto =
+  | "staged"
+  | "unstaged"
+  | "untracked"
+  | "conflicted";
+
+export interface GitCommitDto {
+  short_hash: string;
+  subject: string;
+  authored_at?: string;
+}
+
+export interface GitFileChangeDto {
+  path: string;
+  orig_path?: string;
+  xy: string;
+  bucket: GitFileBucketDto;
+}
+
+export interface GitCheckoutSummaryDto {
+  role: GitCheckoutRoleDto;
+  path: string;
+  reachable: boolean;
+  unreachable_reason?: string;
+  locked?: boolean;
+  prunable?: boolean;
+  branch?: string;
+  detached_head?: boolean;
+  upstream?: string;
+  ahead_count: number;
+  behind_count: number;
+  head_commit?: string;
+  head_subject?: string;
+  head_authored_at?: string;
+  staged_count: number;
+  unstaged_count: number;
+  untracked_count: number;
+  conflicted_count: number;
+  total_change_count: number;
+}
+
+export interface GitCheckoutDetailDto extends GitCheckoutSummaryDto {
+  files: GitFileChangeDto[];
+  files_total: number;
+  next_file_cursor?: string;
+  commits?: GitCommitDto[];
+}
+
+export interface WorkspaceGitStatusResult {
+  main: GitCheckoutSummaryDto;
+  worktrees: GitCheckoutSummaryDto[];
+  worktrees_truncated?: boolean;
+  worktrees_total_count: number;
+  collected_at: string;
+}
+
+export interface WorkspaceCheckoutStatusResult {
+  checkout: GitCheckoutDetailDto;
+  collected_at: string;
+}
+
+export interface GitDiffDto {
+  reachable: boolean;
+  unreachable_reason?: string;
+  patch?: string;
+  truncated?: boolean;
+  binary?: boolean;
+  file_count?: number;
+  subject?: string;
+  author?: string;
+  author_mail?: string;
+  authored_at?: string;
+  hash?: string;
+}
+
+export interface WorkspaceFileDiffParams {
+  workspace_id: string;
+  checkout_path: string;
+  file_path: string;
+  bucket?: "staged" | "unstaged" | "untracked" | "conflicted";
+}
+
+export interface WorkspaceFileDiffResult {
+  diff: GitDiffDto;
+  collected_at: string;
+}
+
+export interface WorkspaceCommitDiffParams {
+  workspace_id: string;
+  checkout_path: string;
+  commit_hash: string;
+}
+
+export interface WorkspaceCommitDiffResult {
+  diff: GitDiffDto;
+  collected_at: string;
+}
+
+export interface WorkspaceGitStatusParams {
+  workspace_id: string;
+}
+
+export interface WorkspaceCheckoutStatusParams {
+  workspace_id: string;
+  checkout_path: string;
+  file_cursor?: string;
+  file_limit?: number;
+}
+
 export interface WorkspaceReconcileParams {
   workspace_id: string;
 }

@@ -208,9 +208,9 @@ test("still allows starting a task from the all-workspaces task view", async ({ 
 
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-alt-workspace"));
   await page.getByTestId("workspace-picker-button").click();
-  await page.getByRole("link", { name: /^Tasks$/i }).click();
+  await page.goto("/");
 
-  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
+  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
   await page.getByTestId("open-new-task").click();
   await expect(page.getByTestId("new-task-modal")).toBeVisible();
   await expect(page.getByTestId("new-task-workspace")).toBeVisible();
@@ -235,7 +235,7 @@ test("renders the needs-attention task filter and drills back into task detail",
 test("renders configs and settings from the desktop shell", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
-  await page.getByRole("link", { name: /^Configs$/i }).click();
+  await page.goto("/configs");
   await expect(page.getByTestId("configs-screen")).toBeVisible();
   await expect(page.getByText("Agentic workflow with planning, approval, and verification")).toBeVisible();
   await expect(page.getByText("draft_plan")).toBeVisible();
@@ -250,7 +250,9 @@ test("renders configs and settings from the desktop shell", async ({ page }) => 
     page.getByTestId("settings-runtime-row").filter({ hasText: "Codex" }),
   ).toContainText("Detected");
   await expect(page.getByTestId("settings-about-section")).toContainText("About");
-  await expect(page.getByTestId("settings-version-row")).toContainText("fixture");
+  await expect(
+    page.getByTestId("settings-version-row").filter({ hasText: "fixture" }),
+  ).toBeVisible();
   await expect(page.getByText("Protocol")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
 });

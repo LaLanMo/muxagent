@@ -1,30 +1,43 @@
 import { useEffect, type ReactNode } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import {
+  BrowserRouter,
+  Navigate,
+  Outlet,
+  Route,
+  Routes,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import { useServerBootstrap } from "@/features/app/model/use-server-bootstrap";
 import { useRuntimeSync } from "@/features/app/model/use-runtime-sync";
+import { useTaskRouteSelection } from "@/features/app/model/use-task-route-selection";
+import { useTaskSurfaceReturnContext } from "@/features/app/model/use-task-surface-return-context";
+import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
+import { useConfigsScreen } from "@/features/configs/model/use-configs-screen";
+import { ConfigEditorScreen } from "@/features/configs/ui/ConfigEditorScreen";
+import { ConfigsScreen } from "@/features/configs/ui/ConfigsScreen";
 import { useEntryScreen } from "@/features/entry/model/use-entry-screen";
 import { EntryShellScreen } from "@/features/entry/ui/EntryShellScreen";
-import {
-  isOnboardingCompleted,
-  markOnboardingCompleted,
-} from "@/features/onboarding/model/onboarding-memory";
-import { OnboardingScreen } from "@/features/onboarding/ui/OnboardingScreen";
+import { WorkbenchShell } from "@/features/layout/ui/WorkbenchShell";
 import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
 import {
   buildNewTaskModalSearch,
   isNewTaskModalOpen,
 } from "@/features/new-task/model/new-task-route-state";
+import {
+  isOnboardingCompleted,
+  markOnboardingCompleted,
+} from "@/features/onboarding/model/onboarding-memory";
+import { OnboardingScreen } from "@/features/onboarding/ui/OnboardingScreen";
 import { NewTaskModal } from "@/features/new-task/ui/NewTaskModal";
-import { useTaskDetailScreen } from "@/features/task-detail/model/use-task-detail-screen";
-import { TaskDetailScreen } from "@/features/task-detail/ui/TaskDetailScreen";
-import { useConfigsScreen } from "@/features/configs/model/use-configs-screen";
-import { ConfigsScreen } from "@/features/configs/ui/ConfigsScreen";
-import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
-import { ConfigEditorScreen } from "@/features/configs/ui/ConfigEditorScreen";
 import { useSettingsScreen } from "@/features/settings/model/use-settings-screen";
 import { SettingsScreen } from "@/features/settings/ui/SettingsScreen";
-import { useTaskRouteSelection } from "@/features/app/model/use-task-route-selection";
-import { useTaskSurfaceReturnContext } from "@/features/app/model/use-task-surface-return-context";
+import { CommitDiffView } from "@/features/source-control/ui/CommitDiffView";
+import { FileDiffView } from "@/features/source-control/ui/FileDiffView";
+import { SourceControlLanding } from "@/features/source-control/ui/SourceControlLanding";
+import { WorktreeOverview } from "@/features/source-control/ui/WorktreeOverview";
+import { useTaskDetailScreen } from "@/features/task-detail/model/use-task-detail-screen";
+import { TaskDetailScreen } from "@/features/task-detail/ui/TaskDetailScreen";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
 function RuntimeEffects() {
@@ -76,6 +89,22 @@ function OnboardingGate({ children }: { children: ReactNode }) {
   return <Navigate replace to="/onboarding" />;
 }
 
+function RequireConnectedPhaseRoute({ children }: { children: ReactNode }) {
+  const phase = useWorkspaceStore((state) => state.phase);
+  if (phase !== "connected") {
+    return <Navigate replace to="/" />;
+  }
+  return <>{children}</>;
+}
+
+function WorkbenchLayout() {
+  return (
+    <WorkbenchShell>
+      <Outlet />
+    </WorkbenchShell>
+  );
+}
+
 function EntryRoute() {
   const model = useEntryScreen();
   return (
@@ -93,7 +122,9 @@ function GlobalNewTaskModal() {
   const navigate = useNavigate();
   const catalog = useWorkspaceStore((state) => state.catalog);
   const modalOpen = isNewTaskModalOpen(location.search);
-  const launchableEntries = (catalog?.entries ?? []).filter((entry) => entry.launchable);
+  const launchableEntries = (catalog?.entries ?? []).filter(
+    (entry) => entry.launchable,
+  );
 
   function setModalOpen(nextOpen: boolean) {
     navigate(
@@ -185,7 +216,6 @@ function ConfigsRoute() {
       createConfig={model.createConfig}
       entries={model.entries}
       pendingRemoveEntry={model.pendingRemoveEntry}
-      shell={model.shell}
     />
   );
 }
@@ -201,9 +231,15 @@ function SettingsRoute() {
     <SettingsScreen
       aboutRows={model.aboutRows}
       runtimeRows={model.runtimeRows}
-      shell={model.shell}
     />
   );
+}
+
+function SourceControlRedirect() {
+  const location = useLocation();
+  const next = new URLSearchParams(location.search);
+  next.set("panel", "source-control");
+  return <Navigate replace to={`/?${next.toString()}`} />;
 }
 
 export function App() {
@@ -212,16 +248,51 @@ export function App() {
       <RuntimeEffects />
       <OnboardingGate>
         <Routes>
-          <Route element={<EntryRoute />} path="/" />
           <Route element={<OnboardingScreen />} path="/onboarding" />
-          <Route
-            element={<ProtectedTaskDetailRoute />}
-            path="/workspaces/:workspaceId/tasks/:taskId"
-          />
-          <Route element={<ConfigsRoute />} path="/configs" />
-          <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
-          <Route element={<SettingsRoute />} path="/settings" />
-          <Route element={<Navigate replace to="/" />} path="*" />
+          <Route element={<WorkbenchLayout />}>
+            <Route element={<EntryRoute />} path="/" />
+            <Route
+              element={<ProtectedTaskDetailRoute />}
+              path="/workspaces/:workspaceId/tasks/:taskId"
+            />
+            <Route
+              element={
+                <RequireConnectedPhaseRoute>
+                  <WorktreeOverview />
+                </RequireConnectedPhaseRoute>
+              }
+              path="/workspaces/:workspaceId/checkouts/:checkoutPath"
+            />
+            <Route
+              element={
+                <RequireConnectedPhaseRoute>
+                  <FileDiffView />
+                </RequireConnectedPhaseRoute>
+              }
+              path="/workspaces/:workspaceId/checkouts/:checkoutPath/files/:fileId"
+            />
+            <Route
+              element={
+                <RequireConnectedPhaseRoute>
+                  <CommitDiffView />
+                </RequireConnectedPhaseRoute>
+              }
+              path="/workspaces/:workspaceId/checkouts/:checkoutPath/commits/:commitHash"
+            />
+            <Route element={<SourceControlRedirect />} path="/source-control" />
+            <Route
+              element={
+                <RequireConnectedPhaseRoute>
+                  <SourceControlLanding />
+                </RequireConnectedPhaseRoute>
+              }
+              path="/source-control-landing"
+            />
+            <Route element={<ConfigsRoute />} path="/configs" />
+            <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
+            <Route element={<SettingsRoute />} path="/settings" />
+            <Route element={<Navigate replace to="/" />} path="*" />
+          </Route>
         </Routes>
         <GlobalNewTaskModal />
       </OnboardingGate>

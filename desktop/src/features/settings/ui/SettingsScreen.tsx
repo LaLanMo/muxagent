@@ -1,13 +1,10 @@
-import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import {
   type SettingsAboutRowModel,
   type SettingsRuntimeRowModel,
   type SettingsStatusTone,
 } from "@/features/settings/model/use-settings-screen";
-import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 
 type SettingsScreenProps = {
-  shell: ShellChromeModel;
   runtimeRows: SettingsRuntimeRowModel[];
   aboutRows: SettingsAboutRowModel[];
 };
@@ -73,47 +70,34 @@ function AboutRow({ row }: { row: SettingsAboutRowModel }) {
 }
 
 export function SettingsScreen({
-  shell,
   runtimeRows,
   aboutRows,
 }: SettingsScreenProps) {
   return (
-    <DesktopShellFrame
-      addWorkspaceDisabled={shell.phase !== "connected"}
-      footerNav={shell.footerNav}
-      onPrimaryAction={shell.openNewTask}
-      primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
-      primaryNav={shell.primaryNav}
-      workspaceRemoveDialog={shell.workspaceRemoveDialog}
-      workspaceItems={shell.workspaceItems}
-      onAddWorkspace={() => void shell.addWorkspace()}
-      topBarLeft={<h1 className="screen-title">Settings</h1>}
-    >
-      <section className="stack-screen settings-screen" data-testid="settings-screen">
-        <article className="settings-panel">
-          <div className="settings-section" data-testid="settings-runtime-section">
-            <div className="settings-section__header">
-              <span className="settings-section__eyebrow">Runtimes</span>
-            </div>
-            <div className="settings-section__rows">
-              {runtimeRows.map((row) => (
-                <RuntimeRow key={row.id} row={row} testId="settings-runtime-row" />
-              ))}
-            </div>
+    <section className="stack-screen settings-screen" data-testid="settings-screen">
+      <article className="settings-panel">
+        <div className="settings-section" data-testid="settings-runtime-section">
+          <div className="settings-section__header">
+            <span className="settings-section__eyebrow">Runtimes</span>
           </div>
+          <div className="settings-section__rows">
+            {runtimeRows.map((row) => (
+              <RuntimeRow key={row.id} row={row} testId="settings-runtime-row" />
+            ))}
+          </div>
+        </div>
 
-          <div className="settings-section" data-testid="settings-about-section">
-            <div className="settings-section__header">
-              <span className="settings-section__eyebrow">About</span>
-            </div>
-            <div className="settings-section__rows">
-              {aboutRows.map((row) => (
-                <AboutRow key={row.id} row={row} />
-              ))}
-            </div>
+        <div className="settings-section" data-testid="settings-about-section">
+          <div className="settings-section__header">
+            <span className="settings-section__eyebrow">About</span>
           </div>
-        </article>
-      </section>
-    </DesktopShellFrame>
+          <div className="settings-section__rows">
+            {aboutRows.map((row) => (
+              <AboutRow key={row.id} row={row} />
+            ))}
+          </div>
+        </div>
+      </article>
+    </section>
   );
 }

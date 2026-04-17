@@ -84,6 +84,11 @@ export function useShellModel(): ShellChromeModel {
             ...item,
             onClick: shellCommands.showAllTasks,
           }
+        : item.label === "Source Control"
+          ? {
+              ...item,
+              onClick: () => void shellCommands.showSourceControl(),
+            }
         : item,
     ),
     workspaceItems: shellState.workspaceItems.map((item) => ({

@@ -29,8 +29,6 @@ import {
   type RunningActivityPreviewRow,
   type TranscriptTimelineItem,
 } from "@/features/task-history/model/timeline";
-import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
-import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
 import { Button } from "@/features/shared/ui/Button";
 import { DocumentContent } from "@/features/shared/ui/DocumentContent";
@@ -487,7 +485,7 @@ function completedRunSummary(run: NodeRunViewDto) {
 }
 
 type TaskDetailScreenProps = {
-  shell: ShellChromeModel;
+  shell?: unknown;
   goBackToTaskSurface: () => void;
   task?: TaskViewDto;
   loading: boolean;
@@ -561,7 +559,6 @@ type TaskDetailScreenProps = {
 };
 
 export function TaskDetailScreen({
-  shell,
   goBackToTaskSurface,
   task,
   loading,
@@ -925,19 +922,7 @@ export function TaskDetailScreen({
       : "detail-main-column";
 
   return (
-    <DesktopShellFrame
-      addWorkspaceDisabled={shell.phase !== "connected"}
-      footerNav={shell.footerNav}
-      onPrimaryAction={shell.openNewTask}
-      primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
-      primaryNav={shell.primaryNav}
-      topBarClassName="desktop-shell__topbar--detail"
-      topBarLeft={<span />}
-      workspaceRemoveDialog={shell.workspaceRemoveDialog}
-      workspaceItems={shell.workspaceItems}
-      onAddWorkspace={() => void shell.addWorkspace()}
-    >
-      <section className="detail-screen" data-testid="task-detail-screen">
+    <section className="detail-screen" data-testid="task-detail-screen">
         {detailError || staleReconcilePending ? (
           <div className="toast-container">
             {detailError ? (
@@ -1474,7 +1459,6 @@ export function TaskDetailScreen({
         </div>
         {artifactModal}
         {transcriptModal}
-      </section>
       <ConfirmDialog
         body={
           worktreeCleanupInfo ? (
@@ -1513,6 +1497,6 @@ export function TaskDetailScreen({
             : "Remove worktree"
         }
       />
-    </DesktopShellFrame>
+    </section>
   );
 }

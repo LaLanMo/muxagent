@@ -33,6 +33,7 @@ type DesktopShellFrameProps = {
   topBarLeft: ReactNode;
   topBarRight?: ReactNode;
   topBarClassName?: string;
+  topBarHidden?: boolean;
   children: ReactNode;
   workspaceItems?: ShellWorkspaceItem[];
   onAddWorkspace?: () => void;
@@ -139,6 +140,7 @@ export function DesktopShellFrame({
   topBarLeft,
   topBarRight,
   topBarClassName,
+  topBarHidden = false,
   children,
   workspaceItems = [],
   onAddWorkspace,
@@ -232,23 +234,31 @@ export function DesktopShellFrame({
 
         <div className="desktop-shell__divider" />
 
-        <section className="desktop-shell__main">
-          <header
-            className={
-              topBarClassName
-                ? `desktop-shell__topbar ${topBarClassName}`
-                : "desktop-shell__topbar"
-            }
-            onMouseDown={(event) => {
-              void startWindowDrag(event);
-            }}
-          >
-            <div className="desktop-shell__topbar-left">{topBarLeft}</div>
-            {topBarRight ? (
-              <div className="desktop-shell__topbar-right">{topBarRight}</div>
-            ) : null}
-          </header>
-          <div className="desktop-shell__topbar-divider" />
+        <section
+          className={`desktop-shell__main${
+            topBarHidden ? " desktop-shell__main--chromeless" : ""
+          }`}
+        >
+          {topBarHidden ? null : (
+            <>
+              <header
+                className={
+                  topBarClassName
+                    ? `desktop-shell__topbar ${topBarClassName}`
+                    : "desktop-shell__topbar"
+                }
+                onMouseDown={(event) => {
+                  void startWindowDrag(event);
+                }}
+              >
+                <div className="desktop-shell__topbar-left">{topBarLeft}</div>
+                {topBarRight ? (
+                  <div className="desktop-shell__topbar-right">{topBarRight}</div>
+                ) : null}
+              </header>
+              <div className="desktop-shell__topbar-divider" />
+            </>
+          )}
           <div className="desktop-shell__content">{children}</div>
         </section>
       </main>

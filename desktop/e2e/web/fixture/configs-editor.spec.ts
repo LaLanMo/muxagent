@@ -21,7 +21,7 @@ test("shows a built-in config as a read-only file inspector", async ({
 }) => {
   await connectFixtureWorkspace(page);
 
-  await page.getByRole("link", { name: /^Configs$/i }).click();
+  await page.goto("/configs");
   await expect(page.getByTestId("configs-screen")).toBeVisible();
   await expect(page.getByRole("button", { name: /^\+ New Config$/i })).toHaveCount(0);
   await expect(page.getByTestId("config-card-default")).toBeVisible();
@@ -78,7 +78,7 @@ test("shows a built-in config as a read-only file inspector", async ({
 test("deletes a customized config from the config list", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
-  await page.getByRole("link", { name: /^Configs$/i }).click();
+  await page.goto("/configs");
   await expect(page.getByTestId("configs-screen")).toBeVisible();
   await expect(page.getByRole("button", { name: /^\+ New Config$/i })).toHaveCount(0);
   await expect(page.getByTestId("config-card-quick")).toBeVisible();

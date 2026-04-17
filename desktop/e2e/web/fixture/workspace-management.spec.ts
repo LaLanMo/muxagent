@@ -44,7 +44,9 @@ test("keeps settings sparse and removes legacy workspace management controls", a
   await expect(page.getByTestId("settings-runtime-section")).toContainText("Runtimes");
   await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
   await expect(page.getByTestId("settings-about-section")).toContainText("About");
-  await expect(page.getByTestId("settings-version-row")).toContainText("fixture");
+  await expect(
+    page.getByTestId("settings-version-row").filter({ hasText: "fixture" }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
   await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "Codex" })).toContainText(
     "Detected",
@@ -53,23 +55,17 @@ test("keeps settings sparse and removes legacy workspace management controls", a
   await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "OpenCode" })).toContainText("Not found");
 });
 
-test("uses a single active destination state between Tasks and workspace rows", async ({ page }) => {
+test("activates the selected workspace row in the tasks panel", async ({ page }) => {
   await connectPrimaryWorkspace(page);
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
 
-  await expect(page.locator(".shell-nav__row.is-active")).toContainText("Tasks");
-  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
+  await expect(page.locator(".tasks-panel__filter.is-active")).toContainText("All");
 
-  await workspaceRow(page, "muxagent-alt-workspace").locator(".shell-workspace__row").click();
+  await workspaceRow(page, "muxagent-alt-workspace").locator(".tasks-panel__workspace-row").click();
   await expect(page).toHaveURL(/\/$/);
   await expect(
-    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+    page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
-  await expect(page.locator(".shell-nav__row.is-active")).toHaveCount(0);
-
-  await page.getByRole("link", { name: /^Tasks$/i }).click();
-  await expect(page.locator(".shell-workspace__row.is-active")).toHaveCount(0);
-  await expect(page.locator(".shell-nav__row.is-active")).toContainText("Tasks");
 });
 
 test("reveals a row-scoped sidebar delete action and removes the selected workspace", async ({
@@ -78,9 +74,9 @@ test("reveals a row-scoped sidebar delete action and removes the selected worksp
   await connectPrimaryWorkspace(page);
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
 
-  await workspaceRow(page, "muxagent-alt-workspace").locator(".shell-workspace__row").click();
+  await workspaceRow(page, "muxagent-alt-workspace").locator(".tasks-panel__workspace-row").click();
   await expect(
-    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+    page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
 
   await removeWorkspaceFromSidebar(page, "muxagent-alt-workspace");
@@ -89,6 +85,6 @@ test("reveals a row-scoped sidebar delete action and removes the selected worksp
   await expect(workspaceRow(page, "muxagent-alt-workspace")).toHaveCount(0);
   await expect(workspaceRow(page, "muxagent-workspace")).toHaveCount(1);
   await expect(
-    page.locator(".shell-workspace__row.is-active .shell-workspace__label").first(),
+    page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-workspace");
 });

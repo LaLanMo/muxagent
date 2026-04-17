@@ -5,7 +5,7 @@ import {
   type BoardFilter,
 } from "@/domain/task-shell";
 import type { ShellCommands } from "@/features/app/model/use-shell-commands";
-import { parseTaskDetailPath } from "@/domain/routes";
+import { isSourceControlPath, parseTaskDetailPath, sourceControlRoutePath } from "@/domain/routes";
 import type {
   ShellNavItem,
   ShellWorkspaceItem,
@@ -91,12 +91,12 @@ export function useShellChrome(): ShellChromeState {
   const inboxItems = buildInboxItems(scopedTasks);
   const boardFilter = parseBoardFilter(searchParams.get("view"));
   const taskRoute = parseTaskDetailPath(location.pathname);
+  const sourceControlActive = isSourceControlPath(location.pathname);
   const taskSurfaceActive =
     location.pathname === "/" ||
     location.pathname === "/inbox" ||
     Boolean(taskRoute);
-  const tasksRootActive =
-    location.pathname === "/" && !taskRoute && !selectedWorkspaceId;
+  const tasksRootActive = location.pathname === "/" && !taskRoute;
 
   const primaryNav: ShellNavItem[] = [
     {
@@ -104,6 +104,12 @@ export function useShellChrome(): ShellChromeState {
       to: "/",
       active: tasksRootActive,
       icon: "tasks",
+    },
+    {
+      label: "Source Control",
+      to: sourceControlRoutePath,
+      icon: "source-control",
+      active: sourceControlActive,
     },
     {
       label: "Configs",
@@ -153,7 +159,7 @@ export function useShellChrome(): ShellChromeState {
       id: workspace.workspace_id,
       label: workspace.display_name,
       active:
-        taskSurfaceActive &&
+        (taskSurfaceActive || sourceControlActive) &&
         workspace.workspace_id === selectedWorkspaceId,
       badgeCount:
         attentionCount > 0

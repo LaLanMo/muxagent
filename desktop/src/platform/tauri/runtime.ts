@@ -34,7 +34,15 @@ import type {
   TaskRetryNodeParams,
   WorkspaceAddParams,
   WorkspaceAddResult,
+  WorkspaceCheckoutStatusParams,
+  WorkspaceCheckoutStatusResult,
+  WorkspaceCommitDiffParams,
+  WorkspaceCommitDiffResult,
+  WorkspaceFileDiffParams,
+  WorkspaceFileDiffResult,
   WorkspaceGetResult,
+  WorkspaceGitStatusParams,
+  WorkspaceGitStatusResult,
   WorkspaceReconcileParams,
   WorkspaceReconcileResult,
   WorkspaceListResult,
@@ -90,6 +98,30 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult> {
     return this.request("workspace.get", { workspace_id: workspaceId });
+  }
+
+  workspaceGitStatus(
+    params: WorkspaceGitStatusParams,
+  ): Promise<WorkspaceGitStatusResult> {
+    return this.request("workspace.git_status", params);
+  }
+
+  workspaceCheckoutStatus(
+    params: WorkspaceCheckoutStatusParams,
+  ): Promise<WorkspaceCheckoutStatusResult> {
+    return this.request("workspace.checkout_status", params);
+  }
+
+  workspaceFileDiff(
+    params: WorkspaceFileDiffParams,
+  ): Promise<WorkspaceFileDiffResult> {
+    return this.request("workspace.file_diff", params);
+  }
+
+  workspaceCommitDiff(
+    params: WorkspaceCommitDiffParams,
+  ): Promise<WorkspaceCommitDiffResult> {
+    return this.request("workspace.commit_diff", params);
   }
 
   workspaceReconcileStale(

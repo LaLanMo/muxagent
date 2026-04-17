@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from "react-router-dom";
-import { parseTaskDetailPath } from "@/domain/routes";
+import { parseTaskDetailPath, sourceControlRoutePath } from "@/domain/routes";
 import { useAppSessionController } from "@/features/app/model/use-app-session-controller";
 import { buildNewTaskModalSearch } from "@/features/new-task/model/new-task-route-state";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
@@ -11,6 +11,7 @@ export type ShellCommands = {
   openWorkspaceTasks: (workspaceId: string) => Promise<void>;
   openNewTask: () => void;
   reconnect: () => void;
+  showSourceControl: () => Promise<void>;
   showAllTasks: () => void;
 };
 
@@ -66,6 +67,19 @@ export function useShellCommands(): ShellCommands {
       });
     },
     reconnect,
+    showSourceControl: async () => {
+      if (parseTaskDetailPath(location.pathname)) {
+        clearTaskSurfaceReturnContext();
+      }
+      const state = useWorkspaceStore.getState();
+      if (!state.selectedWorkspaceId && state.workspaces[0]?.workspace_id) {
+        const result = await selectWorkspaceById(state.workspaces[0].workspace_id);
+        if (result.status !== "selected") {
+          return;
+        }
+      }
+      navigate(sourceControlRoutePath, { replace: false });
+    },
     showAllTasks: () => {
       if (parseTaskDetailPath(location.pathname)) {
         clearTaskSurfaceReturnContext();

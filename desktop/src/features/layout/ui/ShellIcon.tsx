@@ -1,5 +1,6 @@
 import {
   Folder,
+  GitBranch,
   History,
   Inbox,
   LayoutGrid,
@@ -22,7 +23,8 @@ export type ShellIconName =
   | "machines"
   | "configs"
   | "settings"
-  | "workspace";
+  | "workspace"
+  | "source-control";
 
 type ShellIconProps = {
   name: ShellIconName;
@@ -39,6 +41,7 @@ const iconMap: Record<ShellIconName, LucideIcon> = {
   configs: SlidersHorizontal,
   settings: Settings,
   workspace: Folder,
+  "source-control": GitBranch,
 };
 
 export function ShellIcon({ name }: ShellIconProps) {

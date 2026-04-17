@@ -1,7 +1,6 @@
 import { FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import { useState } from "react";
 import { getRuntime } from "@/app/runtime";
-import { DesktopShellFrame } from "@/features/layout/ui/DesktopShellFrame";
 import { startWindowDrag } from "@/features/layout/ui/window-drag";
 import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
 import { ConfigGraphCanvas } from "@/features/configs/ui/ConfigGraphCanvas";
@@ -30,7 +29,6 @@ function getParentDirectory(path: string): string {
 }
 
 export function ConfigEditorScreen({
-  shell,
   loading,
   error,
   detail,
@@ -86,19 +84,7 @@ export function ConfigEditorScreen({
   }
 
   return (
-    <DesktopShellFrame
-      addWorkspaceDisabled={shell.phase !== "connected"}
-      footerNav={shell.footerNav}
-      onPrimaryAction={shell.openNewTask}
-      primaryActionDisabled={shell.phase !== "connected" || shell.workspaceCount === 0}
-      primaryNav={shell.primaryNav}
-      topBarClassName="desktop-shell__topbar--detail"
-      topBarLeft={null}
-      workspaceRemoveDialog={shell.workspaceRemoveDialog}
-      workspaceItems={shell.workspaceItems}
-      onAddWorkspace={() => void shell.addWorkspace()}
-    >
-      <section className="config-editor-screen" data-testid="config-editor-screen">
+    <section className="config-editor-screen" data-testid="config-editor-screen">
         {loading ? (
           <div className="board-empty-state">
             <h2>Loading config…</h2>
@@ -235,7 +221,6 @@ export function ConfigEditorScreen({
             <p>{error ?? "The requested config could not be loaded."}</p>
           </div>
         )}
-      </section>
-    </DesktopShellFrame>
+    </section>
   );
 }

@@ -10,6 +10,14 @@ import type {
   ConfigSetBuiltinRuntimesParams,
   ConfigValidateParams,
   ConfigValidateResult,
+  WorkspaceCheckoutStatusParams,
+  WorkspaceCheckoutStatusResult,
+  WorkspaceCommitDiffParams,
+  WorkspaceCommitDiffResult,
+  WorkspaceFileDiffParams,
+  WorkspaceFileDiffResult,
+  WorkspaceGitStatusParams,
+  WorkspaceGitStatusResult,
   InitializeResult,
   NotificationEnvelopeParams,
   RuntimeStatusResult,
@@ -51,6 +59,16 @@ export interface TaskBackendClient {
   workspaceList(): Promise<WorkspaceListResult>;
   workspaceAdd(params: WorkspaceAddParams): Promise<WorkspaceAddResult>;
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult>;
+  workspaceGitStatus(params: WorkspaceGitStatusParams): Promise<WorkspaceGitStatusResult>;
+  workspaceCheckoutStatus(
+    params: WorkspaceCheckoutStatusParams,
+  ): Promise<WorkspaceCheckoutStatusResult>;
+  workspaceFileDiff(
+    params: WorkspaceFileDiffParams,
+  ): Promise<WorkspaceFileDiffResult>;
+  workspaceCommitDiff(
+    params: WorkspaceCommitDiffParams,
+  ): Promise<WorkspaceCommitDiffResult>;
   workspaceReconcileStale(params: WorkspaceReconcileParams): Promise<WorkspaceReconcileResult>;
   workspaceUpdate(params: WorkspaceUpdateParams): Promise<WorkspaceUpdateResult>;
   workspaceRemove(params: WorkspaceRemoveParams): Promise<WorkspaceRemoveResult>;
