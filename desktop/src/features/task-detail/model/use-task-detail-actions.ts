@@ -82,7 +82,6 @@ export function useTaskDetailActions({
   const [submittingClarification, setSubmittingClarification] = useState(false);
   const [submittingFollowUp, setSubmittingFollowUp] = useState(false);
   const [worktreeCleanupDialogOpen, setWorktreeCleanupDialogOpen] = useState(false);
-  const [loadingWorktreeCleanupDialog, setLoadingWorktreeCleanupDialog] = useState(false);
   const [submittingWorktreeCleanup, setSubmittingWorktreeCleanup] = useState(false);
   const [retryingNodeId, setRetryingNodeId] = useState<string | undefined>();
   const [continuingBlocked, setContinuingBlocked] = useState(false);
@@ -91,7 +90,6 @@ export function useTaskDetailActions({
 
   useEffect(() => {
     setWorktreeCleanupDialogOpen(false);
-    setLoadingWorktreeCleanupDialog(false);
   }, [taskId]);
 
   async function runTaskAction(
@@ -255,18 +253,8 @@ export function useTaskDetailActions({
     if (!workspaceId || !taskId) {
       return;
     }
-    if (worktreeCleanupInfo) {
+    if (worktreeCleanupInfo?.state === "available") {
       setWorktreeCleanupDialogOpen(true);
-      return;
-    }
-    setLoadingWorktreeCleanupDialog(true);
-    try {
-      const info = await loadCleanupInfo();
-      if (info) {
-        setWorktreeCleanupDialogOpen(true);
-      }
-    } finally {
-      setLoadingWorktreeCleanupDialog(false);
     }
   }
 
@@ -350,7 +338,6 @@ export function useTaskDetailActions({
     submittingClarification,
     submittingFollowUp,
     worktreeCleanupDialogOpen,
-    loadingWorktreeCleanupDialog,
     submittingWorktreeCleanup,
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,

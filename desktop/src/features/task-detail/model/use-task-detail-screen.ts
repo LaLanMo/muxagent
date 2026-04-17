@@ -268,7 +268,7 @@ export function useTaskDetailScreen() {
   const tasksById = useTaskSnapshotStore((state) => state.tasksById);
   const inputRequest = detailEntry?.inputRequest;
   const nodeActorTypes = resolveNodeActorTypes(detailEntry?.config);
-  const detailError = detailEntry?.error ?? cleanupError;
+  const detailError = detailEntry?.error;
   const loading = detailEntry?.loading ?? false;
   const latestBlockedStep = resolvedTask?.blocked_steps?.at(-1) as
     | BlockedStepDto
@@ -372,7 +372,6 @@ export function useTaskDetailScreen() {
     submittingClarification,
     submittingFollowUp,
     worktreeCleanupDialogOpen,
-    loadingWorktreeCleanupDialog,
     submittingWorktreeCleanup,
     submittingRetry,
     submittingContinue,
@@ -596,7 +595,11 @@ export function useTaskDetailScreen() {
     followUp,
     followUpState,
     worktreeCleanupInfo: cleanupInfo,
-    worktreeCleanupLoading: cleanupLoading || loadingWorktreeCleanupDialog,
+    worktreeCleanupLoading: cleanupLoading,
+    worktreeCleanupError: cleanupError,
+    retryWorktreeCleanupInfo: () => {
+      void loadCleanupInfo({ showLoading: true });
+    },
     submittingFollowUp,
     worktreeCleanupDialogOpen,
     submittingWorktreeCleanup,

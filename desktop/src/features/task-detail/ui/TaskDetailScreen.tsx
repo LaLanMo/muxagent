@@ -528,6 +528,8 @@ type TaskDetailScreenProps = {
   followUpState?: FollowUpDockState;
   worktreeCleanupInfo?: WorktreeCleanupInfoDto;
   worktreeCleanupLoading: boolean;
+  worktreeCleanupError?: string;
+  retryWorktreeCleanupInfo: () => void;
   configEntries: ConfigCatalogEntryDto[];
   submittingFollowUp: boolean;
   worktreeCleanupDialogOpen: boolean;
@@ -599,6 +601,8 @@ export function TaskDetailScreen({
   followUpState,
   worktreeCleanupInfo,
   worktreeCleanupLoading,
+  worktreeCleanupError,
+  retryWorktreeCleanupInfo,
   configEntries,
   submittingFollowUp,
   worktreeCleanupDialogOpen,
@@ -738,7 +742,20 @@ export function TaskDetailScreen({
   ]
     .filter((value): value is string => Boolean(value))
     .join(" · ");
-  const showCleanupMessage = worktreeCleanupInfo?.state === "blocked";
+  const cleanupView: "loading" | "error" | "available" | "blocked" | "missing" | "hidden" =
+    !cleanupEligible
+      ? "hidden"
+      : worktreeCleanupInfo?.state === "available"
+        ? "available"
+        : worktreeCleanupInfo?.state === "blocked"
+          ? "blocked"
+          : worktreeCleanupInfo?.state === "missing"
+            ? "missing"
+            : worktreeCleanupError
+              ? "error"
+              : "loading";
+  const showCleanupMessage =
+    cleanupView === "blocked" || cleanupView === "missing";
   const promptLead = task?.task.description ?? title;
   const showHistorySection = historyEntries.length > 0;
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
@@ -1387,7 +1404,41 @@ export function TaskDetailScreen({
                   data-testid="detail-worktree-cleanup"
                 >
                   <span className="detail-properties__label">Worktree cleanup</span>
-                  <div className="detail-properties__cleanup">
+                  <div
+                    className="detail-properties__cleanup"
+                    data-cleanup-view={cleanupView}
+                  >
+                    {cleanupView === "loading" ? (
+                      <p
+                        className="detail-properties__value detail-properties__cleanup-message"
+                        data-testid="worktree-cleanup-loading"
+                      >
+                        Checking worktree…
+                      </p>
+                    ) : null}
+                    {cleanupView === "error" ? (
+                      <>
+                        <p
+                          className="detail-properties__value detail-properties__cleanup-message"
+                          data-testid="worktree-cleanup-error"
+                        >
+                          {worktreeCleanupError ?? "Failed to check worktree status."}
+                        </p>
+                        <Button
+                          className="detail-properties__cleanup-button"
+                          data-testid="worktree-cleanup-retry"
+                          disabled={worktreeCleanupLoading}
+                          onClick={() => {
+                            retryWorktreeCleanupInfo();
+                          }}
+                          size="sm"
+                          type="button"
+                          variant="secondary"
+                        >
+                          {worktreeCleanupLoading ? "Retrying…" : "Retry"}
+                        </Button>
+                      </>
+                    ) : null}
                     {showCleanupMessage ? (
                       <p
                         className="detail-properties__value detail-properties__cleanup-message"
@@ -1396,10 +1447,10 @@ export function TaskDetailScreen({
                         {worktreeCleanupInfo?.message ?? "Worktree cleanup unavailable."}
                       </p>
                     ) : null}
-                    {cleanupMeta ? (
+                    {cleanupMeta && cleanupView !== "missing" ? (
                       <p className="detail-properties__cleanup-meta">{cleanupMeta}</p>
                     ) : null}
-                    {worktreeCleanupInfo?.state === "available" ? (
+                    {cleanupView === "available" ? (
                       <Button
                         className="detail-properties__cleanup-button"
                         data-testid="worktree-cleanup-trigger"
@@ -1413,21 +1464,7 @@ export function TaskDetailScreen({
                       >
                         {submittingWorktreeCleanup ? "Removing…" : "Remove worktree"}
                       </Button>
-                    ) : (
-                      <Button
-                        className="detail-properties__cleanup-button"
-                        data-testid="worktree-cleanup-trigger"
-                        disabled={worktreeCleanupLoading}
-                        onClick={() => {
-                          void openWorktreeCleanupDialog();
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="secondary"
-                      >
-                        {worktreeCleanupLoading ? "Checking…" : "Check cleanup status"}
-                      </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ) : null}

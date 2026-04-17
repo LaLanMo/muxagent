@@ -670,6 +670,57 @@ func TestServerTaskGetWorktreeCleanupInfoBlocksSharedWorktreeWithLiveSibling(t *
 	}
 }
 
+func TestServerTaskGetWorktreeCleanupInfoIgnoresUnrelatedWorktrees(t *testing.T) {
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	repoRoot := seedAppServerGitRepo(t)
+	workspacePath := filepath.Join(repoRoot, "packages", "app")
+
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{})
+	workspace, _, err := server.registry.Add(workspacePath, "cmdr")
+	if err != nil {
+		t.Fatalf("add workspace: %v", err)
+	}
+	targetTaskID := seedCompletedWorktreeTask(t, workspacePath)
+
+	unrelatedRoot, err := worktree.Create(repoRoot, "appserver-unrelated-worktree")
+	if err != nil {
+		t.Fatalf("create unrelated worktree: %v", err)
+	}
+	unrelatedExecutionDir := filepath.Join(unrelatedRoot, "packages", "app")
+	seedCompletedAppServerTask(
+		t,
+		workspacePath,
+		"task-unrelated-worktree",
+		"Completed unrelated worktree task",
+		unrelatedExecutionDir,
+	)
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodTaskGetWorktreeCleanupInfo,
+		Params: mustRawParams(t, taskGetWorktreeCleanupInfoParams{
+			WorkspaceID: workspace.WorkspaceID,
+			TaskID:      targetTaskID,
+		}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("task.get_worktree_cleanup_info rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(taskGetWorktreeCleanupInfoResult)
+	if got := result.Info.State; got != worktreeCleanupStateAvailable {
+		t.Fatalf("cleanup info state = %q, want %q", got, worktreeCleanupStateAvailable)
+	}
+	if got := result.Info.SharedTaskCount; got != 1 {
+		t.Fatalf("cleanup info shared_task_count = %d, want 1", got)
+	}
+	if got := result.Info.RemovalScope; got != worktreeRemovalScopeSingle {
+		t.Fatalf("cleanup info removal_scope = %q, want %q", got, worktreeRemovalScopeSingle)
+	}
+	if !result.Info.CanRemove {
+		t.Fatal("cleanup info can_remove = false, want true")
+	}
+}
+
 func TestServerTaskGetWorktreeCleanupInfoReturnsMissingAfterWorktreeRemoved(t *testing.T) {
 	stateDir := filepath.Join(t.TempDir(), "appserver")
 	repoRoot := seedAppServerGitRepo(t)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
@@ -335,13 +336,22 @@ func (m *taskReadModel) buildWorktreeCleanupInfoFromView(ctx context.Context, vi
 		return worktreeCleanupInfoDTO{}, err
 	}
 
+	worktreeRootCanonical := canonicalPathOrFallback(worktreeRoot)
+	worktreeRootPrefix := worktreeRootCanonical + string(os.PathSeparator)
+
 	sharedTaskCount := 0
 	blockedBy := make([]worktreeCleanupBlockerDTO, 0)
 	for _, candidate := range views {
 		if !taskUsesExecutionCheckout(candidate.Task) {
 			continue
 		}
-		candidateRoot, err := worktree.FindRepoRoot(candidate.Task.ExecutionDir)
+		candidateDir := candidate.Task.ExecutionDir
+		candidateDirCanonical := canonicalPathOrFallback(candidateDir)
+		if candidateDirCanonical != worktreeRootCanonical &&
+			!strings.HasPrefix(candidateDirCanonical, worktreeRootPrefix) {
+			continue
+		}
+		candidateRoot, err := worktree.FindRepoRoot(candidateDir)
 		if err != nil || candidateRoot != worktreeRoot {
 			continue
 		}
@@ -405,6 +415,18 @@ func (m *taskReadModel) loadTaskViewsStrict(ctx context.Context) ([]taskdomain.T
 
 func isLiveWorktreeCleanupStatus(status taskdomain.TaskStatus) bool {
 	return status == taskdomain.TaskStatusRunning || status == taskdomain.TaskStatusAwaitingUser
+}
+
+// Resolves symlinks so prefix comparisons stay correct across mounts like
+// /var vs /private/var on macOS; falls back to filepath.Clean for stale paths.
+func canonicalPathOrFallback(path string) string {
+	if path == "" {
+		return ""
+	}
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return filepath.Clean(resolved)
+	}
+	return filepath.Clean(path)
 }
 
 func pluralSuffix(count int) string {

@@ -72,6 +72,16 @@ export function useTaskWorktreeCleanup({
     setCleanupError(undefined);
   }, [eligible, taskId, taskSnapshotKey, workspaceId]);
 
+  useEffect(() => {
+    if (!eligible || !workspaceId || !taskId) {
+      return;
+    }
+    if (cleanupInfo || cleanupLoading || cleanupError) {
+      return;
+    }
+    void loadCleanupInfo({ showLoading: false });
+  }, [cleanupError, cleanupInfo, cleanupLoading, eligible, taskId, workspaceId]);
+
   return {
     cleanupInfo,
     cleanupLoading,

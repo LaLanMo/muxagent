@@ -240,6 +240,12 @@ test("disables follow-up when the seeded worktree checkout has been removed", as
     await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
     await expect(page.getByTestId("follow-up-mode-trigger")).toHaveCount(0);
     await expect(page.getByTestId("follow-up-send")).toHaveCount(0);
+
+    await expect(
+      page.locator("[data-testid='detail-worktree-cleanup'] [data-cleanup-view]"),
+    ).toHaveAttribute("data-cleanup-view", "missing", { timeout: 30_000 });
+    await expect(page.getByTestId("worktree-cleanup-trigger")).toHaveCount(0);
+    await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
   });
 });
 
@@ -313,6 +319,9 @@ test("removes a completed task worktree from task detail and disables follow-up"
       page.locator("[data-testid='complete-pane'] [data-testid='worktree-cleanup-trigger']"),
     ).toHaveCount(0);
     await expect(page.getByTestId("worktree-cleanup-trigger")).toBeVisible();
+    await expect(
+      page.locator("[data-testid='detail-worktree-cleanup'] [data-cleanup-view]"),
+    ).toHaveAttribute("data-cleanup-view", "available");
 
     await page.getByTestId("worktree-cleanup-trigger").click();
     await expect(page.getByTestId("confirm-dialog")).toBeVisible();
@@ -333,8 +342,11 @@ test("removes a completed task worktree from task detail and disables follow-up"
     await expect(page.getByTestId("follow-up-description")).toHaveCount(0);
     await expect(page.getByTestId("follow-up-mode-trigger")).toHaveCount(0);
     await expect(page.getByTestId("follow-up-send")).toHaveCount(0);
-    await expect(page.getByTestId("detail-worktree-cleanup")).toHaveCount(0);
     await expect(page.getByTestId("worktree-cleanup-trigger")).toHaveCount(0);
+    await expect(
+      page.locator("[data-testid='detail-worktree-cleanup'] [data-cleanup-view]"),
+    ).toHaveAttribute("data-cleanup-view", "missing", { timeout: 30_000 });
+    await expect(page.getByTestId("worktree-cleanup-message")).toContainText(/unavailable|removed/i);
   });
 });
 
