@@ -416,6 +416,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodConfigDelete,
 					methodConfigReset,
 					methodConfigSetDefault,
+					methodConfigSetBuiltinRuntimes,
 					methodConfigValidate,
 					methodConfigSave,
 					methodConfigPromptGet,
@@ -1078,6 +1079,33 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, rpcErr
 		}
 		return configSetDefaultResult{Entry: entry}, nil, stopModeContinue, nil
+
+	case methodConfigSetBuiltinRuntimes:
+		params, err := decodeParams[configSetBuiltinRuntimesParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		runtimeID := appconfig.RuntimeID(strings.TrimSpace(string(params.RuntimeID)))
+		if runtimeID == "" {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "runtime_id is required"}
+		}
+		if !appconfig.IsSupportedRuntime(runtimeID) {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: fmt.Sprintf("runtime %q is not supported", runtimeID)}
+		}
+		catalog, err := taskconfig.SetBuiltinRuntimes(runtimeID)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+		}
+		reg, err := s.loadRegistry()
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+		}
+		runtimeCfg, err := s.loadRuntimeConfig()
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+		}
+		prefs := s.loadTaskLaunchPreferences()
+		return buildConfigCatalogResult(catalog, reg, runtimeCfg, prefs.UseWorktree), nil, stopModeContinue, nil
 
 	case methodConfigValidate:
 		params, err := decodeParams[configValidateParams](req.Params)

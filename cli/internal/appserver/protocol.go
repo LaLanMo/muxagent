@@ -47,6 +47,7 @@ const (
 	methodConfigDelete               = "config.delete"
 	methodConfigReset                = "config.reset"
 	methodConfigSetDefault           = "config.set_default"
+	methodConfigSetBuiltinRuntimes   = "config.set_builtin_runtimes"
 	methodConfigValidate             = "config.validate"
 	methodConfigSave                 = "config.save"
 	methodConfigPromptGet            = "config.prompt.get"
@@ -418,6 +419,10 @@ type configSetDefaultParams struct {
 
 type configSetDefaultResult struct {
 	Entry configDetailDTO `json:"entry"`
+}
+
+type configSetBuiltinRuntimesParams struct {
+	RuntimeID appconfig.RuntimeID `json:"runtime_id"`
 }
 
 type configValidateParams struct {

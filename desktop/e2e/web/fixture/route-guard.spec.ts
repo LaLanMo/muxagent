@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { skipOnboarding } from "./_helpers";
+
+test.beforeEach(async ({ page }) => {
+  await skipOnboarding(page);
+});
 
 test("redirects task deep links back to the root shell when no workspace session exists", async ({
   page,

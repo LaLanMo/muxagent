@@ -2619,6 +2619,59 @@ func TestServerConfigRuntimeFlows(t *testing.T) {
 	}
 }
 
+func TestServerConfigSetBuiltinRuntimes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	stateDir := filepath.Join(t.TempDir(), "appserver")
+	server := newTestServerWithOptions(t, stateDir, testServerOptions{
+		loadConfig: func() (appconfig.Config, error) {
+			return appconfig.Config{
+				Runtimes: map[appconfig.RuntimeID]appconfig.RuntimeSettings{
+					appconfig.RuntimeCodex:      {},
+					appconfig.RuntimeClaudeCode: {},
+				},
+			}, nil
+		},
+	})
+	server.markInitialized()
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodConfigSetBuiltinRuntimes,
+		Params: mustRawParams(t, configSetBuiltinRuntimesParams{RuntimeID: appconfig.RuntimeClaudeCode}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("config.set_builtin_runtimes rpc error: %+v", rpcErr)
+	}
+	result := resultAny.(configCatalogResult)
+	if len(result.Entries) == 0 {
+		t.Fatal("config.set_builtin_runtimes entries = 0")
+	}
+	for _, entry := range result.Entries {
+		if !entry.Builtin {
+			continue
+		}
+		if entry.RuntimeID != appconfig.RuntimeClaudeCode {
+			t.Fatalf("builtin %q runtime = %q, want %q", entry.Alias, entry.RuntimeID, appconfig.RuntimeClaudeCode)
+		}
+		if !entry.RuntimeExplicit {
+			t.Fatalf("builtin %q runtime_explicit = false, want true", entry.Alias)
+		}
+	}
+
+	if _, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodConfigSetBuiltinRuntimes,
+		Params: mustRawParams(t, configSetBuiltinRuntimesParams{RuntimeID: appconfig.RuntimeID("ghost")}),
+	}); rpcErr == nil || rpcErr.Code != errorCodeInvalidParams {
+		t.Fatalf("config.set_builtin_runtimes invalid runtime rpc error = %+v, want invalid params", rpcErr)
+	}
+
+	if _, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodConfigSetBuiltinRuntimes,
+		Params: mustRawParams(t, configSetBuiltinRuntimesParams{RuntimeID: ""}),
+	}); rpcErr == nil || rpcErr.Code != errorCodeInvalidParams {
+		t.Fatalf("config.set_builtin_runtimes empty runtime rpc error = %+v, want invalid params", rpcErr)
+	}
+}
+
 func TestServerConfigPromptFlows(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	stateDir := filepath.Join(t.TempDir(), "appserver")

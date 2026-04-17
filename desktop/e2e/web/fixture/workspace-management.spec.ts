@@ -1,4 +1,9 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { skipOnboarding } from "./_helpers";
+
+test.beforeEach(async ({ page }) => {
+  await skipOnboarding(page);
+});
 
 async function connectWorkspace(page: Page, path: string) {
   await expect(page.getByTestId("workspace-picker-button")).toBeEnabled();

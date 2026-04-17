@@ -1,4 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { skipOnboarding } from "./_helpers";
+
+test.beforeEach(async ({ page }) => {
+  await skipOnboarding(page);
+});
 
 test("keeps the entry shell unchanged when add workspace is cancelled", async ({
   page,

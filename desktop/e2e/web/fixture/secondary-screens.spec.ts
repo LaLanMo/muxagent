@@ -1,4 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { skipOnboarding } from "./_helpers";
+
+test.beforeEach(async ({ page }) => {
+  await skipOnboarding(page);
+});
 
 async function connectFixtureWorkspace(page: Page, workDir = "/tmp/muxagent-workspace") {
   await page.goto("/");

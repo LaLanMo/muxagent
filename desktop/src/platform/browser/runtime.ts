@@ -10,6 +10,7 @@ import {
   type ConfigDeleteParams,
   type ConfigDeleteResult,
   type ConfigGetResult,
+  type ConfigSetBuiltinRuntimesParams,
   type ConfigValidateParams,
   type ConfigValidateResult,
   type InitializeResult,
@@ -172,6 +173,12 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
     return this.request("config.delete", params);
+  }
+
+  configSetBuiltinRuntimes(
+    params: ConfigSetBuiltinRuntimesParams,
+  ): Promise<ConfigCatalogResult> {
+    return this.request("config.set_builtin_runtimes", params);
   }
 
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {

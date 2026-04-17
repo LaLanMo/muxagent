@@ -1,9 +1,14 @@
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useServerBootstrap } from "@/features/app/model/use-server-bootstrap";
 import { useRuntimeSync } from "@/features/app/model/use-runtime-sync";
 import { useEntryScreen } from "@/features/entry/model/use-entry-screen";
 import { EntryShellScreen } from "@/features/entry/ui/EntryShellScreen";
+import {
+  isOnboardingCompleted,
+  markOnboardingCompleted,
+} from "@/features/onboarding/model/onboarding-memory";
+import { OnboardingScreen } from "@/features/onboarding/ui/OnboardingScreen";
 import { useNewTaskModal } from "@/features/new-task/model/use-new-task-modal";
 import {
   buildNewTaskModalSearch,
@@ -38,6 +43,37 @@ function RequireConnectedRoute({ children }: { children: ReactNode }) {
     return <Navigate replace to="/" />;
   }
   return <>{children}</>;
+}
+
+function OnboardingGate({ children }: { children: ReactNode }) {
+  const phase = useWorkspaceStore((state) => state.phase);
+  const bootstrapPending = useWorkspaceStore((state) => state.bootstrapPending);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const location = useLocation();
+
+  const onOnboardingRoute = location.pathname.startsWith("/onboarding");
+  const isConnected = phase === "connected" && !bootstrapPending;
+  const completed = isOnboardingCompleted();
+  const hasWorkspaces = workspaces.length > 0;
+  const shouldAutoComplete =
+    isConnected && !completed && hasWorkspaces && !onOnboardingRoute;
+
+  useEffect(() => {
+    if (shouldAutoComplete) {
+      markOnboardingCompleted();
+    }
+  }, [shouldAutoComplete]);
+
+  if (!isConnected) {
+    return <>{children}</>;
+  }
+  if (onOnboardingRoute) {
+    return <>{children}</>;
+  }
+  if (completed || hasWorkspaces) {
+    return <>{children}</>;
+  }
+  return <Navigate replace to="/onboarding" />;
 }
 
 function EntryRoute() {
@@ -174,18 +210,21 @@ export function App() {
   return (
     <BrowserRouter>
       <RuntimeEffects />
-      <Routes>
-        <Route element={<EntryRoute />} path="/" />
-        <Route
-          element={<ProtectedTaskDetailRoute />}
-          path="/workspaces/:workspaceId/tasks/:taskId"
-        />
-        <Route element={<ConfigsRoute />} path="/configs" />
-        <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
-        <Route element={<SettingsRoute />} path="/settings" />
-        <Route element={<Navigate replace to="/" />} path="*" />
-      </Routes>
-      <GlobalNewTaskModal />
+      <OnboardingGate>
+        <Routes>
+          <Route element={<EntryRoute />} path="/" />
+          <Route element={<OnboardingScreen />} path="/onboarding" />
+          <Route
+            element={<ProtectedTaskDetailRoute />}
+            path="/workspaces/:workspaceId/tasks/:taskId"
+          />
+          <Route element={<ConfigsRoute />} path="/configs" />
+          <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
+          <Route element={<SettingsRoute />} path="/settings" />
+          <Route element={<Navigate replace to="/" />} path="*" />
+        </Routes>
+        <GlobalNewTaskModal />
+      </OnboardingGate>
     </BrowserRouter>
   );
 }

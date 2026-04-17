@@ -636,6 +636,80 @@ func TestSetConfigRuntimePinsBuiltinAndCustomConfigs(t *testing.T) {
 	}
 }
 
+func TestSetBuiltinRuntimesRewritesAllBuiltinConfigs(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	setTaskConfigRuntimePath(t, "codex")
+
+	writeSimpleUserBundle(t, "reviewer", "reviewer")
+	_, err := SaveRegistry(Registry{
+		DefaultAlias: DefaultAlias,
+		Configs: []RegistryEntry{
+			{Alias: "reviewer", Path: "reviewer"},
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = LoadCatalog()
+	require.NoError(t, err)
+
+	catalog, err := SetBuiltinRuntimes(appconfig.RuntimeClaudeCode)
+	require.NoError(t, err)
+
+	builtinAliases := []string{BuiltinIDDefault, BuiltinIDPlanOnly, BuiltinIDSingleRun, BuiltinIDAutonomous, BuiltinIDYolo}
+	for _, alias := range builtinAliases {
+		entry, ok := catalog.Entry(alias)
+		require.True(t, ok, "builtin %q missing from catalog", alias)
+		cfg, err := entry.LoadConfig()
+		require.NoError(t, err)
+		assert.Equal(t, appconfig.RuntimeClaudeCode, cfg.Runtime, "builtin %q runtime", alias)
+		data, err := os.ReadFile(entry.Path)
+		require.NoError(t, err)
+		assert.Contains(t, string(data), "runtime: claude-code", "builtin %q yaml", alias)
+	}
+
+	userEntry, ok := catalog.Entry("reviewer")
+	require.True(t, ok)
+	userCfg, err := userEntry.LoadConfig()
+	require.NoError(t, err)
+	assert.Equal(t, appconfig.RuntimeCodex, userCfg.Runtime)
+}
+
+func TestSetBuiltinRuntimesIsIdempotent(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	setTaskConfigRuntimePath(t, "codex")
+
+	_, err := LoadCatalog()
+	require.NoError(t, err)
+
+	_, err = SetBuiltinRuntimes(appconfig.RuntimeClaudeCode)
+	require.NoError(t, err)
+
+	catalog, err := SetBuiltinRuntimes(appconfig.RuntimeOpenCode)
+	require.NoError(t, err)
+	for _, entry := range catalog.Entries {
+		if !entry.Builtin {
+			continue
+		}
+		cfg, err := entry.LoadConfig()
+		require.NoError(t, err)
+		assert.Equal(t, appconfig.RuntimeOpenCode, cfg.Runtime, "builtin %q", entry.Alias)
+	}
+}
+
+func TestSetBuiltinRuntimesRejectsInvalidRuntime(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	_, err := LoadCatalog()
+	require.NoError(t, err)
+
+	_, err = SetBuiltinRuntimes(appconfig.RuntimeID("ghost"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `runtime "ghost" is not supported`)
+}
+
 func TestSetConfigRuntimeRejectsInvalidConfigWithoutMutatingFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

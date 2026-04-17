@@ -9,6 +9,7 @@ import type {
   ConfigDeleteParams,
   ConfigDeleteResult,
   ConfigGetResult,
+  ConfigSetBuiltinRuntimesParams,
   ConfigValidateParams,
   ConfigValidateResult,
   InitializeResult,
@@ -119,6 +120,12 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   configDelete(params: ConfigDeleteParams): Promise<ConfigDeleteResult> {
     return this.request("config.delete", params);
+  }
+
+  configSetBuiltinRuntimes(
+    params: ConfigSetBuiltinRuntimesParams,
+  ): Promise<ConfigCatalogResult> {
+    return this.request("config.set_builtin_runtimes", params);
   }
 
   configValidate(params: ConfigValidateParams): Promise<ConfigValidateResult> {

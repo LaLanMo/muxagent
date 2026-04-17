@@ -251,6 +251,10 @@ export interface ConfigDeleteResult {
   removed: boolean;
 }
 
+export interface ConfigSetBuiltinRuntimesParams {
+  runtime_id: string;
+}
+
 export interface ConfigValidateParams {
   config: ConfigDraftDto;
 }

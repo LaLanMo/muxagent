@@ -53,12 +53,17 @@ export async function connectServer(
 export async function addWorkspace(
   runtime: DesktopRuntime,
   path: string,
+  displayName?: string,
 ): Promise<WorkspaceSummaryDto> {
   const trimmed = path.trim();
   if (!trimmed) {
     throw new Error("Workspace path is required");
   }
-  const result = await runtime.backend.workspaceAdd({ path: trimmed });
+  const trimmedDisplayName = displayName?.trim() || undefined;
+  const result = await runtime.backend.workspaceAdd({
+    path: trimmed,
+    display_name: trimmedDisplayName,
+  });
   return result.workspace;
 }
 

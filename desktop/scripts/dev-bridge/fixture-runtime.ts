@@ -640,6 +640,7 @@ export class FixtureRuntime {
               "config.rename",
               "config.delete",
               "config.reset",
+              "config.set_builtin_runtimes",
               "config.validate",
               "config.save",
               "config.prompt.get",
@@ -796,6 +797,43 @@ export class FixtureRuntime {
           default_use_worktree: false,
           entries: state.configs.map((config) => this.configCatalogEntry(state, config)),
         });
+      case "config.set_builtin_runtimes": {
+        const runtimeId = String(params.runtime_id ?? "").trim();
+        if (!runtimeId) {
+          return this.fail(id, -32602, "runtime_id is required");
+        }
+        const knownStatus = state.runtimeStatus.runtimes.find(
+          (entry) => entry.runtime_id === runtimeId,
+        );
+        if (!knownStatus) {
+          return this.fail(id, -32602, `runtime ${runtimeId} is not supported`);
+        }
+        const existing = state.runtimes.find(
+          (runtime) => runtime.runtime_id === runtimeId,
+        );
+        if (existing) {
+          existing.configured = true;
+        } else {
+          state.runtimes.push({
+            runtime_id: runtimeId,
+            runtime_name: knownStatus.runtime_name,
+            command: knownStatus.launcher ?? runtimeId,
+            configured: true,
+          });
+        }
+        for (const config of state.configs) {
+          if (config.builtin) {
+            config.config.runtime = runtimeId;
+            config.revision = randomUUID();
+          }
+        }
+        return this.respond(id, {
+          default_alias:
+            state.configs.find((config) => config.is_default)?.alias ?? "default",
+          default_use_worktree: false,
+          entries: state.configs.map((config) => this.configCatalogEntry(state, config)),
+        });
+      }
       case "config.get": {
         const config = this.requireConfig(state, String(params.alias ?? ""));
         if (!config) {

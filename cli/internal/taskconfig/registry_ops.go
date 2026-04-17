@@ -136,6 +136,43 @@ func SetDefaultConfig(alias string) (*Catalog, error) {
 	return LoadCatalog()
 }
 
+func SetBuiltinRuntimes(runtime appconfig.RuntimeID) (*Catalog, error) {
+	if !appconfig.IsSupportedRuntime(runtime) {
+		return nil, fmt.Errorf("runtime %q is not supported", runtime)
+	}
+
+	reg, err := ensureBuiltinDefaults()
+	if err != nil {
+		return nil, err
+	}
+	taskConfigDir, err := TaskConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range reg.Configs {
+		if !isBuiltinEntry(entry) {
+			continue
+		}
+		_, configPath, err := resolveRegistryEntryPath(taskConfigDir, entry.Path)
+		if err != nil {
+			return nil, fmt.Errorf("resolve builtin %q: %w", entry.Alias, err)
+		}
+		cfg, err := Load(configPath)
+		if err != nil {
+			return nil, fmt.Errorf("load builtin %q: %w", entry.Alias, err)
+		}
+		cfg.Runtime = runtime
+		data, err := yaml.Marshal(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("marshal builtin %q: %w", entry.Alias, err)
+		}
+		if err := os.WriteFile(configPath, data, 0o644); err != nil {
+			return nil, fmt.Errorf("write builtin %q: %w", entry.Alias, err)
+		}
+	}
+	return LoadCatalog()
+}
+
 func SetConfigRuntime(alias string, runtime appconfig.RuntimeID) (*Catalog, error) {
 	alias = strings.TrimSpace(alias)
 	if alias == "" {
