@@ -3,6 +3,7 @@ package daemon
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"github.com/LaLanMo/muxagent/cli/internal/claudesession"
 	"github.com/LaLanMo/muxagent/cli/internal/control"
 	"github.com/LaLanMo/muxagent/cli/internal/relayws"
+	_ "modernc.org/sqlite"
 )
 
 type fakeAttachPublisher struct {
@@ -151,6 +153,70 @@ func TestAttachSessionUsesClaudeLocalRuntimeMetadataAndBroadcasts(t *testing.T) 
 	}
 	if event.SessionInfo == nil || event.SessionInfo.App.MachineID != "machine-2" {
 		t.Fatalf("machineID = %+v, want machine-2", event.SessionInfo)
+	}
+}
+
+func TestAttachSessionUsesOpenCodeLocalRuntimeMetadataAndBroadcasts(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", root)
+
+	dbPath := filepath.Join(root, "opencode", "opencode.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatalf("mkdir db dir: %v", err)
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, slug TEXT NOT NULL, directory TEXT NOT NULL, title TEXT NOT NULL, version TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL)`); err != nil {
+		t.Fatalf("create session table: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"ses-open-1",
+		"proj-1",
+		"quiet-brook",
+		"/tmp/opencode-project",
+		"Attach this OpenCode session",
+		"1.4.3",
+		int64(1775826902718),
+		int64(1775826934257),
+	); err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	publisher := &fakeAttachPublisher{machineID: "machine-3"}
+	d := &Daemon{attachPublisher: publisher}
+
+	resp, err := d.attachSession(context.Background(), control.AttachSessionRequest{
+		SessionID: "ses-open-1",
+		Runtime:   "opencode",
+	})
+	if err != nil {
+		t.Fatalf("attachSession: %v", err)
+	}
+	if !resp.Broadcasted {
+		t.Fatalf("Broadcasted = false, want true")
+	}
+	if resp.Runtime != "opencode" {
+		t.Fatalf("runtime = %q, want opencode", resp.Runtime)
+	}
+	if resp.CWD != "/tmp/opencode-project" {
+		t.Fatalf("cwd = %q, want /tmp/opencode-project", resp.CWD)
+	}
+	if resp.Title != "Attach this OpenCode session" {
+		t.Fatalf("title = %q, want Attach this OpenCode session", resp.Title)
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(publisher.events))
+	}
+	event := publisher.events[0]
+	if event.SessionInfo == nil || event.SessionInfo.App.Runtime != "opencode" {
+		t.Fatalf("runtime = %+v, want opencode", event.SessionInfo)
+	}
+	if event.SessionInfo == nil || event.SessionInfo.App.MachineID != "machine-3" {
+		t.Fatalf("machineID = %+v, want machine-3", event.SessionInfo)
 	}
 }
 

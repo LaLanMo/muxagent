@@ -1,12 +1,15 @@
 package sessionattach
 
 import (
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/LaLanMo/muxagent/cli/internal/claudesession"
+	"github.com/LaLanMo/muxagent/cli/internal/config"
+	_ "modernc.org/sqlite"
 )
 
 func TestRegistryResolveUnsupportedRuntime(t *testing.T) {
@@ -59,5 +62,52 @@ func TestRegistryResolveClaudeUsesLocalTranscriptMetadata(t *testing.T) {
 	}
 	if meta.Title != "Attach this Claude session" {
 		t.Fatalf("title = %q, want transcript title", meta.Title)
+	}
+}
+
+func TestRegistryResolveOpenCodeUsesLocalStoreMetadata(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", root)
+
+	dbPath := filepath.Join(root, "opencode", "opencode.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatalf("mkdir db dir: %v", err)
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT NOT NULL, slug TEXT NOT NULL, directory TEXT NOT NULL, title TEXT NOT NULL, version TEXT NOT NULL, time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL)`); err != nil {
+		t.Fatalf("create session table: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		"ses-open-1",
+		"proj-1",
+		"quiet-brook",
+		"/tmp/opencode-project",
+		"Attach this OpenCode session",
+		"1.4.3",
+		int64(1775826902718),
+		int64(1775826934257),
+	); err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	registry := NewRegistry()
+
+	meta, err := registry.Resolve(string(config.RuntimeOpenCode), "ses-open-1")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if meta.CWD != "/tmp/opencode-project" {
+		t.Fatalf("cwd = %q, want /tmp/opencode-project", meta.CWD)
+	}
+	if meta.Title != "Attach this OpenCode session" {
+		t.Fatalf("title = %q, want store title", meta.Title)
+	}
+	if meta.CreatedAt.IsZero() || meta.UpdatedAt.IsZero() {
+		t.Fatalf("times = created %v updated %v, want non-zero", meta.CreatedAt, meta.UpdatedAt)
 	}
 }
