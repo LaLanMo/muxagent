@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LaLanMo/muxagent/cli/internal/claudesession"
 	"github.com/LaLanMo/muxagent/cli/internal/codexsession"
 	"github.com/LaLanMo/muxagent/cli/internal/config"
 )
@@ -40,6 +41,7 @@ type Registry struct {
 
 func NewRegistry() *Registry {
 	r := &Registry{resolvers: make(map[config.RuntimeID]Resolver)}
+	r.Register(config.RuntimeClaudeCode, ResolverFunc(resolveClaudeLocalSession))
 	r.Register(config.RuntimeCodex, ResolverFunc(resolveCodexLocalSession))
 	return r
 }
@@ -67,6 +69,23 @@ func resolveCodexLocalSession(sessionID string) (Metadata, error) {
 	meta, err := codexsession.ResolveLocalSession(sessionID)
 	if err != nil {
 		if errors.Is(err, codexsession.ErrSessionNotFound) {
+			return Metadata{}, fmt.Errorf("%w: %v", ErrSessionNotFound, err)
+		}
+		return Metadata{}, err
+	}
+	return Metadata{
+		SessionID: meta.SessionID,
+		CWD:       meta.CWD,
+		Title:     meta.Title,
+		CreatedAt: meta.CreatedAt,
+		UpdatedAt: meta.UpdatedAt,
+	}, nil
+}
+
+func resolveClaudeLocalSession(sessionID string) (Metadata, error) {
+	meta, err := claudesession.ResolveLocalSession(sessionID)
+	if err != nil {
+		if errors.Is(err, claudesession.ErrSessionNotFound) {
 			return Metadata{}, fmt.Errorf("%w: %v", ErrSessionNotFound, err)
 		}
 		return Metadata{}, err

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/LaLanMo/muxagent/cli/internal/claudesession"
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
@@ -34,7 +35,7 @@ func readProviderBackfill(task taskdomain.Task, runtime appconfig.RuntimeID, run
 }
 
 func readClaudeBackfill(task taskdomain.Task, run taskdomain.NodeRun) (ReadResult, error) {
-	path, err := claudeTranscriptPath(task.ExecutionWorkDir(), run.SessionID)
+	path, err := claudesession.TranscriptPath(task.ExecutionWorkDir(), run.SessionID)
 	if err != nil {
 		return ReadResult{}, err
 	}
@@ -169,30 +170,6 @@ func providerEventRecord(event taskexecutor.StreamEvent, sessionID, providerReco
 		recordedAt = time.Now().UTC()
 	}
 	return eventRecordFromExecutor(event, recordedAt.UTC())
-}
-
-func claudeTranscriptPath(workDir, sessionID string) (string, error) {
-	base, err := claudeBaseDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(base, "projects", escapeClaudeProjectDir(workDir), sessionID+".jsonl"), nil
-}
-
-func claudeBaseDir() (string, error) {
-	if root := strings.TrimSpace(os.Getenv("CLAUDE_CONFIG_DIR")); root != "" {
-		return root, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".claude"), nil
-}
-
-func escapeClaudeProjectDir(workDir string) string {
-	cleaned := filepath.Clean(strings.TrimSpace(workDir))
-	return strings.ReplaceAll(cleaned, string(filepath.Separator), "-")
 }
 
 func codexTranscriptPath(sessionID string) (string, error) {
