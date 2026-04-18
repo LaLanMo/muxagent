@@ -30,6 +30,8 @@ type Config struct {
 	Version         int                       `yaml:"version" json:"version"`
 	Description     string                    `yaml:"description,omitempty" json:"description,omitempty"`
 	Runtime         appconfig.RuntimeID       `yaml:"runtime" json:"runtime"`
+	Model           string                    `yaml:"model,omitempty" json:"model,omitempty"`
+	ThinkingLevel   string                    `yaml:"thinking_level,omitempty" json:"thinking_level,omitempty"`
 	Clarification   ClarificationConfig       `yaml:"clarification" json:"clarification"`
 	Topology        Topology                  `yaml:"topology" json:"topology"`
 	NodeDefinitions map[string]NodeDefinition `yaml:"node_definitions" json:"node_definitions"`
@@ -131,10 +133,13 @@ func (c EdgeCondition) MarshalYAML() (interface{}, error) {
 }
 
 type NodeDefinition struct {
-	Type                   NodeType   `yaml:"type,omitempty" json:"type,omitempty"`
-	SystemPrompt           string     `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"`
-	MaxClarificationRounds int        `yaml:"max_clarification_rounds,omitempty" json:"max_clarification_rounds,omitempty"`
-	ResultSchema           JSONSchema `yaml:"result_schema" json:"result_schema"`
+	Type                   NodeType            `yaml:"type,omitempty" json:"type,omitempty"`
+	SystemPrompt           string              `yaml:"system_prompt,omitempty" json:"system_prompt,omitempty"`
+	MaxClarificationRounds int                 `yaml:"max_clarification_rounds,omitempty" json:"max_clarification_rounds,omitempty"`
+	Runtime                appconfig.RuntimeID `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Model                  string              `yaml:"model,omitempty" json:"model,omitempty"`
+	ThinkingLevel          string              `yaml:"thinking_level,omitempty" json:"thinking_level,omitempty"`
+	ResultSchema           JSONSchema          `yaml:"result_schema" json:"result_schema"`
 }
 
 type NodeType string
@@ -169,6 +174,8 @@ type rawConfig struct {
 	Version         *int                         `yaml:"version"`
 	Description     *string                      `yaml:"description"`
 	Runtime         *appconfig.RuntimeID         `yaml:"runtime"`
+	Model           *string                      `yaml:"model"`
+	ThinkingLevel   *string                      `yaml:"thinking_level"`
 	Clarification   *rawClarificationConfig      `yaml:"clarification"`
 	Topology        *rawTopology                 `yaml:"topology"`
 	NodeDefinitions map[string]rawNodeDefinition `yaml:"node_definitions"`
@@ -194,10 +201,13 @@ type rawNodeRef struct {
 }
 
 type rawNodeDefinition struct {
-	Type                   NodeType   `yaml:"type,omitempty"`
-	SystemPrompt           *string    `yaml:"system_prompt,omitempty"`
-	MaxClarificationRounds *int       `yaml:"max_clarification_rounds,omitempty"`
-	ResultSchema           JSONSchema `yaml:"result_schema"`
+	Type                   NodeType             `yaml:"type,omitempty"`
+	SystemPrompt           *string              `yaml:"system_prompt,omitempty"`
+	MaxClarificationRounds *int                 `yaml:"max_clarification_rounds,omitempty"`
+	Runtime                *appconfig.RuntimeID `yaml:"runtime,omitempty"`
+	Model                  *string              `yaml:"model,omitempty"`
+	ThinkingLevel          *string              `yaml:"thinking_level,omitempty"`
+	ResultSchema           JSONSchema           `yaml:"result_schema"`
 }
 
 func LoadDefault() (*Config, error) {
@@ -319,6 +329,9 @@ func Validate(cfg *Config) error {
 		}
 		if err := validateNodeDefinition(name, def); err != nil {
 			return err
+		}
+		if strings.TrimSpace(string(def.Runtime)) != "" && !appconfig.IsSupportedRuntime(def.Runtime) {
+			return fmt.Errorf("node %q runtime %q is not supported", name, def.Runtime)
 		}
 	}
 	for name := range cfg.NodeDefinitions {
@@ -552,6 +565,17 @@ func validateRawConfig(raw *rawConfig) error {
 				return fmt.Errorf("human node %q cannot define max_clarification_rounds", name)
 			}
 		}
+		if def.Type == NodeTypeHuman || def.Type == NodeTypeTerminal {
+			if def.Runtime != nil {
+				return fmt.Errorf("%s node %q cannot define runtime", def.Type, name)
+			}
+			if def.Model != nil {
+				return fmt.Errorf("%s node %q cannot define model", def.Type, name)
+			}
+			if def.ThinkingLevel != nil {
+				return fmt.Errorf("%s node %q cannot define thinking_level", def.Type, name)
+			}
+		}
 	}
 	return nil
 }
@@ -568,6 +592,12 @@ func (raw *rawConfig) toConfig() Config {
 	}
 	if raw.Runtime != nil {
 		cfg.Runtime = *raw.Runtime
+	}
+	if raw.Model != nil {
+		cfg.Model = *raw.Model
+	}
+	if raw.ThinkingLevel != nil {
+		cfg.ThinkingLevel = *raw.ThinkingLevel
 	}
 	if raw.Clarification != nil {
 		if raw.Clarification.MaxQuestions != nil {
@@ -606,6 +636,15 @@ func (raw *rawConfig) toConfig() Config {
 		}
 		if def.MaxClarificationRounds != nil {
 			nodeDef.MaxClarificationRounds = *def.MaxClarificationRounds
+		}
+		if def.Runtime != nil {
+			nodeDef.Runtime = *def.Runtime
+		}
+		if def.Model != nil {
+			nodeDef.Model = *def.Model
+		}
+		if def.ThinkingLevel != nil {
+			nodeDef.ThinkingLevel = *def.ThinkingLevel
 		}
 		cfg.NodeDefinitions[name] = nodeDef
 	}
@@ -959,6 +998,47 @@ func ResolveRuntime(cfg *Config) (appconfig.RuntimeID, error) {
 		return cfg.Runtime, nil
 	}
 	return appconfig.PreferredRuntimeFromPATH(), nil
+}
+
+// NodeExecution captures the runtime parameters that should be used when
+// executing a single node, after merging node-level overrides on top of the
+// config-level defaults.
+type NodeExecution struct {
+	Runtime       appconfig.RuntimeID
+	Model         string
+	ThinkingLevel string
+}
+
+// ResolveNodeExecution merges the per-node overrides for runtime / model /
+// thinking_level on top of the config-level defaults. Falls back to
+// PreferredRuntimeFromPATH when neither level specifies a runtime, mirroring
+// ResolveRuntime. Returns an error when a non-empty runtime fails the
+// supported-runtime check.
+func ResolveNodeExecution(cfg *Config, nodeName string) (NodeExecution, error) {
+	exec := NodeExecution{}
+	if cfg != nil {
+		exec.Runtime = cfg.Runtime
+		exec.Model = cfg.Model
+		exec.ThinkingLevel = cfg.ThinkingLevel
+		if def, ok := cfg.NodeDefinitions[nodeName]; ok {
+			if strings.TrimSpace(string(def.Runtime)) != "" {
+				exec.Runtime = def.Runtime
+			}
+			if strings.TrimSpace(def.Model) != "" {
+				exec.Model = def.Model
+			}
+			if strings.TrimSpace(def.ThinkingLevel) != "" {
+				exec.ThinkingLevel = def.ThinkingLevel
+			}
+		}
+	}
+	if strings.TrimSpace(string(exec.Runtime)) == "" {
+		exec.Runtime = appconfig.PreferredRuntimeFromPATH()
+	}
+	if !appconfig.IsSupportedRuntime(exec.Runtime) {
+		return NodeExecution{}, fmt.Errorf("runtime %q is not supported", exec.Runtime)
+	}
+	return exec, nil
 }
 
 func readPrompt(fsys fs.FS, sourceDir, path string, embedded bool) ([]byte, error) {

@@ -239,6 +239,41 @@ func TestBuildExecArgsUsesDeterministicSessionIDForFreshRun(t *testing.T) {
 	assert.Contains(t, strings.Join(args, "\n"), "--session-id\n"+req.NodeRun.ID+"\nfresh prompt")
 }
 
+func TestBuildExecArgsAppendsModelAndThinkingLevel(t *testing.T) {
+	req := requestFixture(t.TempDir())
+	req.Model = "sonnet"
+	req.ThinkingLevel = "high"
+
+	_, args := buildExecArgs(req, `{"type":"object"}`, "fresh prompt")
+	joined := strings.Join(args, "\n")
+	assert.Contains(t, joined, "--model\nsonnet")
+	assert.Contains(t, joined, "--effort\nhigh")
+	// Model/effort flags must precede the prompt so claude doesn't treat them
+	// as part of the user message.
+	modelIdx := indexOf(args, "--model")
+	promptIdx := indexOf(args, "fresh prompt")
+	require.Greater(t, modelIdx, -1)
+	require.Greater(t, promptIdx, -1)
+	assert.Less(t, modelIdx, promptIdx)
+}
+
+func TestBuildExecArgsOmitsModelAndThinkingWhenUnset(t *testing.T) {
+	req := requestFixture(t.TempDir())
+
+	_, args := buildExecArgs(req, `{"type":"object"}`, "fresh prompt")
+	assert.NotContains(t, args, "--model")
+	assert.NotContains(t, args, "--effort")
+}
+
+func indexOf(args []string, value string) int {
+	for i, arg := range args {
+		if arg == value {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestExecutorFailsWithoutStructuredOutput(t *testing.T) {
 	binaryPath := writeFakeClaude(t)
 	t.Setenv("FAKE_CLAUDE_MODE", "missing-structured-output")

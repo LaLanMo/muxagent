@@ -118,6 +118,10 @@ func (s *Service) executeAgentNode(ctx context.Context, task taskdomain.Task, cf
 			return err
 		}
 	}
+	nodeExec, err := taskconfig.ResolveNodeExecution(cfg, run.NodeName)
+	if err != nil {
+		return err
+	}
 	req := taskexecutor.Request{
 		Task:                task,
 		NodeRun:             run,
@@ -127,7 +131,9 @@ func (s *Service) executeAgentNode(ctx context.Context, task taskdomain.Task, cf
 		SchemaPath:          taskstore.SchemaPath(task.WorkDir, task.ID, run.NodeName),
 		WorkDir:             executionDir,
 		ArtifactDir:         artifactDir,
-		Runtime:             cfg.Runtime,
+		Runtime:             nodeExec.Runtime,
+		Model:               nodeExec.Model,
+		ThinkingLevel:       nodeExec.ThinkingLevel,
 		Prompt:              prompt,
 		ResultSchema:        cfg.NodeDefinitions[run.NodeName].ResultSchema,
 	}

@@ -257,6 +257,40 @@ func TestBuildExecArgsStartsFreshWithoutAnsweredClarification(t *testing.T) {
 	assert.NotContains(t, args, "resume")
 }
 
+func TestBuildExecArgsAppendsModelAndThinkingLevel(t *testing.T) {
+	req := requestFixture(t.TempDir())
+	req.Model = "gpt-5"
+	req.ThinkingLevel = "high"
+
+	args := buildExecArgs(req, filepath.Join(req.ArtifactDir, "output.json"), "fresh prompt")
+	assert.Equal(t, "fresh prompt", args[len(args)-1])
+
+	mIdx := indexOf(args, "-m")
+	require.Greater(t, mIdx, -1)
+	assert.Equal(t, "gpt-5", args[mIdx+1])
+
+	cIdx := indexOf(args, "-c")
+	require.Greater(t, cIdx, -1)
+	assert.Equal(t, `model_reasoning_effort="high"`, args[cIdx+1])
+}
+
+func TestBuildExecArgsOmitsModelAndThinkingWhenUnset(t *testing.T) {
+	req := requestFixture(t.TempDir())
+
+	args := buildExecArgs(req, filepath.Join(req.ArtifactDir, "output.json"), "fresh prompt")
+	assert.NotContains(t, args, "-m")
+	assert.NotContains(t, args, "-c")
+}
+
+func indexOf(args []string, value string) int {
+	for i, arg := range args {
+		if arg == value {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestExecutorInvokesCodexResumeForAnsweredClarification(t *testing.T) {
 	binaryPath := writeFakeCodex(t)
 	argsFile := filepath.Join(t.TempDir(), "args.txt")

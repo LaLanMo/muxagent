@@ -18,6 +18,8 @@ type Request struct {
 	WorkDir             string
 	ArtifactDir         string
 	Runtime             appconfig.RuntimeID
+	Model               string
+	ThinkingLevel       string
 	Prompt              string
 	ResultSchema        taskconfig.JSONSchema
 }

@@ -1077,6 +1077,238 @@ node_definitions:
 	assert.Contains(t, err.Error(), "both materialize to")
 }
 
+func TestPerNodeRuntimeOverrides(t *testing.T) {
+	t.Run("parses model and thinking_level at config root and per node", func(t *testing.T) {
+		cfgPath := writeConfigFile(t, `
+version: 1
+runtime: claude-code
+model: sonnet
+thinking_level: medium
+clarification:
+  max_questions: 4
+  max_options_per_question: 4
+  min_options_per_question: 2
+topology:
+  max_iterations: 1
+  entry: start
+  nodes:
+    - name: start
+    - name: done
+  edges:
+    - from: start
+      to: done
+node_definitions:
+  start:
+    runtime: codex
+    model: gpt-5
+    thinking_level: high
+    system_prompt: ./prompt.md
+    result_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+  done:
+    type: terminal
+`)
+
+		cfg, err := Load(cfgPath)
+		require.NoError(t, err)
+		assert.Equal(t, "sonnet", cfg.Model)
+		assert.Equal(t, "medium", cfg.ThinkingLevel)
+		assert.Equal(t, appconfig.RuntimeCodex, cfg.NodeDefinitions["start"].Runtime)
+		assert.Equal(t, "gpt-5", cfg.NodeDefinitions["start"].Model)
+		assert.Equal(t, "high", cfg.NodeDefinitions["start"].ThinkingLevel)
+	})
+
+	t.Run("rejects unsupported runtime on a node", func(t *testing.T) {
+		cfgPath := writeConfigFile(t, `
+version: 1
+runtime: claude-code
+clarification:
+  max_questions: 4
+  max_options_per_question: 4
+  min_options_per_question: 2
+topology:
+  max_iterations: 1
+  entry: start
+  nodes:
+    - name: start
+    - name: done
+  edges:
+    - from: start
+      to: done
+node_definitions:
+  start:
+    runtime: foobar
+    system_prompt: ./prompt.md
+    result_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+  done:
+    type: terminal
+`)
+		_, err := Load(cfgPath)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "is not supported")
+	})
+
+	t.Run("rejects runtime/model/thinking_level on human and terminal nodes", func(t *testing.T) {
+		cases := []struct {
+			name    string
+			content string
+			wantErr string
+		}{
+			{
+				name: "human runtime",
+				content: `
+version: 1
+runtime: claude-code
+clarification:
+  max_questions: 4
+  max_options_per_question: 4
+  min_options_per_question: 2
+topology:
+  max_iterations: 1
+  entry: approve
+  nodes:
+    - name: approve
+  edges: []
+node_definitions:
+  approve:
+    type: human
+    runtime: codex
+    result_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        approved:
+          type: boolean
+`,
+				wantErr: "human node \"approve\" cannot define runtime",
+			},
+			{
+				name: "terminal model",
+				content: `
+version: 1
+runtime: claude-code
+clarification:
+  max_questions: 4
+  max_options_per_question: 4
+  min_options_per_question: 2
+topology:
+  max_iterations: 1
+  entry: done
+  nodes:
+    - name: done
+  edges: []
+node_definitions:
+  done:
+    type: terminal
+    model: sonnet
+`,
+				wantErr: "terminal node \"done\" cannot define model",
+			},
+			{
+				name: "human thinking_level",
+				content: `
+version: 1
+runtime: claude-code
+clarification:
+  max_questions: 4
+  max_options_per_question: 4
+  min_options_per_question: 2
+topology:
+  max_iterations: 1
+  entry: approve
+  nodes:
+    - name: approve
+  edges: []
+node_definitions:
+  approve:
+    type: human
+    thinking_level: high
+    result_schema:
+      type: object
+      additionalProperties: false
+      properties:
+        approved:
+          type: boolean
+`,
+				wantErr: "human node \"approve\" cannot define thinking_level",
+			},
+		}
+
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				path := writeConfigFile(t, tc.content)
+				_, err := Load(path)
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+			})
+		}
+	})
+}
+
+func TestResolveNodeExecution(t *testing.T) {
+	cfg := &Config{
+		Runtime:       appconfig.RuntimeClaudeCode,
+		Model:         "sonnet",
+		ThinkingLevel: "medium",
+		NodeDefinitions: map[string]NodeDefinition{
+			"defaults_only": {Type: NodeTypeAgent},
+			"override_all": {
+				Type:          NodeTypeAgent,
+				Runtime:       appconfig.RuntimeCodex,
+				Model:         "gpt-5",
+				ThinkingLevel: "high",
+			},
+			"override_thinking_only": {
+				Type:          NodeTypeAgent,
+				ThinkingLevel: "low",
+			},
+		},
+	}
+
+	t.Run("inherits config-level defaults when node is unspecified", func(t *testing.T) {
+		exec, err := ResolveNodeExecution(cfg, "defaults_only")
+		require.NoError(t, err)
+		assert.Equal(t, appconfig.RuntimeClaudeCode, exec.Runtime)
+		assert.Equal(t, "sonnet", exec.Model)
+		assert.Equal(t, "medium", exec.ThinkingLevel)
+	})
+
+	t.Run("overrides every field when the node sets them", func(t *testing.T) {
+		exec, err := ResolveNodeExecution(cfg, "override_all")
+		require.NoError(t, err)
+		assert.Equal(t, appconfig.RuntimeCodex, exec.Runtime)
+		assert.Equal(t, "gpt-5", exec.Model)
+		assert.Equal(t, "high", exec.ThinkingLevel)
+	})
+
+	t.Run("falls back to config defaults for unspecified fields", func(t *testing.T) {
+		exec, err := ResolveNodeExecution(cfg, "override_thinking_only")
+		require.NoError(t, err)
+		assert.Equal(t, appconfig.RuntimeClaudeCode, exec.Runtime)
+		assert.Equal(t, "sonnet", exec.Model)
+		assert.Equal(t, "low", exec.ThinkingLevel)
+	})
+
+	t.Run("rejects unsupported runtime", func(t *testing.T) {
+		bad := &Config{Runtime: appconfig.RuntimeID("foobar")}
+		_, err := ResolveNodeExecution(bad, "missing")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "is not supported")
+	})
+
+	t.Run("falls back to PATH detection when no runtime is set", func(t *testing.T) {
+		setTaskConfigRuntimePath(t, "claude")
+		exec, err := ResolveNodeExecution(&Config{}, "anything")
+		require.NoError(t, err)
+		assert.Equal(t, appconfig.RuntimeClaudeCode, exec.Runtime)
+	})
+}
+
 func TestTaskRuntimeSelection(t *testing.T) {
 	t.Run("explicit claude runtime loads from config", func(t *testing.T) {
 		path := writeConfigFile(t, `

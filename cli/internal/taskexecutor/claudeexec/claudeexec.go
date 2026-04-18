@@ -210,6 +210,12 @@ func buildExecArgs(req taskexecutor.Request, schemaJSON, prompt string) (string,
 		"--setting-sources", "user,project,local",
 		"--dangerously-skip-permissions",
 	}
+	if model := strings.TrimSpace(req.Model); model != "" {
+		args = append(args, "--model", model)
+	}
+	if level := strings.TrimSpace(req.ThinkingLevel); level != "" {
+		args = append(args, "--effort", level)
+	}
 	if expectedSessionID != "" {
 		args = append(args, "--resume", expectedSessionID, prompt)
 		return expectedSessionID, args

@@ -144,6 +144,12 @@ func buildExecArgs(req taskexecutor.Request, outputPath, prompt string) []string
 		"-C", req.WorkDir,
 		"--skip-git-repo-check",
 	}
+	if model := strings.TrimSpace(req.Model); model != "" {
+		args = append(args, "-m", model)
+	}
+	if level := strings.TrimSpace(req.ThinkingLevel); level != "" {
+		args = append(args, "-c", fmt.Sprintf("model_reasoning_effort=%q", level))
+	}
 	if sessionID := taskexecutor.ResumeTargetSessionID(req); sessionID != "" {
 		args = append(args, "resume", sessionID, prompt)
 		return args
