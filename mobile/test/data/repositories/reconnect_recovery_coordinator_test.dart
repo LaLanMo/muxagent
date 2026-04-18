@@ -23,13 +23,13 @@ class _NoopRelayWsClient extends RelayWsClient {
 }
 
 class _FakePairedMachineRepository extends PairedMachineRepository {
-  final Map<String, PairedMachine> machines;
+  final Map<String, PairedMachine> _machineMap;
 
-  _FakePairedMachineRepository(this.machines);
+  _FakePairedMachineRepository(this._machineMap);
 
   @override
   Future<PairedMachine?> getMachine(String machineId) async {
-    return machines[machineId];
+    return _machineMap[machineId];
   }
 }
 
@@ -87,10 +87,11 @@ class _FakeEventRepository extends EventRepository {
     lastSeqUsed: 4,
     highestSeqApplied: 7,
   );
+  RepairStepResult knownSessionsResult = const RepairStepResult.success();
   RepairStepResult reconcileResult = const RepairStepResult.success();
-  RepairStepResult titleResult = const RepairStepResult.success();
   RepairStepResult approvalResult = const RepairStepResult.success();
   Completer<void>? resyncBlocker;
+  Completer<void>? knownSessionsBlocker;
   Object? resyncError;
 
   _FakeEventRepository({required super.wsRepo});
@@ -110,19 +111,19 @@ class _FakeEventRepository extends EventRepository {
   }
 
   @override
-  Future<RepairStepResult> reconcileSessionStatus(String machineId) async {
-    callOrder.add('reconcile');
-    return reconcileResult;
+  Future<RepairStepResult> syncKnownSessions(String machineId) async {
+    callOrder.add('knownSessions');
+    final blocker = knownSessionsBlocker;
+    if (blocker != null) {
+      await blocker.future;
+    }
+    return knownSessionsResult;
   }
 
   @override
-  Future<RepairStepResult> backfillMissingTitles(
-    String machineId, {
-    List<String>? sessionIds,
-    String? runtime,
-  }) async {
-    callOrder.add('backfill');
-    return titleResult;
+  Future<RepairStepResult> reconcileSessionStatus(String machineId) async {
+    callOrder.add('reconcile');
+    return reconcileResult;
   }
 
   @override
@@ -179,13 +180,13 @@ void main() {
       expect(result.transcript, TranscriptRecoveryState.complete);
       expect(result.metadata, MetadataRecoveryState.complete);
       expect(result.statusesOk, isTrue);
-      expect(result.titlesOk, isTrue);
+      expect(result.knownSessionsOk, isTrue);
       expect(result.approvalsOk, isTrue);
       expect(wsRepo.callOrder, ['ensureConnected', 'startSession']);
       expect(eventRepo.callOrder, [
         'resync',
+        'knownSessions',
         'reconcile',
-        'backfill',
         'approvals',
       ]);
       expect(notifications.single.transcript, TranscriptRecoveryState.complete);
@@ -235,8 +236,25 @@ void main() {
       expect(result.metadata, MetadataRecoveryState.degraded);
       expect(result.approvalsOk, isFalse);
       expect(result.statusesOk, isTrue);
-      expect(result.titlesOk, isTrue);
+      expect(result.knownSessionsOk, isTrue);
     });
+
+    test(
+      'known-sessions failure degrades metadata',
+      () async {
+        eventRepo.knownSessionsResult = RepairStepResult.failure(
+          StateError('boom'),
+        );
+
+        final result = await coordinator.recoverMachine('machine-1');
+
+        expect(result.transcript, TranscriptRecoveryState.complete);
+        expect(result.metadata, MetadataRecoveryState.degraded);
+        expect(result.knownSessionsOk, isFalse);
+        expect(result.statusesOk, isTrue);
+        expect(result.approvalsOk, isTrue);
+      },
+    );
 
     test(
       'background recovery skips transcript replay but repairs metadata',
@@ -250,7 +268,11 @@ void main() {
         expect(result.metadata, MetadataRecoveryState.complete);
         expect(result.resyncOutcome, isNull);
         expect(chatCacheRepo.staleMarkedMachines, isEmpty);
-        expect(eventRepo.callOrder, ['reconcile', 'backfill', 'approvals']);
+        expect(eventRepo.callOrder, [
+          'knownSessions',
+          'reconcile',
+          'approvals',
+        ]);
       },
     );
 
@@ -292,8 +314,8 @@ void main() {
       expect(result.metadata, MetadataRecoveryState.complete);
       expect(eventRepo.callOrder, [
         'resync',
+        'knownSessions',
         'reconcile',
-        'backfill',
         'approvals',
       ]);
     });
@@ -321,6 +343,31 @@ void main() {
         hasLength(1),
       );
     });
+
+    test(
+      'runs metadata and status repair in sequence so approvals land last',
+      () async {
+        eventRepo.knownSessionsBlocker = Completer<void>();
+
+        final pending = coordinator.recoverMachine('machine-1');
+
+        for (var i = 0; i < 10; i++) {
+          await Future<void>.delayed(Duration.zero);
+        }
+
+        expect(eventRepo.callOrder, ['resync', 'knownSessions']);
+
+        eventRepo.knownSessionsBlocker!.complete();
+        final result = await pending;
+        expect(result.metadata, MetadataRecoveryState.complete);
+        expect(eventRepo.callOrder, [
+          'resync',
+          'knownSessions',
+          'reconcile',
+          'approvals',
+        ]);
+      },
+    );
 
     test(
       'does not join in-flight recoveries with different transcript modes',

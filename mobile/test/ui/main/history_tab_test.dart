@@ -81,7 +81,7 @@ class _FakeReconnectRecoveryCoordinator extends ReconnectRecoveryCoordinator {
       metadata: MetadataRecoveryState.skipped,
       sessionReady: false,
       statusesOk: false,
-      titlesOk: false,
+      knownSessionsOk: false,
       approvalsOk: false,
     );
   }

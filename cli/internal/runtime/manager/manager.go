@@ -237,23 +237,28 @@ func (m *Manager) LoadSession(
 	return string(rid), resp, nil
 }
 
+// ResolveSessions returns summaries for explicitly requested sessionIDs only.
 func (m *Manager) ResolveSessions(
 	ctx context.Context,
 	runtimeID string,
 	sessionIDs []string,
 ) ([]domain.SessionSummary, error) {
+	targets := compactSessionIDs(sessionIDs)
+	if len(targets) == 0 {
+		return nil, nil
+	}
 	if runtimeID != "" {
 		return m.resolveSessionsForRuntime(
 			ctx,
 			config.RuntimeID(runtimeID),
-			sessionIDs,
+			targets,
 		)
 	}
 
-	seen := make(map[string]struct{}, len(sessionIDs))
+	seen := make(map[string]struct{}, len(targets))
 	list := make([]domain.SessionSummary, 0)
 	for _, rid := range m.configuredRuntimeIDs() {
-		sessions, err := m.resolveSessionsForRuntime(ctx, rid, sessionIDs)
+		sessions, err := m.resolveSessionsForRuntime(ctx, rid, targets)
 		if err != nil {
 			log.Printf("[runtime] resolve list %s failed: %v", rid, err)
 			continue
@@ -274,6 +279,9 @@ func (m *Manager) resolveSessionsForRuntime(
 	rid config.RuntimeID,
 	sessionIDs []string,
 ) ([]domain.SessionSummary, error) {
+	if rid == "" || len(sessionIDs) == 0 {
+		return nil, nil
+	}
 	client, _, err := m.ensureRuntime(ctx, string(rid), "")
 	if err != nil {
 		return nil, err
@@ -281,7 +289,7 @@ func (m *Manager) resolveSessionsForRuntime(
 
 	sessions, err := client.ListSessions(ctx, "")
 	if err == nil {
-		return m.applyStoredSessionSnapshots(sessions, rid), nil
+		return m.mergeResolvedSessionsWithSnapshots(sessions, rid, sessionIDs), nil
 	}
 	if isSessionListUnsupported(err) {
 		return m.snapshotSessionSummaries(rid, sessionIDs), nil
@@ -306,7 +314,7 @@ func (m *Manager) resolveSessionsForRuntime(
 		}
 		return nil, err
 	}
-	return m.applyStoredSessionSnapshots(sessions, rid), nil
+	return m.mergeResolvedSessionsWithSnapshots(sessions, rid, sessionIDs), nil
 }
 
 func isSessionListUnsupported(err error) bool {
@@ -627,6 +635,9 @@ func (m *Manager) applyStoredSessionSnapshot(
 			if strings.TrimSpace(session.CWD) == "" && strings.TrimSpace(storedSnapshot.CWD) != "" {
 				session.CWD = storedSnapshot.CWD
 			}
+			if strings.TrimSpace(session.Title) == "" && strings.TrimSpace(storedSnapshot.Title) != "" {
+				session.Title = storedSnapshot.Title
+			}
 			if session.UpdatedAt.IsZero() && !storedSnapshot.UpdatedAt.IsZero() {
 				session.UpdatedAt = storedSnapshot.UpdatedAt
 			}
@@ -655,6 +666,9 @@ func (m *Manager) applyStoredSessionSnapshot(
 	}
 	if strings.TrimSpace(session.CWD) == "" && strings.TrimSpace(storedSnapshot.CWD) != "" {
 		session.CWD = storedSnapshot.CWD
+	}
+	if strings.TrimSpace(session.Title) == "" && strings.TrimSpace(storedSnapshot.Title) != "" {
+		session.Title = storedSnapshot.Title
 	}
 	if session.UpdatedAt.IsZero() && !storedSnapshot.UpdatedAt.IsZero() {
 		session.UpdatedAt = storedSnapshot.UpdatedAt
@@ -707,25 +721,17 @@ func (m *Manager) snapshotSessionSummaries(
 		targets[sessionID] = struct{}{}
 	}
 
-	runtimeSnapshots := m.snapshotStore.All()[string(runtimeID)]
-	if len(runtimeSnapshots) == 0 {
+	runtimeSnapshots := m.snapshotStore.ListRuntime(string(runtimeID))
+	if len(runtimeSnapshots) == 0 || len(targets) == 0 {
 		return nil
 	}
 
 	summaries := make([]domain.SessionSummary, 0, len(runtimeSnapshots))
 	for sessionID, snapshot := range runtimeSnapshots {
-		if len(targets) > 0 {
-			if _, ok := targets[sessionID]; !ok {
-				continue
-			}
+		if _, ok := targets[sessionID]; !ok {
+			continue
 		}
-		summaries = append(summaries, m.applyStoredSessionSnapshot(domain.SessionSummary{
-			SessionID:     sessionID,
-			CWD:           snapshot.CWD,
-			Runtime:       string(runtimeID),
-			UpdatedAt:     snapshot.UpdatedAt,
-			ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
-		}, runtimeID))
+		summaries = append(summaries, m.sessionSummaryFromSnapshot(runtimeID, sessionID, snapshot))
 	}
 
 	sort.Slice(summaries, func(i, j int) bool {
@@ -737,6 +743,21 @@ func (m *Manager) snapshotSessionSummaries(
 		return summaries[i].SessionID < summaries[j].SessionID
 	})
 	return summaries
+}
+
+func (m *Manager) sessionSummaryFromSnapshot(
+	runtimeID config.RuntimeID,
+	sessionID string,
+	snapshot sessionSnapshot,
+) domain.SessionSummary {
+	return m.applyStoredSessionSnapshot(domain.SessionSummary{
+		SessionID:     sessionID,
+		CWD:           snapshot.CWD,
+		Title:         snapshot.Title,
+		Runtime:       string(runtimeID),
+		UpdatedAt:     snapshot.UpdatedAt,
+		ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
+	}, runtimeID)
 }
 
 func (m *Manager) persistSessionRuntime(
@@ -782,6 +803,82 @@ func (m *Manager) updateSessionSnapshot(
 	if err := m.snapshotStore.Update(string(runtimeID), sessionID, update); err != nil {
 		log.Printf("[runtime] update session snapshot failed: %v", err)
 	}
+}
+
+func (m *Manager) mergeResolvedSessionsWithSnapshots(
+	sessions []domain.SessionSummary,
+	rid config.RuntimeID,
+	sessionIDs []string,
+) []domain.SessionSummary {
+	targets := make(map[string]struct{}, len(sessionIDs))
+	for _, sessionID := range sessionIDs {
+		if sessionID == "" {
+			continue
+		}
+		targets[sessionID] = struct{}{}
+	}
+
+	filtered := make([]domain.SessionSummary, 0, len(sessions))
+	for _, s := range sessions {
+		if _, ok := targets[s.SessionID]; ok {
+			filtered = append(filtered, s)
+		}
+	}
+	resolved := m.applyStoredSessionSnapshots(filtered, rid)
+
+	if m.snapshotStore == nil || rid == "" {
+		return resolved
+	}
+
+	present := make(map[string]struct{}, len(resolved))
+	for _, session := range resolved {
+		if session.SessionID == "" {
+			continue
+		}
+		present[session.SessionID] = struct{}{}
+	}
+
+	supplemental := make([]domain.SessionSummary, 0, len(targets))
+	for _, sessionID := range compactSessionIDs(sessionIDs) {
+		if _, ok := present[sessionID]; ok {
+			continue
+		}
+		snapshot, ok := m.snapshotStore.Get(string(rid), sessionID)
+		if !ok {
+			continue
+		}
+		supplemental = append(supplemental, m.sessionSummaryFromSnapshot(rid, sessionID, snapshot))
+	}
+	if len(supplemental) == 0 {
+		return resolved
+	}
+
+	sort.Slice(supplemental, func(i, j int) bool {
+		left := supplemental[i].UpdatedAt
+		right := supplemental[j].UpdatedAt
+		if !left.Equal(right) {
+			return left.After(right)
+		}
+		return supplemental[i].SessionID < supplemental[j].SessionID
+	})
+	return append(resolved, supplemental...)
+}
+
+func compactSessionIDs(sessionIDs []string) []string {
+	seen := make(map[string]struct{}, len(sessionIDs))
+	out := make([]string, 0, len(sessionIDs))
+	for _, sessionID := range sessionIDs {
+		sessionID = strings.TrimSpace(sessionID)
+		if sessionID == "" {
+			continue
+		}
+		if _, ok := seen[sessionID]; ok {
+			continue
+		}
+		seen[sessionID] = struct{}{}
+		out = append(out, sessionID)
+	}
+	return out
 }
 
 func (m *Manager) captureSessionSnapshotFromEvent(ev appwire.Event) {

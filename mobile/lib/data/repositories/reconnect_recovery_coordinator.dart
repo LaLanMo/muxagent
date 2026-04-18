@@ -20,7 +20,7 @@ class ReconnectRecoveryResult {
   final ResyncOutcome? resyncOutcome;
   final bool sessionReady;
   final bool statusesOk;
-  final bool titlesOk;
+  final bool knownSessionsOk;
   final bool approvalsOk;
   final Object? transportError;
 
@@ -30,7 +30,7 @@ class ReconnectRecoveryResult {
     required this.metadata,
     required this.sessionReady,
     required this.statusesOk,
-    required this.titlesOk,
+    required this.knownSessionsOk,
     required this.approvalsOk,
     this.resyncOutcome,
     this.transportError,
@@ -113,7 +113,7 @@ class ReconnectRecoveryCoordinator {
           metadata: MetadataRecoveryState.skipped,
           sessionReady: false,
           statusesOk: false,
-          titlesOk: false,
+          knownSessionsOk: false,
           approvalsOk: false,
           transportError: StateError('machine not found'),
         ),
@@ -161,7 +161,7 @@ class ReconnectRecoveryCoordinator {
             metadata: MetadataRecoveryState.skipped,
             sessionReady: false,
             statusesOk: false,
-            titlesOk: false,
+            knownSessionsOk: false,
             approvalsOk: false,
             transportError: transportError,
           ),
@@ -171,8 +171,10 @@ class ReconnectRecoveryCoordinator {
       final resync = transcriptMode == TranscriptRecoveryMode.metadataOnly
           ? null
           : await _eventRepo.resync(machineId);
+      // Keep metadata/session-status repair ordered so resolve-based metadata
+      // refresh runs before status repair and pending-approval hydration.
+      final knownSessions = await _eventRepo.syncKnownSessions(machineId);
       final statuses = await _eventRepo.reconcileSessionStatus(machineId);
-      final titles = await _eventRepo.backfillMissingTitles(machineId);
       final approvals = await _eventRepo.fetchPendingApprovals(machineId);
 
       final transcript = resync == null
@@ -188,7 +190,7 @@ class ReconnectRecoveryCoordinator {
                     ? TranscriptRecoveryState.fallbackNeeded
                     : TranscriptRecoveryState.failed,
             };
-      final metadata = statuses.ok && titles.ok && approvals.ok
+      final metadata = knownSessions.ok && statuses.ok && approvals.ok
           ? MetadataRecoveryState.complete
           : MetadataRecoveryState.degraded;
       final result = ReconnectRecoveryResult(
@@ -198,7 +200,7 @@ class ReconnectRecoveryCoordinator {
         resyncOutcome: resync?.outcome,
         sessionReady: sessionReady,
         statusesOk: statuses.ok,
-        titlesOk: titles.ok,
+        knownSessionsOk: knownSessions.ok,
         approvalsOk: approvals.ok,
         transportError: transportError ?? resync?.error,
       );
@@ -209,7 +211,7 @@ class ReconnectRecoveryCoordinator {
         '[ReconnectRecovery] machine=$machineId '
         'transcript=${result.transcript} metadata=${result.metadata} '
         'resyncOutcome=${result.resyncOutcome} sessionReady=${result.sessionReady} '
-        'statusesOk=${result.statusesOk} titlesOk=${result.titlesOk} '
+        'knownSessionsOk=${result.knownSessionsOk} statusesOk=${result.statusesOk} '
         'approvalsOk=${result.approvalsOk} '
         'lastSeqUsed=${resync?.lastSeqUsed} highestSeqApplied=${resync?.highestSeqApplied}',
       );
@@ -235,7 +237,7 @@ class ReconnectRecoveryCoordinator {
           metadata: MetadataRecoveryState.skipped,
           sessionReady: sessionReady,
           statusesOk: false,
-          titlesOk: false,
+          knownSessionsOk: false,
           approvalsOk: false,
           transportError: e,
         ),

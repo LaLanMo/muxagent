@@ -189,10 +189,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
 
   // --- Session List (grouped by status sections) ---
 
-  Widget _buildSessionList(
-    BuildContext context,
-    List<PairedMachine> machines,
-  ) {
+  Widget _buildSessionList(BuildContext context, List<PairedMachine> machines) {
     final sessions = controller.activeSessions;
 
     final approvalSessions = sessions
@@ -249,17 +246,20 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
     );
   }
 
-  Widget _buildSessionRow(
-    AgentSession session,
-    List<PairedMachine> machines,
-  ) {
+  Widget _buildSessionRow(AgentSession session, List<PairedMachine> machines) {
     final machineId = session.machineId;
     final cwd = session.cwd;
     final title = session.title.isNotEmpty ? session.title : 'Untitled';
 
     return GestureDetector(
       onTap: () {
-        shell.navigateToChat(session.id, machineId, cwd, title);
+        shell.navigateToChat(
+          session.id,
+          machineId,
+          session.runtime,
+          cwd,
+          title,
+        );
       },
       child: Container(
         // padding [14, 0], alignItems center, gap 12

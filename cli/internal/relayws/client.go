@@ -134,6 +134,10 @@ func (c *Client) HasSession() bool {
 	return c.session != nil || c.activeSession != nil
 }
 
+func (c *Client) MachineID() string {
+	return c.machineID
+}
+
 func (c *Client) Connect(ctx context.Context) error {
 	oldConn := c.detachActiveConnection()
 	if oldConn != nil {
@@ -686,29 +690,15 @@ func (c *Client) rpcResolveSessions(ctx context.Context, params appwire.ResolveS
 				c.clearSessionStatus(id)
 			}
 		}
-	} else {
-		c.clearMissingSessionStatuses(present)
 	}
-	// If caller provided specific IDs, filter to those only.
-	if len(wanted) > 0 {
-		filtered := make([]appwire.ResolvedSession, 0, len(wanted))
-		for _, s := range all {
-			if _, ok := wanted[s.SessionID]; ok {
-				filtered = append(filtered, appwire.ResolvedSession{
-					SessionID:     s.SessionID,
-					CWD:           s.CWD,
-					Title:         s.Title,
-					Runtime:       s.Runtime,
-					UpdatedAt:     s.UpdatedAt,
-					Status:        sessionStatusToWire(c.resolvedSessionStatus(s.SessionID)),
-					ConfigOptions: s.ConfigOptions,
-				})
-			}
-		}
-		return appwire.SessionResolveResult{Sessions: filtered}, ""
-	}
-	resolved := make([]appwire.ResolvedSession, 0, len(all))
-	for _, s := range all {
+	return appwire.SessionResolveResult{Sessions: c.wireResolvedSessions(all)}, ""
+}
+
+func (c *Client) wireResolvedSessions(
+	sessions []domain.SessionSummary,
+) []appwire.ResolvedSession {
+	resolved := make([]appwire.ResolvedSession, 0, len(sessions))
+	for _, s := range sessions {
 		resolved = append(resolved, appwire.ResolvedSession{
 			SessionID:     s.SessionID,
 			CWD:           s.CWD,
@@ -719,7 +709,7 @@ func (c *Client) rpcResolveSessions(ctx context.Context, params appwire.ResolveS
 			ConfigOptions: s.ConfigOptions,
 		})
 	}
-	return appwire.SessionResolveResult{Sessions: resolved}, ""
+	return resolved
 }
 
 func (c *Client) resolveRequestedRuntime(runtimeID string) string {
@@ -1130,6 +1120,34 @@ func (c *Client) SendEvent(event appwire.Event) error {
 	})
 }
 
+// SendLiveEvent writes an event only to the current active phone session.
+// Unlike SendEvent, it does not enter the replay buffer when delivery fails.
+func (c *Client) SendLiveEvent(event appwire.Event) error {
+	event = normalizeEventForTransport(event)
+	msgID := uuid.New().String()
+	body, err := marshalEvent(event)
+	if err != nil {
+		return err
+	}
+	if err := c.writeEncryptedForActiveSession(func(session *Session) (EncryptedMessage, error) {
+		nonce, ciphertext, err := session.encrypt(string(MessageTypeEvent), msgID, body)
+		if err != nil {
+			return EncryptedMessage{}, err
+		}
+		return EncryptedMessage{
+			Type:       MessageTypeEvent,
+			MachineID:  c.machineID,
+			MsgID:      msgID,
+			Nonce:      nonce,
+			Ciphertext: ciphertext,
+		}, nil
+	}); err != nil {
+		return err
+	}
+	c.applyEventStatus(event)
+	return nil
+}
+
 func (c *Client) applyEventStatus(event appwire.Event) {
 	if event.SessionID == "" {
 		return
@@ -1193,16 +1211,6 @@ func (c *Client) clearSessionStatus(sessionID string) {
 	c.statusMu.Lock()
 	defer c.statusMu.Unlock()
 	delete(c.sessionStatus, sessionID)
-}
-
-func (c *Client) clearMissingSessionStatuses(present map[string]struct{}) {
-	c.statusMu.Lock()
-	defer c.statusMu.Unlock()
-	for sessionID := range c.sessionStatus {
-		if _, ok := present[sessionID]; !ok {
-			delete(c.sessionStatus, sessionID)
-		}
-	}
 }
 
 func sessionStatusToWire(status domain.SessionStatus) appwire.SessionStatus {

@@ -321,7 +321,11 @@ func TestResolveSessionsReturnsRestartFailureAfterRetiringStaleRuntime(t *testin
 	}
 	m.runtimes[config.RuntimeCodex].client = client
 
-	_, err := m.ResolveSessions(context.Background(), string(config.RuntimeCodex), nil)
+	_, err := m.ResolveSessions(
+		context.Background(),
+		string(config.RuntimeCodex),
+		[]string{"session-123"},
+	)
 	if err == nil {
 		t.Fatal("expected resolve sessions to fail")
 	}
@@ -442,6 +446,71 @@ func TestResolveSessionsFallsBackToStoredSnapshotsWhenSessionListUnsupported(t *
 	}
 	if got := findConfigOptionValue(sessions[0].ConfigOptions, "mode"); got != geminiModePlan {
 		t.Fatalf("mode = %q, want %q", got, geminiModePlan)
+	}
+}
+
+func writePersistedSessionSnapshot(t *testing.T, cfg config.Config, runtime config.RuntimeID, sessionID, cwd string, configOptions []acpprotocol.SessionConfigOption) {
+	t.Helper()
+	m := New(cfg)
+	m.persistSessionSnapshot(sessionID, runtime, cwd, configOptions)
+}
+
+func TestResolveSessionsIncludesExplicitSnapshotTargetsWhenRuntimeListOmitsThem(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := config.Default()
+	writePersistedSessionSnapshot(t, cfg, config.RuntimeCodex, "session-targeted", "/tmp/targeted", nil)
+
+	m2 := New(cfg)
+	client := &fakeRuntimeClient{
+		alive:        true,
+		listSessions: nil,
+	}
+	m2.runtimes[config.RuntimeCodex].client = client
+
+	sessions, err := m2.ResolveSessions(
+		context.Background(),
+		string(config.RuntimeCodex),
+		[]string{"session-targeted"},
+	)
+	if err != nil {
+		t.Fatalf("ResolveSessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("len(sessions) = %d, want 1", len(sessions))
+	}
+	if sessions[0].SessionID != "session-targeted" {
+		t.Fatalf("sessionID = %q, want session-targeted", sessions[0].SessionID)
+	}
+	if sessions[0].CWD != "/tmp/targeted" {
+		t.Fatalf("cwd = %q, want /tmp/targeted", sessions[0].CWD)
+	}
+}
+
+func TestResolveSessionsWithEmptyIDsReturnsNothing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := config.Default()
+	m := New(cfg)
+
+	client := &fakeRuntimeClient{
+		alive: true,
+		listSessions: []domain.SessionSummary{
+			{SessionID: "runtime-only-1", Runtime: string(config.RuntimeCodex), UpdatedAt: time.Now()},
+			{SessionID: "runtime-only-2", Runtime: string(config.RuntimeCodex), UpdatedAt: time.Now()},
+			{SessionID: "runtime-only-3", Runtime: string(config.RuntimeCodex), UpdatedAt: time.Now()},
+		},
+	}
+	m.runtimes[config.RuntimeCodex].client = client
+
+	sessions, err := m.ResolveSessions(context.Background(), string(config.RuntimeCodex), nil)
+	if err != nil {
+		t.Fatalf("ResolveSessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Fatalf("empty sessionIDs must return nothing, got %d: %+v", len(sessions), sessions)
 	}
 }
 

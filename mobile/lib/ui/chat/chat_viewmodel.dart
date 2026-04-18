@@ -206,6 +206,36 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   @visibleForTesting
+  static String restoreUnavailableCopy({
+    required String runtime,
+    required String cwd,
+    Object? restoreError,
+  }) {
+    if (restoreError != null) {
+      final message = restoreError.toString().trim().replaceFirst(
+        RegExp(r'^(Exception|Bad state):\s*'),
+        '',
+      );
+      return 'Could not restore this session from the connected daemon: $message';
+    }
+
+    final missing = <String>[];
+    if (runtime.trim().isEmpty) {
+      missing.add('runtime');
+    }
+    if (cwd.trim().isEmpty) {
+      missing.add('working directory');
+    }
+    if (missing.isEmpty) {
+      return 'This session cannot be restored on this device yet.';
+    }
+    if (missing.length == 2) {
+      return 'This session is missing runtime and working directory metadata. Re-attach it from the CLI and try again.';
+    }
+    return 'This session is missing ${missing.single} metadata. Re-attach it from the CLI and try again.';
+  }
+
+  @visibleForTesting
   static bool hasPersistableVisibleTranscript({
     required Iterable<Message> messages,
     required Map<String, ApprovalRequest> approvals,
@@ -227,6 +257,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   late final ChatState chatState;
   final effectiveCwd = ''.obs;
   final uiMode = ChatUiMode.initialLoading.obs;
+  final restoreUnavailableMessage = ''.obs;
 
   final messages = <Message>[].obs;
   final approvals = <String, ApprovalRequest>{}.obs;
@@ -392,6 +423,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       _attachSubscriptions();
       _syncSessionSnapshotFromRepository();
       unawaited(_refreshSessionConfigInBackground());
+      restoreUnavailableMessage.value = '';
       uiMode.value = ChatUiMode.normal;
       isLoading.value = false;
       _scheduleScrollStateSync();
@@ -511,6 +543,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     _pendingTranscriptRepair = needsRepair;
     if (!needsRepair) {
       unawaited(_refreshSessionConfigInBackground());
+      restoreUnavailableMessage.value = '';
       uiMode.value = ChatUiMode.normal;
       _scrollToBottom();
       _maybeSendInitialPrompt();
@@ -519,6 +552,10 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
     if (!_canRepairSession()) {
       unawaited(_refreshSessionConfigInBackground());
+      restoreUnavailableMessage.value = restoreUnavailableCopy(
+        runtime: runtimeId.value,
+        cwd: effectiveCwd.value,
+      );
       uiMode.value = hydrated != null
           ? ChatUiMode.viewOnly
           : ChatUiMode.unsupported;
@@ -735,6 +772,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       unawaited(_refreshSessionConfigInBackground());
       if (refreshed != null && refreshed.isRenderable) {
         uiMode.value = ChatUiMode.viewOnly;
+      } else {
+        restoreUnavailableMessage.value = restoreUnavailableCopy(
+          runtime: runtimeId.value,
+          cwd: effectiveCwd.value,
+        );
       }
       _maybeSendInitialPrompt();
       return;
@@ -922,6 +964,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       await _flushVisibleSnapshot(promoteReady: true, force: true);
       if (!isClosed && loadToken == _recoveryEpoch) {
         _pendingTranscriptRepair = false;
+        restoreUnavailableMessage.value = '';
         uiMode.value = ChatUiMode.normal;
         isLoading.value = false;
       }
@@ -941,6 +984,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
           uiMode.value = restoredUiModeAfterSessionLoadFailure(previousUiMode);
         }
       } else if (!isClosed && loadToken == _recoveryEpoch) {
+        restoreUnavailableMessage.value = restoreUnavailableCopy(
+          runtime: loadRuntime,
+          cwd: loadCwd,
+          restoreError: e,
+        );
         uiMode.value = ChatUiMode.unsupported;
       }
     } finally {

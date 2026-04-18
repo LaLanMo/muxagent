@@ -567,24 +567,27 @@ class EventRepository {
           );
           sessions[sessionId] = incoming;
 
-          // Persist title, status, model changes
-          final dbFields = <String, dynamic>{
-            'updated_at': incoming.updatedAt.toIso8601String(),
-            'machine_id': incoming.machineId,
-            'runtime': incoming.runtime,
-            'cwd': incoming.cwd,
-          };
-          if (incoming.title.isNotEmpty) {
-            dbFields['title'] = incoming.title;
+          if (existing == null) {
+            unawaited(SessionDatabase.insertSession(incoming));
+          } else {
+            final dbFields = <String, dynamic>{
+              'updated_at': incoming.updatedAt.toIso8601String(),
+              'machine_id': incoming.machineId,
+              'runtime': incoming.runtime,
+              'cwd': incoming.cwd,
+            };
+            if (incoming.title.isNotEmpty) {
+              dbFields['title'] = incoming.title;
+            }
+            dbFields['status'] = incoming.status.value;
+            if (incoming.model != null) {
+              dbFields['model'] = incoming.model;
+            }
+            if (incoming.mode != null) {
+              dbFields['mode'] = incoming.mode;
+            }
+            unawaited(SessionDatabase.updateFields(sessionId, dbFields));
           }
-          dbFields['status'] = incoming.status.value;
-          if (incoming.model != null) {
-            dbFields['model'] = incoming.model;
-          }
-          if (incoming.mode != null) {
-            dbFields['mode'] = incoming.mode;
-          }
-          SessionDatabase.updateFields(sessionId, dbFields);
 
           _sessionsChangedController.add(null);
         }
@@ -1026,6 +1029,204 @@ class EventRepository {
     }
   }
 
+  /// Refresh daemon-known metadata for sessions already associated with
+  /// [machineId]. This is an explicit session lookup only.
+  Future<RepairStepResult> syncKnownSessions(String machineId) async {
+    try {
+      final baselineRevisions = <String, int>{
+        for (final sessionId in sessions.keys)
+          sessionId: _configRevision(sessionId),
+      };
+      final knownSessionIds = [
+        for (final session in sessions.values)
+          if (session.machineId == machineId) session.id,
+      ];
+      if (knownSessionIds.isEmpty) {
+        return const RepairStepResult.success();
+      }
+      return _resolveAndMergeSessions(
+        machineId,
+        knownSessionIds,
+        baselineRevisions: baselineRevisions,
+      );
+    } catch (e) {
+      debugPrint('[EventRepo] syncKnownSessions failed: $e');
+      return RepairStepResult.failure(e);
+    }
+  }
+
+  Future<RepairStepResult> _resolveAndMergeSessions(
+    String machineId,
+    Iterable<String> sessionIds, {
+    String? runtime,
+    Map<String, int>? baselineRevisions,
+    bool mergeStatus = true,
+    bool mergeConfigSnapshot = true,
+    bool mergeCwd = true,
+    bool insertMissing = true,
+  }) async {
+    final targetIds = [
+      for (final sessionId in sessionIds)
+        if (sessionId.trim().isNotEmpty) sessionId.trim(),
+    ];
+    if (targetIds.isEmpty) {
+      return const RepairStepResult.success();
+    }
+    final resolvedSessions = await _wsRepo.resolveSessions(
+      machineId: machineId,
+      sessionIds: targetIds,
+      runtime: runtime,
+    );
+    return _mergeResolvedSessions(
+      machineId,
+      resolvedSessions,
+      baselineRevisions ?? const {},
+      runtimeFallback: runtime,
+      mergeStatus: mergeStatus,
+      mergeConfigSnapshot: mergeConfigSnapshot,
+      mergeCwd: mergeCwd,
+      insertMissing: insertMissing,
+    );
+  }
+
+  Future<RepairStepResult> _mergeResolvedSessions(
+    String machineId,
+    List<ResolvedSessionSnapshot> resolvedSessions,
+    Map<String, int> baselineRevisions, {
+    String? runtimeFallback,
+    bool mergeStatus = true,
+    bool mergeConfigSnapshot = true,
+    bool mergeCwd = true,
+    bool insertMissing = true,
+  }) async {
+    var changed = false;
+    for (final item in resolvedSessions) {
+      final runtime = item.runtime.trim().isNotEmpty
+          ? item.runtime.trim()
+          : (runtimeFallback ?? '').trim();
+      final existing = sessions[item.sessionId];
+      if (existing == null && (!insertMissing || runtime.isEmpty)) {
+        continue;
+      }
+
+      final updatedAt = item.updatedAt ?? DateTime.now();
+      final nextSnapshot = item.configSnapshot;
+      final hasSnapshot =
+          mergeConfigSnapshot &&
+          nextSnapshot != null &&
+          _hasConfigSnapshotData(nextSnapshot);
+
+      if (existing == null) {
+        final session = AgentSession(
+          id: item.sessionId,
+          title: item.title,
+          status: mergeStatus ? item.status : SessionStatus.idle,
+          machineId: machineId,
+          runtime: runtime,
+          cwd: mergeCwd ? item.cwd : '',
+          configSnapshot: hasSnapshot
+              ? nextSnapshot
+              : const SessionConfigSnapshot(),
+          createdAt: updatedAt,
+          updatedAt: updatedAt,
+        );
+        session.mode = session.configSnapshot.currentMode?.id;
+        session.model = session.configSnapshot.currentModel;
+        sessions[session.id] = session;
+        if (hasSnapshot) {
+          _bumpConfigRevision(session.id);
+        }
+        await SessionDatabase.insertSession(session);
+        changed = true;
+        continue;
+      }
+
+      final baseline = baselineRevisions[existing.id];
+      if (mergeConfigSnapshot &&
+          baseline != null &&
+          _configRevision(existing.id) != baseline) {
+        continue;
+      }
+
+      var dirty = false;
+      if (existing.machineId != machineId) {
+        existing.machineId = machineId;
+        dirty = true;
+      }
+      if (item.title.isNotEmpty && existing.title != item.title) {
+        existing.title = item.title;
+        dirty = true;
+      }
+      if (runtime.isNotEmpty && existing.runtime != runtime) {
+        existing.runtime = runtime;
+        dirty = true;
+      }
+      if (mergeCwd && item.cwd.isNotEmpty && existing.cwd != item.cwd) {
+        existing.cwd = item.cwd;
+        dirty = true;
+      }
+      if (mergeStatus && existing.status != item.status) {
+        existing.status = item.status;
+        dirty = true;
+      }
+      if (updatedAt.isAfter(existing.updatedAt)) {
+        existing.updatedAt = updatedAt;
+        dirty = true;
+      }
+
+      String? configSnapshotJson;
+      if (hasSnapshot) {
+        final currentJson = jsonEncode(
+          serializeSessionConfigSnapshot(existing.configSnapshot),
+        );
+        final nextJson = jsonEncode(
+          serializeSessionConfigSnapshot(nextSnapshot),
+        );
+        if (currentJson != nextJson) {
+          existing.configSnapshot = nextSnapshot;
+          existing.mode = nextSnapshot.currentMode?.id ?? existing.mode;
+          existing.model = nextSnapshot.currentModel ?? existing.model;
+          configSnapshotJson = nextJson;
+          _bumpConfigRevision(existing.id);
+          dirty = true;
+        }
+      }
+
+      if (!dirty) {
+        continue;
+      }
+
+      final dbFields = <String, Object?>{
+        'machine_id': existing.machineId,
+        'runtime': existing.runtime,
+        'cwd': existing.cwd,
+        'updated_at': existing.updatedAt.toIso8601String(),
+      };
+      if (mergeStatus) {
+        dbFields['status'] = existing.status.value;
+      }
+      if (existing.title.isNotEmpty) {
+        dbFields['title'] = existing.title;
+      }
+      if (mergeConfigSnapshot) {
+        dbFields['model'] = existing.model;
+        if (existing.mode != null) {
+          dbFields['mode'] = existing.mode;
+        }
+        if (configSnapshotJson != null) {
+          dbFields['config_snapshot_json'] = configSnapshotJson;
+        }
+      }
+      await SessionDatabase.updateFields(existing.id, dbFields);
+      changed = true;
+    }
+
+    if (changed) {
+      _sessionsChangedController.add(null);
+    }
+    return RepairStepResult.success(changed: changed);
+  }
+
   /// Fetch pending approvals from daemon via RPC (fallback for ring buffer overflow).
   Future<RepairStepResult> fetchPendingApprovals(String machineId) async {
     try {
@@ -1076,10 +1277,8 @@ class EventRepository {
     }
   }
 
-  /// Resolve missing session titles via daemon-side session/list.
-  /// When [runtime] is provided, only sessions matching that runtime are
-  /// included in the RPC call. Sessions from a different runtime would not
-  /// be resolvable by the current daemon anyway.
+  /// Resolve missing session titles via daemon-side `session.resolve`, then
+  /// reuse the shared resolve-session merge path with title-only semantics.
   Future<RepairStepResult> backfillMissingTitles(
     String machineId, {
     List<String>? sessionIds,
@@ -1105,79 +1304,15 @@ class EventRepository {
       if (targetIds.isEmpty) {
         return const RepairStepResult.success();
       }
-
-      final resolvedSessions = await _wsRepo.resolveSessions(
-        machineId: machineId,
-        sessionIds: targetIds,
+      return _resolveAndMergeSessions(
+        machineId,
+        targetIds,
         runtime: runtime,
+        mergeStatus: false,
+        mergeConfigSnapshot: false,
+        mergeCwd: false,
+        insertMissing: false,
       );
-      var changed = false;
-
-      for (final item in resolvedSessions) {
-        final sessionId = item.sessionId;
-        final title = item.title;
-        final status = item.status;
-        final updatedAt = item.updatedAt ?? DateTime.now();
-        final existing = sessions[sessionId];
-
-        if (existing == null) {
-          if (runtime != null && runtime.isNotEmpty) {
-            final session = AgentSession(
-              id: sessionId,
-              title: title,
-              status: status,
-              machineId: machineId,
-              runtime: runtime,
-              cwd: '',
-              createdAt: updatedAt,
-              updatedAt: updatedAt,
-            );
-            sessions[sessionId] = session;
-            await SessionDatabase.insertSession(session);
-            changed = true;
-          }
-          continue;
-        }
-
-        var dirty = false;
-        if (title.isNotEmpty && existing.title != title) {
-          existing.title = title;
-          dirty = true;
-        }
-        if (updatedAt.isAfter(existing.updatedAt)) {
-          existing.updatedAt = updatedAt;
-          dirty = true;
-        }
-
-        if (existing.machineId != machineId) {
-          existing.machineId = machineId;
-          dirty = true;
-        }
-        if (runtime != null &&
-            runtime.isNotEmpty &&
-            existing.runtime != runtime) {
-          existing.runtime = runtime;
-          dirty = true;
-        }
-        if (!dirty) continue;
-
-        final dbFields = <String, dynamic>{
-          'machine_id': machineId,
-          'runtime': existing.runtime,
-          'cwd': existing.cwd,
-          'updated_at': existing.updatedAt.toIso8601String(),
-        };
-        if (existing.title.isNotEmpty) {
-          dbFields['title'] = existing.title;
-        }
-        await SessionDatabase.updateFields(sessionId, dbFields);
-        changed = true;
-      }
-
-      if (changed) {
-        _sessionsChangedController.add(null);
-      }
-      return RepairStepResult.success(changed: changed);
     } catch (e) {
       debugPrint('[EventRepo] backfillMissingTitles failed: $e');
       return RepairStepResult.failure(e);

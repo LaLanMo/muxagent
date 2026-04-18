@@ -199,7 +199,13 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     return GestureDetector(
       onTap: () {
         Get.find<EventRepository>().markAsRead(session.id);
-        shell.navigateToChat(session.id, session.machineId, session.cwd, title);
+        shell.navigateToChat(
+          session.id,
+          session.machineId,
+          session.runtime,
+          session.cwd,
+          title,
+        );
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

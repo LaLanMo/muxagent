@@ -15,7 +15,6 @@ import 'package:muxagent/data/services/ws/models/ws_models.dart';
 import 'package:muxagent/data/services/ws/ws_types.dart';
 import 'package:muxagent/domain/approval.dart';
 import 'package:muxagent/domain/enums.dart';
-import 'package:muxagent/domain/event.dart';
 import 'package:muxagent/domain/mode_option.dart';
 import 'package:muxagent/domain/session.dart';
 import 'package:muxagent/domain/session_config_snapshot.dart';
@@ -36,6 +35,7 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   final _events = StreamController<WsEvent>.broadcast();
   List<ApprovalRequest> nextApprovals = const [];
   List<ResolvedSessionSnapshot> nextResolvedSessions = const [];
+  bool activeSessionAvailable = true;
   ReplayHeadSnapshot nextReplayHead = const ReplayHeadSnapshot(
     streamEpoch: 77,
     replayedThroughSeq: 0,
@@ -58,6 +58,9 @@ class _FakeWsSessionRepository extends WsSessionRepository {
 
   @override
   Stream<WsEvent> get events => _events.stream;
+
+  @override
+  bool hasSession(String machineId) => activeSessionAvailable;
 
   void emitEvent(WsEvent event) => _events.add(event);
 
@@ -560,6 +563,173 @@ void main() {
     );
 
     test(
+      'syncKnownSessions inserts missing resolved sessions and persists them',
+      () async {
+        final updatedAt = DateTime.now();
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: 'resolved-only',
+            title: 'Resolved title',
+            cwd: '/repo/root',
+            runtime: 'codex',
+            status: SessionStatus.waitingApproval,
+            updatedAt: updatedAt,
+            configSnapshot: const SessionConfigSnapshot(
+              modeConfigId: 'mode',
+              currentMode: ModeOption(id: 'plan', label: 'Plan'),
+              availableModes: [
+                ModeOption(id: 'plan', label: 'Plan'),
+                ModeOption(id: 'read-only', label: 'Read Only'),
+              ],
+            ),
+          ),
+        ];
+
+        final result = await repo.syncKnownSessions('machine-1');
+
+        expect(result.ok, isTrue);
+        final session = repo.sessionById('resolved-only');
+        expect(session, isNotNull);
+        expect(session?.title, 'Resolved title');
+        expect(session?.runtime, 'codex');
+        expect(session?.cwd, '/repo/root');
+        expect(session?.status, SessionStatus.waitingApproval);
+        expect(session?.machineId, 'machine-1');
+        expect(session?.configSnapshot.currentMode?.id, 'plan');
+
+        final rows = await SessionDatabase.loadAll();
+        final persisted = rows.firstWhere((row) => row.id == 'resolved-only');
+        expect(persisted.title, 'Resolved title');
+        expect(persisted.runtime, 'codex');
+        expect(persisted.cwd, '/repo/root');
+        expect(persisted.status, SessionStatus.waitingApproval);
+        expect(persisted.mode, 'plan');
+      },
+    );
+
+    test(
+      'syncKnownSessions updates existing rows without clobbering empty fields',
+      () async {
+        final existingId = 'existing-${DateTime.now().microsecondsSinceEpoch}';
+        final now = DateTime.now();
+        await repo.registerSession(
+          AgentSession(
+            id: existingId,
+            title: 'Keep title',
+            machineId: 'machine-1',
+            runtime: 'codex',
+            cwd: '/keep',
+            status: SessionStatus.idle,
+            createdAt: now,
+            updatedAt: now,
+          ),
+        );
+
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: existingId,
+            title: '',
+            cwd: '',
+            runtime: '',
+            status: SessionStatus.waitingApproval,
+            updatedAt: now.add(const Duration(minutes: 1)),
+            configSnapshot: const SessionConfigSnapshot(
+              modeConfigId: 'mode',
+              currentMode: ModeOption(id: 'read-only', label: 'Read Only'),
+            ),
+          ),
+        ];
+
+        final result = await repo.syncKnownSessions('machine-1');
+
+        expect(result.ok, isTrue);
+        final session = repo.sessionById(existingId);
+        expect(session?.title, 'Keep title');
+        expect(session?.cwd, '/keep');
+        expect(session?.runtime, 'codex');
+        expect(session?.status, SessionStatus.waitingApproval);
+        expect(session?.mode, 'read-only');
+
+        final rows = await SessionDatabase.loadAll();
+        final persisted = rows.firstWhere((row) => row.id == existingId);
+        expect(persisted.status, SessionStatus.waitingApproval);
+        expect(persisted.mode, 'read-only');
+      },
+    );
+
+    test(
+      'syncKnownSessions does not overwrite a newer live mode update',
+      () async {
+        wsRepo.nextResolvedSessions = [
+          ResolvedSessionSnapshot(
+            sessionId: sessionId,
+            title: 'Resolved title',
+            cwd: '/tmp',
+            runtime: 'codex',
+            status: SessionStatus.idle,
+            updatedAt: DateTime.now(),
+            configSnapshot: const SessionConfigSnapshot(
+              modeConfigId: 'mode',
+              currentMode: ModeOption(id: 'read-only', label: 'Read Only'),
+              availableModes: [
+                ModeOption(id: 'full-access', label: 'Full Access'),
+                ModeOption(id: 'read-only', label: 'Read Only'),
+              ],
+            ),
+          ),
+        ];
+        wsRepo.resolveBlocker = Completer<void>();
+
+        final syncFuture = repo.syncKnownSessions('machine-1');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'mode.changed',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 42,
+              'modeChanged': {
+                'app': {'currentModeId': 'full-access'},
+                'acp': {
+                  'configOptions': [
+                    {
+                      'id': 'mode',
+                      'name': 'Approval Preset',
+                      'type': 'select',
+                      'category': 'mode',
+                      'currentValue': 'full-access',
+                      'options': [
+                        {'value': 'full-access', 'name': 'Full Access'},
+                        {'value': 'read-only', 'name': 'Read Only'},
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        wsRepo.resolveBlocker!.complete();
+        final result = await syncFuture;
+
+        expect(result.ok, isTrue);
+        final session = repo.sessionById(sessionId);
+        expect(session?.configSnapshot.currentMode?.id, 'full-access');
+        expect(
+          session?.configSnapshot.availableModes
+              .map((mode) => mode.id)
+              .toList(),
+          ['full-access', 'read-only'],
+        );
+      },
+    );
+
+    test(
       'fetchPendingApprovals removes stale approvals for the machine',
       () async {
         repo.pendingApprovals['req-1'] = ApprovalRequest(
@@ -876,6 +1046,51 @@ void main() {
         expect(applied, isFalse);
         final session = repo.sessionById(sessionId);
         expect(session?.configSnapshot.currentMode?.id, 'full-access');
+      },
+    );
+
+    test(
+      'session.status inserts an unknown attached session into sqlite',
+      () async {
+        final attachedId = 'attached-${DateTime.now().microsecondsSinceEpoch}';
+        final updatedAt = DateTime.now();
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'session.status',
+              'machineId': 'machine-1',
+              'sessionId': attachedId,
+              'seq': 7,
+              'at': updatedAt.toIso8601String(),
+              'sessionStatus': {
+                'app': {
+                  'id': attachedId,
+                  'title': 'Attached title',
+                  'status': 'idle',
+                  'runtime': 'codex',
+                  'cwd': '/repo/attached',
+                  'createdAt': updatedAt.toIso8601String(),
+                  'updatedAt': updatedAt.toIso8601String(),
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        final session = repo.sessionById(attachedId);
+        expect(session, isNotNull);
+        expect(session?.title, 'Attached title');
+        expect(session?.runtime, 'codex');
+        expect(session?.cwd, '/repo/attached');
+
+        final rows = await SessionDatabase.loadAll();
+        final persisted = rows.firstWhere((row) => row.id == attachedId);
+        expect(persisted.title, 'Attached title');
+        expect(persisted.runtime, 'codex');
+        expect(persisted.cwd, '/repo/attached');
       },
     );
   });

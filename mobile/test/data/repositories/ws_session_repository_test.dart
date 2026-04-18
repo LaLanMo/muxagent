@@ -5,7 +5,6 @@ import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/models/rpc_transport_models.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
-import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/domain/prompt_content_block.dart';
 
 class FakeRelayWsClient extends RelayWsClient {
@@ -293,6 +292,20 @@ void main() {
         sessions.single.configSnapshot?.availableModes.map((mode) => mode.id),
         ['full-access', 'auto', 'read-only'],
       );
+
+      relay.nextPayload = {
+        'result': {'sessions': []},
+      };
+
+      final allKnownSessions = await repo.resolveSessions(
+        machineId: 'machine-1',
+        sessionIds: const [],
+      );
+
+      expect(relay.lastMethod, 'session.resolve');
+      expect(relay.lastParams, {'sessionIds': []});
+      expect(relay.lastParams!.containsKey('runtime'), isFalse);
+      expect(allKnownSessions, isEmpty);
 
       relay.nextPayload = {
         'result': {

@@ -83,7 +83,7 @@ ReconnectRecoveryResult _buildRecoveryResult({
         : MetadataRecoveryState.skipped,
     sessionReady: sessionReady,
     statusesOk: sessionReady,
-    titlesOk: sessionReady,
+    knownSessionsOk: sessionReady,
     approvalsOk: sessionReady,
   );
 }

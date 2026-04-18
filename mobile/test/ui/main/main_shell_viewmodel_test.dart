@@ -181,7 +181,7 @@ void main() {
                   metadata: MetadataRecoveryState.complete,
                   sessionReady: true,
                   statusesOk: true,
-                  titlesOk: true,
+                  knownSessionsOk: true,
                   approvalsOk: true,
                 );
               },
@@ -202,5 +202,23 @@ void main() {
         expect(viewModel.isMachineConnected(machine.machineId), isTrue);
       },
     );
+  });
+
+  group('MainShellViewModel chat route arguments', () {
+    test('includes runtime in chat navigation arguments', () {
+      final args = MainShellViewModel.chatRouteArguments(
+        sessionId: 'sid-1',
+        machineId: 'machine-1',
+        runtime: 'codex',
+        cwd: '/tmp/project',
+        title: 'Attached session',
+      );
+
+      expect(args['sessionId'], 'sid-1');
+      expect(args['machineId'], 'machine-1');
+      expect(args['runtime'], 'codex');
+      expect(args['cwd'], '/tmp/project');
+      expect(args['sessionTitle'], 'Attached session');
+    });
   });
 }

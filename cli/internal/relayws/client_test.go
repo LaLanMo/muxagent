@@ -533,6 +533,49 @@ func TestSendEventBuffersLocalEventsAndTracksStatus(t *testing.T) {
 	require.Equal(t, appwire.EventRunFinished, snapshot.Events[1].Type)
 }
 
+func TestSendLiveEventDoesNotBufferOrTrackStatusWithoutActivePhone(t *testing.T) {
+	client := &Client{
+		machineID:     "machine-1",
+		runtime:       &listingRuntime{sessions: []domain.SessionSummary{{SessionID: "sid", CWD: "/tmp/project", Title: "Title", UpdatedAt: time.Now()}}},
+		eventBuf:      NewEventBuffer(8),
+		sessionStatus: map[string]domain.SessionStatus{},
+	}
+
+	err := client.SendLiveEvent(appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: "sid",
+		At:        time.Now(),
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{
+				ID:     "sid",
+				Status: appwire.SessionStatusRunning,
+			},
+		},
+	})
+	require.ErrorIs(t, err, ErrRelayNotConnected)
+
+	snapshot := client.eventBuf.ReplaySince(client.eventBuf.StreamEpoch(), 0)
+	require.Equal(t, appwire.ResyncStatusOK, snapshot.Status)
+	require.Empty(t, snapshot.Events)
+	require.Equal(t, domain.SessionStatusIdle, client.resolvedSessionStatus("sid"))
+}
+
+func TestRpcResolveSessionsWithEmptyTargetsDoesNotClearUnrelatedStatuses(t *testing.T) {
+	client := &Client{
+		machineID:     "machine-1",
+		runtime:       &listingRuntime{},
+		sessionStatus: map[string]domain.SessionStatus{"sid-live": domain.SessionStatusRunning},
+	}
+
+	result, errStr := client.rpcResolveSessions(
+		context.Background(),
+		appwire.ResolveSessionsParams{},
+	)
+	require.Empty(t, errStr)
+	require.Empty(t, resolvedSessionIDsFromRPCResult(t, result))
+	require.Equal(t, domain.SessionStatusRunning, client.resolvedSessionStatus("sid-live"))
+}
+
 func TestRpcResyncEventsReturnsReplayContract(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -2730,6 +2773,26 @@ func resolvedStatusFromRPCResult(t *testing.T, result any) string {
 	require.NoError(t, json.Unmarshal(body, &payload))
 	require.Len(t, payload.Sessions, 1)
 	return payload.Sessions[0].Status
+}
+
+func resolvedSessionIDsFromRPCResult(t *testing.T, result any) []string {
+	t.Helper()
+
+	body, err := json.Marshal(result)
+	require.NoError(t, err)
+
+	var payload struct {
+		Sessions []struct {
+			SessionID string `json:"sessionId"`
+		} `json:"sessions"`
+	}
+	require.NoError(t, json.Unmarshal(body, &payload))
+
+	ids := make([]string, 0, len(payload.Sessions))
+	for _, session := range payload.Sessions {
+		ids = append(ids, session.SessionID)
+	}
+	return ids
 }
 
 func resyncResultFromRPCResult(t *testing.T, result any) appwire.ResyncEventsResult {

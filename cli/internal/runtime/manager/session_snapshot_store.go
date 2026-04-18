@@ -15,6 +15,7 @@ import (
 type sessionSnapshot struct {
 	ConfigOptions []acpprotocol.SessionConfigOption `json:"configOptions,omitempty"`
 	CWD           string                            `json:"cwd,omitempty"`
+	Title         string                            `json:"title,omitempty"`
 	UpdatedAt     time.Time                         `json:"updatedAt,omitempty"`
 }
 
@@ -84,28 +85,7 @@ func (s *sessionSnapshotStore) Get(
 	if !ok {
 		return sessionSnapshot{}, false
 	}
-	snapshot.ConfigOptions = cloneConfigOptions(snapshot.ConfigOptions)
-	return snapshot, true
-}
-
-func (s *sessionSnapshotStore) Set(
-	runtimeID string,
-	sessionID string,
-	snapshot sessionSnapshot,
-) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	runtimeSnapshots, ok := s.snapshots[runtimeID]
-	if !ok {
-		runtimeSnapshots = make(map[string]sessionSnapshot)
-		s.snapshots[runtimeID] = runtimeSnapshots
-	}
-	runtimeSnapshots[sessionID] = sessionSnapshot{
-		ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
-		CWD:           snapshot.CWD,
-		UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
-	}
+	return cloneSessionSnapshot(snapshot), true
 }
 
 func (s *sessionSnapshotStore) Ensure(
@@ -141,11 +121,7 @@ func (s *sessionSnapshotStore) Put(
 	if snapshot.UpdatedAt.IsZero() {
 		snapshot.UpdatedAt = time.Now().UTC()
 	}
-	runtimeSnapshots[sessionID] = sessionSnapshot{
-		ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
-		CWD:           snapshot.CWD,
-		UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
-	}
+	runtimeSnapshots[sessionID] = mergeSessionSnapshot(runtimeSnapshots[sessionID], snapshot)
 	return s.saveLocked()
 }
 
@@ -166,13 +142,26 @@ func (s *sessionSnapshotStore) Update(
 	if !update(&current) {
 		return nil
 	}
-	current.UpdatedAt = time.Now().UTC()
-	runtimeSnapshots[sessionID] = sessionSnapshot{
-		ConfigOptions: cloneConfigOptions(current.ConfigOptions),
-		CWD:           current.CWD,
-		UpdatedAt:     normalizeSnapshotUpdatedAt(current.UpdatedAt),
+	if current.UpdatedAt.IsZero() {
+		current.UpdatedAt = time.Now().UTC()
 	}
+	runtimeSnapshots[sessionID] = mergeSessionSnapshot(runtimeSnapshots[sessionID], current)
 	return s.saveLocked()
+}
+
+func (s *sessionSnapshotStore) ListRuntime(runtimeID string) map[string]sessionSnapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	runtimeSnapshots, ok := s.snapshots[runtimeID]
+	if !ok || len(runtimeSnapshots) == 0 {
+		return nil
+	}
+	cloned := make(map[string]sessionSnapshot, len(runtimeSnapshots))
+	for sessionID, snapshot := range runtimeSnapshots {
+		cloned[sessionID] = cloneSessionSnapshot(snapshot)
+	}
+	return cloned
 }
 
 func (s *sessionSnapshotStore) All() map[string]map[string]sessionSnapshot {
@@ -183,11 +172,7 @@ func (s *sessionSnapshotStore) All() map[string]map[string]sessionSnapshot {
 	for runtimeID, runtimeSnapshots := range s.snapshots {
 		cloned := make(map[string]sessionSnapshot, len(runtimeSnapshots))
 		for sessionID, snapshot := range runtimeSnapshots {
-			cloned[sessionID] = sessionSnapshot{
-				ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
-				CWD:           snapshot.CWD,
-				UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
-			}
+			cloned[sessionID] = cloneSessionSnapshot(snapshot)
 		}
 		out[runtimeID] = cloned
 	}
@@ -257,6 +242,32 @@ func cloneConfigOptions(
 		return append([]acpprotocol.SessionConfigOption(nil), options...)
 	}
 	return cloned
+}
+
+func cloneSessionSnapshot(snapshot sessionSnapshot) sessionSnapshot {
+	return sessionSnapshot{
+		ConfigOptions: cloneConfigOptions(snapshot.ConfigOptions),
+		CWD:           snapshot.CWD,
+		Title:         snapshot.Title,
+		UpdatedAt:     normalizeSnapshotUpdatedAt(snapshot.UpdatedAt),
+	}
+}
+
+func mergeSessionSnapshot(existing sessionSnapshot, incoming sessionSnapshot) sessionSnapshot {
+	merged := cloneSessionSnapshot(incoming)
+	if len(merged.ConfigOptions) == 0 && len(existing.ConfigOptions) > 0 {
+		merged.ConfigOptions = cloneConfigOptions(existing.ConfigOptions)
+	}
+	if merged.CWD == "" {
+		merged.CWD = existing.CWD
+	}
+	if merged.Title == "" {
+		merged.Title = existing.Title
+	}
+	if merged.UpdatedAt.IsZero() {
+		merged.UpdatedAt = normalizeSnapshotUpdatedAt(existing.UpdatedAt)
+	}
+	return merged
 }
 
 func normalizeSnapshotUpdatedAt(value time.Time) time.Time {

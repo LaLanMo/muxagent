@@ -310,7 +310,7 @@ type SessionGitStatusResult struct {
 	Reachable         bool             `json:"reachable"`
 	UnreachableReason string           `json:"unreachableReason,omitempty"`
 	Branch            string           `json:"branch,omitempty"`
-	DetachedHead     bool              `json:"detachedHead,omitempty"`
+	DetachedHead      bool             `json:"detachedHead,omitempty"`
 	Upstream          string           `json:"upstream,omitempty"`
 	AheadCount        int              `json:"aheadCount"`
 	BehindCount       int              `json:"behindCount"`

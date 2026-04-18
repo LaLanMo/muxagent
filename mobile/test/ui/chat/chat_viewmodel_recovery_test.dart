@@ -24,7 +24,7 @@ void main() {
       resyncOutcome: ResyncOutcome.complete,
       sessionReady: sessionReady,
       statusesOk: metadata != MetadataRecoveryState.degraded,
-      titlesOk: metadata != MetadataRecoveryState.degraded,
+      knownSessionsOk: metadata != MetadataRecoveryState.degraded,
       approvalsOk: metadata != MetadataRecoveryState.degraded,
     );
   }
@@ -489,6 +489,28 @@ void main() {
       expect(
         ChatViewModel.restoredUiModeAfterSessionLoadFailure(ChatUiMode.normal),
         ChatUiMode.normal,
+      );
+    });
+
+    test('explains missing restore metadata explicitly', () {
+      expect(
+        ChatViewModel.restoreUnavailableCopy(runtime: '', cwd: ''),
+        'This session is missing runtime and working directory metadata. Re-attach it from the CLI and try again.',
+      );
+      expect(
+        ChatViewModel.restoreUnavailableCopy(runtime: 'codex', cwd: ''),
+        'This session is missing working directory metadata. Re-attach it from the CLI and try again.',
+      );
+    });
+
+    test('surfaces cold-open session.load failures precisely', () {
+      expect(
+        ChatViewModel.restoreUnavailableCopy(
+          runtime: 'codex',
+          cwd: '/tmp/project',
+          restoreError: Exception('missing runtime for session.load'),
+        ),
+        'Could not restore this session from the connected daemon: missing runtime for session.load',
       );
     });
 

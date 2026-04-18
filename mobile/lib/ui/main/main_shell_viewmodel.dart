@@ -117,18 +117,37 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   void navigateToChat(
     String sessionId,
     String machineId,
+    String runtime,
     String cwd,
     String title,
   ) {
     Get.toNamed(
       Routes.chat,
-      arguments: {
-        'sessionId': sessionId,
-        'machineId': machineId,
-        'cwd': cwd,
-        'sessionTitle': title,
-      },
+      arguments: chatRouteArguments(
+        sessionId: sessionId,
+        machineId: machineId,
+        runtime: runtime,
+        cwd: cwd,
+        title: title,
+      ),
     );
+  }
+
+  @visibleForTesting
+  static Map<String, dynamic> chatRouteArguments({
+    required String sessionId,
+    required String machineId,
+    required String runtime,
+    required String cwd,
+    required String title,
+  }) {
+    return {
+      'sessionId': sessionId,
+      'machineId': machineId,
+      'runtime': runtime,
+      'cwd': cwd,
+      'sessionTitle': title,
+    };
   }
 
   // --- Private ---
@@ -184,7 +203,7 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
         metadata: MetadataRecoveryState.skipped,
         sessionReady: false,
         statusesOk: false,
-        titlesOk: false,
+        knownSessionsOk: false,
         approvalsOk: false,
         transportError: e,
       );

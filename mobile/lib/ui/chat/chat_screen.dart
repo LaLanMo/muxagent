@@ -74,9 +74,13 @@ class ChatScreen extends GetView<ChatViewModel> {
                       );
                     }
                     if (uiMode == ChatUiMode.unsupported) {
+                      final message =
+                          controller.restoreUnavailableMessage.value.isNotEmpty
+                          ? controller.restoreUnavailableMessage.value
+                          : 'This session cannot be restored on this device yet.';
                       return Center(
                         child: Text(
-                          'This session cannot be restored on this device yet.',
+                          message,
                           style: AppTypography.sans(
                             fontSize: 14,
                             color: AppTheme.textTertiary,
@@ -447,7 +451,9 @@ class ChatScreen extends GetView<ChatViewModel> {
       ChatUiMode.unsupported => (
         AppTheme.errorBg,
         AppTheme.errorText,
-        'This session cannot be restored from daemon state here.',
+        controller.restoreUnavailableMessage.value.isNotEmpty
+            ? controller.restoreUnavailableMessage.value
+            : 'This session cannot be restored on this device yet.',
       ),
       ChatUiMode.initialLoading ||
       ChatUiMode.normal => (Colors.transparent, Colors.transparent, ''),

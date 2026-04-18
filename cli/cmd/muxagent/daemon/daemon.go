@@ -13,6 +13,7 @@ func NewCmd() *cobra.Command {
 	cmd.AddCommand(newStopCmd())
 	cmd.AddCommand(newStatusCmd())
 	cmd.AddCommand(newEchoCmd())
+	cmd.AddCommand(newAttachSessionCmd())
 
 	return cmd
 }
