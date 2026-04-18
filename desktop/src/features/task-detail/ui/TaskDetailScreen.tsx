@@ -58,6 +58,7 @@ import type {
   BlockedStepDto,
   ClarificationExchangeDto,
   ConfigCatalogEntryDto,
+  ConfigViewDto,
   FollowUpModeDto,
   InputRequestDto,
   NodeRunViewDto,
@@ -118,6 +119,10 @@ function formatRunTiming(run: NodeRunViewDto) {
 
 function formatCount(count: number, singular: string, plural: string) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function formatAbsoluteStamp(iso: string | undefined) {
@@ -488,6 +493,7 @@ type TaskDetailScreenProps = {
   shell?: unknown;
   goBackToTaskSurface: () => void;
   task?: TaskViewDto;
+  config?: ConfigViewDto;
   loading: boolean;
   detailError?: string;
   historyEntries: TaskDetailHistoryEntry[];
@@ -558,9 +564,79 @@ type TaskDetailScreenProps = {
   recoverRun: (nodeRunId: string) => Promise<void>;
 };
 
+function runtimeDisplayName(runtimeId: string): string {
+  switch (runtimeId.trim()) {
+    case "claude":
+    case "claude-code":
+      return "Claude Code";
+    case "codex":
+      return "Codex";
+    case "copilot":
+      return "GitHub Copilot";
+    case "gemini":
+      return "Gemini";
+    case "goose":
+      return "Goose";
+    case "opencode":
+      return "OpenCode";
+    default:
+      return runtimeId.trim();
+  }
+}
+
+function resolveRunRuntimeNameFromConfig(
+  run: NodeRunViewDto | undefined,
+  config: ConfigViewDto | undefined,
+): string | undefined {
+  if (!run || !isRecord(config?.config)) {
+    return undefined;
+  }
+  const nodeDefinitions = isRecord(config.config.node_definitions)
+    ? config.config.node_definitions
+    : undefined;
+  const definitionValue = nodeDefinitions?.[run.node_name];
+  const definition = isRecord(definitionValue) ? definitionValue : undefined;
+  const nodeType = typeof definition?.type === "string" ? definition.type.trim() : "";
+  if (nodeType === "human" || nodeType === "terminal") {
+    return undefined;
+  }
+  const nodeRuntimeId =
+    typeof definition?.runtime === "string" ? definition.runtime.trim() : "";
+  const configRuntimeId =
+    typeof config.config.runtime === "string" ? config.config.runtime.trim() : "";
+  const runtimeId = nodeRuntimeId || configRuntimeId;
+  return runtimeId ? runtimeDisplayName(runtimeId) : undefined;
+}
+
+export function resolveTaskRuntimeName(
+  task: TaskViewDto | undefined,
+  run: NodeRunViewDto | undefined,
+  config: ConfigViewDto | undefined,
+  configEntries: ConfigCatalogEntryDto[],
+): string | undefined {
+  const runRuntimeName = resolveRunRuntimeNameFromConfig(run, config);
+  if (runRuntimeName) {
+    return runRuntimeName;
+  }
+  if (!task) {
+    return undefined;
+  }
+  const configPath = task.task.config_path.trim();
+  const configAlias = task.task.config_alias.trim();
+  const matchedEntry =
+    configEntries.find((entry) => entry.config_path === configPath) ??
+    configEntries.find((entry) => entry.alias === configAlias);
+  if (!matchedEntry) {
+    return undefined;
+  }
+  const runtimeLabel = (matchedEntry.runtime_name || matchedEntry.runtime_id || "").trim();
+  return runtimeLabel || "Automatic";
+}
+
 export function TaskDetailScreen({
   goBackToTaskSurface,
   task,
+  config,
   loading,
   detailError,
   historyEntries,
@@ -788,6 +864,13 @@ export function TaskDetailScreen({
       />
     ) : null;
 
+  const taskRuntimeName = resolveTaskRuntimeName(
+    task,
+    selectedRun,
+    config,
+    configEntries,
+  );
+
   const transcriptModal =
     modal.kind === "transcript" ? (
       <TaskTranscriptModal
@@ -805,6 +888,7 @@ export function TaskDetailScreen({
         rawTranscriptItems={rawTranscriptItems}
         displayTranscriptItems={displayTranscriptItems}
         clarificationItems={selectedRunClarificationItems}
+        runtimeName={taskRuntimeName}
         run={selectedRun}
         showEmptyOutput={Boolean(selectedRun)}
         recoveryAction={

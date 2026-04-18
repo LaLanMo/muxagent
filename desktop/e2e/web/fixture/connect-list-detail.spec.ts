@@ -1175,6 +1175,7 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   await expect(page.getByTestId("detail-run-history-source")).toContainText(
     "provider transcript",
   );
+  await expect(page.getByTestId("detail-run-runtime")).toContainText("Codex");
   await expect(page.getByTestId("detail-run-session")).toContainText(
     "session-login-implement",
   );

@@ -55,6 +55,7 @@ type OverviewPaneProps = {
 
 type RunPaneProps = {
   run?: NodeRunViewDto;
+  runtimeName?: string;
   streamLines: string[];
   transcript: TranscriptSnapshot;
   rawTranscriptItems: TranscriptTimelineItem[];
@@ -1627,6 +1628,7 @@ export function TaskOverviewPane({
 
 export function TaskTranscriptModal({
   run,
+  runtimeName,
   streamLines,
   transcript,
   rawTranscriptItems,
@@ -1650,6 +1652,7 @@ export function TaskTranscriptModal({
   const providerSessionId = (transcript.sessionId || run.session_id || "").trim();
   const sessionValue = shortenSessionId(providerSessionId);
   const sessionDetail = providerSessionId || "Awaiting session id";
+  const runtimeLabel = runtimeName?.trim();
   const totalTokens = summarizeUsageTokens(rawTranscriptItems);
   const eventCount = transcript.events.length || streamLines.length;
   const runStatus = detailStatusLabel(run.status);
@@ -1784,31 +1787,42 @@ export function TaskTranscriptModal({
             <span className="detail-modal-frame__meta-inline-value">
               {eventCount} events
             </span>
+            {runtimeLabel ? (
+              <>
+                <span className="detail-modal-frame__meta-inline-separator">·</span>
+                <DetailInlineMetaPair label="Runtime" value={runtimeLabel} />
+              </>
+            ) : null}
             <span className="detail-modal-frame__meta-inline-separator">·</span>
-            <span className="detail-modal-frame__meta-inline-label">Session</span>
-            <button
-              aria-label={providerSessionId ? "Copy provider session ID" : "Provider session ID unavailable"}
-              className="detail-modal-frame__meta-inline-copy"
-              disabled={!providerSessionId}
-              onClick={() => {
-                void copyValue(providerSessionId);
-              }}
-              title={providerSessionId || undefined}
-              type="button"
-            >
-              {copyState === "copied" ? (
-                <Check aria-hidden="true" size={11} strokeWidth={2} />
-              ) : (
-                <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
-              )}
-              <span>{sessionValue}</span>
-            </button>
+            <DetailInlineMetaPair
+              label="Session"
+              value={
+                <button
+                  aria-label={providerSessionId ? "Copy provider session ID" : "Provider session ID unavailable"}
+                  className="detail-modal-frame__meta-inline-copy"
+                  disabled={!providerSessionId}
+                  onClick={() => {
+                    void copyValue(providerSessionId);
+                  }}
+                  title={providerSessionId || undefined}
+                  type="button"
+                >
+                  {copyState === "copied" ? (
+                    <Check aria-hidden="true" size={11} strokeWidth={2} />
+                  ) : (
+                    <Copy aria-hidden="true" size={11} strokeWidth={1.9} />
+                  )}
+                  <span>{sessionValue}</span>
+                </button>
+              }
+            />
           </>
         }
         onClose={onClose}
         title={run.node_name}
       >
         <div hidden>
+          <span data-testid="detail-run-runtime">{runtimeLabel || "Runtime unavailable"}</span>
           <span data-testid="detail-run-session">
             {sessionValue} {sessionDetail}
           </span>

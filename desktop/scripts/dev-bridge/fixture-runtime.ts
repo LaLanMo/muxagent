@@ -1092,6 +1092,7 @@ export class FixtureRuntime {
         }
         return this.respond(id, {
           task,
+          config: this.taskConfigView(state, task),
           input_request: task.input_request,
           follow_up: task.follow_up,
           follow_up_state: deriveFixtureFollowUpState(task),
@@ -1559,6 +1560,26 @@ export class FixtureRuntime {
 
   private requireConfig(state: FixtureState, alias: string): FixtureConfig | undefined {
     return state.configs.find((config) => config.alias === alias.trim());
+  }
+
+  private taskConfigView(state: FixtureState, task: FixtureTask) {
+    const config =
+      this.requireConfig(state, task.task.config_alias) ??
+      state.configs.find((entry) => entry.config_path === task.task.config_path);
+    if (!config) {
+      return undefined;
+    }
+    const materializedConfig = structuredClone(config.config);
+    if (!materializedConfig.runtime?.trim()) {
+      const automaticRuntimeId = state.runtimeStatus.automatic.runtime_id.trim();
+      if (automaticRuntimeId) {
+        materializedConfig.runtime = automaticRuntimeId;
+      }
+    }
+    return {
+      path: task.task.config_path,
+      config: materializedConfig,
+    };
   }
 
   private resolveRuntime(state: FixtureState, runtimeId?: string) {

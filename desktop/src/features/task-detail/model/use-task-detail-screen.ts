@@ -565,6 +565,7 @@ export function useTaskDetailScreen() {
     openAncestorTask: (ancestorTaskId: string) =>
       navigate(buildTaskDetailPath(workspaceId, ancestorTaskId)),
     task: resolvedTask,
+    config: detailEntry?.config,
     loading,
     detailError,
     selection,
