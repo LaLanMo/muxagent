@@ -97,6 +97,54 @@ func TestRegistryResolveCopilotUsesLocalSessionStateMetadata(t *testing.T) {
 	}
 }
 
+func TestRegistryResolveGooseUsesLocalStoreMetadata(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", root)
+
+	dbPath := filepath.Join(root, "goose", "sessions", "sessions.db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		t.Fatalf("mkdir db dir: %v", err)
+	}
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`CREATE TABLE sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', user_set_name BOOLEAN DEFAULT FALSE, session_type TEXT NOT NULL DEFAULT 'user', working_dir TEXT NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, extension_data TEXT DEFAULT '{}', total_tokens INTEGER, input_tokens INTEGER, output_tokens INTEGER, accumulated_total_tokens INTEGER, accumulated_input_tokens INTEGER, accumulated_output_tokens INTEGER, schedule_id TEXT, recipe_json TEXT, user_recipe_values_json TEXT, provider_name TEXT, model_config_json TEXT, goose_mode TEXT NOT NULL DEFAULT 'auto')`); err != nil {
+		t.Fatalf("create sessions table: %v", err)
+	}
+	if _, err := db.Exec(`CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, message_id TEXT, session_id TEXT NOT NULL REFERENCES sessions(id), role TEXT NOT NULL, content_json TEXT NOT NULL, created_timestamp INTEGER NOT NULL, timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP, tokens INTEGER, metadata_json TEXT)`); err != nil {
+		t.Fatalf("create messages table: %v", err)
+	}
+	if _, err := db.Exec(
+		`INSERT INTO sessions (id, name, description, working_dir, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		"20260418_3",
+		"Explain this project",
+		"",
+		"/tmp/goose-project",
+		"2026-04-18 12:34:56",
+		"2026-04-18 12:35:10",
+	); err != nil {
+		t.Fatalf("insert session: %v", err)
+	}
+
+	registry := NewRegistry()
+
+	meta, err := registry.Resolve(string(config.RuntimeGoose), "20260418_3")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if meta.CWD != "/tmp/goose-project" {
+		t.Fatalf("cwd = %q, want /tmp/goose-project", meta.CWD)
+	}
+	if meta.Title != "Explain this project" {
+		t.Fatalf("title = %q, want store title", meta.Title)
+	}
+	if meta.CreatedAt.IsZero() || meta.UpdatedAt.IsZero() {
+		t.Fatalf("times = created %v updated %v, want non-zero", meta.CreatedAt, meta.UpdatedAt)
+	}
+}
+
 func TestRegistryResolveOpenCodeUsesLocalStoreMetadata(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", root)
