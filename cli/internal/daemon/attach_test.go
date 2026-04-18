@@ -205,6 +205,65 @@ func TestAttachSessionUsesCopilotLocalRuntimeMetadataAndBroadcasts(t *testing.T)
 	}
 }
 
+func TestAttachSessionUsesGeminiLocalRuntimeMetadataAndBroadcasts(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("GEMINI_HOME", root)
+
+	path := filepath.Join(root, "tmp", "muxagent", "chats", "session-gemini.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir chats dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "tmp", "muxagent", ".project_root"), []byte("/tmp/gemini-project\n"), 0o644); err != nil {
+		t.Fatalf("write project root: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{
+  "sessionId": "session-gemini",
+  "startTime": "2026-04-18T12:00:00Z",
+  "lastUpdated": "2026-04-18T12:00:05Z",
+  "messages": [
+    {
+      "type": "user",
+      "content": [{"text": "Attach this Gemini session"}]
+    }
+  ]
+}`), 0o644); err != nil {
+		t.Fatalf("write session file: %v", err)
+	}
+
+	publisher := &fakeAttachPublisher{machineID: "machine-27"}
+	d := &Daemon{attachPublisher: publisher}
+
+	resp, err := d.attachSession(context.Background(), control.AttachSessionRequest{
+		SessionID: "session-gemini",
+		Runtime:   "gemini",
+	})
+	if err != nil {
+		t.Fatalf("attachSession: %v", err)
+	}
+	if !resp.Broadcasted {
+		t.Fatalf("Broadcasted = false, want true")
+	}
+	if resp.Runtime != "gemini" {
+		t.Fatalf("runtime = %q, want gemini", resp.Runtime)
+	}
+	if resp.CWD != "/tmp/gemini-project" {
+		t.Fatalf("cwd = %q, want /tmp/gemini-project", resp.CWD)
+	}
+	if resp.Title != "Attach this Gemini session" {
+		t.Fatalf("title = %q, want Attach this Gemini session", resp.Title)
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(publisher.events))
+	}
+	event := publisher.events[0]
+	if event.SessionInfo == nil || event.SessionInfo.App.Runtime != "gemini" {
+		t.Fatalf("runtime = %+v, want gemini", event.SessionInfo)
+	}
+	if event.SessionInfo == nil || event.SessionInfo.App.MachineID != "machine-27" {
+		t.Fatalf("machineID = %+v, want machine-27", event.SessionInfo)
+	}
+}
+
 func TestAttachSessionUsesGooseLocalRuntimeMetadataAndBroadcasts(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", root)
