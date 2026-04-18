@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/LaLanMo/muxagent/cli/internal/claudesession"
 	"github.com/LaLanMo/muxagent/cli/internal/control"
 	"github.com/LaLanMo/muxagent/cli/internal/relayws"
+	"github.com/LaLanMo/muxagent/cli/internal/sessionattach"
 	_ "modernc.org/sqlite"
 )
 
@@ -473,7 +475,7 @@ func TestHandleAttachSessionMapsTranscriptNotFoundTo404(t *testing.T) {
 	}
 }
 
-func TestAttachSessionAllowsCWDOverrideWhenTranscriptMetadataIsMissing(t *testing.T) {
+func TestAttachSessionReturnsMissingCWDWhenTranscriptMetadataIsMissing(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("CODEX_HOME", root)
 
@@ -499,19 +501,15 @@ func TestAttachSessionAllowsCWDOverrideWhenTranscriptMetadataIsMissing(t *testin
 	publisher := &fakeAttachPublisher{}
 	d := &Daemon{attachPublisher: publisher}
 
-	resp, err := d.attachSession(context.Background(), control.AttachSessionRequest{
+	_, err := d.attachSession(context.Background(), control.AttachSessionRequest{
 		SessionID: "019d-no-cwd",
 		Runtime:   "codex",
-		CWD:       "/tmp/override",
 	})
-	if err != nil {
-		t.Fatalf("attachSession: %v", err)
+	if !errors.Is(err, sessionattach.ErrMissingCWD) {
+		t.Fatalf("error = %v, want ErrMissingCWD", err)
 	}
-	if resp.CWD != "/tmp/override" {
-		t.Fatalf("response cwd = %q, want /tmp/override", resp.CWD)
-	}
-	if publisher.events[0].SessionInfo == nil || publisher.events[0].SessionInfo.App.CWD != "/tmp/override" {
-		t.Fatalf("broadcast cwd = %+v, want /tmp/override", publisher.events[0].SessionInfo)
+	if len(publisher.events) != 0 {
+		t.Fatalf("events = %d, want 0", len(publisher.events))
 	}
 }
 

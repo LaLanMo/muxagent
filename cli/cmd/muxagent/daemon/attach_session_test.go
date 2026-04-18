@@ -42,8 +42,6 @@ func TestSendAttachSessionRequest(t *testing.T) {
 		control.AttachSessionRequest{
 			SessionID: "sid-1",
 			Runtime:   "codex",
-			CWD:       "/tmp/project",
-			Title:     "Attached title",
 		},
 		server.Client(),
 	)
@@ -55,9 +53,6 @@ func TestSendAttachSessionRequest(t *testing.T) {
 	}
 	if received.Runtime != "codex" {
 		t.Fatalf("runtime = %q, want codex", received.Runtime)
-	}
-	if received.CWD != "/tmp/project" {
-		t.Fatalf("cwd = %q, want /tmp/project", received.CWD)
 	}
 	if resp.Runtime != "codex" {
 		t.Fatalf("runtime = %q, want codex", resp.Runtime)
@@ -100,5 +95,18 @@ func TestAttachSessionCommandRequiresRuntimeFlag(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), `required flag(s) "runtime" not set`) {
 		t.Fatalf("error = %v, want required runtime flag message", err)
+	}
+}
+
+func TestAttachSessionCommandRejectsRemovedOverrideFlags(t *testing.T) {
+	cmd := newAttachSessionCmd()
+	cmd.SetArgs([]string{"sid-1", "--runtime", "codex", "--cwd", "/tmp/project"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected unknown flag error")
+	}
+	if !strings.Contains(err.Error(), "unknown flag: --cwd") {
+		t.Fatalf("error = %v, want unknown --cwd flag message", err)
 	}
 }

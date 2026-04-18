@@ -17,11 +17,7 @@ import (
 )
 
 func newAttachSessionCmd() *cobra.Command {
-	var (
-		runtimeID     string
-		cwdOverride   string
-		titleOverride string
-	)
+	var runtimeID string
 
 	cmd := &cobra.Command{
 		Use:   "attach-session <session-id>",
@@ -42,8 +38,6 @@ func newAttachSessionCmd() *cobra.Command {
 			req := control.AttachSessionRequest{
 				SessionID: args[0],
 				Runtime:   runtimeID,
-				CWD:       cwdOverride,
-				Title:     titleOverride,
 			}
 			resp, err := sendAttachSessionRequest(
 				context.Background(),
@@ -68,8 +62,6 @@ func newAttachSessionCmd() *cobra.Command {
 
 	cmd.Flags().StringVar(&runtimeID, "runtime", "", "Runtime that owns the session to attach")
 	_ = cmd.MarkFlagRequired("runtime")
-	cmd.Flags().StringVar(&cwdOverride, "cwd", "", "Override cwd resolved from the local runtime transcript")
-	cmd.Flags().StringVar(&titleOverride, "title", "", "Override the displayed session title")
 	return cmd
 }
 

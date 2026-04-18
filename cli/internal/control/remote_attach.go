@@ -5,8 +5,6 @@ import "time"
 type AttachSessionRequest struct {
 	SessionID string `json:"session_id"`
 	Runtime   string `json:"runtime"`
-	CWD       string `json:"cwd,omitempty"`
-	Title     string `json:"title,omitempty"`
 }
 
 type AttachSessionResponse struct {

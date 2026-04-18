@@ -295,12 +295,6 @@ func (d *Daemon) attachSession(
 	if err != nil {
 		return control.AttachSessionResponse{}, err
 	}
-	if overrideCWD := strings.TrimSpace(req.CWD); overrideCWD != "" {
-		meta.CWD = overrideCWD
-	}
-	if overrideTitle := strings.TrimSpace(req.Title); overrideTitle != "" {
-		meta.Title = overrideTitle
-	}
 	if strings.TrimSpace(meta.CWD) == "" {
 		return control.AttachSessionResponse{}, sessionattach.ErrMissingCWD
 	}
