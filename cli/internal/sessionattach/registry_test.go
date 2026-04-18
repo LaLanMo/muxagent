@@ -65,6 +65,38 @@ func TestRegistryResolveClaudeUsesLocalTranscriptMetadata(t *testing.T) {
 	}
 }
 
+func TestRegistryResolveCopilotUsesLocalSessionStateMetadata(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("COPILOT_HOME", root)
+
+	path := filepath.Join(root, "session-state", "session-copilot", "events.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir session-state dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(
+		"{\"type\":\"session.start\",\"timestamp\":\"2026-04-18T12:00:00Z\",\"data\":{\"sessionId\":\"session-copilot\",\"startTime\":\"2026-04-18T12:00:00Z\",\"context\":{\"cwd\":\"/tmp/project\"}}}\n"+
+			"{\"type\":\"user.message\",\"timestamp\":\"2026-04-18T12:00:05Z\",\"data\":{\"content\":\"Attach this Copilot session\"}}\n",
+	), 0o644); err != nil {
+		t.Fatalf("write session state: %v", err)
+	}
+
+	registry := NewRegistry()
+
+	meta, err := registry.Resolve(string(config.RuntimeCopilot), "session-copilot")
+	if err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if meta.CWD != "/tmp/project" {
+		t.Fatalf("cwd = %q, want /tmp/project", meta.CWD)
+	}
+	if meta.Title != "Attach this Copilot session" {
+		t.Fatalf("title = %q, want prompt title", meta.Title)
+	}
+	if meta.CreatedAt.IsZero() || meta.UpdatedAt.IsZero() {
+		t.Fatalf("times = created %v updated %v, want non-zero", meta.CreatedAt, meta.UpdatedAt)
+	}
+}
+
 func TestRegistryResolveOpenCodeUsesLocalStoreMetadata(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", root)

@@ -156,6 +156,55 @@ func TestAttachSessionUsesClaudeLocalRuntimeMetadataAndBroadcasts(t *testing.T) 
 	}
 }
 
+func TestAttachSessionUsesCopilotLocalRuntimeMetadataAndBroadcasts(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("COPILOT_HOME", root)
+
+	path := filepath.Join(root, "session-state", "session-copilot", "events.jsonl")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir session-state dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(
+		"{\"type\":\"session.start\",\"timestamp\":\"2026-04-18T12:00:00Z\",\"data\":{\"sessionId\":\"session-copilot\",\"startTime\":\"2026-04-18T12:00:00Z\",\"context\":{\"cwd\":\"/tmp/copilot-project\"}}}\n"+
+			"{\"type\":\"user.message\",\"timestamp\":\"2026-04-18T12:00:05Z\",\"data\":{\"content\":\"Attach this Copilot session\"}}\n",
+	), 0o644); err != nil {
+		t.Fatalf("write session state: %v", err)
+	}
+
+	publisher := &fakeAttachPublisher{machineID: "machine-25"}
+	d := &Daemon{attachPublisher: publisher}
+
+	resp, err := d.attachSession(context.Background(), control.AttachSessionRequest{
+		SessionID: "session-copilot",
+		Runtime:   "copilot",
+	})
+	if err != nil {
+		t.Fatalf("attachSession: %v", err)
+	}
+	if !resp.Broadcasted {
+		t.Fatalf("Broadcasted = false, want true")
+	}
+	if resp.Runtime != "copilot" {
+		t.Fatalf("runtime = %q, want copilot", resp.Runtime)
+	}
+	if resp.CWD != "/tmp/copilot-project" {
+		t.Fatalf("cwd = %q, want /tmp/copilot-project", resp.CWD)
+	}
+	if resp.Title != "Attach this Copilot session" {
+		t.Fatalf("title = %q, want Attach this Copilot session", resp.Title)
+	}
+	if len(publisher.events) != 1 {
+		t.Fatalf("events = %d, want 1", len(publisher.events))
+	}
+	event := publisher.events[0]
+	if event.SessionInfo == nil || event.SessionInfo.App.Runtime != "copilot" {
+		t.Fatalf("runtime = %+v, want copilot", event.SessionInfo)
+	}
+	if event.SessionInfo == nil || event.SessionInfo.App.MachineID != "machine-25" {
+		t.Fatalf("machineID = %+v, want machine-25", event.SessionInfo)
+	}
+}
+
 func TestAttachSessionUsesOpenCodeLocalRuntimeMetadataAndBroadcasts(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", root)
