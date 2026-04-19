@@ -110,6 +110,29 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                                 ),
                               ),
                               _buildSettingsRow(
+                                icon: LucideIcons.github,
+                                label: 'Star us on GitHub',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.openGithubRepo,
+                              ),
+                              _buildSettingsRow(
+                                leading: const _XLogoIcon(
+                                  size: 18,
+                                  color: AppTheme.textTertiary,
+                                ),
+                                label: 'Follow us on X',
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.openAuthorX,
+                              ),
+                              _buildSettingsRow(
                                 icon: LucideIcons.shield,
                                 label: 'Privacy Policy',
                                 trailing: Icon(
@@ -269,11 +292,13 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   }
 
   Widget _buildSettingsRow({
-    required IconData icon,
+    IconData? icon,
+    Widget? leading,
     required String label,
     required Widget trailing,
     VoidCallback? onTap,
   }) {
+    assert(icon != null || leading != null);
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -285,7 +310,15 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Icon(icon, size: 20, color: AppTheme.textTertiary),
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: Center(
+                child:
+                    leading ??
+                    Icon(icon, size: 20, color: AppTheme.textTertiary),
+              ),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
@@ -303,4 +336,56 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
       ),
     );
   }
+}
+
+class _XLogoIcon extends StatelessWidget {
+  final double size;
+  final Color color;
+  const _XLogoIcon({required this.size, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: size,
+      height: size,
+      child: CustomPaint(painter: _XLogoPainter(color: color)),
+    );
+  }
+}
+
+class _XLogoPainter extends CustomPainter {
+  final Color color;
+  const _XLogoPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    final scale = size.width / 24.0;
+    canvas.scale(scale, scale);
+    final path = Path()
+      ..moveTo(18.244, 2.25)
+      ..relativeLineTo(3.308, 0)
+      ..relativeLineTo(-7.227, 8.26)
+      ..relativeLineTo(8.502, 11.24)
+      ..lineTo(16.17, 21.75)
+      ..relativeLineTo(-5.214, -6.817)
+      ..lineTo(4.99, 21.75)
+      ..lineTo(1.68, 21.75)
+      ..relativeLineTo(7.73, -8.835)
+      ..lineTo(1.254, 2.25)
+      ..lineTo(8.08, 2.25)
+      ..relativeLineTo(4.713, 6.231)
+      ..close()
+      ..relativeMoveTo(-1.161, 17.52)
+      ..relativeLineTo(1.833, 0)
+      ..lineTo(7.084, 4.126)
+      ..lineTo(5.117, 4.126)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _XLogoPainter old) => old.color != color;
 }

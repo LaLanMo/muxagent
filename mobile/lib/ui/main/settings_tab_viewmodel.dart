@@ -127,6 +127,20 @@ class SettingsTabViewModel extends GetxController {
     launchUrl(Uri.parse('https://muxagent.com/en/terms'));
   }
 
+  void openGithubRepo() {
+    launchUrl(
+      Uri.parse('https://github.com/LaLanMo/muxagent'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  void openAuthorX() {
+    launchUrl(
+      Uri.parse('https://x.com/hexarrior'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
   void showPasteUrlDialog() async {
     final textController = TextEditingController();
 
