@@ -12,7 +12,6 @@ import 'package:muxagent/data/services/ws/token_service.dart';
 import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
-import '../../support/fake_pairing_deep_link_coordinator.dart';
 import '../../support/fake_paired_machine_repository.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
@@ -110,7 +109,6 @@ void main() {
     late MainShellViewModel viewModel;
 
     setUp(() {
-      Get.testMode = true;
       wsRepo = _FakeWsSessionRepository(initialActiveIds: {'machine-1'});
       eventRepo = EventRepository(wsRepo: wsRepo);
       machineRepo = FakePairedMachineRepository([_buildMachine('machine-1')]);
@@ -124,9 +122,6 @@ void main() {
         ),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
-        pairingDeepLinkCoordinator: FakePairingDeepLinkCoordinator(
-          blockingWelcomeRedirect: false,
-        ),
       );
     });
 
@@ -194,9 +189,6 @@ void main() {
           recovery: recovery,
           wsRepo: wsRepo,
           eventRepo: eventRepo,
-          pairingDeepLinkCoordinator: FakePairingDeepLinkCoordinator(
-            blockingWelcomeRedirect: false,
-          ),
         );
 
         expect(viewModel.isMachineConnected(machine.machineId), isFalse);
@@ -206,33 +198,6 @@ void main() {
 
         expect(result.sessionReady, isTrue);
         expect(viewModel.isMachineConnected(machine.machineId), isTrue);
-      },
-    );
-  });
-
-  group('MainShellViewModel welcome redirect', () {
-    test('redirects empty machine catalogs when nothing blocks welcome', () {
-      expect(
-        MainShellViewModel.shouldRedirectToWelcome(
-          machineCatalogInitialized: true,
-          hasMachines: false,
-          isPairingDeepLinkBlocking: false,
-        ),
-        isTrue,
-      );
-    });
-
-    test(
-      'does not redirect to welcome while an external pairing deeplink is pending',
-      () {
-        expect(
-          MainShellViewModel.shouldRedirectToWelcome(
-            machineCatalogInitialized: true,
-            hasMachines: false,
-            isPairingDeepLinkBlocking: true,
-          ),
-          isFalse,
-        );
       },
     );
   });

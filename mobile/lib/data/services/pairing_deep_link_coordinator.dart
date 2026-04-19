@@ -174,17 +174,15 @@ class PairingDeepLinkCoordinator {
   bool _authRouteOwnedByExternalLink = false;
   bool _startupObservationInProgress = false;
   bool _started = false;
+  final ValueNotifier<bool> _welcomeRedirectBlocked = ValueNotifier(false);
 
   bool get hasPendingPairingNavigation =>
       _pendingRequest != null ||
       _startupRouteRequest != null ||
       _navigationInFlight;
-  bool get isBlockingWelcomeRedirect =>
-      _startupObservationInProgress ||
-      _pendingRequest != null ||
-      _startupRouteRequest != null ||
-      _navigationInFlight ||
-      _authRouteOwnedByExternalLink;
+  bool get isBlockingWelcomeRedirect => _welcomeRedirectBlocked.value;
+  ValueListenable<bool> get welcomeRedirectBlockedListenable =>
+      _welcomeRedirectBlocked;
   AuthRequest? get currentPendingRequest => _pendingRequest;
 
   bool prepareStartupRoute() {
@@ -200,12 +198,14 @@ class PairingDeepLinkCoordinator {
     _pendingRequestKey = null;
     _navigationInFlight = false;
     _authRouteOwnedByExternalLink = true;
+    _syncWelcomeRedirectBlocked();
     return true;
   }
 
   AuthRequest? consumeStartupRouteRequest() {
     final request = _startupRouteRequest;
     _startupRouteRequest = null;
+    _syncWelcomeRedirectBlocked();
     return request;
   }
 
@@ -241,6 +241,7 @@ class PairingDeepLinkCoordinator {
     if (_currentRoute == Routes.auth) {
       _navigationInFlight = false;
       _authRouteOwnedByExternalLink = _trackedRequestKey != null;
+      _syncWelcomeRedirectBlocked();
       return;
     }
 
@@ -249,11 +250,14 @@ class PairingDeepLinkCoordinator {
       _trackedRequestKey = null;
     }
 
+    _syncWelcomeRedirectBlocked();
     _navigatePendingIfPossible();
   }
 
   Future<void> dispose() async {
     _startupObservationTimer?.cancel();
+    _startupObservationInProgress = false;
+    _syncWelcomeRedirectBlocked();
     await _linkSubscription?.cancel();
   }
 
@@ -274,6 +278,7 @@ class PairingDeepLinkCoordinator {
     _pendingRequestKey = requestKey;
     _trackedRequestKey = requestKey;
     _authRouteOwnedByExternalLink = false;
+    _syncWelcomeRedirectBlocked();
     debugPrint(
       '[PairingDeepLinkCoordinator] accepted request $requestKey, navigatorReady=$_navigatorReady',
     );
@@ -300,6 +305,7 @@ class PairingDeepLinkCoordinator {
     _pendingRequestKey = null;
     _navigationInFlight = true;
     _trackedRequestKey = requestKey;
+    _syncWelcomeRedirectBlocked();
     debugPrint(
       '[PairingDeepLinkCoordinator] navigating to auth for request $requestKey',
     );
@@ -318,10 +324,24 @@ class PairingDeepLinkCoordinator {
     }
 
     _startupObservationInProgress = true;
+    _syncWelcomeRedirectBlocked();
     _startupObservationTimer?.cancel();
     _startupObservationTimer = Timer(const Duration(seconds: 2), () {
       _startupObservationInProgress = false;
+      _syncWelcomeRedirectBlocked();
     });
+  }
+
+  void _syncWelcomeRedirectBlocked() {
+    final next =
+        _startupObservationInProgress ||
+        _pendingRequest != null ||
+        _startupRouteRequest != null ||
+        _navigationInFlight ||
+        _authRouteOwnedByExternalLink;
+    if (_welcomeRedirectBlocked.value != next) {
+      _welcomeRedirectBlocked.value = next;
+    }
   }
 
   bool _shouldIgnoreRequest(String requestKey) {

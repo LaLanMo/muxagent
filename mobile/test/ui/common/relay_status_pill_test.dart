@@ -16,7 +16,6 @@ import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/ui/common/relay_status_pill.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
-import '../../support/fake_pairing_deep_link_coordinator.dart';
 import '../../support/fake_paired_machine_repository.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
@@ -95,9 +94,6 @@ void main() {
         ),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
-        pairingDeepLinkCoordinator: FakePairingDeepLinkCoordinator(
-          blockingWelcomeRedirect: false,
-        ),
       );
       Get.put<MainShellViewModel>(shell);
     });

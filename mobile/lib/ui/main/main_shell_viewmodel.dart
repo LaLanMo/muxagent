@@ -8,7 +8,6 @@ import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../data/repositories/reconnect_recovery_coordinator.dart';
 import '../../data/repositories/ws_session_repository.dart';
-import '../../data/services/pairing_deep_link_coordinator.dart';
 import '../../data/services/ws/models/ws_models.dart';
 import '../../data/services/ws/ws_types.dart';
 import '../../domain/enums.dart';
@@ -20,19 +19,16 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   final ReconnectRecoveryCoordinator _recovery;
   final WsSessionRepository _wsRepo;
   final EventRepository _eventRepo;
-  final PairingDeepLinkCoordinator _pairingDeepLinkCoordinator;
 
   MainShellViewModel({
     required PairedMachineRepository machineRepo,
     required ReconnectRecoveryCoordinator recovery,
     required WsSessionRepository wsRepo,
     required EventRepository eventRepo,
-    required PairingDeepLinkCoordinator pairingDeepLinkCoordinator,
   }) : _machineRepo = machineRepo,
        _recovery = recovery,
        _wsRepo = wsRepo,
-       _eventRepo = eventRepo,
-       _pairingDeepLinkCoordinator = pairingDeepLinkCoordinator;
+       _eventRepo = eventRepo;
 
   RxBool get relayConnected => _wsRepo.relayConnected;
   Rx<ConnState> get relayConnectionState => _wsRepo.connectionState;
@@ -45,7 +41,6 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   StreamSubscription<WsMachineStatus>? _machineStatusSub;
   VoidCallback? _machinesListener;
   bool _isReconnecting = false;
-  bool _machineCatalogInitialized = false;
 
   @override
   void onInit() {
@@ -154,24 +149,11 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
     };
   }
 
-  @visibleForTesting
-  static bool shouldRedirectToWelcome({
-    required bool machineCatalogInitialized,
-    required bool hasMachines,
-    required bool isPairingDeepLinkBlocking,
-  }) {
-    if (!machineCatalogInitialized || hasMachines) {
-      return false;
-    }
-    return !isPairingDeepLinkBlocking;
-  }
-
   // --- Private ---
 
   Future<void> _loadMachines() async {
     await _machineRepo.refresh();
-    _machineCatalogInitialized = true;
-    _handleMachineCatalogChanged();
+    _connectKnownMachines();
   }
 
   void _subscribeToMachineCatalog() {
@@ -180,28 +162,10 @@ class MainShellViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   void _handleMachineCatalogChanged() {
-    if (shouldRedirectToWelcome(
-      machineCatalogInitialized: _machineCatalogInitialized,
-      hasMachines: machines.isNotEmpty,
-      isPairingDeepLinkBlocking:
-          _pairingDeepLinkCoordinator.isBlockingWelcomeRedirect,
-    )) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!shouldRedirectToWelcome(
-          machineCatalogInitialized: _machineCatalogInitialized,
-          hasMachines: machines.isNotEmpty,
-          isPairingDeepLinkBlocking:
-              _pairingDeepLinkCoordinator.isBlockingWelcomeRedirect,
-        )) {
-          return;
-        }
-        Get.offAllNamed(Routes.welcome);
-      });
-      return;
-    }
-    if (!_machineCatalogInitialized) {
-      return;
-    }
+    _connectKnownMachines();
+  }
+
+  void _connectKnownMachines() {
     for (final machine in machines) {
       if (!_wsRepo.hasSession(machine.machineId)) {
         unawaited(_connectMachineInBackground(machine));

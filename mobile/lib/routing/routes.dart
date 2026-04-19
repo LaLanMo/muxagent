@@ -1,4 +1,5 @@
 abstract class Routes {
+  static const startup = '/startup';
   static const home = '/';
   static const welcome = '/welcome';
   static const scan = '/scan';

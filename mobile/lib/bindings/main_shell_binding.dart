@@ -5,7 +5,6 @@ import '../data/repositories/paired_machine_repository.dart';
 import '../data/repositories/reconnect_recovery_coordinator.dart';
 import '../data/repositories/ws_session_repository.dart';
 import '../data/services/local/crypto_service.dart';
-import '../data/services/pairing_deep_link_coordinator.dart';
 import '../ui/main/active_tab_viewmodel.dart';
 import '../ui/main/history_tab_viewmodel.dart';
 import '../ui/main/main_shell_viewmodel.dart';
@@ -20,7 +19,6 @@ class MainShellBinding extends Bindings {
         recovery: Get.find<ReconnectRecoveryCoordinator>(),
         wsRepo: Get.find<WsSessionRepository>(),
         eventRepo: Get.find<EventRepository>(),
-        pairingDeepLinkCoordinator: Get.find<PairingDeepLinkCoordinator>(),
       ),
     );
     Get.lazyPut(

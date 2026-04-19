@@ -16,7 +16,6 @@ import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 import 'package:muxagent/ui/main/settings_tab.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
-import '../../support/fake_pairing_deep_link_coordinator.dart';
 import '../../support/fake_paired_machine_repository.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
@@ -102,9 +101,6 @@ void main() {
         ),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
-        pairingDeepLinkCoordinator: FakePairingDeepLinkCoordinator(
-          blockingWelcomeRedirect: false,
-        ),
       );
       settings = SettingsTabViewModel(
         crypto: _FakeCryptoService(),

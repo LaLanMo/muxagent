@@ -42,9 +42,6 @@ Future<void> main() async {
     Get.find<SessionChatCacheRepository>().init(),
     pairingDeepLinkCoordinator.start(),
   ]);
-  final initialRoute = pairingDeepLinkCoordinator.prepareStartupRoute()
-      ? Routes.auth
-      : Routes.home;
 
   // Fire-and-forget: don't block app startup for push registration.
   Get.find<PushNotificationService>().init();
@@ -57,7 +54,7 @@ Future<void> main() async {
     ),
   );
 
-  runApp(MuxAgentApp(initialRoute: initialRoute));
+  runApp(const MuxAgentApp(initialRoute: Routes.startup));
   WidgetsBinding.instance.addPostFrameCallback((_) {
     pairingDeepLinkCoordinator.onNavigatorReady();
   });
