@@ -1,19 +1,13 @@
 # MuxAgent
 
-![MuxAgent Task TUI](cli/task-tui.png)
+![MuxAgent Remote Control](cli/og-image.png)
 
-MuxAgent orchestrates AI coding agents with workflow graphs and mobile remote
-control.
+**Your AI coding agents, remote-controlled from your phone.**
 
-## What MuxAgent Does
-
-- **Task System** — Run coding tasks through graph-based workflows with
-  explicit planning, review, approval, implementation, and verification steps.
-  MuxAgent ships built-in configs for different risk tolerances and supports
-  both Codex and Claude Code runtimes.
-- **Remote Control** — Pair the mobile app to monitor and control supported
-  agent sessions from your phone, including Claude Code, Codex, Gemini CLI,
-  GitHub Copilot, OpenCode, and Goose.
+Claude Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, and Goose run on
+your dev machine — MuxAgent lets you drive them from anywhere. Pair the
+mobile app to a daemon on your Mac, Linux, or Windows box and monitor,
+prompt, and approve sessions from your pocket.
 
 ## Installation
 
@@ -36,45 +30,59 @@ Official installs include everything needed to run MuxAgent with Claude Code.
 
 ## Quick Start
 
-### Task System
+You can be driving a Claude Code session from your phone in under a minute.
 
-```bash
-muxagent
-```
-
-This opens the workflow CLI. Pick a task config (`default`, `plan-only`,
-`single-run`, `autonomous`, or `yolo`), describe the task, and MuxAgent routes
-the agent through the workflow for you.
-
-### Remote Control
-
-![MuxAgent Remote Control](cli/og-image.png)
-
-1. Download the MuxAgent mobile app.
-   [Google Play](https://play.google.com/store/apps/details?id=ai.soloflux.muxagent) | [App Store](https://apps.apple.com/us/app/muxagent-remote-coding/id6761751534).
-2. Run:
+1. Install the MuxAgent mobile app.
+   [Google Play](https://play.google.com/store/apps/details?id=ai.soloflux.muxagent) | [App Store](https://apps.apple.com/us/app/muxagent-remote-coding/id6761751534)
+2. On your dev machine, start the daemon:
 
    ```bash
    muxagent daemon start
    ```
 
-3. Scan the QR code in the app to finish setup.
+3. Scan the QR code in the app to pair. First run walks through setup, then
+   starts the daemon.
 
-On a new machine, `muxagent daemon start` begins first-time setup, shows a QR
-code, waits for approval in the mobile app, and then starts the daemon.
+Once paired, pick any supported runtime — Claude Code, Codex, Gemini CLI,
+GitHub Copilot, OpenCode, or Goose — and you are attached to a live session.
 
-You can also run `muxagent auth login` manually if you want to pair before
-starting the daemon.
+Pairing keys and session traffic are described in
+[SECURITY.md](SECURITY.md).
 
-After pairing, the mobile app can connect to supported runtimes such as Claude
-Code, Codex, Gemini CLI, GitHub Copilot, OpenCode, and Goose.
+## CLI Commands
 
-## Workflow Graphs
+Everything the mobile flow needs lives under a handful of commands:
 
-A task config defines a workflow graph: the sequence of nodes and edges that an
-AI agent follows while working on a task.
+**Daemon**
 
-**`default`** — When you want human sign-off before code changes land.
+- `muxagent daemon start` — First-time setup, or start the daemon in the background.
+- `muxagent daemon status` — Check whether the daemon is running.
+- `muxagent daemon stop` — Stop the daemon.
+- `muxagent daemon attach-session <session-id> --runtime <runtime>` — Attach an existing local runtime session (e.g. `--runtime claude-code`) so the mobile app can continue it.
+
+**Auth / pairing**
+
+- `muxagent auth login` — Pair a mobile device via QR code.
+- `muxagent auth status` — Show current pairing status.
+- `muxagent auth logout` — Remove stored credentials.
+
+**General**
+
+- `muxagent version` — Print the installed version.
+- `muxagent update` — Update to the latest release.
+- `muxagent health` — Check daemon health.
+
+Full command reference lives in [cli/README.md](cli/README.md).
+
+## Coming Soon: Desktop Workflow Graphs
+
+The upcoming MuxAgent **Desktop** app runs coding tasks through graph-based
+workflows with explicit planning, review, approval, implementation, and
+verification steps. Five bundled configs cover different risk tolerances
+— from strict human sign-off to fully autonomous multi-wave runs.
+
+The `default` graph, for example, requires human approval before any code
+lands:
 
 ```
         ┌─────────────────────────┐
@@ -86,61 +94,12 @@ AI agent follows while working on a task.
      (review rejected)                    (verify failed)
 ```
 
-**`plan-only`** — When you want a reviewed plan without touching code.
-
-```
-       plan ──▶ review ──▶ done
-        ▲         │
-        └─────────┘
-     (review rejected)
-```
-
-**`single-run`** — Handle one request once, then stop.
-
-```
-   handle_request ──▶ done
-```
-
-**`autonomous`** — When you trust the agent and want fast iteration.
-
-```
-       plan ──▶ review ──▶ implement ──▶ verify ──▶ done
-        ▲         │           ▲              │
-        └─────────┘           └──────────────┘
-     (review rejected)         (verify failed)
-```
-
-**`yolo`** — Fully autonomous multi-wave mode. No approval, no clarification.
-
-```
-       ┌──────────────────────────────────────────────────┐
-       │                                    (next wave)   │
-       ▼                                                  │
-      plan ──▶ review ──▶ implement ──▶ verify ──▶ evaluate ──▶ done
-       ▲         │           ▲              │
-       └─────────┘           └──────────────┘
-    (review rejected)         (verify failed)
-```
-
-Workflow configs are different from runtime selection:
-
-- a workflow config chooses the graph, bundled prompts, and product intent
-- runtime selection chooses which coding runtime executes agent nodes, for
-  example `codex` or `claude-code`
-
-## Customize Workflows
-
-The included workflow configs are stored as task config bundles under
-`~/.muxagent/taskconfigs`. You can clone them and modify the YAML to change the
-workflow graph, prompts, runtime, iteration limits, or clarification settings.
-
-See [CLI docs](cli/README.md) for the full command set and
-[Task Config Semantics](cli/docs/task-config-semantics.md) for the workflow
-schema, edge semantics, and output contract.
+See [the full set of workflow graphs](cli/README.md#workflow-graphs)
+(`plan-only`, `single-run`, `autonomous`, `yolo`) and
+[Task Config Semantics](cli/docs/task-config-semantics.md) for the schema,
+edge semantics, and output contract.
 
 ## Monorepo Surfaces
-
-This repository is a monorepo for the product's different surfaces:
 
 - `cli/` — Go CLI, app-server, updater, and bundled workflow configs
 - `mobile/` — Flutter mobile app
