@@ -1,9 +1,11 @@
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 
 import '../../data/models/auth_request.dart';
 import '../../data/repositories/auth_repository.dart';
 import '../../data/services/api/base_api_client.dart';
 import '../../data/services/api/relay_service.dart';
+import '../../data/services/pairing_deep_link_coordinator.dart';
 import '../../routing/routes.dart';
 
 enum AuthState { checking, pending, approving, approved, expired, error }
@@ -14,7 +16,10 @@ class AuthViewModel extends GetxController {
   AuthViewModel({required AuthRepository authRepository})
     : _authRepository = authRepository;
 
-  late final AuthRequest authRequest;
+  AuthRequest? _authRequest;
+  AuthRequest get authRequest => _authRequest!;
+  @protected
+  set authRequest(AuthRequest request) => _authRequest = request;
 
   final state = AuthState.checking.obs;
   final errorMessage = RxnString();
@@ -23,15 +28,28 @@ class AuthViewModel extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    authRequest = Get.arguments as AuthRequest;
+    _authRequest = _resolveAuthRequest();
+    if (_authRequest == null) {
+      state.value = AuthState.error;
+      errorMessage.value = 'Missing pairing request.';
+      return;
+    }
+    debugPrint('[AuthViewModel] onInit for request ${authRequest.id}');
     _checkAndApprove();
   }
 
   Future<void> _checkAndApprove() async {
+    final request = _authRequest;
+    if (request == null) {
+      state.value = AuthState.error;
+      errorMessage.value = 'Missing pairing request.';
+      return;
+    }
+
     try {
       // First check if the request is still valid
       state.value = AuthState.checking;
-      final status = await _authRepository.checkStatus(authRequest);
+      final status = await _authRepository.checkStatus(request);
 
       if (status.isExpired) {
         state.value = AuthState.expired;
@@ -56,9 +74,16 @@ class AuthViewModel extends GetxController {
   }
 
   Future<void> approve() async {
+    final request = _authRequest;
+    if (request == null) {
+      state.value = AuthState.error;
+      errorMessage.value = 'Missing pairing request.';
+      return;
+    }
+
     try {
       state.value = AuthState.approving;
-      await _authRepository.approve(authRequest);
+      await _authRepository.approve(request);
       state.value = AuthState.approved;
     } on ApiException catch (e) {
       state.value = AuthState.error;
@@ -83,5 +108,18 @@ class AuthViewModel extends GetxController {
 
   void retry() {
     _checkAndApprove();
+  }
+
+  AuthRequest? _resolveAuthRequest() {
+    final routeArguments = Get.arguments;
+    if (routeArguments is AuthRequest) {
+      return routeArguments;
+    }
+
+    if (!Get.isRegistered<PairingDeepLinkCoordinator>()) {
+      return null;
+    }
+
+    return Get.find<PairingDeepLinkCoordinator>().consumeStartupRouteRequest();
   }
 }

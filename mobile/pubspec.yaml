@@ -47,6 +47,7 @@ dependencies:
 
   # URL launcher for deep links
   url_launcher: ^6.2.0
+  app_links: ^6.4.1
 
   # Shared preferences for storing keys
   shared_preferences: ^2.2.0

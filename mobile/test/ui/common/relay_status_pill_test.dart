@@ -4,7 +4,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/config/theme.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
-import 'package:muxagent/data/repositories/paired_machine_repository.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
 import 'package:muxagent/data/repositories/session_chat_cache_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
@@ -17,6 +16,7 @@ import 'package:muxagent/domain/paired_machine.dart';
 import 'package:muxagent/ui/common/relay_status_pill.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
+import '../../support/fake_pairing_deep_link_coordinator.dart';
 import '../../support/fake_paired_machine_repository.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
@@ -32,7 +32,7 @@ class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = true.obs;
   final connectionStateValue = ConnState.connected.obs;
   final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
-  Set<String> _activeIds;
+  final Set<String> _activeIds;
 
   _FakeWsSessionRepository({Set<String>? initialActiveIds})
     : _activeIds = {...?initialActiveIds},
@@ -95,6 +95,9 @@ void main() {
         ),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
+        pairingDeepLinkCoordinator: FakePairingDeepLinkCoordinator(
+          blockingWelcomeRedirect: false,
+        ),
       );
       Get.put<MainShellViewModel>(shell);
     });

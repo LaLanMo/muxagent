@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:muxagent/data/models/auth_request.dart';
 import 'package:muxagent/ui/welcome/welcome_screen.dart';
 import 'package:muxagent/ui/welcome/welcome_viewmodel.dart';
 
@@ -16,7 +17,9 @@ void main() {
   testWidgets('welcome screen avoids overflow when keyboard is visible', (
     tester,
   ) async {
-    Get.put(WelcomeViewModel());
+    Get.put(
+      WelcomeViewModel(pairingLinkParser: const AuthRequestPairingLinkParser()),
+    );
 
     await tester.pumpWidget(
       GetMaterialApp(
@@ -43,7 +46,9 @@ void main() {
   testWidgets('tapping outside the URL field dismisses the keyboard focus', (
     tester,
   ) async {
-    Get.put(WelcomeViewModel());
+    Get.put(
+      WelcomeViewModel(pairingLinkParser: const AuthRequestPairingLinkParser()),
+    );
 
     await tester.pumpWidget(const GetMaterialApp(home: WelcomeScreen()));
     await tester.pumpAndSettle();
@@ -62,5 +67,20 @@ void main() {
 
     editableText = tester.widget(find.byType(EditableText));
     expect(editableText.focusNode.hasFocus, isFalse);
+  });
+
+  test('manual connect maps parser failures to inline errors', () {
+    final viewModel = WelcomeViewModel(
+      pairingLinkParser: const AuthRequestPairingLinkParser(),
+    );
+    addTearDown(viewModel.onClose);
+
+    viewModel.urlController.text = 'muxagent://auth?id=req-123';
+    viewModel.onManualConnect();
+
+    expect(
+      viewModel.urlError.value,
+      'Invalid URL: missing id or relay parameter',
+    );
   });
 }

@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
-import 'package:muxagent/data/repositories/paired_machine_repository.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
 import 'package:muxagent/data/repositories/session_chat_cache_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
 import 'package:muxagent/data/repositories/ws_session_repository.dart';
+import 'package:muxagent/data/models/auth_request.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
@@ -16,6 +16,7 @@ import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 import 'package:muxagent/ui/main/settings_tab.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
+import '../../support/fake_pairing_deep_link_coordinator.dart';
 import '../../support/fake_paired_machine_repository.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
@@ -101,6 +102,9 @@ void main() {
         ),
         wsRepo: wsRepo,
         eventRepo: eventRepo,
+        pairingDeepLinkCoordinator: FakePairingDeepLinkCoordinator(
+          blockingWelcomeRedirect: false,
+        ),
       );
       settings = SettingsTabViewModel(
         crypto: _FakeCryptoService(),
@@ -109,6 +113,7 @@ void main() {
         connectMachine: (_) async {
           throw UnimplementedError();
         },
+        pairingLinkParser: const AuthRequestPairingLinkParser(),
       );
       Get.put<MainShellViewModel>(shell);
       Get.put<SettingsTabViewModel>(settings);

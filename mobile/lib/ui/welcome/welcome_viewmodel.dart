@@ -12,6 +12,10 @@ const welcomeInstallScriptUrl =
 const welcomeInstallCommand = 'curl -fsSL $welcomeInstallScriptUrl | sh';
 
 class WelcomeViewModel extends GetxController {
+  WelcomeViewModel({required PairingLinkParser pairingLinkParser})
+    : _pairingLinkParser = pairingLinkParser;
+
+  final PairingLinkParser _pairingLinkParser;
   final urlController = TextEditingController();
   final urlError = RxnString();
 
@@ -34,24 +38,19 @@ class WelcomeViewModel extends GetxController {
     dismissKeyboard();
     final url = urlController.text.trim();
     if (url.isEmpty) {
-      urlError.value = 'Please enter a URL';
+      urlError.value = _errorMessageFor(PairingLinkParseFailure.emptyInput);
       return;
     }
 
-    if (!url.toLowerCase().startsWith('muxagent://auth')) {
-      urlError.value = 'Invalid URL format. Must start with muxagent://auth';
-      return;
-    }
-
-    final authRequest = AuthRequest.fromQrUrl(url);
-    if (!authRequest.isValid) {
-      urlError.value = 'Invalid URL: missing id or relay parameter';
+    final result = _pairingLinkParser.parseText(url);
+    if (!result.isSuccess) {
+      urlError.value = _errorMessageFor(result.failure!);
       return;
     }
 
     urlError.value = null;
     urlController.clear();
-    Get.toNamed(Routes.auth, arguments: authRequest);
+    Get.toNamed(Routes.auth, arguments: result.authRequest);
   }
 
   void clearUrlError() {
@@ -70,5 +69,20 @@ class WelcomeViewModel extends GetxController {
     dismissKeyboard();
     Clipboard.setData(const ClipboardData(text: welcomeInstallCommand));
     AppToast.show('Installation command copied');
+  }
+
+  String _errorMessageFor(PairingLinkParseFailure failure) {
+    switch (failure) {
+      case PairingLinkParseFailure.emptyInput:
+        return 'Please enter a URL';
+      case PairingLinkParseFailure.invalidScheme:
+      case PairingLinkParseFailure.invalidTarget:
+        return 'Invalid URL format. Must start with muxagent://auth';
+      case PairingLinkParseFailure.missingId:
+      case PairingLinkParseFailure.missingRelay:
+        return 'Invalid URL: missing id or relay parameter';
+      case PairingLinkParseFailure.malformedUri:
+        return 'Invalid URL format';
+    }
   }
 }

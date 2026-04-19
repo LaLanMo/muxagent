@@ -23,6 +23,7 @@ class SettingsTabViewModel extends GetxController {
   final PairedMachineRepository _machineRepo;
   final WsSessionRepository _wsRepo;
   final Future<ReconnectRecoveryResult> Function(PairedMachine) _connectMachine;
+  final PairingLinkParser _pairingLinkParser;
 
   SettingsTabViewModel({
     required CryptoService crypto,
@@ -30,10 +31,12 @@ class SettingsTabViewModel extends GetxController {
     required WsSessionRepository wsRepo,
     required Future<ReconnectRecoveryResult> Function(PairedMachine)
     connectMachine,
+    required PairingLinkParser pairingLinkParser,
   }) : _crypto = crypto,
        _machineRepo = machineRepo,
        _wsRepo = wsRepo,
-       _connectMachine = connectMachine;
+       _connectMachine = connectMachine,
+       _pairingLinkParser = pairingLinkParser;
 
   final hasMasterKey = false.obs;
   final appVersion = ''.obs;
@@ -145,17 +148,13 @@ class SettingsTabViewModel extends GetxController {
             onPressed: () {
               final url = textController.text.trim();
               if (url.isEmpty) return;
-              if (!url.toLowerCase().startsWith('muxagent://auth')) {
-                uiEffect.value = ShowToast('Invalid URL format');
-                return;
-              }
-              final authRequest = AuthRequest.fromQrUrl(url);
-              if (!authRequest.isValid) {
-                uiEffect.value = ShowToast('Missing id or relay parameter');
+              final result = _pairingLinkParser.parseText(url);
+              if (!result.isSuccess) {
+                uiEffect.value = ShowToast(_errorMessageFor(result.failure!));
                 return;
               }
               Get.back();
-              Get.toNamed(Routes.auth, arguments: authRequest);
+              Get.toNamed(Routes.auth, arguments: result.authRequest);
             },
             child: const Text('Connect'),
           ),
@@ -184,5 +183,18 @@ class SettingsTabViewModel extends GetxController {
       smartQuotesType: SmartQuotesType.disabled,
       spellCheckConfiguration: const SpellCheckConfiguration.disabled(),
     );
+  }
+
+  String _errorMessageFor(PairingLinkParseFailure failure) {
+    switch (failure) {
+      case PairingLinkParseFailure.emptyInput:
+      case PairingLinkParseFailure.malformedUri:
+      case PairingLinkParseFailure.invalidScheme:
+      case PairingLinkParseFailure.invalidTarget:
+        return 'Invalid URL format';
+      case PairingLinkParseFailure.missingId:
+      case PairingLinkParseFailure.missingRelay:
+        return 'Missing id or relay parameter';
+    }
   }
 }

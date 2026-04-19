@@ -2,7 +2,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/local/session_database.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
-import 'package:muxagent/data/repositories/paired_machine_repository.dart';
 import 'package:muxagent/data/repositories/runtime_preference_repository.dart';
 import 'package:muxagent/data/repositories/session_chat_cache_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';

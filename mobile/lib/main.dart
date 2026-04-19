@@ -10,6 +10,7 @@ import 'config/firebase.dart';
 import 'config/theme.dart';
 import 'data/repositories/event_repository.dart';
 import 'data/repositories/session_chat_cache_repository.dart';
+import 'data/services/pairing_deep_link_coordinator.dart';
 import 'data/services/push/push_notification_service.dart';
 import 'routing/router.dart';
 import 'routing/routes.dart';
@@ -31,12 +32,17 @@ Future<void> main() async {
 
   // Eagerly register bindings so we can init the EventRepository.
   InitialBinding().dependencies();
+  final pairingDeepLinkCoordinator = Get.find<PairingDeepLinkCoordinator>();
 
   // Load persisted session and chat-cache state before the UI starts.
   await Future.wait([
     Get.find<EventRepository>().init(),
     Get.find<SessionChatCacheRepository>().init(),
+    pairingDeepLinkCoordinator.start(),
   ]);
+  final initialRoute = pairingDeepLinkCoordinator.prepareStartupRoute()
+      ? Routes.auth
+      : Routes.home;
 
   // Fire-and-forget: don't block app startup for push registration.
   Get.find<PushNotificationService>().init();
@@ -49,11 +55,16 @@ Future<void> main() async {
     ),
   );
 
-  runApp(const MuxAgentApp());
+  runApp(MuxAgentApp(initialRoute: initialRoute));
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    pairingDeepLinkCoordinator.onNavigatorReady();
+  });
 }
 
 class MuxAgentApp extends StatelessWidget {
-  const MuxAgentApp({super.key});
+  const MuxAgentApp({required this.initialRoute, super.key});
+
+  final String initialRoute;
 
   @override
   Widget build(BuildContext context) {
@@ -62,8 +73,14 @@ class MuxAgentApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.light,
-      initialRoute: Routes.home,
+      initialRoute: initialRoute,
       getPages: AppRouter.pages,
+      routingCallback: (routing) {
+        if (!Get.isRegistered<PairingDeepLinkCoordinator>()) {
+          return;
+        }
+        Get.find<PairingDeepLinkCoordinator>().onRouteChanged(routing?.current);
+      },
       debugShowCheckedModeBanner: false,
     );
   }

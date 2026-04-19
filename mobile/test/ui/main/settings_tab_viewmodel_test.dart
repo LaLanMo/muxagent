@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
 import 'package:muxagent/data/repositories/ws_session_repository.dart';
+import 'package:muxagent/data/models/auth_request.dart';
 import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
@@ -111,6 +112,7 @@ void main() {
             sessionReady: false,
           );
         },
+        pairingLinkParser: const AuthRequestPairingLinkParser(),
       );
     });
 
@@ -167,6 +169,7 @@ void main() {
               sessionReady: true,
             );
           },
+          pairingLinkParser: const AuthRequestPairingLinkParser(),
         );
 
         await viewModel.connectMachine(machineRepo.machines.first);

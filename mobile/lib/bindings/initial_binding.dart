@@ -14,9 +14,11 @@ import '../data/repositories/ws_session_repository.dart';
 import '../data/services/api/relay_service.dart';
 import '../data/services/api/stt_service.dart';
 import '../data/services/local/crypto_service.dart';
+import '../data/services/pairing_deep_link_coordinator.dart';
 import '../data/services/push/push_notification_service.dart';
 import '../data/services/ws/relay_ws_client.dart';
 import '../data/services/ws/token_service.dart';
+import '../data/models/auth_request.dart';
 import '../usecases/transcribe_audio.dart';
 
 class InitialBinding extends Bindings {
@@ -25,6 +27,26 @@ class InitialBinding extends Bindings {
     // Services
     Get.put<CryptoService>(CryptoService(), permanent: true);
     Get.put<RelayService>(RelayService(), permanent: true);
+    Get.put<PairingLinkParser>(
+      const AuthRequestPairingLinkParser(),
+      permanent: true,
+    );
+    Get.put<PairingLinkSource>(
+      CompositePairingLinkSource(
+        sources: [
+          NativePreferencePairingLinkSource(),
+          AppLinksPairingLinkSource(),
+        ],
+      ),
+      permanent: true,
+    );
+    Get.put<PairingDeepLinkCoordinator>(
+      PairingDeepLinkCoordinator(
+        source: Get.find<PairingLinkSource>(),
+        parser: Get.find<PairingLinkParser>(),
+      ),
+      permanent: true,
+    );
     Get.put<PairedMachineRepository>(
       PairedMachineRepository(),
       permanent: true,
