@@ -48,6 +48,11 @@ type LoadSessionParams struct {
 	Runtime        string `json:"runtime"`
 }
 
+type AttachSessionParams struct {
+	SessionID string `json:"sessionId"`
+	Runtime   string `json:"runtime"`
+}
+
 type ResolveSessionsParams struct {
 	Runtime    string   `json:"runtime,omitempty"`
 	SessionIDs []string `json:"sessionIds,omitempty"`
@@ -130,6 +135,10 @@ func DecodeCreateSessionParams(raw json.RawMessage) (CreateSessionParams, error)
 
 func DecodeLoadSessionParams(raw json.RawMessage) (LoadSessionParams, error) {
 	return decodeRPCParams[LoadSessionParams](raw)
+}
+
+func DecodeAttachSessionParams(raw json.RawMessage) (AttachSessionParams, error) {
+	return decodeRPCParams[AttachSessionParams](raw)
 }
 
 func DecodeResolveSessionsParams(raw json.RawMessage) (ResolveSessionsParams, error) {
@@ -231,6 +240,17 @@ type SessionLoadResultApp struct {
 type SessionLoadResult struct {
 	App SessionLoadResultApp            `json:"app"`
 	ACP acpprotocol.LoadSessionResponse `json:"acp"`
+}
+
+type SessionAttachResult struct {
+	OK        bool          `json:"ok"`
+	SessionID string        `json:"sessionId"`
+	Runtime   string        `json:"runtime"`
+	CWD       string        `json:"cwd"`
+	Title     string        `json:"title,omitempty"`
+	Status    SessionStatus `json:"status"`
+	CreatedAt time.Time     `json:"createdAt,omitempty"`
+	UpdatedAt time.Time     `json:"updatedAt,omitempty"`
 }
 
 type ResolvedSession struct {

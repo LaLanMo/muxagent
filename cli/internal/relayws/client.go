@@ -26,6 +26,7 @@ import (
 	"github.com/LaLanMo/muxagent/cli/internal/domain"
 	"github.com/LaLanMo/muxagent/cli/internal/keyring"
 	runtimemanager "github.com/LaLanMo/muxagent/cli/internal/runtime/manager"
+	"github.com/LaLanMo/muxagent/cli/internal/sessionattach"
 	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -391,6 +392,13 @@ func (c *Client) handleRPC(connEpoch uint64, enc EncryptedMessage) {
 			break
 		}
 		result, respErr = c.rpcLoadSession(ctx, params)
+	case "session.attach":
+		params, err := appwire.DecodeAttachSessionParams(payload.Params)
+		if err != nil {
+			respErr = "invalid attach params: " + err.Error()
+			break
+		}
+		result, respErr = c.rpcAttachSession(ctx, params)
 	case "session.resolve":
 		params, err := appwire.DecodeResolveSessionsParams(payload.Params)
 		if err != nil {
@@ -659,6 +667,37 @@ func (c *Client) rpcLoadSession(ctx context.Context, params appwire.LoadSessionP
 		ACP: acpResp,
 	}
 	return resp, ""
+}
+
+func (c *Client) rpcAttachSession(ctx context.Context, params appwire.AttachSessionParams) (any, string) {
+	result, err := sessionattach.Execute(
+		ctx,
+		nil,
+		c,
+		sessionattach.Request{
+			SessionID: params.SessionID,
+			Runtime:   c.resolveRequestedRuntime(params.Runtime),
+		},
+	)
+	if err != nil {
+		return nil, err.Error()
+	}
+
+	c.ensureSessionStatus(result.SessionID, result.Status)
+	c.sessionCWDMu.Lock()
+	c.sessionCWD[result.SessionID] = result.CWD
+	c.sessionCWDMu.Unlock()
+
+	return appwire.SessionAttachResult{
+		OK:        true,
+		SessionID: result.SessionID,
+		Runtime:   result.Runtime,
+		CWD:       result.CWD,
+		Title:     result.Title,
+		Status:    sessionStatusToWire(result.Status),
+		CreatedAt: result.CreatedAt,
+		UpdatedAt: result.UpdatedAt,
+	}, ""
 }
 
 func (c *Client) rpcResolveSessions(ctx context.Context, params appwire.ResolveSessionsParams) (any, string) {

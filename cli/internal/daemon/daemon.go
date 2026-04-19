@@ -11,16 +11,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 	"github.com/LaLanMo/muxagent/cli/internal/auth"
 	"github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/control"
 	"github.com/LaLanMo/muxagent/cli/internal/crypto"
-	"github.com/LaLanMo/muxagent/cli/internal/domain"
 	"github.com/LaLanMo/muxagent/cli/internal/keyring"
 	"github.com/LaLanMo/muxagent/cli/internal/relayws"
 	runtimemanager "github.com/LaLanMo/muxagent/cli/internal/runtime/manager"
@@ -33,11 +30,6 @@ const (
 	relayReplayByteBudget = 2 * 1024 * 1024
 )
 
-var (
-	errAttachSessionRuntimeRequired = errors.New("missing runtime")
-	errAttachSessionIDRequired      = errors.New("missing session id")
-)
-
 type Daemon struct {
 	control         *control.Server
 	addr            string
@@ -47,15 +39,10 @@ type Daemon struct {
 	rt              *runtimemanager.Manager
 	eventBuf        *relayws.EventBuffer
 	attachResolvers *sessionattach.Registry
-	attachPublisher attachSessionPublisher
+	attachPublisher sessionattach.Publisher
 	stopOnce        sync.Once
 	stopErr         error
 	done            chan struct{}
-}
-
-type attachSessionPublisher interface {
-	SendLiveEvent(event appwire.Event) error
-	MachineID() string
 }
 
 func New(relayURL string) *Daemon {
@@ -253,8 +240,8 @@ func (d *Daemon) handleAttachSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status := http.StatusInternalServerError
 		switch {
-		case errors.Is(err, errAttachSessionRuntimeRequired),
-			errors.Is(err, errAttachSessionIDRequired):
+		case errors.Is(err, sessionattach.ErrRuntimeRequired),
+			errors.Is(err, sessionattach.ErrSessionIDRequired):
 			status = http.StatusBadRequest
 		case errors.Is(err, sessionattach.ErrSessionNotFound):
 			status = http.StatusNotFound
@@ -262,7 +249,8 @@ func (d *Daemon) handleAttachSession(w http.ResponseWriter, r *http.Request) {
 			status = http.StatusUnprocessableEntity
 		case errors.Is(err, sessionattach.ErrUnsupportedRuntime):
 			status = http.StatusNotImplemented
-		case errors.Is(err, relayws.ErrRelayNotConnected):
+		case errors.Is(err, sessionattach.ErrPublisherRequired),
+			errors.Is(err, relayws.ErrRelayNotConnected):
 			status = http.StatusServiceUnavailable
 		case errors.Is(err, relayws.ErrNoActiveSession):
 			status = http.StatusConflict
@@ -278,75 +266,30 @@ func (d *Daemon) attachSession(
 	ctx context.Context,
 	req control.AttachSessionRequest,
 ) (control.AttachSessionResponse, error) {
-	runtimeID := strings.TrimSpace(req.Runtime)
-	if runtimeID == "" {
-		return control.AttachSessionResponse{}, errAttachSessionRuntimeRequired
-	}
-	sessionID := strings.TrimSpace(req.SessionID)
-	if sessionID == "" {
-		return control.AttachSessionResponse{}, errAttachSessionIDRequired
-	}
-
-	resolvers := d.attachResolvers
-	if resolvers == nil {
-		resolvers = sessionattach.NewRegistry()
-	}
-	meta, err := resolvers.Resolve(runtimeID, sessionID)
+	result, err := sessionattach.Execute(
+		ctx,
+		d.attachResolvers,
+		d.attachPublisher,
+		sessionattach.Request{
+			SessionID: req.SessionID,
+			Runtime:   req.Runtime,
+		},
+	)
 	if err != nil {
 		return control.AttachSessionResponse{}, err
 	}
-	if strings.TrimSpace(meta.CWD) == "" {
-		return control.AttachSessionResponse{}, sessionattach.ErrMissingCWD
-	}
 
-	updatedAt := meta.UpdatedAt
-	if updatedAt.IsZero() {
-		updatedAt = time.Now().UTC()
-	}
-	createdAt := meta.CreatedAt
-	if createdAt.IsZero() {
-		createdAt = updatedAt
-	}
-
-	resp := control.AttachSessionResponse{
-		OK:        true,
-		SessionID: sessionID,
-		Runtime:   runtimeID,
-		CWD:       meta.CWD,
-		Title:     meta.Title,
-		Status:    string(domain.SessionStatusIdle),
-		CreatedAt: createdAt,
-		UpdatedAt: updatedAt,
-	}
-	if err := d.publishAttachedSessionStatus(ctx, resp); err != nil {
-		return control.AttachSessionResponse{}, err
-	}
-	resp.Broadcasted = true
-	return resp, nil
-}
-
-func (d *Daemon) publishAttachedSessionStatus(_ context.Context, resp control.AttachSessionResponse) error {
-	if d.attachPublisher == nil {
-		return relayws.ErrRelayNotConnected
-	}
-	machineID := strings.TrimSpace(d.attachPublisher.MachineID())
-	return d.attachPublisher.SendLiveEvent(appwire.Event{
-		Type:      appwire.EventSessionStatus,
-		SessionID: resp.SessionID,
-		At:        time.Now().UTC(),
-		SessionInfo: &appwire.SessionStatusEvent{
-			App: appwire.SessionStatusEventApp{
-				ID:        resp.SessionID,
-				Title:     resp.Title,
-				Status:    appwire.SessionStatus(resp.Status),
-				MachineID: machineID,
-				Runtime:   resp.Runtime,
-				CWD:       resp.CWD,
-				CreatedAt: resp.CreatedAt,
-				UpdatedAt: resp.UpdatedAt,
-			},
-		},
-	})
+	return control.AttachSessionResponse{
+		OK:          true,
+		SessionID:   result.SessionID,
+		Runtime:     result.Runtime,
+		CWD:         result.CWD,
+		Title:       result.Title,
+		Status:      string(result.Status),
+		CreatedAt:   result.CreatedAt,
+		UpdatedAt:   result.UpdatedAt,
+		Broadcasted: true,
+	}, nil
 }
 
 func (d *Daemon) Address() string {

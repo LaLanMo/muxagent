@@ -218,6 +218,106 @@ func TestRunProcessesRPCWhileAnotherRPCIsBlocked(t *testing.T) {
 	}
 }
 
+func TestRunHandlesSessionAttachRPC(t *testing.T) {
+	upgrader := websocket.Upgrader{}
+	serverConn := make(chan *websocket.Conn, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := upgrader.Upgrade(w, r, nil)
+		require.NoError(t, err)
+		serverConn <- conn
+	}))
+	defer server.Close()
+
+	root := t.TempDir()
+	t.Setenv("CODEX_HOME", root)
+	transcriptPath := filepath.Join(
+		root,
+		"sessions",
+		"2026",
+		"04",
+		"19",
+		"rollout-2026-04-19T12-00-00-019d-attach.jsonl",
+	)
+	require.NoError(t, os.MkdirAll(filepath.Dir(transcriptPath), 0o755))
+	require.NoError(t, os.WriteFile(
+		transcriptPath,
+		[]byte("{\"timestamp\":\"2026-04-19T12:00:00Z\",\"type\":\"session_meta\",\"payload\":{\"id\":\"019d-attach\",\"cwd\":\"/tmp/attached\"}}\n"),
+		0o644,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(root, "session_index.jsonl"),
+		[]byte("{\"id\":\"019d-attach\",\"thread_name\":\"Attached from relay\",\"updated_at\":\"2026-04-19T12:05:00Z\"}\n"),
+		0o644,
+	))
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http")
+	clientConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	require.NoError(t, err)
+	defer clientConn.Close()
+
+	relayConn := <-serverConn
+	defer relayConn.Close()
+
+	var key [32]byte
+	key[0] = 1
+	session := newSession("machine-1", key, 1)
+	client := &Client{
+		conn:          clientConn,
+		connEpoch:     1,
+		machineID:     "machine-1",
+		session:       session,
+		activeSession: session,
+		sessionCWD:    map[string]string{},
+		sessionStatus: map[string]domain.SessionStatus{},
+	}
+
+	runErr := make(chan error, 1)
+	go func() {
+		runErr <- client.Run(context.Background())
+	}()
+
+	require.NoError(t, relayConn.WriteJSON(encryptRPC(
+		t,
+		session,
+		"machine-1",
+		"msg-attach",
+		"session.attach",
+		map[string]any{
+			"sessionId": "019d-attach",
+			"runtime":   "codex",
+		},
+	)))
+
+	eventMsg := readEncryptedMessage(t, relayConn)
+	require.Equal(t, MessageTypeEvent, eventMsg.Type)
+	eventPayload := decryptResponse(t, session, eventMsg)
+	require.Equal(t, string(appwire.EventSessionStatus), eventPayload["type"])
+	require.Equal(t, "019d-attach", eventPayload["sessionId"])
+
+	respMsg := readEncryptedMessage(t, relayConn)
+	require.Equal(t, MessageTypeResponse, respMsg.Type)
+	require.Equal(t, "msg-attach", respMsg.MsgID)
+
+	payload := decryptResponse(t, session, respMsg)
+	require.Equal(t, "", payload["error"])
+	result, ok := payload["result"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, true, result["ok"])
+	require.Equal(t, "019d-attach", result["sessionId"])
+	require.Equal(t, "/tmp/attached", result["cwd"])
+	require.Equal(t, "Attached from relay", result["title"])
+
+	require.Equal(t, "/tmp/attached", client.sessionCWD["019d-attach"])
+	require.Equal(t, domain.SessionStatusIdle, client.resolvedSessionStatus("019d-attach"))
+
+	require.NoError(t, clientConn.Close())
+	select {
+	case <-runErr:
+	case <-time.After(2 * time.Second):
+		t.Fatal("relay run loop did not stop")
+	}
+}
+
 // listingRuntime is a runtime mock that returns a fixed session list.
 type listingRuntime struct {
 	blockingRuntime
