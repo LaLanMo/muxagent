@@ -12,6 +12,7 @@ import '../data/repositories/session_manager.dart';
 import '../data/repositories/stt_repository.dart';
 import '../data/repositories/ws_session_repository.dart';
 import '../data/services/api/relay_service.dart';
+import '../data/services/deep_links/auth_deep_link_service.dart';
 import '../data/services/api/stt_service.dart';
 import '../data/services/local/crypto_service.dart';
 import '../data/services/pairing_deep_link_coordinator.dart';
@@ -83,6 +84,7 @@ class InitialBinding extends Bindings {
       ),
       permanent: true,
     );
+    Get.put<AuthDeepLinkService>(AuthDeepLinkService(), permanent: true);
 
     // Repositories
     Get.put<AuthRepository>(

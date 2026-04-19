@@ -599,6 +599,47 @@ class AppSessionLoadResponseDto {
   }
 }
 
+class AppSessionAttachResponseDto {
+  final bool ok;
+  final String sessionId;
+  final String runtime;
+  final String cwd;
+  final String title;
+  final String status;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  const AppSessionAttachResponseDto({
+    required this.ok,
+    required this.sessionId,
+    required this.runtime,
+    required this.cwd,
+    required this.title,
+    required this.status,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  factory AppSessionAttachResponseDto.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(String key) {
+      final value = _nullableString(json, key);
+      if (value == null || value.isEmpty) return null;
+      return DateTime.parse(value);
+    }
+
+    return AppSessionAttachResponseDto(
+      ok: _requireBool(json, 'ok'),
+      sessionId: _requireString(json, 'sessionId'),
+      runtime: _requireString(json, 'runtime'),
+      cwd: _requireString(json, 'cwd'),
+      title: _nullableString(json, 'title') ?? '',
+      status: _requireString(json, 'status'),
+      createdAt: parseDate('createdAt'),
+      updatedAt: parseDate('updatedAt'),
+    );
+  }
+}
+
 class AppRuntimeInfoDto {
   final String id;
   final String label;

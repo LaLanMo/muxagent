@@ -133,6 +133,36 @@ void main() {
       expect(response.app.cwd, '/workspace');
     });
 
+    test('attachSession owns method name and params', () async {
+      final relay = FakeRelayWsClient(
+        nextPayload: {
+          'result': {
+            'ok': true,
+            'sessionId': 'sid-attach',
+            'runtime': 'codex',
+            'cwd': '/workspace',
+            'title': 'Attached',
+            'status': 'idle',
+          },
+        },
+      );
+      final repo = WsSessionRepository(
+        relay: relay,
+        sessions: SessionManager(),
+      );
+
+      final response = await repo.attachSession(
+        machineId: 'machine-1',
+        sessionId: 'sid-attach',
+        runtime: 'codex',
+      );
+
+      expect(relay.lastMethod, 'session.attach');
+      expect(relay.lastParams, {'sessionId': 'sid-attach', 'runtime': 'codex'});
+      expect(response.ok, isTrue);
+      expect(response.cwd, '/workspace');
+    });
+
     test('file helpers map fs.list and fs.search results', () async {
       final relay = FakeRelayWsClient(
         nextPayload: {

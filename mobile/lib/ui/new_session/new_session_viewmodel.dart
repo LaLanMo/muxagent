@@ -162,6 +162,8 @@ class NewSessionViewModel extends GetxController {
   final availableRuntimes = <RuntimeOption>[].obs;
   final selectedRuntime = Rxn<RuntimeOption>();
   final isLoadingRuntimes = false.obs;
+  final isRuntimeDropdownOpen = false.obs;
+  final isMachineDropdownOpen = false.obs;
   final availableModes = <ModeOption>[].obs;
   final selectedMode = Rxn<ModeOption>();
   final useWorktree = false.obs;
@@ -293,10 +295,12 @@ class NewSessionViewModel extends GetxController {
 
   void selectMachine(PairedMachine machine) {
     if (!isMachineConnected(machine.machineId)) return;
+    isMachineDropdownOpen.value = false;
     selectedMachine.value = machine;
   }
 
   void selectRuntime(RuntimeOption runtime) {
+    isRuntimeDropdownOpen.value = false;
     selectedRuntime.value = runtime;
     unawaited(_rememberRuntimeSelection(runtime.id));
   }
@@ -402,7 +406,33 @@ class NewSessionViewModel extends GetxController {
     }
   }
 
+  void toggleRuntimeDropdown() {
+    if (isLoadingRuntimes.value || availableRuntimes.isEmpty) return;
+    closeMachineDropdown();
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.unfocus();
+    isRuntimeDropdownOpen.value = !isRuntimeDropdownOpen.value;
+  }
+
+  void closeRuntimeDropdown() {
+    isRuntimeDropdownOpen.value = false;
+  }
+
+  void toggleMachineDropdown() {
+    if (machines.isEmpty) return;
+    closeRuntimeDropdown();
+    closeCwdDropdown(unfocus: true);
+    promptFocusNode.unfocus();
+    isMachineDropdownOpen.value = !isMachineDropdownOpen.value;
+  }
+
+  void closeMachineDropdown() {
+    isMachineDropdownOpen.value = false;
+  }
+
   void dismissTransientInputs() {
+    closeRuntimeDropdown();
+    closeMachineDropdown();
     closeCwdDropdown(unfocus: true);
     promptFocusNode.unfocus();
   }

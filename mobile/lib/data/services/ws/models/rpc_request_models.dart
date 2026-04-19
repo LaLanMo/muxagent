@@ -48,6 +48,18 @@ class RpcSessionLoadParamsDto {
   };
 }
 
+class RpcSessionAttachParamsDto {
+  final String sessionId;
+  final String runtime;
+
+  const RpcSessionAttachParamsDto({
+    required this.sessionId,
+    required this.runtime,
+  });
+
+  Map<String, dynamic> toJson() => {'sessionId': sessionId, 'runtime': runtime};
+}
+
 class RpcFsListParamsDto {
   final String sessionId;
   final String path;

@@ -149,6 +149,22 @@ class WsSessionRepository {
     );
   }
 
+  Future<AppSessionAttachResponseDto> attachSession({
+    required String machineId,
+    required String sessionId,
+    required String runtime,
+  }) async {
+    return _relay.callRpcDecoded(
+      machineId: machineId,
+      method: 'session.attach',
+      params: RpcSessionAttachParamsDto(
+        sessionId: sessionId,
+        runtime: runtime,
+      ).toJson(),
+      decode: AppSessionAttachResponseDto.fromJson,
+    );
+  }
+
   Future<List<FsEntry>> listFiles({
     required String machineId,
     required String sessionId,

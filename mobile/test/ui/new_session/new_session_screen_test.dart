@@ -132,13 +132,15 @@ void main() {
       viewModel.selectedMode.value = runtime.modeOptions[1];
       viewModel.useWorktree.value = true;
 
-      await tester.pumpWidget(
-        const GetMaterialApp(home: NewSessionScreen()),
-      );
+      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
       await tester.pump();
 
       expect(find.text('RUNTIME'), findsOneWidget);
       expect(find.text('MACHINE'), findsOneWidget);
+      expect(
+        find.text('Already started a session in your machine?'),
+        findsOneWidget,
+      );
       expect(find.text('WORKING DIRECTORY'), findsOneWidget);
       expect(find.text('INITIAL PROMPT'), findsOneWidget);
       expect(find.text('MODE'), findsOneWidget);
@@ -162,9 +164,7 @@ void main() {
       viewModel.selectedRuntime.value = runtime;
       viewModel.availableModes.clear();
 
-      await tester.pumpWidget(
-        const GetMaterialApp(home: NewSessionScreen()),
-      );
+      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
       await tester.pump();
 
       expect(find.text('Use runtime default mode'), findsOneWidget);
@@ -182,16 +182,11 @@ void main() {
       viewModel.availableModes.value = runtime.modeOptions;
       viewModel.selectedMode.value = runtime.modeOptions[1];
       viewModel.recentCwds.value = [
-        RecentCwd(
-          path: '~/project-a',
-          lastUsed: DateTime(2026, 4, 13, 12),
-        ),
+        RecentCwd(path: '~/project-a', lastUsed: DateTime(2026, 4, 13, 12)),
       ];
       viewModel.filteredCwds.value = List.of(viewModel.recentCwds);
 
-      await tester.pumpWidget(
-        const GetMaterialApp(home: NewSessionScreen()),
-      );
+      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('Working directory'));
@@ -221,9 +216,7 @@ void main() {
       ];
       viewModel.filteredCwds.value = List.of(viewModel.recentCwds);
 
-      await tester.pumpWidget(
-        const GetMaterialApp(home: NewSessionScreen()),
-      );
+      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('Working directory'));

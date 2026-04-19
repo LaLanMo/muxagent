@@ -9,6 +9,7 @@ import '../../domain/enums.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/runtime_option.dart';
+import '../../routing/routes.dart';
 import '../common/ui_effect_listener.dart';
 import 'new_session_viewmodel.dart';
 
@@ -85,6 +86,9 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildAttachBanner(),
+                        const SizedBox(height: 24),
+
                         _buildFieldLabel('Runtime'),
                         const SizedBox(height: 8),
                         Obx(() => _buildRuntimeSelector()),
@@ -187,7 +191,53 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     );
   }
 
-  // Machine selector: cornerRadius 8, fill #EDEEF1, padding 12, gap 8, alignItems center
+  Widget _buildAttachBanner() {
+    return Semantics(
+      button: true,
+      label: 'Attach an existing session',
+      child: GestureDetector(
+        onTap: () {
+          controller.dismissTransientInputs();
+          Get.toNamed(Routes.attachSession);
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: _fieldFill,
+            border: Border.all(color: AppTheme.borderStrong),
+          ),
+          child: Row(
+            children: [
+              const Icon(
+                LucideIcons.link2,
+                size: 16,
+                color: AppTheme.textPrimary,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Already started a session in your machine?',
+                  style: AppTypography.sans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Icon(
+                LucideIcons.chevronRight,
+                size: 16,
+                color: AppTheme.textTertiary,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildMachineSelector() {
     final selected = controller.selectedMachine.value;
     final hostname = selected != null
@@ -196,120 +246,174 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               : 'Unknown host')
         : 'Select a machine';
 
-    return GestureDetector(
-      onTap: () {
-        controller.dismissTransientInputs();
-        _showMachinePicker();
-      },
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _fieldFill,
-          border: Border.all(color: AppTheme.chipBorder),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Icon(
-              LucideIcons.monitor,
-              size: 16,
-              color: AppTheme.textTertiary,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                hostname,
-                style: AppTypography.sans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.normal,
-                  color: selected != null
-                      ? AppTheme.textPrimary
-                      : AppTheme.textMuted,
+    return ValueListenableBuilder<List<PairedMachine>>(
+      valueListenable: controller.machinesListenable,
+      builder: (context, machines, _) {
+        return ValueListenableBuilder<Set<String>>(
+          valueListenable: controller.activeSessionIdsListenable,
+          builder: (context, activeSessionIds, _) {
+            final isOpen = controller.isMachineDropdownOpen.value;
+            return Column(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    controller.dismissTransientInputs();
+                    controller.toggleMachineDropdown();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _fieldFill,
+                      border: Border.all(color: AppTheme.chipBorder),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        const Icon(
+                          LucideIcons.monitor,
+                          size: 16,
+                          color: AppTheme.textTertiary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            hostname,
+                            style: AppTypography.sans(
+                              fontSize: 14,
+                              fontWeight: FontWeight.normal,
+                              color: selected != null
+                                  ? AppTheme.textPrimary
+                                  : AppTheme.textMuted,
+                            ),
+                          ),
+                        ),
+                        const Icon(
+                          LucideIcons.chevronDown,
+                          size: 16,
+                          color: AppTheme.textMuted,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            // Chevron-right 16x16 #C8CBD0
-            const Icon(
-              LucideIcons.chevronRight,
-              size: 16,
-              color: AppTheme.textMuted,
-            ),
-          ],
-        ),
-      ),
+                if (isOpen)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: _dropdownFill,
+                      border: Border.all(color: AppTheme.borderStrong),
+                    ),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < machines.length; i++) ...[
+                          _buildMachineOptionRow(
+                            machine: machines[i],
+                            isSelected:
+                                controller.selectedMachine.value?.machineId ==
+                                machines[i].machineId,
+                            isOnline: activeSessionIds.contains(
+                              machines[i].machineId,
+                            ),
+                          ),
+                          if (i != machines.length - 1)
+                            const Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: AppTheme.border,
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
   Widget _buildRuntimeSelector() {
     if (controller.isLoadingRuntimes.value) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _fieldFill,
-          border: Border.all(color: AppTheme.borderStrong),
-        ),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: AppTheme.primary,
-              ),
-            ),
-            const SizedBox(width: 10),
-            Text(
-              'Loading runtimes...',
-              style: AppTypography.sans(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildLoadingSelector(label: 'Loading runtimes...');
     }
 
     final options = controller.availableRuntimes;
     if (options.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: _fieldFill,
-          border: Border.all(color: AppTheme.borderStrong),
-        ),
-        child: Text(
-          'No runtimes available',
-          style: AppTypography.sans(
-            fontSize: 14,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-      );
+      return _buildEmptySelector(label: 'No runtimes available');
     }
 
-    final selectionEnabled = options.length > 1;
-    return Container(
-      decoration: BoxDecoration(
-        color: _fieldFill,
-        border: Border.all(color: AppTheme.borderStrong),
-      ),
-      child: Column(
-        children: [
-          for (var i = 0; i < options.length; i++) ...[
-            _buildRuntimeRow(
-              runtime: options[i],
-              isSelected: controller.selectedRuntime.value?.id == options[i].id,
-              enabled: selectionEnabled,
+    final selected = controller.selectedRuntime.value;
+    final selectedLabel = selected?.label ?? 'Select a runtime';
+    final selectedEnabled = selected?.ready ?? false;
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            controller.dismissTransientInputs();
+            controller.toggleRuntimeDropdown();
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _fieldFill,
+              border: Border.all(color: AppTheme.chipBorder),
             ),
-            if (i != options.length - 1)
-              const Divider(height: 1, thickness: 1, color: AppTheme.border),
-          ],
-        ],
-      ),
+            child: Row(
+              children: [
+                _buildRuntimeLeadingIcon(
+                  selected?.id ?? '',
+                  enabled: selectedEnabled,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    selectedLabel,
+                    style: AppTypography.sans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.normal,
+                      color: selected != null
+                          ? AppTheme.textPrimary
+                          : AppTheme.textMuted,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(
+                  LucideIcons.chevronDown,
+                  size: 16,
+                  color: AppTheme.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (controller.isRuntimeDropdownOpen.value)
+          Container(
+            decoration: BoxDecoration(
+              color: _dropdownFill,
+              border: Border.all(color: AppTheme.borderStrong),
+            ),
+            child: Column(
+              children: [
+                for (var i = 0; i < options.length; i++) ...[
+                  _buildRuntimeRow(
+                    runtime: options[i],
+                    isSelected:
+                        controller.selectedRuntime.value?.id == options[i].id,
+                    enabled: options[i].ready,
+                  ),
+                  if (i != options.length - 1)
+                    const Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: AppTheme.border,
+                    ),
+                ],
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -399,7 +503,12 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 ),
               ),
               const SizedBox(width: 12),
-              _buildRuntimeRadio(isSelected: isSelected, enabled: enabled),
+              if (isSelected)
+                const Icon(
+                  LucideIcons.check,
+                  size: 16,
+                  color: AppTheme.textPrimary,
+                ),
             ],
           ),
         ),
@@ -453,28 +562,99 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     return 'Mode';
   }
 
-  Widget _buildRuntimeRadio({required bool isSelected, required bool enabled}) {
-    if (isSelected) {
-      return Container(
-        width: 16,
-        height: 16,
-        decoration: BoxDecoration(
-          color: AppTheme.primary,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppTheme.primary, width: 2),
-        ),
-      );
-    }
+  Widget _buildMachineOptionRow({
+    required PairedMachine machine,
+    required bool isSelected,
+    required bool isOnline,
+  }) {
+    final label = machine.hostname?.isNotEmpty == true
+        ? machine.hostname!
+        : 'Unknown host';
 
-    return Container(
-      width: 16,
-      height: 16,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: enabled ? AppTheme.chipBorder : AppTheme.border,
-          width: 1.5,
+    return GestureDetector(
+      onTap: isOnline
+          ? () {
+              controller.dismissTransientInputs();
+              controller.selectMachine(machine);
+            }
+          : null,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              LucideIcons.monitor,
+              size: 16,
+              color: isOnline ? AppTheme.textTertiary : AppTheme.textMetadata,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                label,
+                style: AppTypography.sans(
+                  fontSize: 14,
+                  color: isOnline ? AppTheme.textPrimary : AppTheme.textMuted,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (isSelected)
+              const Icon(
+                LucideIcons.check,
+                size: 16,
+                color: AppTheme.textPrimary,
+              )
+            else
+              _statusDot(isOnline),
+          ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingSelector({required String label}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _fieldFill,
+        border: Border.all(color: AppTheme.borderStrong),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppTheme.primary,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: AppTypography.sans(
+              fontSize: 14,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptySelector({required String label}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: _fieldFill,
+        border: Border.all(color: AppTheme.borderStrong),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.sans(fontSize: 14, color: AppTheme.textSecondary),
       ),
     );
   }
@@ -572,80 +752,6 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
       default:
         return AppTheme.textPrimary;
     }
-  }
-
-  void _showMachinePicker() {
-    if (controller.machines.isEmpty) return;
-
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        color: AppTheme.surface,
-        child: ValueListenableBuilder<List<PairedMachine>>(
-          valueListenable: controller.machinesListenable,
-          builder: (context, machines, _) {
-            return ValueListenableBuilder<Set<String>>(
-              valueListenable: controller.activeSessionIdsListenable,
-              builder: (context, activeSessionIds, _) {
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Text(
-                        'Select Machine',
-                        style: AppTypography.sans(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                    ),
-                    const Divider(height: 1),
-                    ...machines.map((machine) {
-                      final isOnline = activeSessionIds.contains(
-                        machine.machineId,
-                      );
-                      final name = machine.hostname ?? 'Unknown host';
-                      return ListTile(
-                        enabled: isOnline,
-                        leading: const Icon(
-                          LucideIcons.monitor,
-                          size: 20,
-                          color: AppTheme.textSecondary,
-                        ),
-                        title: Text(
-                          name,
-                          style: AppTypography.sans(
-                            fontSize: 15,
-                            color: isOnline
-                                ? AppTheme.textPrimary
-                                : AppTheme.textMuted,
-                          ),
-                        ),
-                        trailing: isOnline
-                            ? _statusDot(true)
-                            : _statusDot(false),
-                        onTap: isOnline
-                            ? () {
-                                controller.dismissTransientInputs();
-                                controller.selectMachine(machine);
-                                Get.back();
-                              }
-                            : null,
-                      );
-                    }),
-                  ],
-                );
-              },
-            );
-          },
-        ),
-      ),
-    );
   }
 
   Widget _statusDot(bool online) {

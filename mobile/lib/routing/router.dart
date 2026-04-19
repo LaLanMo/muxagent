@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 
 import '../bindings/auth_binding.dart';
+import '../bindings/attach_session_binding.dart';
 import '../bindings/chat_binding.dart';
 import '../bindings/main_shell_binding.dart';
 import '../bindings/new_session_binding.dart';
@@ -11,6 +12,7 @@ import '../bindings/stt_settings_binding.dart';
 import '../bindings/tool_detail_binding.dart';
 import '../bindings/welcome_binding.dart';
 import '../ui/auth/auth_screen.dart';
+import '../ui/attach_session/attach_session_screen.dart';
 import '../ui/chat/chat_screen.dart';
 import '../ui/main/main_shell.dart';
 import '../ui/new_session/new_session_screen.dart';
@@ -63,6 +65,11 @@ class AppRouter {
       name: Routes.newSession,
       page: () => const NewSessionScreen(),
       binding: NewSessionBinding(),
+    ),
+    GetPage(
+      name: Routes.attachSession,
+      page: () => const AttachSessionScreen(),
+      binding: AttachSessionBinding(),
     ),
     GetPage(
       name: Routes.sttSettings,
