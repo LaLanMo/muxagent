@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/local/session_database.dart';
@@ -33,15 +35,38 @@ class _NoopRelayWsClient extends RelayWsClient {
 class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = true.obs;
   final connectionStateValue = ConnState.connected.obs;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
+  Set<String> _activeIds;
 
   _FakeWsSessionRepository()
-    : super(relay: _NoopRelayWsClient(), sessions: SessionManager());
+    : _activeIds = <String>{},
+      _activeSessionIdsNotifier = ValueNotifier(const <String>{}),
+      super(relay: _NoopRelayWsClient(), sessions: SessionManager());
 
   @override
   RxBool get relayConnected => relayConnectedValue;
 
   @override
   Rx<ConnState> get connectionState => connectionStateValue;
+
+  @override
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+
+  @override
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
+
+  @override
+  bool hasSession(String machineId) => _activeIds.contains(machineId);
+
+  void setActiveSessionIds(Set<String> ids) {
+    _activeIds = {...ids};
+    _activeSessionIdsNotifier.value = Set.unmodifiable(_activeIds);
+  }
+
+  void dispose() {
+    _activeSessionIdsNotifier.dispose();
+  }
 }
 
 class _TestNewSessionViewModel extends NewSessionViewModel {
@@ -114,6 +139,7 @@ void main() {
     });
 
     tearDown(() {
+      wsRepo.dispose();
       viewModel.eventRepo.dispose();
       viewModel.machineRepo.dispose();
       Get.reset();
@@ -224,6 +250,47 @@ void main() {
 
       expect(find.text('~/Projects/cmdr'), findsOneWidget);
       expect(find.text('/Users/by/Projects/cmdr'), findsNothing);
+    });
+
+    testWidgets(
+      'opens the machine dropdown immediately when the selector is tapped',
+      (tester) async {
+        final machine = _machine();
+        viewModel.machineRepo.setMachines([machine]);
+        wsRepo.setActiveSessionIds({machine.machineId});
+
+        await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+        await tester.pump();
+
+        expect(find.text('Select a machine'), findsOneWidget);
+        expect(find.text('by'), findsNothing);
+
+        await tester.tap(find.text('Select a machine'));
+        await tester.pump();
+
+        expect(find.text('by'), findsOneWidget);
+      },
+    );
+
+    testWidgets('renders offline machines in a disabled style', (tester) async {
+      final machine = _machine();
+      viewModel.machineRepo.setMachines([machine]);
+
+      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+      await tester.pump();
+
+      await tester.tap(find.text('Select a machine'));
+      await tester.pump();
+
+      expect(
+        find.ancestor(
+          of: find.text('by'),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Opacity && widget.opacity == 0.55,
+          ),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }

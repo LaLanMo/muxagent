@@ -318,74 +318,80 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
         return ValueListenableBuilder<Set<String>>(
           valueListenable: controller.activeSessionIdsListenable,
           builder: (context, activeSessionIds, _) {
-            return Column(
-              children: [
-                GestureDetector(
-                  onTap: controller.toggleMachineDropdown,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _fieldFill,
-                      border: Border.all(color: AppTheme.chipBorder),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(
-                          LucideIcons.monitor,
-                          size: 16,
-                          color: AppTheme.textTertiary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            hostname,
-                            style: AppTypography.sans(
-                              fontSize: 14,
-                              color: selected != null
-                                  ? AppTheme.textPrimary
-                                  : AppTheme.textMuted,
+            return Obx(() {
+              final isOpen = controller.isMachineDropdownOpen.value;
+              final selectedMachineId =
+                  controller.selectedMachine.value?.machineId;
+
+              return Column(
+                children: [
+                  GestureDetector(
+                    onTap: controller.toggleMachineDropdown,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: _fieldFill,
+                        border: Border.all(color: AppTheme.chipBorder),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            LucideIcons.monitor,
+                            size: 16,
+                            color: AppTheme.textTertiary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              hostname,
+                              style: AppTypography.sans(
+                                fontSize: 14,
+                                color: selected != null
+                                    ? AppTheme.textPrimary
+                                    : AppTheme.textMuted,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 8),
-                        const Icon(
-                          LucideIcons.chevronDown,
-                          size: 16,
-                          color: AppTheme.textMuted,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (controller.isMachineDropdownOpen.value)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: _dropdownFill,
-                      border: Border.all(color: AppTheme.borderStrong),
-                    ),
-                    child: Column(
-                      children: [
-                        for (var i = 0; i < machines.length; i++) ...[
-                          _buildMachineOption(
-                            machine: machines[i],
-                            isOnline: activeSessionIds.contains(
-                              machines[i].machineId,
-                            ),
-                            isSelected:
-                                selected?.machineId == machines[i].machineId,
+                          const SizedBox(width: 8),
+                          const Icon(
+                            LucideIcons.chevronDown,
+                            size: 16,
+                            color: AppTheme.textMuted,
                           ),
-                          if (i != machines.length - 1)
-                            const Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: AppTheme.border,
-                            ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
-              ],
-            );
+                  if (isOpen)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: _dropdownFill,
+                        border: Border.all(color: AppTheme.borderStrong),
+                      ),
+                      child: Column(
+                        children: [
+                          for (var i = 0; i < machines.length; i++) ...[
+                            _buildMachineOption(
+                              machine: machines[i],
+                              isOnline: activeSessionIds.contains(
+                                machines[i].machineId,
+                              ),
+                              isSelected:
+                                  selectedMachineId == machines[i].machineId,
+                            ),
+                            if (i != machines.length - 1)
+                              const Divider(
+                                height: 1,
+                                thickness: 1,
+                                color: AppTheme.border,
+                              ),
+                          ],
+                        ],
+                      ),
+                    ),
+                ],
+              );
+            });
           },
         );
       },
@@ -441,6 +447,33 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
     final label = machine.hostname?.isNotEmpty == true
         ? machine.hostname!
         : 'Unknown host';
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: [
+          Icon(
+            LucideIcons.monitor,
+            size: 16,
+            color: isOnline ? AppTheme.textTertiary : AppTheme.textMetadata,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: AppTypography.sans(
+                fontSize: 14,
+                color: isOnline ? AppTheme.textPrimary : AppTheme.textMuted,
+              ),
+            ),
+          ),
+          if (isSelected)
+            const Icon(LucideIcons.check, size: 16, color: AppTheme.textPrimary)
+          else
+            _statusDot(isOnline),
+        ],
+      ),
+    );
+
     return GestureDetector(
       onTap: isOnline
           ? () {
@@ -449,36 +482,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
             }
           : null,
       behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          children: [
-            Icon(
-              LucideIcons.monitor,
-              size: 16,
-              color: isOnline ? AppTheme.textTertiary : AppTheme.textMetadata,
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                label,
-                style: AppTypography.sans(
-                  fontSize: 14,
-                  color: isOnline ? AppTheme.textPrimary : AppTheme.textMuted,
-                ),
-              ),
-            ),
-            if (isSelected)
-              const Icon(
-                LucideIcons.check,
-                size: 16,
-                color: AppTheme.textPrimary,
-              )
-            else
-              _statusDot(isOnline),
-          ],
-        ),
-      ),
+      child: Opacity(opacity: isOnline ? 1 : 0.55, child: row),
     );
   }
 
@@ -606,7 +610,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-        color: online ? AppTheme.successText : AppTheme.textTertiary,
+        color: online ? AppTheme.successText : AppTheme.textMuted,
         shape: BoxShape.circle,
       ),
     );

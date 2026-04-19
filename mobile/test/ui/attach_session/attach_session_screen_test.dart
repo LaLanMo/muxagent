@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
@@ -27,15 +29,38 @@ class _NoopRelayWsClient extends RelayWsClient {
 class _FakeWsSessionRepository extends WsSessionRepository {
   final relayConnectedValue = true.obs;
   final connectionStateValue = ConnState.connected.obs;
+  final ValueNotifier<Set<String>> _activeSessionIdsNotifier;
+  Set<String> _activeIds;
 
   _FakeWsSessionRepository()
-    : super(relay: _NoopRelayWsClient(), sessions: SessionManager());
+    : _activeIds = <String>{},
+      _activeSessionIdsNotifier = ValueNotifier(const <String>{}),
+      super(relay: _NoopRelayWsClient(), sessions: SessionManager());
 
   @override
   RxBool get relayConnected => relayConnectedValue;
 
   @override
   Rx<ConnState> get connectionState => connectionStateValue;
+
+  @override
+  Set<String> get activeSessionIds => Set.unmodifiable(_activeIds);
+
+  @override
+  ValueListenable<Set<String>> get activeSessionIdsListenable =>
+      _activeSessionIdsNotifier;
+
+  @override
+  bool hasSession(String machineId) => _activeIds.contains(machineId);
+
+  void setActiveSessionIds(Set<String> ids) {
+    _activeIds = {...ids};
+    _activeSessionIdsNotifier.value = Set.unmodifiable(_activeIds);
+  }
+
+  void dispose() {
+    _activeSessionIdsNotifier.dispose();
+  }
 }
 
 class _TestAttachSessionViewModel extends AttachSessionViewModel {
@@ -95,6 +120,7 @@ void main() {
     });
 
     tearDown(() {
+      wsRepo.dispose();
       viewModel.eventRepo.dispose();
       viewModel.machineRepo.dispose();
       Get.reset();
@@ -123,6 +149,50 @@ void main() {
       expect(find.text('RUNTIME'), findsOneWidget);
       expect(find.text('MACHINE'), findsOneWidget);
       expect(find.text('Attach Session'), findsWidgets);
+    });
+
+    testWidgets(
+      'opens the machine dropdown immediately when the selector is tapped',
+      (tester) async {
+        final machine = _machine();
+        viewModel.machineRepo.setMachines([machine]);
+
+        await tester.pumpWidget(
+          const GetMaterialApp(home: AttachSessionScreen()),
+        );
+        await tester.pump();
+
+        expect(find.text('Select a machine'), findsOneWidget);
+        expect(find.text('MacBook Pro'), findsNothing);
+
+        await tester.tap(find.text('Select a machine'));
+        await tester.pump();
+
+        expect(find.text('MacBook Pro'), findsOneWidget);
+      },
+    );
+
+    testWidgets('renders offline machines in a disabled style', (tester) async {
+      final machine = _machine();
+      viewModel.machineRepo.setMachines([machine]);
+
+      await tester.pumpWidget(
+        const GetMaterialApp(home: AttachSessionScreen()),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('Select a machine'));
+      await tester.pump();
+
+      expect(
+        find.ancestor(
+          of: find.text('MacBook Pro'),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Opacity && widget.opacity == 0.55,
+          ),
+        ),
+        findsOneWidget,
+      );
     });
   });
 }
