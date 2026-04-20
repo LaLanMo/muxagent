@@ -235,17 +235,20 @@
 .source-control__checkout-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-3);
   width: 100%;
+  border: 0;
+  background: transparent;
   border-radius: var(--radius-sm);
   padding: var(--space-2);
   color: var(--color-text-secondary);
+  cursor: pointer;
   text-align: left;
 }
 
 .source-control__checkout.is-selected > .source-control__checkout-header,
-.source-control__checkout-header:hover {
+.source-control__checkout-header:hover,
+.source-control__checkout-header:focus-within {
   background: rgba(231, 224, 219, 0.72);
   color: var(--color-text-primary);
 }
@@ -258,7 +261,12 @@
   min-width: 0;
 }
 
+.source-control__checkout-copy {
+  flex: 1 1 auto;
+}
+
 .source-control__checkout-summary {
+  flex: 0 0 auto;
   justify-content: flex-end;
   color: var(--color-text-ghost);
   font-family: var(--font-mono);
@@ -275,9 +283,12 @@
 }
 
 .source-control__checkout-chevron {
-  width: 10px;
+  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--color-text-muted);
-  font-size: 12px;
+  flex: none;
 }
 
 .source-control__checkout-meta {

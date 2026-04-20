@@ -57,19 +57,159 @@ test("opening source-control panel keeps right pane untouched until selection", 
   await maybeScreenshot(page, "MUXAGENT_PANEL_SOURCE_CONTROL_SCREENSHOT");
 });
 
-test("selecting a worktree renders the worktree overview in the right pane", async ({
+test("source-control: clicking a collapsed worktree name toggles it open without changing the current route", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openSourceControlPanel(page);
+
+  await expect(page.getByTestId("source-control-checkout-body-main")).toHaveCount(0);
+  await expect(page.getByTestId("source-control-checkout-row-main")).toHaveAttribute(
+    "data-selected",
+    "false",
+  );
+
+  await page.getByTestId("source-control-checkout-main").click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("entry-shell")).toBeVisible();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toBeVisible();
+  await expect(page.getByTestId("source-control-checkout-main")).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  await expect(page.getByTestId("source-control-checkout-row-main")).toHaveAttribute(
+    "data-selected",
+    "false",
+  );
+});
+
+test("source-control: clicking the same worktree name again collapses it without changing the current route", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openSourceControlPanel(page);
+
+  await page.getByTestId("source-control-checkout-main").click();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toBeVisible();
+  await page.getByTestId("source-control-checkout-main").click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("entry-shell")).toBeVisible();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toHaveCount(0);
+  await expect(page.getByTestId("source-control-checkout-main")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+});
+
+test("source-control: navigating into one expanded worktree does not collapse other expanded worktrees", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openSourceControlPanel(page);
+
+  await page.getByTestId("source-control-checkout-main").click();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toBeVisible();
+
+  await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+
+  await page.getByTestId("source-control-file-unstaged:src/auth.ts").first().click();
+  await expect(page).toHaveURL(/\/files\/.+$/);
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+});
+
+test("source-control: a worktree header re-expands a collapsed non-selected worktree after route changes without changing the current center route", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openSourceControlPanel(page);
+
+  await page.getByTestId("source-control-checkout-main").click();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toBeVisible();
+  await page.getByTestId("source-control-checkout-main").click();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toHaveCount(0);
+
+  await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+  await page.getByTestId("source-control-file-unstaged:src/auth.ts").first().click();
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+
+  const activeDiffUrl = page.url();
+  await page.getByTestId("source-control-checkout-main").click();
+
+  await expect(page).toHaveURL(activeDiffUrl);
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+  await expect(page.getByTestId("source-control-checkout-body-main")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+});
+
+test("source-control: clicking the selected worktree name on a file diff route toggles expansion without changing the diff route", async ({
   page,
 }) => {
   await connectFixtureWorkspace(page);
   await openSourceControlPanel(page);
 
   await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
-  await expect(page.getByTestId("worktree-overview")).toBeVisible();
-  await expect(page.getByTestId("worktree-overview")).toContainText(
-    "feat/auth-refactor",
-  );
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+  await page.getByTestId("source-control-file-unstaged:src/auth.ts").first().click();
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-row-feat-auth-refactor"),
+  ).toHaveAttribute("data-selected", "true");
 
-  await maybeScreenshot(page, "MUXAGENT_WORKTREE_OVERVIEW_SCREENSHOT");
+  const activeDiffUrl = page.url();
+
+  await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
+
+  await expect(page).toHaveURL(activeDiffUrl);
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId("source-control-checkout-row-feat-auth-refactor"),
+  ).toHaveAttribute("data-selected", "true");
+
+  await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
+  await expect(page).toHaveURL(activeDiffUrl);
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+});
+
+test("source-control: the board route does not mark any worktree selected before navigation", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openSourceControlPanel(page);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("source-control-checkout-body-main")).toHaveCount(0);
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByTestId("source-control-checkout-row-feat-auth-refactor"),
+  ).toHaveAttribute("data-selected", "false");
+  await expect(page.getByTestId("source-control-checkout-row-main")).toHaveAttribute(
+    "data-selected",
+    "false",
+  );
 });
 
 test("selecting a file under a worktree renders its diff", async ({ page }) => {
@@ -77,7 +217,9 @@ test("selecting a file under a worktree renders its diff", async ({ page }) => {
   await openSourceControlPanel(page);
 
   await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
-  await expect(page.getByTestId("worktree-overview")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
 
   await page.getByTestId("source-control-file-unstaged:src/auth.ts").first().click();
   await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
@@ -96,7 +238,9 @@ test("selecting a commit under a worktree renders the full commit diff", async (
   await openSourceControlPanel(page);
 
   await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
-  await expect(page.getByTestId("worktree-overview")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
 
   await page.getByTestId("source-control-commit-fa3b2").first().click();
   await expect(page.getByTestId("source-control-commit-diff")).toBeVisible();
@@ -112,12 +256,11 @@ test("selecting a task under a worktree opens the task detail screen", async ({
   await openSourceControlPanel(page);
 
   await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
-  await expect(page.getByTestId("worktree-overview")).toBeVisible();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
 
-  const taskLink = page
-    .getByTestId("worktree-overview")
-    .locator('[data-testid^="worktree-overview-task-"]')
-    .first();
+  const taskLink = page.getByTestId("source-control-task-task-scm-wire-jwt").first();
 
   const taskCount = await taskLink.count();
   if (taskCount === 0) {
@@ -129,4 +272,21 @@ test("selecting a task under a worktree opens the task detail screen", async ({
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
 
   await maybeScreenshot(page, "MUXAGENT_TASK_UNDER_WORKTREE_SCREENSHOT");
+});
+
+test("source-control: legacy checkout routes fall back to the board", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await openSourceControlPanel(page);
+
+  await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
+  await page.getByTestId("source-control-file-unstaged:src/auth.ts").first().click();
+  await expect(page.getByTestId("source-control-file-diff")).toBeVisible();
+
+  const legacyCheckoutUrl = page.url().replace(/\/files\/[^/]+$/, "");
+  await page.goto(legacyCheckoutUrl);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("entry-shell")).toBeVisible();
 });

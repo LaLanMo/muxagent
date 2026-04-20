@@ -18,6 +18,7 @@ import {
   isWorktreeTask,
   taskLaunchModeLabel,
 } from "@/domain/task-shell";
+import type { WorkbenchTabId } from "@/domain/routes";
 import {
   buildTranscriptSnapshot,
   type SessionHistoryEvent,
@@ -29,7 +30,10 @@ import {
   type RunningActivityPreviewRow,
   type TranscriptTimelineItem,
 } from "@/features/task-history/model/timeline";
-import { startWindowDrag } from "@/features/layout/ui/window-drag";
+import {
+  useWorkbenchRegions,
+  useWorkbenchTab,
+} from "@/features/layout/ui/workbench-surface";
 import { Button } from "@/features/shared/ui/Button";
 import { DocumentContent } from "@/features/shared/ui/DocumentContent";
 import { ConfirmDialog } from "@/features/shared/ui/ConfirmDialog";
@@ -93,10 +97,6 @@ function ActivityRunIcon({
 }) {
   const Icon = actorType === "human" ? User : Bot;
   return <Icon size={14} strokeWidth={1.9} />;
-}
-
-function flowBullet(status: StageNode["status"]) {
-  return status === "pending" ? "○" : "●";
 }
 
 function formatRunTiming(run: NodeRunViewDto) {
@@ -633,6 +633,253 @@ export function resolveTaskRuntimeName(
   return runtimeLabel || "Automatic";
 }
 
+type TaskDetailPropertiesContentProps = {
+  statusLabel: string;
+  statusTone: "running" | "awaiting" | "done" | "failed" | "neutral";
+  configLabel: string;
+  stageNodes: StageNode[];
+  launchedInWorktree: boolean;
+  launchModeLabel?: string;
+  createdLabel: string;
+  durationLabel: string;
+  runsLabel: string;
+  showCleanupPropertyBlock: boolean;
+  cleanupView: string;
+  showCleanupMessage: boolean;
+  cleanupMeta?: string;
+  worktreeCleanupInfo?: WorktreeCleanupInfoDto;
+  worktreeCleanupError?: string;
+  worktreeCleanupLoading: boolean;
+  submittingWorktreeCleanup: boolean;
+  retryWorktreeCleanupInfo: () => void;
+  openWorktreeCleanupDialog: () => Promise<void>;
+};
+
+function stageFlowGlyph(status: StageNode["status"]) {
+  switch (status) {
+    case "done":
+      return "●";
+    case "current":
+      return "◐";
+    case "failed":
+      return "✕";
+    case "pending":
+    default:
+      return "○";
+  }
+}
+
+function TaskDetailCleanupBlock({
+  showCleanupPropertyBlock,
+  cleanupView,
+  showCleanupMessage,
+  cleanupMeta,
+  worktreeCleanupInfo,
+  worktreeCleanupError,
+  worktreeCleanupLoading,
+  submittingWorktreeCleanup,
+  retryWorktreeCleanupInfo,
+  openWorktreeCleanupDialog,
+}: Pick<
+  TaskDetailPropertiesContentProps,
+  | "showCleanupPropertyBlock"
+  | "cleanupView"
+  | "showCleanupMessage"
+  | "cleanupMeta"
+  | "worktreeCleanupInfo"
+  | "worktreeCleanupError"
+  | "worktreeCleanupLoading"
+  | "submittingWorktreeCleanup"
+  | "retryWorktreeCleanupInfo"
+  | "openWorktreeCleanupDialog"
+>) {
+  if (!showCleanupPropertyBlock) {
+    return null;
+  }
+
+  return (
+    <div
+      className="detail-properties__block detail-properties__block--cleanup"
+      data-testid="detail-worktree-cleanup"
+    >
+      <span className="detail-properties__label">Worktree cleanup</span>
+      <div className="detail-properties__cleanup" data-cleanup-view={cleanupView}>
+        {cleanupView === "loading" ? (
+          <p
+            className="detail-properties__value detail-properties__cleanup-message"
+            data-testid="worktree-cleanup-loading"
+          >
+            Checking worktree…
+          </p>
+        ) : null}
+
+        {cleanupView === "error" ? (
+          <>
+            <p
+              className="detail-properties__value detail-properties__cleanup-message"
+              data-testid="worktree-cleanup-error"
+            >
+              {worktreeCleanupError ?? "Failed to check worktree status."}
+            </p>
+            <Button
+              className="detail-properties__cleanup-button"
+              data-testid="worktree-cleanup-retry"
+              disabled={worktreeCleanupLoading}
+              onClick={() => {
+                retryWorktreeCleanupInfo();
+              }}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {worktreeCleanupLoading ? "Retrying…" : "Retry"}
+            </Button>
+          </>
+        ) : null}
+
+        {showCleanupMessage ? (
+          <p
+            className="detail-properties__value detail-properties__cleanup-message"
+            data-testid="worktree-cleanup-message"
+          >
+            {worktreeCleanupInfo?.message ?? "Worktree cleanup unavailable."}
+          </p>
+        ) : null}
+
+        {cleanupMeta && cleanupView !== "missing" ? (
+          <p className="detail-properties__cleanup-meta">{cleanupMeta}</p>
+        ) : null}
+
+        {cleanupView === "available" ? (
+          <Button
+            className="detail-properties__cleanup-button"
+            data-testid="worktree-cleanup-trigger"
+            disabled={submittingWorktreeCleanup}
+            onClick={() => {
+              void openWorktreeCleanupDialog();
+            }}
+            size="sm"
+            type="button"
+            variant="danger"
+          >
+            {submittingWorktreeCleanup ? "Removing…" : "Remove worktree"}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function TaskDetailPropertiesPanel({
+  statusLabel,
+  statusTone,
+  configLabel,
+  stageNodes,
+  launchedInWorktree,
+  launchModeLabel,
+  createdLabel,
+  durationLabel,
+  runsLabel,
+  showCleanupPropertyBlock,
+  cleanupView,
+  showCleanupMessage,
+  cleanupMeta,
+  worktreeCleanupInfo,
+  worktreeCleanupError,
+  worktreeCleanupLoading,
+  submittingWorktreeCleanup,
+  retryWorktreeCleanupInfo,
+  openWorktreeCleanupDialog,
+}: TaskDetailPropertiesContentProps) {
+  return (
+    <section className="detail-properties-surface" data-testid="detail-properties-surface">
+      <div className="detail-properties__content">
+        <div className="detail-properties__block" data-testid="detail-task-status">
+          <span className="detail-properties__label">Status</span>
+          <StatusBadge label={statusLabel} tone={statusTone} />
+        </div>
+
+        <div className="detail-properties__block" data-testid="detail-task-duration">
+          <span className="detail-properties__label">Duration</span>
+          <span className="detail-properties__value">{durationLabel}</span>
+        </div>
+
+        <div className="detail-properties__block" data-testid="detail-task-config">
+          <span className="detail-properties__label">Config</span>
+          <span className="detail-properties__value detail-properties__mono">
+            {configLabel}
+          </span>
+        </div>
+
+        {launchModeLabel ? (
+          <div className="detail-properties__block" data-testid="detail-task-launch-mode">
+            <span className="detail-properties__label">Launch mode</span>
+            <span className="detail-properties__value detail-properties__launch-mode">
+              {launchedInWorktree ? (
+                <span
+                  className="detail-properties__launch-mode-icon-wrap"
+                  data-testid="detail-task-launch-mode-icon"
+                >
+                  <WorktreeGlyph
+                    className="detail-properties__launch-mode-icon"
+                    size={12}
+                    strokeWidth={1.95}
+                  />
+                </span>
+              ) : null}
+              <span>{launchModeLabel}</span>
+            </span>
+          </div>
+        ) : null}
+
+        {stageNodes.length > 0 ? (
+          <div className="detail-properties__block" data-testid="detail-task-flow">
+            <span className="detail-properties__label">Flow</span>
+            <div className="detail-properties__flow">
+              {stageNodes.map((node) => (
+                <div className="detail-properties__flow-row" key={node.name}>
+                  <span
+                    aria-hidden="true"
+                    className={`detail-properties__flow-bullet detail-properties__flow-bullet--${node.status}`}
+                  >
+                    {stageFlowGlyph(node.status)}
+                  </span>
+                  <span className="detail-properties__value">{node.name}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="detail-properties__block" data-testid="detail-task-created">
+          <span className="detail-properties__label">Created</span>
+          <span className="detail-properties__value">{createdLabel}</span>
+        </div>
+
+        <div className="detail-properties__block" data-testid="detail-task-runs">
+          <span className="detail-properties__label">Runs</span>
+          <span className="detail-properties__value detail-properties__muted">
+            {runsLabel}
+          </span>
+        </div>
+
+        <TaskDetailCleanupBlock
+          cleanupMeta={cleanupMeta}
+          cleanupView={cleanupView}
+          openWorktreeCleanupDialog={openWorktreeCleanupDialog}
+          retryWorktreeCleanupInfo={retryWorktreeCleanupInfo}
+          showCleanupMessage={showCleanupMessage}
+          showCleanupPropertyBlock={showCleanupPropertyBlock}
+          submittingWorktreeCleanup={submittingWorktreeCleanup}
+          worktreeCleanupError={worktreeCleanupError}
+          worktreeCleanupInfo={worktreeCleanupInfo}
+          worktreeCleanupLoading={worktreeCleanupLoading}
+        />
+      </div>
+    </section>
+  );
+}
+
 export function TaskDetailScreen({
   goBackToTaskSurface,
   task,
@@ -829,6 +1076,52 @@ export function TaskDetailScreen({
               : "loading";
   const showCleanupMessage =
     cleanupView === "blocked" || cleanupView === "missing";
+  const propertiesPanel = useMemo(
+    () => (
+      <TaskDetailPropertiesPanel
+        cleanupMeta={cleanupMeta}
+        cleanupView={cleanupView}
+        configLabel={configLabel}
+        createdLabel={createdLabel}
+        durationLabel={durationLabel}
+        launchModeLabel={launchModeLabel}
+        launchedInWorktree={launchedInWorktree}
+        openWorktreeCleanupDialog={openWorktreeCleanupDialog}
+        retryWorktreeCleanupInfo={retryWorktreeCleanupInfo}
+        runsLabel={runsLabel}
+        showCleanupMessage={showCleanupMessage}
+        showCleanupPropertyBlock={showCleanupPropertyBlock}
+        stageNodes={stageNodes}
+        statusLabel={statusLabel}
+        statusTone={statusTone}
+        submittingWorktreeCleanup={submittingWorktreeCleanup}
+        worktreeCleanupError={worktreeCleanupError}
+        worktreeCleanupInfo={worktreeCleanupInfo}
+        worktreeCleanupLoading={worktreeCleanupLoading}
+      />
+    ),
+    [
+      cleanupMeta,
+      cleanupView,
+      configLabel,
+      createdLabel,
+      durationLabel,
+      launchModeLabel,
+      launchedInWorktree,
+      openWorktreeCleanupDialog,
+      retryWorktreeCleanupInfo,
+      runsLabel,
+      showCleanupMessage,
+      showCleanupPropertyBlock,
+      stageNodes,
+      statusLabel,
+      statusTone,
+      submittingWorktreeCleanup,
+      worktreeCleanupError,
+      worktreeCleanupInfo,
+      worktreeCleanupLoading,
+    ],
+  );
   const promptLead = task?.task.description ?? title;
   const showHistorySection = historyEntries.length > 0;
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
@@ -1004,6 +1297,41 @@ export function TaskDetailScreen({
     actionSurface.kind === "follow_up"
       ? "detail-main-column detail-main-column--follow-up"
       : "detail-main-column";
+  const workbenchTab = useMemo(
+    () => ({
+      key: `task-detail-tab:${task?.task.id ?? "loading"}`,
+      tabId: task ? (`task-detail:${task.task.id}` as WorkbenchTabId) : undefined,
+      title:
+        title.trim().length > 40
+          ? `${title.trim().slice(0, 37).trimEnd()}…`
+          : title.trim() || "Task",
+    }),
+    [task, title],
+  );
+  const workbenchRegions = useMemo(
+    () =>
+      task
+        ? {
+            key: `task-detail-regions:${task.task.id}`,
+            tabId: `task-detail:${task.task.id}` as WorkbenchTabId,
+            secondarySidebar: {
+              defaultOpen: true,
+              preferredSize: 320,
+              panel: {
+                title: "Properties",
+                size: 320,
+                testId: "detail-properties-header",
+                content: propertiesPanel,
+              },
+            },
+          }
+        : null,
+    [propertiesPanel, task],
+  );
+  useWorkbenchTab(workbenchTab);
+  useWorkbenchRegions(workbenchRegions);
+  const detailLayoutClassName = "detail-layout detail-layout--workbench";
+  const showInlineFollowUp = actionSurface.kind === "follow_up" && Boolean(actionPanel);
 
   return (
     <section className="detail-screen" data-testid="task-detail-screen">
@@ -1025,13 +1353,10 @@ export function TaskDetailScreen({
           </div>
         ) : null}
 
-        <div className="detail-layout">
+        <div className={detailLayoutClassName}>
           <div className={detailMainColumnClassName}>
             <header
               className="detail-main-header"
-              onMouseDown={(event) => {
-                void startWindowDrag(event);
-              }}
             >
               <button
                 aria-label="Back to tasks"
@@ -1375,171 +1700,10 @@ export function TaskDetailScreen({
               </section>
             </div>
 
-            {actionSurface.kind === "follow_up" && actionPanel ? (
+            {showInlineFollowUp ? (
               <div className="detail-follow-up-slot">{actionPanel}</div>
             ) : null}
           </div>
-
-          <aside className="detail-properties">
-            <div
-              className="detail-properties__header"
-              onMouseDown={(event) => {
-                void startWindowDrag(event);
-              }}
-            >
-              <span className="detail-properties__eyebrow">Properties</span>
-            </div>
-            <div className="detail-properties__divider" />
-            <div className="detail-properties__content">
-              <div className="detail-properties__block" data-testid="detail-task-status">
-                <span className="detail-properties__label">Status</span>
-                <StatusBadge label={statusLabel} tone={statusTone} />
-              </div>
-
-              <div className="detail-properties__block">
-                <span className="detail-properties__label">Config</span>
-                <span className="detail-properties__value detail-properties__mono">
-                  {configLabel}
-                </span>
-              </div>
-
-              {launchedInWorktree && launchModeLabel ? (
-                <div
-                  className="detail-properties__block"
-                  data-testid="detail-task-launch-mode"
-                >
-                  <span className="detail-properties__label">Launch mode</span>
-                  <span className="detail-properties__value detail-properties__launch-mode">
-                    <span
-                      className="detail-properties__launch-mode-icon-wrap"
-                      data-testid="detail-task-launch-mode-icon"
-                    >
-                      <WorktreeGlyph
-                        className="detail-properties__launch-mode-icon"
-                        size={12}
-                        strokeWidth={1.95}
-                      />
-                    </span>
-                    <span>{launchModeLabel}</span>
-                  </span>
-                </div>
-              ) : null}
-
-              <div className="detail-properties__block">
-                <span className="detail-properties__label">Flow</span>
-                {stageNodes.length > 0 ? (
-                  <div className="detail-properties__flow">
-                    {stageNodes.map((node) => (
-                      <span className="detail-properties__flow-row" key={node.name}>
-                        <span
-                          aria-hidden="true"
-                          className={`detail-properties__flow-bullet detail-properties__flow-bullet--${node.status}`}
-                        >
-                          {flowBullet(node.status)}
-                        </span>
-                        <span className="detail-properties__value detail-properties__mono">
-                          {node.name}
-                        </span>
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="detail-properties__value detail-properties__muted">
-                    No workflow nodes yet
-                  </span>
-                )}
-              </div>
-
-              <div className="detail-properties__block">
-                <span className="detail-properties__label">Created</span>
-                <span className="detail-properties__value">{createdLabel}</span>
-              </div>
-
-              <div className="detail-properties__block">
-                <span className="detail-properties__label">Duration</span>
-                <span className="detail-properties__value">{durationLabel}</span>
-              </div>
-
-              <div className="detail-properties__block">
-                <span className="detail-properties__label">Runs</span>
-                <span className="detail-properties__value detail-properties__muted">
-                  {runsLabel}
-                </span>
-              </div>
-
-              {showCleanupPropertyBlock ? (
-                <div
-                  className="detail-properties__block detail-properties__block--cleanup"
-                  data-testid="detail-worktree-cleanup"
-                >
-                  <span className="detail-properties__label">Worktree cleanup</span>
-                  <div
-                    className="detail-properties__cleanup"
-                    data-cleanup-view={cleanupView}
-                  >
-                    {cleanupView === "loading" ? (
-                      <p
-                        className="detail-properties__value detail-properties__cleanup-message"
-                        data-testid="worktree-cleanup-loading"
-                      >
-                        Checking worktree…
-                      </p>
-                    ) : null}
-                    {cleanupView === "error" ? (
-                      <>
-                        <p
-                          className="detail-properties__value detail-properties__cleanup-message"
-                          data-testid="worktree-cleanup-error"
-                        >
-                          {worktreeCleanupError ?? "Failed to check worktree status."}
-                        </p>
-                        <Button
-                          className="detail-properties__cleanup-button"
-                          data-testid="worktree-cleanup-retry"
-                          disabled={worktreeCleanupLoading}
-                          onClick={() => {
-                            retryWorktreeCleanupInfo();
-                          }}
-                          size="sm"
-                          type="button"
-                          variant="secondary"
-                        >
-                          {worktreeCleanupLoading ? "Retrying…" : "Retry"}
-                        </Button>
-                      </>
-                    ) : null}
-                    {showCleanupMessage ? (
-                      <p
-                        className="detail-properties__value detail-properties__cleanup-message"
-                        data-testid="worktree-cleanup-message"
-                      >
-                        {worktreeCleanupInfo?.message ?? "Worktree cleanup unavailable."}
-                      </p>
-                    ) : null}
-                    {cleanupMeta && cleanupView !== "missing" ? (
-                      <p className="detail-properties__cleanup-meta">{cleanupMeta}</p>
-                    ) : null}
-                    {cleanupView === "available" ? (
-                      <Button
-                        className="detail-properties__cleanup-button"
-                        data-testid="worktree-cleanup-trigger"
-                        disabled={submittingWorktreeCleanup}
-                        onClick={() => {
-                          void openWorktreeCleanupDialog();
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="danger"
-                      >
-                        {submittingWorktreeCleanup ? "Removing…" : "Remove worktree"}
-                      </Button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-            </div>
-          </aside>
         </div>
         {artifactModal}
         {transcriptModal}

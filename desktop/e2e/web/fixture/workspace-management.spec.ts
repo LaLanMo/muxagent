@@ -21,6 +21,10 @@ function workspaceRow(page: Page, label: string): Locator {
   return page.locator('[data-testid^="workspace-row-"]').filter({ hasText: label }).first();
 }
 
+function allWorkspacesScope(page: Page): Locator {
+  return page.getByTestId("task-scope-all-workspaces");
+}
+
 async function removeWorkspaceFromSidebar(page: Page, label: string) {
   const row = workspaceRow(page, label);
   await row.hover();
@@ -30,13 +34,30 @@ async function removeWorkspaceFromSidebar(page: Page, label: string) {
   await page.getByTestId("confirm-dialog-submit").click();
 }
 
-test("keeps settings sparse and removes legacy workspace management controls", async ({ page }) => {
+test("keeps settings split into runtimes and about while removing legacy workspace controls", async ({
+  page,
+}) => {
   await connectPrimaryWorkspace(page);
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
   await expect(page.locator(".workbench__traffic-lights")).toHaveCount(0);
 
-  await page.getByRole("link", { name: /^Settings$/i }).click();
+  await page.getByTestId("workbench-activity-settings").click();
+  await expect(page.getByTestId("settings-panel-nav")).toBeVisible();
+  await expect(page.getByTestId("settings-panel-runtimes")).toBeVisible();
+  await expect(page.getByTestId("settings-panel-about")).toBeVisible();
+
+  await page.getByTestId("settings-panel-runtimes").click();
+  await expect(page).toHaveURL(/\/settings\/runtimes$/);
   await expect(page.getByTestId("settings-screen")).toBeVisible();
+  await expect(page.getByTestId("settings-panel-runtimes")).toHaveClass(/is-active/);
+  await expect(page.getByTestId("settings-runtimes-section")).toContainText("Runtimes");
+  await expect(page.getByTestId("settings-runtime-codex")).toContainText("Codex");
+  await expect(page.getByTestId("settings-runtime-claude-code")).toContainText("Claude Code");
+  await expect(page.getByTestId("settings-runtime-opencode")).toContainText("OpenCode");
+
+  await page.getByTestId("settings-panel-about").click();
+  await expect(page.getByTestId("settings-screen")).toBeVisible();
+  await expect(page).toHaveURL(/\/settings\/about$/);
   await expect(page.getByTestId("workbench-activity-settings")).toHaveClass(/is-active/);
   await expect(page.getByTestId("workbench-activity-tasks")).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByTestId("workbench-activity-source-control")).toHaveAttribute(
@@ -52,18 +73,11 @@ test("keeps settings sparse and removes legacy workspace management controls", a
   await expect(page.getByTestId("workspace-rename-button")).toHaveCount(0);
   await expect(page.getByTestId("workspace-remove-button")).toHaveCount(0);
   await expect(page.getByText("Protocol")).toHaveCount(0);
-  await expect(page.getByTestId("settings-runtime-section")).toContainText("Runtimes");
-  await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
   await expect(page.getByTestId("settings-about-section")).toContainText("About");
   await expect(
     page.getByTestId("settings-version-row").filter({ hasText: "fixture" }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Check now" })).toHaveCount(0);
-  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "Codex" })).toContainText(
-    "Detected",
-  );
-  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "Claude Code" })).toContainText("Available");
-  await expect(page.getByTestId("settings-runtime-row").filter({ hasText: "OpenCode" })).toContainText("Not found");
 });
 
 test("activates the selected workspace row in the tasks panel", async ({ page }) => {
@@ -71,12 +85,58 @@ test("activates the selected workspace row in the tasks panel", async ({ page })
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
 
   await expect(page.locator(".tasks-panel__filter.is-active")).toContainText("All");
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
 
   await workspaceRow(page, "muxagent-alt-workspace").locator(".tasks-panel__workspace-row").click();
   await expect(page).toHaveURL(/\/$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
+
+  await allWorkspacesScope(page).click();
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
+  await expect(
+    page.locator('[data-testid^="workspace-row-"] .tasks-panel__workspace-row.is-active'),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-workspace");
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
+});
+
+test("keeps a stable zero-tab workspace when the last tab closes", async ({
+  page,
+}) => {
+  await connectPrimaryWorkspace(page);
+
+  await expect(page.getByTestId("workbench-tab-task-board")).toBeVisible();
+  await page.getByTestId("workbench-tab-close-task-board").focus();
+  await page.keyboard.press("Enter");
+
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.getByTestId("workbench-empty-state")).toBeVisible();
+  await expect(page.getByTestId("workbench-empty-brand")).toBeFocused();
+  await expect(page.getByTestId("workbench-tab-task-board")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand bottom panel" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
+
+  await page.getByTestId("workbench-activity-settings").click();
+  await page.getByTestId("settings-panel-about").click();
+  await expect(page).toHaveURL(/\/settings\/about$/);
+  await expect(page.getByTestId("workbench-tab-settings")).toBeVisible();
+
+  await page.getByTestId("workbench-tab-close-settings").click();
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.getByTestId("workbench-empty-state")).toBeVisible();
+  await expect(page.getByTestId("workbench-empty-brand")).toBeFocused();
+  await expect(page.getByTestId("workbench-tab-settings")).toHaveCount(0);
+
+  await page.getByTestId("workbench-activity-tasks").click();
+  await page.getByTestId("task-view-all").click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("workbench-empty-state")).toHaveCount(0);
+  await expect(page.getByTestId("workbench-tab-task-board")).toBeVisible();
+  await expect(page.getByTestId("workbench-tab-settings")).toHaveCount(0);
+  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.getByTestId("entry-shell")).toBeVisible();
 });
 
 test("reveals a row-scoped sidebar delete action and removes the selected workspace", async ({

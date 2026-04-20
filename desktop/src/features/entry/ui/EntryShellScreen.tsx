@@ -19,6 +19,12 @@ export function EntryShellScreen({
 }: EntryShellScreenProps) {
   const showTaskListEmptyState =
     shell.phase === "connected" && shell.workspaceCount > 0 && !hasTasks;
+  const emptyStateTitle = shell.allWorkspacesActive
+    ? "No tasks yet"
+    : `No tasks in ${shell.workspaceLabel}`;
+  const emptyStateBody = shell.allWorkspacesActive
+    ? "Create your first task to start a workflow."
+    : "Try another status filter or switch back to All workspaces.";
 
   return (
     <section
@@ -75,8 +81,8 @@ export function EntryShellScreen({
             <div className="board-empty-state__icon" aria-hidden="true">
               <Inbox size={28} strokeWidth={1.75} />
             </div>
-            <h2>No tasks yet</h2>
-            <p>Create your first task to start a workflow.</p>
+            <h2>{emptyStateTitle}</h2>
+            <p>{emptyStateBody}</p>
             <Button
               leadingIcon={<Plus strokeWidth={2.1} />}
               onClick={shell.openNewTask}

@@ -208,9 +208,8 @@ test("still allows starting a task from the all-workspaces task view", async ({ 
 
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-alt-workspace"));
   await page.getByTestId("workspace-picker-button").click();
-  await page.goto("/");
 
-  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
+  await expect(page.getByTestId("task-scope-all-workspaces")).toHaveClass(/is-active/);
   await page.getByTestId("open-new-task").click();
   await expect(page.getByTestId("new-task-modal")).toBeVisible();
   await expect(page.getByTestId("new-task-workspace")).toBeVisible();
@@ -242,13 +241,14 @@ test("renders configs and settings from the desktop shell", async ({ page }) => 
   await expect(page.getByRole("button", { name: /Make default/i })).toHaveCount(0);
   await expect(page.getByText("Default for new tasks")).toHaveCount(0);
 
-  await page.getByRole("link", { name: /^Settings$/i }).click();
+  await page.getByTestId("workbench-activity-settings").click();
+  await expect(page.getByTestId("settings-panel-nav")).toBeVisible();
+  await expect(page.getByTestId("settings-panel-runtimes")).toBeVisible();
+  await expect(page.getByTestId("settings-panel-about")).toBeVisible();
+  await page.getByTestId("settings-panel-about").click();
+  await expect(page).toHaveURL(/\/settings\/about$/);
   await expect(page.getByTestId("settings-screen")).toBeVisible();
-  await expect(page.getByTestId("settings-runtime-section")).toContainText("Runtimes");
-  await expect(page.getByTestId("settings-runtime-row")).toHaveCount(3);
-  await expect(
-    page.getByTestId("settings-runtime-row").filter({ hasText: "Codex" }),
-  ).toContainText("Detected");
+  await expect(page.getByTestId("settings-panel-about")).toHaveClass(/is-active/);
   await expect(page.getByTestId("settings-about-section")).toContainText("About");
   await expect(
     page.getByTestId("settings-version-row").filter({ hasText: "fixture" }),

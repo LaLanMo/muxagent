@@ -269,6 +269,10 @@
   background: var(--color-surface-0);
 }
 
+.config-editor-layout--workbench {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .config-editor-canvas {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -464,6 +468,10 @@
   min-height: 0;
   overflow: auto;
   background: var(--color-surface-1);
+}
+
+.config-editor-panel__body--surface {
+  background: inherit;
 }
 
 .config-editor-panel__section {

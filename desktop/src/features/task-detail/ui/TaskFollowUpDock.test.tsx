@@ -59,11 +59,21 @@ function renderDock(props: {
 }
 
 test("basic dock hides the fixed continue-here control for non-repo tasks", () => {
-  const markup = renderDock({ followUpState: "basic" });
+  const markup = renderDock({});
 
   assert.doesNotMatch(markup, /follow-up-mode-fixed/);
   assert.doesNotMatch(markup, /follow-up-mode-trigger/);
   assert.doesNotMatch(markup, /Continue here/);
+});
+
+test("basic dock renders a passive fixed mode pill when the backend pins basic mode", () => {
+  const markup = renderDock({
+    followUpState: "basic",
+  });
+
+  assert.match(markup, /follow-up-mode-fixed/);
+  assert.doesNotMatch(markup, /follow-up-mode-trigger/);
+  assert.match(markup, /Continue here/);
 });
 
 test("refine dock renders the repo-backed mode trigger and dirty hint", () => {

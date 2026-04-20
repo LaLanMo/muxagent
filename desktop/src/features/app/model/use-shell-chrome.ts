@@ -39,6 +39,7 @@ export type ShellChromeState = {
   workDir: string;
   workspaceLabel: string;
   workspaceCount: number;
+  allWorkspacesActive: boolean;
   phase: "idle" | "connecting" | "connected" | "failed";
   bootstrapPending: boolean;
   error?: string;
@@ -76,6 +77,8 @@ export function useShellChrome(): ShellChromeState {
   const selectedWorkspace = workspaces.find(
     (workspace) => workspace.workspace_id === selectedWorkspaceId,
   );
+  const allWorkspacesActive =
+    phase === "connected" && workspaces.length > 0 && !selectedWorkspaceId;
   const tasksById = useTaskSnapshotStore((state) => state.tasksById);
   const taskIdsByWorkspaceId = useTaskSnapshotStore(
     (state) => state.taskIdsByWorkspaceId,
@@ -177,6 +180,7 @@ export function useShellChrome(): ShellChromeState {
       selectedWorkspace?.display_name ??
       (workspaces.length > 0 ? "All workspaces" : "No workspace selected"),
     workspaceCount: workspaces.length,
+    allWorkspacesActive,
     phase,
     bootstrapPending,
     error,

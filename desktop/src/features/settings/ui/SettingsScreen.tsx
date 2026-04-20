@@ -1,50 +1,24 @@
 import {
-  type SettingsAboutRowModel,
+  type SettingsSectionId,
   type SettingsRuntimeRowModel,
-  type SettingsStatusTone,
+  type SettingsAboutRowModel,
 } from "@/features/settings/model/use-settings-screen";
 
 type SettingsScreenProps = {
+  section: SettingsSectionId;
   runtimeRows: SettingsRuntimeRowModel[];
   aboutRows: SettingsAboutRowModel[];
 };
 
-function statusToneClass(tone: SettingsStatusTone | undefined): string {
-  switch (tone) {
-    case "available":
-      return " settings-status--available";
-    case "warning":
-      return " settings-status--warning";
-    default:
-      return "";
-  }
-}
-
-function RuntimeRow({
-  row,
-  testId,
-}: {
-  row: SettingsRuntimeRowModel;
-  testId?: string;
-}) {
+function RuntimeRow({ row }: { row: SettingsRuntimeRowModel }) {
   return (
-    <div className="settings-row" data-testid={testId}>
+    <div className="settings-row settings-row--runtime" data-testid={`settings-runtime-${row.id}`}>
       <div className="settings-row__copy">
-        <strong className="settings-row__title">{row.name}</strong>
-        {row.detail ? (
-          <p
-            className={
-              row.detailMonospace
-                ? "settings-row__detail settings-row__detail--monospace"
-                : "settings-row__detail"
-            }
-          >
-            {row.detail}
-          </p>
-        ) : null}
+        <strong className="settings-row__title">{row.label}</strong>
+        {row.launcher ? <span className="settings-row__subcopy">{row.launcher}</span> : null}
       </div>
-      <span className={`settings-status${statusToneClass(row.statusTone)}`}>
-        {row.statusLabel}
+      <span className={`settings-row__status settings-row__status--${row.stateTone}`}>
+        {row.stateLabel}
       </span>
     </div>
   );
@@ -70,33 +44,40 @@ function AboutRow({ row }: { row: SettingsAboutRowModel }) {
 }
 
 export function SettingsScreen({
+  section,
   runtimeRows,
   aboutRows,
 }: SettingsScreenProps) {
   return (
     <section className="stack-screen settings-screen" data-testid="settings-screen">
       <article className="settings-panel">
-        <div className="settings-section" data-testid="settings-runtime-section">
-          <div className="settings-section__header">
-            <span className="settings-section__eyebrow">Runtimes</span>
+        {section === "runtimes" ? (
+          <div className="settings-section" data-testid="settings-runtimes-section">
+            <div className="settings-section__header">
+              <span className="settings-section__eyebrow">Runtimes</span>
+            </div>
+            <div className="settings-section__rows">
+              {runtimeRows.length > 0 ? (
+                runtimeRows.map((row) => <RuntimeRow key={row.id} row={row} />)
+              ) : (
+                <div className="settings-section__empty">No runtimes detected.</div>
+              )}
+            </div>
           </div>
-          <div className="settings-section__rows">
-            {runtimeRows.map((row) => (
-              <RuntimeRow key={row.id} row={row} testId="settings-runtime-row" />
-            ))}
-          </div>
-        </div>
+        ) : null}
 
-        <div className="settings-section" data-testid="settings-about-section">
-          <div className="settings-section__header">
-            <span className="settings-section__eyebrow">About</span>
+        {section === "about" ? (
+          <div className="settings-section" data-testid="settings-about-section">
+            <div className="settings-section__header">
+              <span className="settings-section__eyebrow">About</span>
+            </div>
+            <div className="settings-section__rows">
+              {aboutRows.map((row) => (
+                <AboutRow key={row.id} row={row} />
+              ))}
+            </div>
           </div>
-          <div className="settings-section__rows">
-            {aboutRows.map((row) => (
-              <AboutRow key={row.id} row={row} />
-            ))}
-          </div>
-        </div>
+        ) : null}
       </article>
     </section>
   );

@@ -1,4 +1,4 @@
-import { FolderPlus, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { Button } from "@/features/shared/ui/Button";
@@ -42,32 +42,37 @@ export function TasksPanel({ shell }: TasksPanelProps) {
         </Button>
       </div>
 
-      <nav className="tasks-panel__filter-nav" aria-label="Task filters">
-        {shell.taskViewNav.map((item) => (
-          <NavLink
-            className={({ isActive }) =>
-              `tasks-panel__filter${
-                (typeof item.active === "boolean" ? item.active : isActive)
-                  ? " is-active"
-                  : ""
-              }`
-            }
-            data-testid={`task-view-${slugifyTaskView(item.label)}`}
-            end={item.to === "/" || item.to?.startsWith("/?")}
-            key={item.label}
-            to={item.to ?? "/"}
-          >
-            <span>{item.label}</span>
-            {item.count != null ? (
-              <span className="tasks-panel__filter-count">{item.count}</span>
-            ) : null}
-          </NavLink>
-        ))}
-      </nav>
+      <div className="tasks-panel__status">
+        <div className="tasks-panel__section-header">
+          <span>STATUS</span>
+        </div>
+        <nav className="tasks-panel__filter-nav" aria-label="Task filters">
+          {shell.taskViewNav.map((item) => (
+            <NavLink
+              className={({ isActive }) =>
+                `tasks-panel__filter${
+                  (typeof item.active === "boolean" ? item.active : isActive)
+                    ? " is-active"
+                    : ""
+                }`
+              }
+              data-testid={`task-view-${slugifyTaskView(item.label)}`}
+              end={item.to === "/" || item.to?.startsWith("/?")}
+              key={item.label}
+              to={item.to ?? "/"}
+            >
+              <span>{item.label}</span>
+              {item.count != null ? (
+                <span className="tasks-panel__filter-count">{item.count}</span>
+              ) : null}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
 
       <div className="tasks-panel__workspaces">
         <div className="tasks-panel__section-header">
-          <span>WORKSPACES</span>
+          <span>WORKSPACE</span>
           <button
             aria-label="Add workspace"
             className="tasks-panel__add-workspace"
@@ -76,59 +81,83 @@ export function TasksPanel({ shell }: TasksPanelProps) {
             onClick={() => void shell.addWorkspace()}
             type="button"
           >
-            <FolderPlus aria-hidden="true" size={14} strokeWidth={1.8} />
+            <Plus aria-hidden="true" size={14} strokeWidth={1.8} />
           </button>
         </div>
         <div className="tasks-panel__workspace-list">
           {shell.workspaceItems.length > 0 ? (
-            shell.workspaceItems.map((item) => {
-              const badgeClass = item.badgeTone
-                ? `tasks-panel__workspace-badge tasks-panel__workspace-badge--${item.badgeTone}`
-                : "tasks-panel__workspace-badge";
-              return (
-                <div
-                  className={`tasks-panel__workspace-item${
-                    item.active ? " is-active" : ""
-                  }${item.removePending ? " is-pending" : ""}`}
-                  data-testid={`workspace-row-${item.id}`}
-                  key={item.id}
+            <>
+              <div
+                className={`tasks-panel__workspace-item${
+                  shell.allWorkspacesActive ? " is-active" : ""
+                }`}
+                data-testid="task-scope-all-workspaces"
+              >
+                <button
+                  className={`tasks-panel__workspace-row${
+                    shell.allWorkspacesActive ? " is-active" : ""
+                  }`}
+                  onClick={shell.showAllTasks}
+                  title="All workspaces"
+                  type="button"
                 >
-                  <button
-                    className={`tasks-panel__workspace-row${
-                      item.active ? " is-active" : ""
-                    }`}
-                    onClick={item.onClick}
-                    title={item.label}
-                    type="button"
-                  >
-                    <span className="tasks-panel__workspace-leading">
-                      <ShellIcon name="workspace" />
-                      <span className="tasks-panel__workspace-label">
-                        {item.label}
-                      </span>
+                  <span className="tasks-panel__workspace-leading">
+                    <ShellIcon name="board" />
+                    <span className="tasks-panel__workspace-label">
+                      All workspaces
                     </span>
-                    {item.active && item.badgeCount ? (
-                      <span className={badgeClass}>{item.badgeCount}</span>
-                    ) : null}
-                  </button>
-                  {item.onRemove ? (
+                  </span>
+                </button>
+              </div>
+              {shell.workspaceItems.map((item) => {
+                const badgeClass = item.badgeTone
+                  ? `tasks-panel__workspace-badge tasks-panel__workspace-badge--${item.badgeTone}`
+                  : "tasks-panel__workspace-badge";
+                return (
+                  <div
+                    className={`tasks-panel__workspace-item${
+                      item.active ? " is-active" : ""
+                    }${item.removePending ? " is-pending" : ""}`}
+                    data-testid={`workspace-row-${item.id}`}
+                    key={item.id}
+                  >
                     <button
-                      aria-label={`Remove workspace ${item.label}`}
-                      className="icon-button tasks-panel__workspace-remove"
-                      data-testid="workspace-row-remove-button"
-                      disabled={item.removePending}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        item.onRemove?.();
-                      }}
+                      className={`tasks-panel__workspace-row${
+                        item.active ? " is-active" : ""
+                      }`}
+                      onClick={item.onClick}
+                      title={item.label}
                       type="button"
                     >
-                      <Trash2 aria-hidden="true" size={14} strokeWidth={1.9} />
+                      <span className="tasks-panel__workspace-leading">
+                        <ShellIcon name="workspace" />
+                        <span className="tasks-panel__workspace-label">
+                          {item.label}
+                        </span>
+                      </span>
+                      {item.active && item.badgeCount ? (
+                        <span className={badgeClass}>{item.badgeCount}</span>
+                      ) : null}
                     </button>
-                  ) : null}
-                </div>
-              );
-            })
+                    {item.onRemove ? (
+                      <button
+                        aria-label={`Remove workspace ${item.label}`}
+                        className="icon-button tasks-panel__workspace-remove"
+                        data-testid="workspace-row-remove-button"
+                        disabled={item.removePending}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          item.onRemove?.();
+                        }}
+                        type="button"
+                      >
+                        <Trash2 aria-hidden="true" size={14} strokeWidth={1.9} />
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </>
           ) : (
             <div className="tasks-panel__empty">No workspaces yet</div>
           )}

@@ -21,7 +21,10 @@ test("shows a built-in config as a read-only file inspector", async ({
 }) => {
   await connectFixtureWorkspace(page);
 
-  await page.goto("/configs");
+  await page.getByTestId("workbench-activity-configs").click();
+  await expect(page.getByTestId("configs-panel")).toBeVisible();
+  await expect(page.getByTestId("configs-panel-new")).toHaveCount(0);
+  await page.getByTestId("configs-panel-view-all").click();
   await expect(page.getByTestId("configs-screen")).toBeVisible();
   await expect(page.getByRole("button", { name: /^\+ New Config$/i })).toHaveCount(0);
   await expect(page.getByTestId("config-card-default")).toBeVisible();
@@ -73,6 +76,78 @@ test("shows a built-in config as a read-only file inspector", async ({
   await page.getByTestId("config-editor-back").click();
   await expect(page).toHaveURL(/\/configs$/);
   await expect(page.getByTestId("configs-screen")).toBeVisible();
+});
+
+test("keeps shell peer-region visibility stable while switching workspace tabs", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+
+  await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
+  await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Expand bottom panel" }).click();
+  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+
+  await page.getByTestId("workbench-activity-configs").click();
+  await expect(page.getByTestId("configs-panel")).toBeVisible();
+  await page.getByTestId("configs-panel-view-all").click();
+  await expect(page.getByTestId("configs-screen")).toBeVisible();
+  await page
+    .getByTestId("config-card-default")
+    .getByRole("button", { name: /^Edit$/i })
+    .click();
+
+  await expect(page.getByTestId("config-editor-screen")).toBeVisible();
+  await expect(page.getByTestId("workbench-right-panel")).toBeVisible();
+  await expect(page.getByTestId("config-editor-config-header")).toContainText(
+    "Config File",
+  );
+  await expect(page.getByRole("button", { name: "Collapse right panel" })).toBeEnabled();
+  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+
+  await page.getByRole("button", { name: "Collapse right panel" }).click();
+  await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand right panel" })).toBeEnabled();
+  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+
+  await page
+    .getByTestId("workbench-center-tabs")
+    .getByRole("tab", { name: "Board" })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId("entry-shell")).toBeVisible();
+  await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
+  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+
+  await page
+    .getByTestId("workbench-center-tabs")
+    .getByRole("tab", { name: "default" })
+    .click();
+  await expect(page.getByTestId("config-editor-screen")).toBeVisible();
+  await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Expand right panel" })).toBeEnabled();
+  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+
+  await page.getByTestId("workbench-tab-close-config-detail:default").click();
+  await expect(page.getByTestId("workbench-tab-config-detail:default")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/configs$/);
+  await expect(page.getByTestId("configs-screen")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
+  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+
+  await page
+    .getByTestId("config-card-default")
+    .getByRole("button", { name: /^Edit$/i })
+    .click();
+  await expect(page.getByTestId("config-editor-screen")).toBeVisible();
+  await expect(page.getByTestId("workbench-right-panel")).toBeVisible();
+  await expect(page.getByTestId("config-editor-config-header")).toContainText(
+    "Config File",
+  );
+  await expect(page.getByRole("button", { name: "Collapse right panel" })).toBeEnabled();
 });
 
 test("deletes a customized config from the config list", async ({ page }) => {

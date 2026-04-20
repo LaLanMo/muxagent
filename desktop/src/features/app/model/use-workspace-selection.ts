@@ -138,16 +138,21 @@ export function useWorkspaceSelection() {
       selectPreferredWorkspace(preferredWorkspaceIdsForPath(pathname, ...fallbackIds)),
   );
 
-  const clearWorkspaceSelection = useEffectEvent((): void => {
-    clearRememberedWorkspaceId();
-    setSelectedWorkspace(undefined);
-    setError(undefined);
+  const clearWorkspaceSelection = useEffectEvent(
+    (options?: { navigateToTaskSurface?: boolean }): void => {
+      const shouldNavigateToTaskSurface =
+        options?.navigateToTaskSurface !== false;
 
-    const taskRoute = parseTaskDetailPath(location.pathname);
-    if (taskRoute) {
-      navigate("/", { replace: false });
-    }
-  });
+      clearRememberedWorkspaceId();
+      setSelectedWorkspace(undefined);
+      setError(undefined);
+
+      const taskRoute = parseTaskDetailPath(location.pathname);
+      if (shouldNavigateToTaskSurface && taskRoute) {
+        navigate("/", { replace: false });
+      }
+    },
+  );
 
   const selectTaskRouteWorkspace = useEffectEvent(
     async (workspaceId: string): Promise<SelectWorkspaceByIdResult> =>

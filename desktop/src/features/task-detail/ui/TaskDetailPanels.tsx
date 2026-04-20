@@ -2530,6 +2530,8 @@ export function TaskFollowUpDock({
       syncInputHeight(inputRef.current);
     }
     setFollowUpConfigAlias(undefined);
+    setConfigPickerOpen(false);
+    setModePickerOpen(false);
   }, [taskKey]);
 
   useEffect(() => {
@@ -2856,6 +2858,23 @@ export function TaskFollowUpDock({
                       );
                     })}
                   </div>
+                ) : null}
+              </div>
+            ) : dockState === "basic" &&
+              (followUp || followUpState === "basic") ? (
+              <div
+                className="detail-follow-up-rail__mode-pill"
+                data-testid="follow-up-mode-fixed"
+              >
+                <FollowUpModeGlyph mode={selectedMode} />
+                <span>{followUpModeLabel(selectedMode)}</span>
+                {modeTriggerMeta ? (
+                  <span
+                    className="detail-follow-up-rail__mode-trigger-meta"
+                    data-testid="follow-up-dirty-hint"
+                  >
+                    · {modeTriggerMeta}
+                  </span>
                 ) : null}
               </div>
             ) : null}

@@ -24,6 +24,14 @@ async function openTaskFromBoard(page: Page, taskId: string) {
   await page.getByTestId(`board-card-link-${taskId}`).click();
 }
 
+function allWorkspacesScope(page: Page) {
+  return page.getByTestId("task-scope-all-workspaces");
+}
+
+function workspaceRow(page: Page, label: string) {
+  return page.locator('[data-testid^="workspace-row-"]').filter({ hasText: label }).first();
+}
+
 async function readHeaderAlignment(page: Page) {
   const [backIconBox, backLabelBox, promptBox, activityBox] = await Promise.all([
     page.locator(".detail-main-header__back-icon").boundingBox(),
@@ -122,6 +130,23 @@ async function readCollapsedHistoryGeometry(page: Page) {
   });
 }
 
+async function readWorkbenchDividerAlignment(page: Page) {
+  return page.evaluate(() => {
+    const tabbar = document.querySelector(".workbench__tabbar");
+    const rightPanel = document.querySelector('[data-testid="workbench-right-panel"]');
+    const rightHeader = rightPanel?.querySelector(".workbench__slot-header");
+    if (!tabbar || !rightHeader) {
+      throw new Error("Expected the workbench tabbar and right-panel header to be visible");
+    }
+    const tabbarRect = tabbar.getBoundingClientRect();
+    const rightHeaderRect = rightHeader.getBoundingClientRect();
+    return {
+      rightHeaderBottom: Math.round(rightHeaderRect.bottom),
+      tabbarBottom: Math.round(tabbarRect.bottom),
+    };
+  });
+}
+
 async function triggerWorkspaceTaskReload(page: Page, workspaceId: string) {
   await page.evaluate(async ({ workspaceId }) => {
     const [{ getRuntime }, { useTaskSnapshotStore }] = await Promise.all([
@@ -160,10 +185,26 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
 
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-live-fixture$/);
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
-  await expect(page.getByText("Refactor auth middleware")).toBeVisible();
+  await expect(page.getByTestId("task-detail-header-description")).toContainText(
+    "Refactor auth middleware",
+  );
+  await expect(page.getByTestId("detail-inline-properties")).toHaveCount(0);
+  await expect(page.getByTestId("detail-task-config")).toContainText("default");
+  await expect(page.getByTestId("detail-task-duration")).toContainText("Duration");
+  await expect(page.getByTestId("detail-task-created")).toContainText("Created");
+  await expect(page.getByTestId("detail-task-runs")).toContainText("Runs");
+  await expect(page.getByTestId("detail-inline-support")).toHaveCount(0);
+  await expect(page.getByTestId("workbench-right-panel")).toBeVisible();
+  await expect(page.getByTestId("detail-properties-header")).toContainText("Properties");
+  await expect(page.getByRole("button", { name: "Collapse right panel" })).toBeEnabled();
+  await expect(page.getByTestId("detail-task-status")).toContainText("Running");
   await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Launch mode");
   await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Worktree");
   await expect(page.getByTestId("detail-task-launch-mode-icon")).toBeVisible();
+  await expect(page.getByTestId("detail-task-flow")).toContainText("plan");
+  await expect(page.getByTestId("detail-task-flow")).toContainText("implement");
+  const dividerAlignment = await readWorkbenchDividerAlignment(page);
+  expect(dividerAlignment.rightHeaderBottom).toBe(dividerAlignment.tabbarBottom);
   await expect(page.getByTestId("detail-run-run-live-plan")).toBeVisible();
   await expect(page.getByTestId("detail-run-summary-run-live-plan")).toContainText(
     "Scope the middleware refactor around the anonymous bypass first",
@@ -796,40 +837,33 @@ test("task deep links restore the route workspace even after switching to anothe
   );
 });
 
-test("treats Tasks as the all-workspaces view and workspace rows as task scope", async ({
+test("keeps status filters independent from workspace scope and exposes all-workspaces reset", async ({
   page,
 }) => {
   await connectFixtureWorkspace(page);
 
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-alt-workspace"));
   await page.getByTestId("workspace-picker-button").click();
-  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
+  await page.getByTestId("task-view-needs-attention").click();
+  await expect(page).toHaveURL(/\/\?view=attention$/);
 
-  await page
+  await workspaceRow(page, "muxagent-alt-workspace")
     .locator(".tasks-panel__workspace-row")
-    .filter({ hasText: "muxagent-alt-workspace" })
     .click();
+  await expect(page).toHaveURL(/\/\?view=attention$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
+  await expect(allWorkspacesScope(page)).not.toHaveClass(/is-active/);
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
+  await expect(page.getByTestId("task-board")).not.toContainText("muxagent-workspace");
 
-  await page.goto("/");
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
+  await allWorkspacesScope(page).click();
+  await expect(page).toHaveURL(/\/\?view=attention$/);
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
   await expect(page.getByTestId("task-board")).toContainText("muxagent-workspace");
   await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
-
-  await page.goto("/configs");
-  await expect(page.getByTestId("configs-screen")).toBeVisible();
-  await page
-    .locator(".tasks-panel__workspace-row")
-    .filter({ hasText: "muxagent-alt-workspace" })
-    .click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
-  ).toContainText("muxagent-alt-workspace");
-  await expect(page.getByTestId("task-board")).toBeVisible();
 });
 
 test("restores the originating task-surface workspace scope after leaving task detail", async ({
@@ -839,8 +873,7 @@ test("restores the originating task-surface workspace scope after leaving task d
 
   page.once("dialog", (dialog) => dialog.accept("/tmp/muxagent-alt-workspace"));
   await page.getByTestId("workspace-picker-button").click();
-  await page.goto("/");
-  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
 
   const allTasksCard = page
     .locator('[data-testid="board-card-task-live-fixture"]')
@@ -855,17 +888,16 @@ test("restores the originating task-surface workspace scope after leaving task d
 
   await page.getByTestId("task-detail-back").click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
 
   await allTasksLink.click();
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.locator(".tasks-panel__workspace-row.is-active")).toHaveCount(0);
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
 
-  await page
+  await workspaceRow(page, "muxagent-alt-workspace")
     .locator(".tasks-panel__workspace-row")
-    .filter({ hasText: "muxagent-alt-workspace" })
     .click();
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
@@ -886,7 +918,9 @@ test("renders approval and artifact preview task surfaces", async ({ page }) => 
 
   await openTaskFromBoard(page, "task-awaiting-pr");
   await expect(page.getByTestId("approval-pane")).toBeVisible();
-  await expect(page.getByText("Review PR #42")).toBeVisible();
+  await expect(page.getByTestId("task-detail-header-description")).toContainText(
+    "Review PR #42",
+  );
   await expect(page.getByRole("button", { name: "Approve" })).toBeVisible();
   await expect(page.getByTestId("detail-run-icon-run-awaiting-plan")).toHaveAttribute(
     "data-actor-type",
@@ -1256,9 +1290,7 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
   );
   await expect(page.locator(".detail-main-header__prompt-text")).toContainText(description);
   await expect(page.locator(".detail-main-header__prompt-text")).toContainText(secondLine);
-  await expect(
-    page.locator(".detail-properties__block").filter({ hasText: /^Config/ }),
-  ).toContainText("quick");
+  await expect(page.getByTestId("detail-task-config")).toContainText("quick");
   await expect(page.getByText("follow-up-mode-fork_with_changes.md")).toBeVisible();
 });
 
@@ -1370,8 +1402,9 @@ test("defaults to the board-only task surface and ignores legacy list routes", a
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByTestId("task-board")).toBeVisible();
 
-  await page.goto("/");
+  await allWorkspacesScope(page).click();
   await expect(page).toHaveURL(/\/$/);
+  await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
   await expect(page.getByTestId("task-board")).toBeVisible();
 
   await page.getByTestId("task-view-needs-attention").click();

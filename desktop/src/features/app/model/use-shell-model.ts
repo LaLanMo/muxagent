@@ -82,7 +82,7 @@ export function useShellModel(): ShellChromeModel {
       item.label === "Tasks"
         ? {
             ...item,
-            onClick: shellCommands.showAllTasks,
+            onClick: shellCommands.showTaskSurface,
           }
         : item.label === "Source Control"
           ? {

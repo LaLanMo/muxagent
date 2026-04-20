@@ -8,6 +8,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
+import { workbenchZeroTabPath } from "@/domain/routes";
 import { useServerBootstrap } from "@/features/app/model/use-server-bootstrap";
 import { useRuntimeSync } from "@/features/app/model/use-runtime-sync";
 import { useTaskRouteSelection } from "@/features/app/model/use-task-route-selection";
@@ -35,7 +36,6 @@ import { SettingsScreen } from "@/features/settings/ui/SettingsScreen";
 import { CommitDiffView } from "@/features/source-control/ui/CommitDiffView";
 import { FileDiffView } from "@/features/source-control/ui/FileDiffView";
 import { SourceControlLanding } from "@/features/source-control/ui/SourceControlLanding";
-import { WorktreeOverview } from "@/features/source-control/ui/WorktreeOverview";
 import { useTaskDetailScreen } from "@/features/task-detail/model/use-task-detail-screen";
 import { TaskDetailScreen } from "@/features/task-detail/ui/TaskDetailScreen";
 import { useWorkspaceStore } from "@/state/workspace-store";
@@ -226,20 +226,26 @@ function ConfigEditorRoute() {
 }
 
 function SettingsRoute() {
+  const location = useLocation();
   const model = useSettingsScreen();
+  const section = location.pathname.startsWith("/settings/about")
+    ? "about"
+    : "runtimes";
   return (
     <SettingsScreen
       aboutRows={model.aboutRows}
       runtimeRows={model.runtimeRows}
+      section={section}
     />
   );
 }
 
 function SourceControlRedirect() {
-  const location = useLocation();
-  const next = new URLSearchParams(location.search);
-  next.set("panel", "source-control");
-  return <Navigate replace to={`/?${next.toString()}`} />;
+  return <Navigate replace to="/source-control-landing" />;
+}
+
+function WorkbenchZeroTabRoute() {
+  return null;
 }
 
 export function App() {
@@ -251,16 +257,13 @@ export function App() {
           <Route element={<OnboardingScreen />} path="/onboarding" />
           <Route element={<WorkbenchLayout />}>
             <Route element={<EntryRoute />} path="/" />
+            <Route element={<WorkbenchZeroTabRoute />} path={workbenchZeroTabPath} />
             <Route
               element={<ProtectedTaskDetailRoute />}
               path="/workspaces/:workspaceId/tasks/:taskId"
             />
             <Route
-              element={
-                <RequireConnectedPhaseRoute>
-                  <WorktreeOverview />
-                </RequireConnectedPhaseRoute>
-              }
+              element={<Navigate replace to="/" />}
               path="/workspaces/:workspaceId/checkouts/:checkoutPath"
             />
             <Route
@@ -290,7 +293,9 @@ export function App() {
             />
             <Route element={<ConfigsRoute />} path="/configs" />
             <Route element={<ConfigEditorRoute />} path="/configs/:alias" />
-            <Route element={<SettingsRoute />} path="/settings" />
+            <Route element={<Navigate replace to="/settings/runtimes" />} path="/settings" />
+            <Route element={<SettingsRoute />} path="/settings/runtimes" />
+            <Route element={<SettingsRoute />} path="/settings/about" />
             <Route element={<Navigate replace to="/" />} path="*" />
           </Route>
         </Routes>

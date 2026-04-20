@@ -16,7 +16,47 @@ export type CommitDiffRouteParams = CheckoutRouteParams & {
   commitHash: string;
 };
 
+export type ConfigDetailRouteParams = {
+  alias: string;
+};
+
 export const sourceControlRoutePath = "/source-control";
+export const sourceControlLandingPath = "/source-control-landing";
+export const workbenchZeroTabPath = "/workspace";
+
+export type WorkbenchSidebarViewId =
+  | "tasks"
+  | "source-control"
+  | "configs"
+  | "settings";
+
+export type WorkbenchTabKind =
+  | "task-board"
+  | "task-detail"
+  | "source-control"
+  | "file-diff"
+  | "commit-diff"
+  | "config-list"
+  | "config-detail"
+  | "settings";
+
+export type WorkbenchTabId =
+  | "task-board"
+  | "source-control"
+  | "config-list"
+  | "settings"
+  | `task-detail:${string}`
+  | `file-diff:${string}:${string}:${string}`
+  | `commit-diff:${string}:${string}:${string}`
+  | `config-detail:${string}`;
+
+export type WorkbenchTabDescriptor = {
+  id: WorkbenchTabId;
+  kind: WorkbenchTabKind;
+  title: string;
+  href: string;
+  closeable?: boolean;
+};
 
 export type TaskSurfaceReturnState = {
   path: string;
@@ -33,6 +73,7 @@ const fileDiffRoutePattern =
   /^\/workspaces\/([^/]+)\/checkouts\/([^/]+)\/files\/([^/]+)\/?$/;
 const commitDiffRoutePattern =
   /^\/workspaces\/([^/]+)\/checkouts\/([^/]+)\/commits\/([^/]+)\/?$/;
+const configDetailRoutePattern = /^\/configs\/([^/]+)\/?$/;
 
 function encodeCheckoutPath(checkoutPath: string): string {
   return encodeURIComponent(checkoutPath);
@@ -40,6 +81,27 @@ function encodeCheckoutPath(checkoutPath: string): string {
 
 function decodeCheckoutPath(value: string): string {
   return decodeURIComponent(value);
+}
+
+function lastPathSegment(value: string): string {
+  const parts = value.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? value;
+}
+
+function trimWorkbenchLabel(value: string, maxLength = 28): string {
+  const label = value.trim();
+  if (label.length <= maxLength) {
+    return label;
+  }
+  return `${label.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function buildPathWithSearch(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete("newTask");
+  params.delete("layout");
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
 }
 
 export function buildTaskDetailPath(
@@ -91,6 +153,10 @@ export function buildCommitDiffPath(
   )}`;
 }
 
+export function buildConfigDetailPath(alias: string): string {
+  return `/configs/${encodeURIComponent(alias)}`;
+}
+
 export function parseCheckoutPath(pathname: string): CheckoutRouteParams | null {
   const match = checkoutRoutePattern.exec(pathname);
   if (!match) {
@@ -128,11 +194,155 @@ export function parseCommitDiffPath(
   };
 }
 
+export function parseConfigDetailPath(
+  pathname: string,
+): ConfigDetailRouteParams | null {
+  const match = configDetailRoutePattern.exec(pathname);
+  if (!match) {
+    return null;
+  }
+  return {
+    alias: decodeURIComponent(match[1] ?? ""),
+  };
+}
+
 export function isSourceControlPath(pathname: string): boolean {
   return (
     pathname === sourceControlRoutePath ||
+    pathname === sourceControlLandingPath ||
     checkoutRoutePattern.test(pathname) ||
     fileDiffRoutePattern.test(pathname) ||
     commitDiffRoutePattern.test(pathname)
   );
+}
+
+export function deriveWorkbenchSidebarView(
+  pathname: string,
+): WorkbenchSidebarViewId {
+  if (pathname.startsWith("/settings")) {
+    return "settings";
+  }
+  if (pathname.startsWith("/configs")) {
+    return "configs";
+  }
+  if (isSourceControlPath(pathname)) {
+    return "source-control";
+  }
+  return "tasks";
+}
+
+export function resolveWorkbenchTab(
+  pathname: string,
+  search = "",
+): WorkbenchTabDescriptor | null {
+  if (pathname === workbenchZeroTabPath) {
+    return null;
+  }
+
+  const taskDetailRoute = parseTaskDetailPath(pathname);
+  if (taskDetailRoute) {
+    const shortTaskId = trimWorkbenchLabel(taskDetailRoute.taskId, 10);
+    return {
+      id: `task-detail:${taskDetailRoute.taskId}`,
+      kind: "task-detail",
+      title: `Task ${shortTaskId}`,
+      href: buildPathWithSearch(pathname, search),
+      closeable: true,
+    };
+  }
+
+  const configDetailRoute = parseConfigDetailPath(pathname);
+  if (configDetailRoute) {
+    return {
+      id: `config-detail:${configDetailRoute.alias}`,
+      kind: "config-detail",
+      title: trimWorkbenchLabel(configDetailRoute.alias),
+      href: buildConfigDetailPath(configDetailRoute.alias),
+      closeable: true,
+    };
+  }
+
+  const commitDiffRoute = parseCommitDiffPath(pathname);
+  if (commitDiffRoute) {
+    return {
+      id: `commit-diff:${commitDiffRoute.workspaceId}:${commitDiffRoute.checkoutPath}:${commitDiffRoute.commitHash}`,
+      kind: "commit-diff",
+      title: trimWorkbenchLabel(commitDiffRoute.commitHash.slice(0, 10), 14),
+      href: buildCommitDiffPath(
+        commitDiffRoute.workspaceId,
+        commitDiffRoute.checkoutPath,
+        commitDiffRoute.commitHash,
+      ),
+      closeable: true,
+    };
+  }
+
+  const fileDiffRoute = parseFileDiffPath(pathname);
+  if (fileDiffRoute) {
+    const filePath =
+      fileDiffRoute.fileId.split(":").slice(1).join(":") || fileDiffRoute.fileId;
+    return {
+      id: `file-diff:${fileDiffRoute.workspaceId}:${fileDiffRoute.checkoutPath}:${fileDiffRoute.fileId}`,
+      kind: "file-diff",
+      title: trimWorkbenchLabel(lastPathSegment(filePath)),
+      href: buildFileDiffPath(
+        fileDiffRoute.workspaceId,
+        fileDiffRoute.checkoutPath,
+        fileDiffRoute.fileId,
+      ),
+      closeable: true,
+    };
+  }
+
+  const checkoutRoute = parseCheckoutPath(pathname);
+  if (checkoutRoute) {
+    return {
+      id: "task-board",
+      kind: "task-board",
+      title: "Board",
+      href: buildPathWithSearch("/", search),
+      closeable: true,
+    };
+  }
+
+  if (pathname.startsWith("/settings")) {
+    return {
+      id: "settings",
+      kind: "settings",
+      title: "Settings",
+      href: pathname === "/settings" ? "/settings/runtimes" : pathname,
+      closeable: true,
+    };
+  }
+
+  if (pathname === "/configs") {
+    return {
+      id: "config-list",
+      kind: "config-list",
+      title: "Configs",
+      href: "/configs",
+      closeable: true,
+    };
+  }
+
+  if (
+    pathname === sourceControlLandingPath ||
+    pathname === sourceControlRoutePath
+  ) {
+    return {
+      id: "source-control",
+      kind: "source-control",
+      title: "Source Control",
+      href: sourceControlLandingPath,
+      closeable: true,
+    };
+  }
+
+  return {
+    id: "task-board",
+    kind: "task-board",
+    title: "Board",
+    href: buildPathWithSearch("/", search),
+    closeable: true,
+  };
 }
