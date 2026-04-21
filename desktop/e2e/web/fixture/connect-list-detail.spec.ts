@@ -1211,6 +1211,20 @@ test("renders failed and complete task surfaces", async ({ page }) => {
   await expect(page.getByTestId("follow-up-description")).toBeVisible();
   await expect(page.getByTestId("follow-up-send")).toBeVisible();
   await expect(page.locator(".detail-follow-up-rail__divider")).toBeVisible();
+  const followUpFrameStyles = await page
+    .locator(".detail-follow-up-rail__box")
+    .evaluate((element) => {
+      const boxStyles = getComputedStyle(element);
+      const surface = element.querySelector(".image-composer__surface");
+      const surfaceStyles = surface ? getComputedStyle(surface) : undefined;
+      return {
+        boxShadow: boxStyles.boxShadow,
+        surfaceBackgroundColor: surfaceStyles?.backgroundColor,
+      };
+    });
+  expect(followUpFrameStyles.boxShadow).toContain("rgb(209, 200, 194)");
+  expect(followUpFrameStyles.boxShadow).toContain("inset");
+  expect(followUpFrameStyles.surfaceBackgroundColor).toBe("rgba(0, 0, 0, 0)");
   const modeTrigger = page.getByTestId("follow-up-mode-trigger");
   await expect(modeTrigger).toContainText("Continue here");
   await modeTrigger.click();

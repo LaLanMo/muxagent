@@ -605,6 +605,50 @@ func TestServiceStartFollowUpCreatesChildTaskAndPersistsLineage(t *testing.T) {
 	assert.Equal(t, "implement", childRuns[0].NodeName)
 }
 
+func TestServiceStartFollowUpPersistsImageAttachmentsForAgentInput(t *testing.T) {
+	executor := &fakeExecutor{
+		steps: map[string][]taskexecutor.Result{
+			"implement": {
+				{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("parent-impl.md")},
+				{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("child-impl.md")},
+			},
+		},
+	}
+	service := newTestServiceWithConfig(t, singleAgentTerminalFixture(), executor)
+	defer service.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = service.Run(ctx) }()
+
+	service.Dispatch(startTaskCommand(t, service, "parent task"))
+	parentCompleted := waitForEvent(t, service.Events(), EventTaskCompleted)
+
+	cmd := startFollowUpCommand(parentCompleted.TaskID, "child task with screenshot")
+	cmd.ImageAttachments = []ImageAttachmentInput{testImageAttachmentInput(t, "follow-up.png")}
+	service.Dispatch(cmd)
+	childCompleted := waitForEventWhere(t, service.Events(), 5*time.Second, func(event RunEvent) bool {
+		return event.Type == EventTaskCompleted && event.TaskID != parentCompleted.TaskID
+	})
+	require.NotNil(t, childCompleted.TaskView)
+
+	requests := executor.requestsForNode("implement")
+	require.Len(t, requests, 2)
+	childRequest := requests[1]
+	require.Len(t, childRequest.ImagePaths, 1)
+	assert.FileExists(t, childRequest.ImagePaths[0])
+	assert.Contains(t, childRequest.Prompt, childRequest.ImagePaths[0])
+
+	childRuns, err := service.store.ListNodeRunsByTask(context.Background(), childCompleted.TaskID)
+	require.NoError(t, err)
+	require.NotEmpty(t, childRuns)
+	images, err := readImageAttachmentManifest(childCompleted.TaskView.Task, childRuns, childRuns[0])
+	require.NoError(t, err)
+	require.Len(t, images, 1)
+	assert.Equal(t, "follow-up.png", images[0].OriginalFilename)
+	assert.Equal(t, childRequest.ImagePaths[0], images[0].AbsolutePath)
+}
+
 func TestServiceSingleRunFollowUpUsesHandleRequestAndInheritedParentContext(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 

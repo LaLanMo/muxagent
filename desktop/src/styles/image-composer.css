@@ -221,6 +221,7 @@
 }
 
 .image-composer--follow-up .image-composer__surface {
+  background: transparent;
   box-shadow: none;
 }
 

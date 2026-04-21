@@ -135,25 +135,25 @@ func (e *Executor) Execute(ctx context.Context, req taskexecutor.Request, progre
 }
 
 func buildExecArgs(req taskexecutor.Request, outputPath, prompt string) []string {
-	args := []string{
-		"exec",
+	args := []string{"exec"}
+	for _, imagePath := range req.ImagePaths {
+		if imagePath = strings.TrimSpace(imagePath); imagePath != "" {
+			args = append(args, "--image", imagePath)
+		}
+	}
+	args = append(args,
 		"-s", "danger-full-access",
 		"--json",
 		"--output-schema", req.SchemaPath,
 		"-o", outputPath,
 		"-C", req.WorkDir,
 		"--skip-git-repo-check",
-	}
+	)
 	if model := strings.TrimSpace(req.Model); model != "" {
 		args = append(args, "-m", model)
 	}
 	if level := strings.TrimSpace(req.ThinkingLevel); level != "" {
 		args = append(args, "-c", fmt.Sprintf("model_reasoning_effort=%q", level))
-	}
-	for _, imagePath := range req.ImagePaths {
-		if imagePath = strings.TrimSpace(imagePath); imagePath != "" {
-			args = append(args, "--image", imagePath)
-		}
 	}
 	if sessionID := taskexecutor.ResumeTargetSessionID(req); sessionID != "" {
 		args = append(args, "resume", sessionID, prompt)

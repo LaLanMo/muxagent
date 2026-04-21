@@ -281,15 +281,57 @@ func TestBuildExecArgsAppendsImagePaths(t *testing.T) {
 	args := buildExecArgs(req, filepath.Join(req.ArtifactDir, "output.json"), "fresh prompt")
 
 	imageIndex := indexOf(args, "--image")
+	sandboxIndex := indexOf(args, "-s")
 	require.GreaterOrEqual(t, imageIndex, 0)
-	assert.Less(t, imageIndex, len(args)-1)
+	require.Greater(t, sandboxIndex, imageIndex)
 	assert.Equal(t, []string{
 		"--image",
 		"/tmp/screenshot-one.png",
 		"--image",
 		"/tmp/screenshot-two.webp",
-	}, args[imageIndex:len(args)-1])
+	}, args[imageIndex:sandboxIndex])
 	assert.Equal(t, "fresh prompt", args[len(args)-1])
+}
+
+func TestBuildExecArgsTerminatesImageVarargsBeforePrompt(t *testing.T) {
+	req := requestFixture(t.TempDir())
+	req.ImagePaths = []string{"/tmp/screenshot.png"}
+
+	args := buildExecArgs(req, filepath.Join(req.ArtifactDir, "output.json"), "fresh prompt")
+
+	imageIndex := indexOf(args, "--image")
+	sandboxIndex := indexOf(args, "-s")
+	require.GreaterOrEqual(t, imageIndex, 0)
+	require.Equal(t, "/tmp/screenshot.png", args[imageIndex+1])
+	require.Greater(t, sandboxIndex, imageIndex+1)
+	assert.Equal(t, "fresh prompt", args[len(args)-1])
+}
+
+func TestBuildExecArgsTerminatesImageVarargsBeforeResume(t *testing.T) {
+	req := requestFixture(t.TempDir())
+	req.ImagePaths = []string{"/tmp/screenshot.png"}
+	req.NodeRun.SessionID = "thread-123"
+	req.NodeRun.Clarifications = []taskdomain.ClarificationExchange{
+		{
+			Request: taskdomain.ClarificationRequest{
+				Questions: []taskdomain.ClarificationQuestion{{Question: "Need input"}},
+			},
+			Response: &taskdomain.ClarificationResponse{
+				Answers: []taskdomain.ClarificationAnswer{{Selected: "A"}},
+			},
+		},
+	}
+
+	args := buildExecArgs(req, filepath.Join(req.ArtifactDir, "output.json"), "resume prompt")
+
+	imageIndex := indexOf(args, "--image")
+	sandboxIndex := indexOf(args, "-s")
+	resumeIndex := indexOf(args, "resume")
+	require.GreaterOrEqual(t, imageIndex, 0)
+	require.Equal(t, "/tmp/screenshot.png", args[imageIndex+1])
+	require.Greater(t, sandboxIndex, imageIndex+1)
+	require.Greater(t, resumeIndex, sandboxIndex)
+	assert.Equal(t, []string{"resume", "thread-123", "resume prompt"}, args[resumeIndex:])
 }
 
 func TestBuildExecArgsOmitsModelAndThinkingWhenUnset(t *testing.T) {
