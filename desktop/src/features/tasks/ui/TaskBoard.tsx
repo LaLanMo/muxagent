@@ -6,7 +6,11 @@ import {
   useNavigate,
 } from "react-router-dom";
 import type { BoardMetaDetails } from "@/domain/task-shell";
-import type { TaskDetailLocationState } from "@/domain/routes";
+import {
+  buildTaskBoardHref,
+  parseTaskBoardPath,
+  type TaskDetailLocationState,
+} from "@/domain/routes";
 import { WorktreeGlyph } from "@/features/shared/ui/WorktreeGlyph";
 import { useNativeContextMenu } from "@/features/shared/ui/use-native-context-menu";
 import { useWorkspaceStore } from "@/state/workspace-store";
@@ -97,16 +101,15 @@ function TaskBoardCard({ card }: { card: TaskBoardCardModel }) {
   const [lineageExpanded, setLineageExpanded] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const selectedWorkspaceId = useWorkspaceStore(
-    (state) => state.selectedWorkspaceId,
-  );
   const captureTaskSurfaceReturnContext = useWorkspaceStore(
     (state) => state.captureTaskSurfaceReturnContext,
   );
+  const boardScope = parseTaskBoardPath(location.pathname) ?? { kind: "all" as const };
   const detailState: TaskDetailLocationState = {
     taskSurfaceReturnContext: {
-      path: location.search ? `${location.pathname}${location.search}` : location.pathname,
-      workspaceId: selectedWorkspaceId,
+      path: buildTaskBoardHref(boardScope, location.search),
+      workspaceId:
+        boardScope.kind === "workspace" ? boardScope.workspaceId : undefined,
     },
   };
   const contextMenu = useNativeContextMenu<HTMLElement>({

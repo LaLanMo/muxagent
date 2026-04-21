@@ -2,6 +2,7 @@ import {
   type MouseEvent,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -24,6 +25,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   deriveWorkbenchSidebarView,
+  parseTaskBoardHref,
   resolveWorkbenchTab,
   workbenchZeroTabPath,
   type WorkbenchTabDescriptor,
@@ -31,6 +33,7 @@ import {
 } from "@/domain/routes";
 import appIcon from "@/assets/app-icon.png";
 import { useShellModel } from "@/features/app/model/use-shell-model";
+import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
 import { useWorkbenchStore } from "@/features/layout/model/use-workbench-store";
 import { ConfigsPanel } from "@/features/layout/ui/ConfigsPanel";
 import { SettingsPanel } from "@/features/layout/ui/SettingsPanel";
@@ -329,6 +332,7 @@ function SlotHeader({
 
 export function WorkbenchShell({ children }: { children: ReactNode }) {
   const shell = useShellModel();
+  const { clearWorkspaceSelection } = useWorkspaceSelection();
   const location = useLocation();
   const navigate = useNavigate();
   const currentHref = `${location.pathname}${location.search}`;
@@ -365,6 +369,7 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   const selectSidebarView = useWorkbenchStore(
     (state) => state.selectSidebarView,
   );
+  const showSidebarView = useWorkbenchStore((state) => state.showSidebarView);
   const toggleSidebarOpen = useWorkbenchStore(
     (state) => state.toggleSidebarOpen,
   );
@@ -411,12 +416,23 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
     if (!routeTab) {
       return null;
     }
-    const title =
+    const existingTab = useWorkbenchStore
+      .getState()
+      .tabs.find((tab) => tab.id === routeTab.id);
+    const registeredTitle =
       registeredTab?.tabId === routeTab.id ? registeredTab.title?.trim() : undefined;
+    const existingWorkspaceBoardTitle =
+      routeTab.kind === "task-board" &&
+      routeTab.id !== "task-board" &&
+      existingTab?.title &&
+      existingTab.title !== "Board"
+        ? existingTab.title
+        : undefined;
+    const title = registeredTitle ?? existingWorkspaceBoardTitle;
     return title ? { ...routeTab, title } : routeTab;
   }, [registeredTab?.tabId, registeredTab?.title, routeTab]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isZeroTabRoute) {
       clearTabs();
     } else if (resolvedRouteTab) {
@@ -553,11 +569,24 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   const onOpenCenterTab = useCallback(
     (tab: WorkbenchTabDescriptor) => {
       activateTab(tab.id);
+      if (tab.kind === "task-board") {
+        showSidebarView("tasks");
+        const boardRoute = parseTaskBoardHref(tab.href);
+        if (boardRoute?.scope.kind === "all") {
+          clearWorkspaceSelection({ navigateToTaskSurface: false });
+        }
+      }
       if (tab.href !== currentHref) {
         navigate(tab.href);
       }
     },
-    [activateTab, currentHref, navigate],
+    [
+      activateTab,
+      clearWorkspaceSelection,
+      currentHref,
+      navigate,
+      showSidebarView,
+    ],
   );
 
   const onCloseCenterTab = useCallback(

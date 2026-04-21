@@ -8,7 +8,7 @@ import {
 import { getRuntime } from "@/app/runtime";
 import { readRememberedWorkspaceId } from "@/features/app/model/workspace-memory";
 import { clearRememberedWorkspaceId } from "@/features/app/model/workspace-memory";
-import { parseTaskDetailPath } from "@/domain/routes";
+import { parseTaskBoardPath, parseTaskDetailPath } from "@/domain/routes";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
@@ -67,7 +67,11 @@ export function useAppSessionController() {
       }
 
       const rememberedId = readRememberedWorkspaceId();
-      if (parseTaskDetailPath(location.pathname)) {
+      const taskBoardRoute = parseTaskBoardPath(location.pathname);
+      const routeHasWorkspace =
+        Boolean(parseTaskDetailPath(location.pathname)) ||
+        taskBoardRoute?.kind === "workspace";
+      if (routeHasWorkspace) {
         await selectPreferredWorkspaceForPath(location.pathname, [rememberedId]);
       } else {
         setSelectedWorkspace(undefined);

@@ -3,14 +3,24 @@ import {
   buildInboxItems,
   collectScopedTasks,
   type BoardFilter,
+  type ScopedTaskView,
 } from "@/domain/task-shell";
 import type { ShellCommands } from "@/features/app/model/use-shell-commands";
-import { isSourceControlPath, parseTaskDetailPath, sourceControlRoutePath } from "@/domain/routes";
+import {
+  buildTaskBoardHref,
+  isSourceControlPath,
+  parseTaskBoardHref,
+  parseTaskBoardPath,
+  parseTaskDetailPath,
+  sourceControlRoutePath,
+  type TaskBoardScope,
+} from "@/domain/routes";
 import type {
   ShellNavItem,
   ShellWorkspaceItem,
 } from "@/features/layout/ui/DesktopShellFrame";
 import type { ConfirmDialogProps } from "@/features/shared/ui/ConfirmDialog";
+import type { TaskViewDto, WorkspaceSummaryDto } from "@/rpc/types";
 import { tasksForWorkspace, useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
@@ -26,13 +36,59 @@ function parseBoardFilter(raw: string | null): BoardFilter {
   }
 }
 
-function buildTaskSurfacePath(filter: BoardFilter): string {
+function buildTaskSurfacePath(scope: TaskBoardScope, filter: BoardFilter): string {
   const params = new URLSearchParams();
   if (filter !== "all") {
     params.set("view", filter);
   }
-  const query = params.toString();
-  return query ? `/?${query}` : "/";
+  return buildTaskBoardHref(scope, params.toString() ? `?${params.toString()}` : "");
+}
+
+function scopesEqual(left: TaskBoardScope, right: TaskBoardScope): boolean {
+  if (left.kind !== right.kind) {
+    return false;
+  }
+  if (left.kind === "all") {
+    return true;
+  }
+  return right.kind === "workspace" && left.workspaceId === right.workspaceId;
+}
+
+function workspaceScope(workspaceId: string | undefined): TaskBoardScope {
+  return workspaceId
+    ? { kind: "workspace", workspaceId }
+    : { kind: "all" };
+}
+
+function workspaceExists(
+  scope: TaskBoardScope,
+  workspaces: WorkspaceSummaryDto[],
+): boolean {
+  return (
+    scope.kind === "all" ||
+    workspaces.some((workspace) => workspace.workspace_id === scope.workspaceId)
+  );
+}
+
+function scopedTasksForScope(
+  scope: TaskBoardScope,
+  workspaces: WorkspaceSummaryDto[],
+  taskIdsByWorkspaceId: Record<string, string[]>,
+  tasksById: Record<string, TaskViewDto>,
+): ScopedTaskView[] {
+  if (scope.kind === "all") {
+    return collectScopedTasks(workspaces, taskIdsByWorkspaceId, tasksById);
+  }
+  const workspace = workspaces.find(
+    (entry) => entry.workspace_id === scope.workspaceId,
+  );
+  return tasksForWorkspace(taskIdsByWorkspaceId, tasksById, scope.workspaceId).map(
+    (task) => ({
+      workspaceId: scope.workspaceId,
+      workspaceLabel: workspace?.display_name ?? "Workspace",
+      task,
+    }),
+  );
 }
 
 export type ShellChromeState = {
@@ -74,38 +130,64 @@ export function useShellChrome(): ShellChromeState {
     (state) => state.selectedWorkspaceId,
   );
 
-  const selectedWorkspace = workspaces.find(
-    (workspace) => workspace.workspace_id === selectedWorkspaceId,
+  const taskSurfaceReturnContext = useWorkspaceStore(
+    (state) => state.taskSurfaceReturnContext,
   );
+  const taskRoute = parseTaskDetailPath(location.pathname);
+  const boardRoute = parseTaskBoardPath(location.pathname);
+  const sourceControlActive = isSourceControlPath(location.pathname);
+  const currentBoardScope = boardRoute;
+  const returnBoardScope = taskSurfaceReturnContext?.path
+    ? parseTaskBoardHref(taskSurfaceReturnContext.path)?.scope
+    : null;
+  const validReturnBoardScope =
+    returnBoardScope && workspaceExists(returnBoardScope, workspaces)
+      ? returnBoardScope
+      : null;
+  const focusScope =
+    boardRoute ??
+    (taskRoute
+      ? workspaceScope(taskRoute.workspaceId)
+      : workspaceScope(selectedWorkspaceId));
+  const statusTargetScope =
+    boardRoute ??
+    validReturnBoardScope ??
+    (taskRoute
+      ? workspaceScope(taskRoute.workspaceId)
+      : workspaceScope(selectedWorkspaceId));
+  const focusWorkspaceId =
+    focusScope.kind === "workspace" ? focusScope.workspaceId : undefined;
+  const focusWorkspace = focusWorkspaceId
+    ? workspaces.find((workspace) => workspace.workspace_id === focusWorkspaceId)
+    : undefined;
   const allWorkspacesActive =
-    phase === "connected" && workspaces.length > 0 && !selectedWorkspaceId;
+    phase === "connected" && workspaces.length > 0 && focusScope.kind === "all";
   const tasksById = useTaskSnapshotStore((state) => state.tasksById);
   const taskIdsByWorkspaceId = useTaskSnapshotStore(
     (state) => state.taskIdsByWorkspaceId,
   );
-  const scopedTasks = selectedWorkspaceId
-    ? tasksForWorkspace(taskIdsByWorkspaceId, tasksById, selectedWorkspaceId).map((task) => ({
-        workspaceId: selectedWorkspaceId,
-        workspaceLabel: selectedWorkspace?.display_name ?? "Workspace",
-        task,
-      }))
-    : collectScopedTasks(workspaces, taskIdsByWorkspaceId, tasksById);
+  const scopedTasks = scopedTasksForScope(
+    statusTargetScope,
+    workspaces,
+    taskIdsByWorkspaceId,
+    tasksById,
+  );
 
   const inboxItems = buildInboxItems(scopedTasks);
   const boardFilter = parseBoardFilter(searchParams.get("view"));
-  const taskRoute = parseTaskDetailPath(location.pathname);
-  const sourceControlActive = isSourceControlPath(location.pathname);
-  const taskSurfaceActive =
-    location.pathname === "/" ||
-    location.pathname === "/inbox" ||
-    Boolean(taskRoute);
-  const tasksRootActive = location.pathname === "/" && !taskRoute;
+  const taskSurfaceActive = Boolean(boardRoute || taskRoute);
+  const statusNavActive = (filter: BoardFilter) =>
+    Boolean(
+      currentBoardScope &&
+        scopesEqual(currentBoardScope, statusTargetScope) &&
+        boardFilter === filter,
+    );
 
   const primaryNav: ShellNavItem[] = [
     {
       label: "Tasks",
       to: "/",
-      active: tasksRootActive,
+      active: taskSurfaceActive,
       icon: "tasks",
     },
     {
@@ -125,24 +207,24 @@ export function useShellChrome(): ShellChromeState {
   const taskViewNav: ShellNavItem[] = [
     {
       label: "All",
-      to: buildTaskSurfacePath("all"),
-      active: location.pathname === "/" && boardFilter === "all",
+      to: buildTaskSurfacePath(statusTargetScope, "all"),
+      active: statusNavActive("all"),
     },
     {
       label: "Needs Attention",
-      to: buildTaskSurfacePath("attention"),
-      active: location.pathname === "/" && boardFilter === "attention",
+      to: buildTaskSurfacePath(statusTargetScope, "attention"),
+      active: statusNavActive("attention"),
       count: inboxItems.length || undefined,
     },
     {
       label: "Running",
-      to: buildTaskSurfacePath("active"),
-      active: location.pathname === "/" && boardFilter === "active",
+      to: buildTaskSurfacePath(statusTargetScope, "active"),
+      active: statusNavActive("active"),
     },
     {
       label: "Completed",
-      to: buildTaskSurfacePath("history"),
-      active: location.pathname === "/" && boardFilter === "history",
+      to: buildTaskSurfacePath(statusTargetScope, "history"),
+      active: statusNavActive("history"),
     },
   ];
 
@@ -163,7 +245,7 @@ export function useShellChrome(): ShellChromeState {
       label: workspace.display_name,
       active:
         (taskSurfaceActive || sourceControlActive) &&
-        workspace.workspace_id === selectedWorkspaceId,
+        workspace.workspace_id === focusWorkspaceId,
       badgeCount:
         attentionCount > 0
           ? attentionCount
@@ -175,9 +257,9 @@ export function useShellChrome(): ShellChromeState {
   });
 
   return {
-    workDir: selectedWorkspace?.path ?? "",
+    workDir: focusWorkspace?.path ?? "",
     workspaceLabel:
-      selectedWorkspace?.display_name ??
+      focusWorkspace?.display_name ??
       (workspaces.length > 0 ? "All workspaces" : "No workspace selected"),
     workspaceCount: workspaces.length,
     allWorkspacesActive,

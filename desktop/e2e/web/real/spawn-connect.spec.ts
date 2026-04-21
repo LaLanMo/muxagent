@@ -130,7 +130,7 @@ test("removes workspaces through the real app-server sidebar", async ({ page }) 
     await workspaceRow(page, "workspace-alt")
       .locator(".tasks-panel__workspace-row")
       .click();
-    await expect(page).toHaveURL(`${url}/`);
+    await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
     await expect(workspaceRow(page, "workspace-alt")).toHaveClass(/is-active/);
 
     await removeWorkspaceFromSidebar(page, "workspace-alt");
@@ -138,7 +138,7 @@ test("removes workspaces through the real app-server sidebar", async ({ page }) 
     await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
     await expect(workspaceRow(page, "workspace-alt")).toHaveCount(0);
     await expect(workspaceRow(page, "workspace")).toHaveCount(1);
-    await expect(page).toHaveURL(`${url}/`);
+    await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
     await expect(workspaceRow(page, "workspace")).toHaveClass(/is-active/);
   });
 });

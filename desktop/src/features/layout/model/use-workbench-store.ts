@@ -33,6 +33,7 @@ type WorkbenchStoreState = {
   clearTabs: () => void;
   hydrateSidebarView: (viewId: WorkbenchSidebarViewId) => void;
   selectSidebarView: (viewId: WorkbenchSidebarViewId) => void;
+  showSidebarView: (viewId: WorkbenchSidebarViewId) => void;
   setSidebarOpen: (open: boolean) => void;
   toggleSidebarOpen: () => void;
   registerTabSecondarySidebar: (
@@ -162,6 +163,16 @@ export const useWorkbenchStore = create<WorkbenchStoreState>((set) => ({
             sidebarHydrated: true,
             sidebarOpen: !state.sidebarOpen,
           }
+        : {
+            activeSidebarView: viewId,
+            sidebarHydrated: true,
+            sidebarOpen: true,
+          },
+    ),
+  showSidebarView: (viewId) =>
+    set((state) =>
+      state.activeSidebarView === viewId && state.sidebarOpen
+        ? {}
         : {
             activeSidebarView: viewId,
             sidebarHydrated: true,

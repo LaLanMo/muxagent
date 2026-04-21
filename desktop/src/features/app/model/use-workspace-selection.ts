@@ -1,7 +1,11 @@
 import { useEffectEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { getRuntime } from "@/app/runtime";
-import { parseTaskDetailPath } from "@/domain/routes";
+import {
+  buildTaskBoardHref,
+  parseTaskBoardPath,
+  parseTaskDetailPath,
+} from "@/domain/routes";
 import { preferredWorkspaceIdsForPath } from "@/features/app/model/task-route";
 import {
   pickPreferredWorkspace,
@@ -23,6 +27,10 @@ type SelectWorkspaceByIdResult =
   | { status: "selected" }
   | { status: "missing" }
   | { status: "failed" };
+
+type ActivateWorkspaceOptions = {
+  suppressTaskRouteRedirect?: boolean;
+};
 
 export function useWorkspaceSelection() {
   const navigate = useNavigate();
@@ -48,6 +56,7 @@ export function useWorkspaceSelection() {
     async (
       workspace: WorkspaceSummaryDto,
       mode: "default" | "route",
+      options: ActivateWorkspaceOptions = {},
     ): Promise<boolean> => {
       const taskRoute = parseTaskDetailPath(location.pathname);
       const shouldTrackReconcile =
@@ -74,6 +83,7 @@ export function useWorkspaceSelection() {
       if (
         selected &&
         mode === "default" &&
+        !options.suppressTaskRouteRedirect &&
         taskRoute &&
         taskRoute.workspaceId !== workspace.workspace_id
       ) {
@@ -87,6 +97,7 @@ export function useWorkspaceSelection() {
     async (
       workspaceId: string,
       mode: "default" | "route",
+      options: ActivateWorkspaceOptions = {},
     ): Promise<SelectWorkspaceByIdResult> => {
       const trimmedWorkspaceId = workspaceId.trim();
       if (!trimmedWorkspaceId) {
@@ -110,7 +121,7 @@ export function useWorkspaceSelection() {
         }
       }
 
-      const selected = await activateWorkspace(workspace, mode);
+      const selected = await activateWorkspace(workspace, mode, options);
       return { status: selected ? "selected" : "failed" };
     },
   );
@@ -148,8 +159,14 @@ export function useWorkspaceSelection() {
       setError(undefined);
 
       const taskRoute = parseTaskDetailPath(location.pathname);
-      if (shouldNavigateToTaskSurface && taskRoute) {
-        navigate("/", { replace: false });
+      const boardRoute = parseTaskBoardPath(location.pathname);
+      if (
+        shouldNavigateToTaskSurface &&
+        (taskRoute || boardRoute?.kind === "workspace")
+      ) {
+        navigate(buildTaskBoardHref({ kind: "all" }, location.search), {
+          replace: false,
+        });
       }
     },
   );
@@ -169,6 +186,48 @@ export function useWorkspaceSelection() {
       const { selectedWorkspaceId, workspaces } = useWorkspaceStore.getState();
       const replacement = pickReplacementWorkspace(workspaces, removedWorkspaceId);
       const removedWasSelected = selectedWorkspaceId === removedWorkspaceId;
+      const boardRoute = parseTaskBoardPath(location.pathname);
+      const taskRoute = parseTaskDetailPath(location.pathname);
+      const removedWasCurrentTaskRoute =
+        taskRoute?.workspaceId === removedWorkspaceId ||
+        (boardRoute?.kind === "workspace" &&
+          boardRoute.workspaceId === removedWorkspaceId);
+
+      if (removedWasCurrentTaskRoute) {
+        if (!replacement) {
+          resetWorkspaceTasks(removedWorkspaceId);
+          removeWorkspaceFromStore(removedWorkspaceId);
+          setSelectedWorkspace(undefined);
+          navigate(buildTaskBoardHref({ kind: "all" }, location.search), {
+            replace: true,
+          });
+          return;
+        }
+
+        const selectedReplacement = await activateWorkspace(replacement, "default", {
+          suppressTaskRouteRedirect: true,
+        });
+        if (!selectedReplacement) {
+          resetWorkspaceTasks(removedWorkspaceId);
+          removeWorkspaceFromStore(removedWorkspaceId);
+          setSelectedWorkspace(undefined);
+          navigate(buildTaskBoardHref({ kind: "all" }, location.search), {
+            replace: true,
+          });
+          return;
+        }
+        navigate(
+          buildTaskBoardHref(
+            { kind: "workspace", workspaceId: replacement.workspace_id },
+            location.search,
+          ),
+          { replace: true },
+        );
+        resetWorkspaceTasks(removedWorkspaceId);
+        removeWorkspaceFromStore(removedWorkspaceId);
+        return;
+      }
+
       resetWorkspaceTasks(removedWorkspaceId);
       removeWorkspaceFromStore(removedWorkspaceId);
 
@@ -194,8 +253,11 @@ export function useWorkspaceSelection() {
   );
 
   const selectWorkspaceById = useEffectEvent(
-    async (workspaceId: string): Promise<SelectWorkspaceByIdResult> =>
-      activateWorkspaceById(workspaceId, "default"),
+    async (
+      workspaceId: string,
+      options: ActivateWorkspaceOptions = {},
+    ): Promise<SelectWorkspaceByIdResult> =>
+      activateWorkspaceById(workspaceId, "default", options),
   );
 
   const addWorkspaceFromPicker = useEffectEvent(async (): Promise<void> => {

@@ -3,6 +3,17 @@ export type TaskRouteParams = {
   taskId: string;
 };
 
+export type TaskBoardScope =
+  | { kind: "all" }
+  | { kind: "workspace"; workspaceId: string };
+
+export type TaskBoardRoute = {
+  scope: TaskBoardScope;
+  pathname: string;
+  search: string;
+  href: string;
+};
+
 export type CheckoutRouteParams = {
   workspaceId: string;
   checkoutPath: string;
@@ -42,6 +53,7 @@ export type WorkbenchTabKind =
 
 export type WorkbenchTabId =
   | "task-board"
+  | `task-board:${string}`
   | "source-control"
   | "config-list"
   | "settings"
@@ -68,12 +80,14 @@ export type TaskDetailLocationState = {
 };
 
 const taskRoutePattern = /^\/workspaces\/([^/]+)\/tasks\/([^/]+)$/;
+const taskBoardRoutePattern = /^\/workspaces\/([^/]+)\/tasks\/?$/;
 const checkoutRoutePattern = /^\/workspaces\/([^/]+)\/checkouts\/([^/]+)\/?$/;
 const fileDiffRoutePattern =
   /^\/workspaces\/([^/]+)\/checkouts\/([^/]+)\/files\/([^/]+)\/?$/;
 const commitDiffRoutePattern =
   /^\/workspaces\/([^/]+)\/checkouts\/([^/]+)\/commits\/([^/]+)\/?$/;
 const configDetailRoutePattern = /^\/configs\/([^/]+)\/?$/;
+const relativeUrlBase = "http://muxagent.local";
 
 function encodeCheckoutPath(checkoutPath: string): string {
   return encodeURIComponent(checkoutPath);
@@ -111,6 +125,70 @@ export function buildTaskDetailPath(
   return `/workspaces/${encodeURIComponent(workspaceId)}/tasks/${encodeURIComponent(
     taskId,
   )}`;
+}
+
+export function buildTaskBoardPath(scope: TaskBoardScope): string {
+  if (scope.kind === "all") {
+    return "/";
+  }
+  return `/workspaces/${encodeURIComponent(scope.workspaceId)}/tasks`;
+}
+
+export function parseTaskBoardPath(pathname: string): TaskBoardScope | null {
+  if (pathname === "/") {
+    return { kind: "all" };
+  }
+
+  const match = taskBoardRoutePattern.exec(pathname);
+  if (!match) {
+    return null;
+  }
+  return {
+    kind: "workspace",
+    workspaceId: decodeURIComponent(match[1] ?? ""),
+  };
+}
+
+export function buildTaskBoardHref(
+  scope: TaskBoardScope,
+  search = "",
+): string {
+  return buildPathWithSearch(buildTaskBoardPath(scope), search);
+}
+
+export function parseTaskBoardHref(href: string): TaskBoardRoute | null {
+  let url: URL;
+  try {
+    url = new URL(href, relativeUrlBase);
+  } catch {
+    return null;
+  }
+  if (url.origin !== relativeUrlBase) {
+    return null;
+  }
+  const scope = parseTaskBoardPath(url.pathname);
+  if (!scope) {
+    return null;
+  }
+  const canonicalHref = buildTaskBoardHref(scope, url.search);
+  const queryIndex = canonicalHref.indexOf("?");
+  return {
+    scope,
+    pathname: buildTaskBoardPath(scope),
+    search: queryIndex >= 0 ? canonicalHref.slice(queryIndex) : "",
+    href: canonicalHref,
+  };
+}
+
+export function taskBoardTabId(scope: TaskBoardScope): WorkbenchTabId {
+  if (scope.kind === "all") {
+    return "task-board";
+  }
+  return `task-board:${scope.workspaceId}`;
+}
+
+export function isTaskBoardPath(pathname: string): boolean {
+  return parseTaskBoardPath(pathname) != null;
 }
 
 export function parseTaskDetailPath(pathname: string): TaskRouteParams | null {
@@ -247,6 +325,17 @@ export function resolveWorkbenchTab(
       kind: "task-detail",
       title: `Task ${shortTaskId}`,
       href: buildPathWithSearch(pathname, search),
+      closeable: true,
+    };
+  }
+
+  const taskBoardRoute = parseTaskBoardPath(pathname);
+  if (taskBoardRoute) {
+    return {
+      id: taskBoardTabId(taskBoardRoute),
+      kind: "task-board",
+      title: "Board",
+      href: buildTaskBoardHref(taskBoardRoute, search),
       closeable: true,
     };
   }

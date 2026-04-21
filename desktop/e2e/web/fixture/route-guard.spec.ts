@@ -14,3 +14,13 @@ test("redirects task deep links back to the root shell when no workspace session
   await expect(page.getByTestId("entry-empty-state")).toBeVisible();
   await expect(page.getByTestId("workspace-picker-button")).toBeVisible();
 });
+
+test("redirects workspace board links back to the root shell when no workspace session exists", async ({
+  page,
+}) => {
+  await page.goto("/workspaces/workspace-missing/tasks?view=attention");
+
+  await expect(page).toHaveURL(/\/\?view=attention$/);
+  await expect(page.getByTestId("entry-empty-state")).toBeVisible();
+  await expect(page.getByTestId("workspace-picker-button")).toBeVisible();
+});

@@ -2,6 +2,8 @@ import { ArrowRight, Inbox, Plus } from "lucide-react";
 import type { ShellChromeModel } from "@/features/app/model/use-shell-chrome";
 import { Button } from "@/features/shared/ui/Button";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
+import type { WorkbenchTabId } from "@/domain/routes";
+import { useWorkbenchTab } from "@/features/layout/ui/workbench-surface";
 import type { TaskBoardColumnModel } from "@/features/tasks/ui/TaskBoard";
 import { TaskBoard } from "@/features/tasks/ui/TaskBoard";
 
@@ -10,13 +12,23 @@ type EntryShellScreenProps = {
   columns: TaskBoardColumnModel[];
   hasTasks: boolean;
   launchableEntries: ConfigCatalogEntryDto[];
+  boardTabId: WorkbenchTabId;
+  boardTitle: string;
 };
 
 export function EntryShellScreen({
   shell,
   columns,
   hasTasks,
+  boardTabId,
+  boardTitle,
 }: EntryShellScreenProps) {
+  useWorkbenchTab({
+    key: `entry-board:${boardTabId}`,
+    tabId: boardTabId,
+    title: boardTitle,
+  });
+
   const showTaskListEmptyState =
     shell.phase === "connected" && shell.workspaceCount > 0 && !hasTasks;
   const emptyStateTitle = shell.allWorkspacesActive

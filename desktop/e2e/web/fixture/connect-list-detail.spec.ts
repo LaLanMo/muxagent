@@ -845,7 +845,7 @@ test("keeps status filters independent from workspace scope and exposes all-work
   await workspaceRow(page, "muxagent-alt-workspace")
     .locator(".tasks-panel__workspace-row")
     .click();
-  await expect(page).toHaveURL(/\/\?view=attention$/);
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\?view=attention$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
@@ -856,6 +856,7 @@ test("keeps status filters independent from workspace scope and exposes all-work
   await allWorkspacesScope(page).click();
   await expect(page).toHaveURL(/\/\?view=attention$/);
   await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
+  await expect(page.locator('[data-testid^="workbench-tab-task-board"]')).toHaveCount(2);
   await expect(page.getByTestId("task-board")).toContainText("muxagent-workspace");
   await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
 });
@@ -893,6 +894,7 @@ test("restores the originating task-surface workspace scope after leaving task d
   await workspaceRow(page, "muxagent-alt-workspace")
     .locator(".tasks-panel__workspace-row")
     .click();
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
@@ -900,7 +902,7 @@ test("restores the originating task-surface workspace scope after leaving task d
   await openTaskFromBoard(page, "task-live-fixture");
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await page.goBack();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
@@ -1391,7 +1393,7 @@ test("defaults to the board-only task surface and ignores legacy list routes", a
     .locator(".tasks-panel__workspace-row")
     .filter({ hasText: "muxagent-workspace" })
     .click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
   await expect(page.getByTestId("task-board")).toBeVisible();
 
   await allWorkspacesScope(page).click();

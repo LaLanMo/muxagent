@@ -114,18 +114,39 @@ test("activates the selected workspace row in the tasks panel", async ({ page })
 
   await expect(page.locator(".tasks-panel__filter.is-active")).toContainText("All");
   await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
+  await expect(page.getByTestId("workbench-tab-task-board")).toBeVisible();
 
   await workspaceRow(page, "muxagent-alt-workspace").locator(".tasks-panel__workspace-row").click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
+  await expect(page.locator('[data-testid^="workbench-tab-task-board"]')).toHaveCount(2);
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
+  await expect(page.getByTestId("task-board")).not.toContainText("muxagent-workspace");
+
+  await workspaceRow(page, "muxagent-workspace").locator(".tasks-panel__workspace-row").click();
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
+  await expect(
+    page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
+  ).toContainText("muxagent-workspace");
+  await expect(page.locator('[data-testid^="workbench-tab-task-board"]')).toHaveCount(3);
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-workspace");
+  await expect(page.getByTestId("task-board")).not.toContainText("muxagent-alt-workspace");
+
+  await page.getByRole("tab", { name: /muxagent-alt-workspace/ }).click();
+  await expect(
+    page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
+  ).toContainText("muxagent-alt-workspace");
+  await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
 
   await allWorkspacesScope(page).click();
+  await expect(page).toHaveURL(/\/$/);
   await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
   await expect(
     page.locator('[data-testid^="workspace-row-"] .tasks-panel__workspace-row.is-active'),
   ).toHaveCount(0);
+  await expect(page.locator('[data-testid^="workbench-tab-task-board"]')).toHaveCount(3);
   await expect(page.getByTestId("task-board")).toContainText("muxagent-workspace");
   await expect(page.getByTestId("task-board")).toContainText("muxagent-alt-workspace");
 });
@@ -174,6 +195,7 @@ test("reveals a row-scoped sidebar delete action and removes the selected worksp
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
 
   await workspaceRow(page, "muxagent-alt-workspace").locator(".tasks-panel__workspace-row").click();
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-alt-workspace");
@@ -186,4 +208,5 @@ test("reveals a row-scoped sidebar delete action and removes the selected worksp
   await expect(
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-workspace");
+  await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks$/);
 });

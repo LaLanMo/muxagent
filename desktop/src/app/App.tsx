@@ -8,10 +8,13 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { workbenchZeroTabPath } from "@/domain/routes";
+import { buildTaskBoardHref, workbenchZeroTabPath } from "@/domain/routes";
 import { useServerBootstrap } from "@/features/app/model/use-server-bootstrap";
 import { useRuntimeSync } from "@/features/app/model/use-runtime-sync";
-import { useTaskRouteSelection } from "@/features/app/model/use-task-route-selection";
+import {
+  useTaskBoardRouteSelection,
+  useTaskRouteSelection,
+} from "@/features/app/model/use-task-route-selection";
 import { useTaskSurfaceReturnContext } from "@/features/app/model/use-task-surface-return-context";
 import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
 import { useConfigsScreen } from "@/features/configs/model/use-configs-screen";
@@ -109,6 +112,8 @@ function EntryRoute() {
   const model = useEntryScreen();
   return (
     <EntryShellScreen
+      boardTabId={model.boardTabId}
+      boardTitle={model.boardTitle}
       columns={model.columns}
       hasTasks={model.hasTasks}
       launchableEntries={model.launchableEntries}
@@ -204,6 +209,32 @@ function ProtectedTaskDetailRoute() {
   );
 }
 
+function ProtectedTaskBoardRoute() {
+  const location = useLocation();
+  const routeState = useTaskBoardRouteSelection();
+  if (routeState === "pending") {
+    return (
+      <main
+        aria-busy="true"
+        aria-live="polite"
+        className="route-pending"
+        data-testid="task-route-pending"
+      >
+        <p className="muted-copy">Loading board…</p>
+      </main>
+    );
+  }
+  if (routeState === "redirect") {
+    return (
+      <Navigate
+        replace
+        to={buildTaskBoardHref({ kind: "all" }, location.search)}
+      />
+    );
+  }
+  return <EntryRoute />;
+}
+
 function ConfigsRoute() {
   const model = useConfigsScreen();
   return (
@@ -261,6 +292,10 @@ export function App() {
             <Route
               element={<ProtectedTaskDetailRoute />}
               path="/workspaces/:workspaceId/tasks/:taskId"
+            />
+            <Route
+              element={<ProtectedTaskBoardRoute />}
+              path="/workspaces/:workspaceId/tasks"
             />
             <Route
               element={<Navigate replace to="/" />}
