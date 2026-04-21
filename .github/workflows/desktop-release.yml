@@ -133,7 +133,7 @@ jobs:
           certificate_path="$RUNNER_TEMP/muxagent-developer-id.p12"
           keychain_path="$RUNNER_TEMP/muxagent-build.keychain-db"
 
-          echo "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain_path"
           security default-keychain -s "$keychain_path"
@@ -173,42 +173,127 @@ jobs:
         run: |
           set -euo pipefail
 
-          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
-          echo "$APPLE_API_PRIVATE_KEY_BASE64" | base64 --decode > "$api_key_path"
+          api_key_path="$RUNNER_TEMP/apple-notary-api-key.p8"
+          printf '%s' "$APPLE_API_PRIVATE_KEY_BASE64" | base64 --decode > "$api_key_path"
           chmod 600 "$api_key_path"
 
           echo "api_key_path=$api_key_path" >> "$GITHUB_OUTPUT"
 
-      - name: Build and upload desktop bundle
-        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
+      - name: Build desktop bundle
+        id: bundle
+        shell: bash
+        working-directory: desktop
+        timeout-minutes: 60
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_SIGNING_IDENTITY: ${{ steps.signing.outputs.identity }}
+          TAURI_BUNDLER_DMG_IGNORE_CI: "true"
+        run: |
+          set -euo pipefail
+
+          pnpm tauri build \
+            --target "${{ matrix.target }}" \
+            --bundles dmg \
+            --ci \
+            --verbose
+
+          dmg_dir="src-tauri/target/${{ matrix.target }}/release/bundle/dmg"
+          dmg_path="$(find "$dmg_dir" -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$dmg_path" ]; then
+            echo "failed to find generated DMG in $dmg_dir" >&2
+            exit 1
+          fi
+
+          echo "dmg_path=desktop/$dmg_path" >> "$GITHUB_OUTPUT"
+
+      - name: Notarize and staple desktop bundle
+        id: notarized
+        shell: bash
+        timeout-minutes: 90
+        env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ steps.notary.outputs.api_key_path }}
-        with:
-          projectPath: desktop
-          tagName: ${{ steps.meta.outputs.release_tag }}
-          releaseName: ${{ steps.meta.outputs.version }}
-          releaseBody: "See the assets to download this desktop release."
-          releaseDraft: true
-          prerelease: ${{ steps.meta.outputs.prerelease }}
-          releaseCommitish: ${{ steps.target.outputs.sha }}
-          args: --target ${{ matrix.target }} --bundles dmg
-          retryAttempts: 2
-          assetNamePattern: "[name]_[version]_[platform]_[arch][ext]"
+        run: |
+          set -euo pipefail
+
+          dmg_path="${{ steps.bundle.outputs.dmg_path }}"
+          result_path="$RUNNER_TEMP/notary-${{ matrix.target }}.json"
+
+          xcrun notarytool submit "$dmg_path" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait \
+            --timeout 75m \
+            --output-format json \
+            --no-progress > "$result_path"
+
+          status="$(jq -r '.status // empty' "$result_path")"
+          submission_id="$(jq -r '.id // empty' "$result_path")"
+          echo "notarization submission '$submission_id' finished with status '$status'"
+          if [ "$status" != "Accepted" ]; then
+            echo "notarization status was '$status' for submission '$submission_id'" >&2
+            if [ -n "$submission_id" ]; then
+              xcrun notarytool log "$submission_id" \
+                --key "$APPLE_API_KEY_PATH" \
+                --key-id "$APPLE_API_KEY" \
+                --issuer "$APPLE_API_ISSUER" || true
+            fi
+            exit 1
+          fi
+
+          xcrun stapler staple "$dmg_path"
+          xcrun stapler validate "$dmg_path"
+
+      - name: Upload desktop bundle
+        shell: bash
+        timeout-minutes: 10
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.meta.outputs.release_tag }}
+          RELEASE_NAME: ${{ steps.meta.outputs.version }}
+          RELEASE_PRERELEASE: ${{ steps.meta.outputs.prerelease }}
+          RELEASE_TARGET: ${{ steps.target.outputs.sha }}
+          DMG_PATH: ${{ steps.bundle.outputs.dmg_path }}
+        run: |
+          set -euo pipefail
+
+          if ! gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            create_args=(
+              "$RELEASE_TAG"
+              --title "$RELEASE_NAME"
+              --notes "See the assets to download this desktop release."
+              --target "$RELEASE_TARGET"
+              --draft
+            )
+            if [ "$RELEASE_PRERELEASE" = "true" ]; then
+              create_args+=(--prerelease)
+            fi
+
+            gh release create "${create_args[@]}" || gh release view "$RELEASE_TAG" >/dev/null
+          fi
+
+          version="${RELEASE_NAME#v}"
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) asset_arch="aarch64" ;;
+            x86_64-apple-darwin) asset_arch="x64" ;;
+            *)
+              echo "unsupported desktop target: ${{ matrix.target }}" >&2
+              exit 1
+              ;;
+          esac
+
+          asset_name="MuxAgent_${version}_darwin_${asset_arch}.dmg"
+          gh release upload "$RELEASE_TAG" "$DMG_PATH#$asset_name" --clobber
 
       - name: Clean up signing material
         if: always()
         shell: bash
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         run: |
           set -euo pipefail
 
           rm -f "${{ steps.signing.outputs.certificate_path }}"
-          rm -f "$RUNNER_TEMP/AuthKey_${APPLE_API_KEY}.p8"
+          rm -f "${{ steps.notary.outputs.api_key_path }}"
 
           if [ -n "${{ steps.signing.outputs.keychain_path }}" ]; then
             security delete-keychain "${{ steps.signing.outputs.keychain_path }}" || true
