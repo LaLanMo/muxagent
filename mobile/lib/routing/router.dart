@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../bindings/auth_binding.dart';
 import '../bindings/attach_session_binding.dart';
 import '../bindings/chat_binding.dart';
+import '../bindings/language_binding.dart';
 import '../bindings/main_shell_binding.dart';
 import '../bindings/new_session_binding.dart';
 import '../bindings/permission_detail_binding.dart';
@@ -15,6 +16,7 @@ import '../bindings/welcome_binding.dart';
 import '../ui/auth/auth_screen.dart';
 import '../ui/attach_session/attach_session_screen.dart';
 import '../ui/chat/chat_screen.dart';
+import '../ui/language/language_screen.dart';
 import '../ui/main/main_shell.dart';
 import '../ui/new_session/new_session_screen.dart';
 import '../ui/permission_detail/permission_detail_screen.dart';
@@ -82,6 +84,11 @@ class AppRouter {
       name: Routes.sttSettings,
       page: () => const SttSettingsPage(),
       binding: SttSettingsBinding(),
+    ),
+    GetPage(
+      name: Routes.language,
+      page: () => const LanguageScreen(),
+      binding: LanguageBinding(),
     ),
     GetPage(
       name: Routes.sessionSettings,

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../config/firebase.dart';
 import '../data/repositories/auth_repository.dart';
 import '../data/repositories/event_repository.dart';
+import '../data/repositories/language_preference_repository.dart';
 import '../data/repositories/paired_machine_repository.dart';
 import '../data/repositories/replay_cursor_repository.dart';
 import '../data/repositories/reconnect_recovery_coordinator.dart';
@@ -54,6 +55,10 @@ class InitialBinding extends Bindings {
     );
     Get.put<RuntimePreferenceRepository>(
       RuntimePreferenceRepository(),
+      permanent: true,
+    );
+    Get.put<LanguagePreferenceRepository>(
+      LanguagePreferenceRepository(),
       permanent: true,
     );
     Get.put<SessionChatCacheRepository>(

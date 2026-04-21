@@ -101,6 +101,7 @@ class Tx {
   static const settingsScanQrCode = 'settings.scan_qr_code';
   static const settingsEnterUrl = 'settings.enter_url';
   static const settingsSpeechToText = 'settings.speech_to_text';
+  static const settingsLanguage = 'settings.language';
   static const settingsVersion = 'settings.version';
   static const settingsStarGithub = 'settings.star_github';
   static const settingsFollowX = 'settings.follow_x';
@@ -114,6 +115,10 @@ class Tx {
   static const settingsPasteConnectionUrl = 'settings.paste_connection_url';
   static const settingsInvalidUrl = 'settings.invalid_url';
   static const settingsMissingIdRelay = 'settings.missing_id_relay';
+
+  static const languageTitle = 'language.title';
+  static const languageAppLanguage = 'language.app_language';
+  static const languageFooter = 'language.footer';
 
   static const attachTitle = 'attach.title';
   static const attachSessionId = 'attach.session_id';

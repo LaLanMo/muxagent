@@ -12,6 +12,7 @@ import 'config/constant.dart';
 import 'config/firebase.dart';
 import 'config/theme.dart';
 import 'data/repositories/event_repository.dart';
+import 'data/repositories/language_preference_repository.dart';
 import 'data/repositories/session_chat_cache_repository.dart';
 import 'data/services/pairing_deep_link_coordinator.dart';
 import 'data/services/push/push_notification_service.dart';
@@ -38,6 +39,9 @@ Future<void> main() async {
   // Eagerly register bindings so we can init the EventRepository.
   InitialBinding().dependencies();
   final pairingDeepLinkCoordinator = Get.find<PairingDeepLinkCoordinator>();
+  final initialLocale =
+      await Get.find<LanguagePreferenceRepository>().getPreferredLocale() ??
+      AppLocales.initialLocale();
 
   // Load persisted session and chat-cache state before the UI starts.
   await Future.wait([
@@ -57,16 +61,23 @@ Future<void> main() async {
     ),
   );
 
-  runApp(const MuxAgentApp(initialRoute: Routes.startup));
+  runApp(
+    MuxAgentApp(initialRoute: Routes.startup, initialLocale: initialLocale),
+  );
   WidgetsBinding.instance.addPostFrameCallback((_) {
     pairingDeepLinkCoordinator.onNavigatorReady();
   });
 }
 
 class MuxAgentApp extends StatelessWidget {
-  const MuxAgentApp({required this.initialRoute, super.key});
+  const MuxAgentApp({
+    required this.initialRoute,
+    this.initialLocale,
+    super.key,
+  });
 
   final String initialRoute;
+  final Locale? initialLocale;
 
   @override
   Widget build(BuildContext context) {
@@ -76,7 +87,7 @@ class MuxAgentApp extends StatelessWidget {
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.light,
       translations: AppTranslations(),
-      locale: AppLocales.initialLocale(),
+      locale: initialLocale ?? AppLocales.initialLocale(),
       fallbackLocale: AppLocales.enUS,
       supportedLocales: AppLocales.supported,
       localizationsDelegates: const [

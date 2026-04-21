@@ -100,6 +100,10 @@ class SettingsTabViewModel extends GetxController {
     Get.toNamed(Routes.sttSettings);
   }
 
+  void navigateToLanguage() {
+    Get.toNamed(Routes.language);
+  }
+
   Future<void> connectMachine(PairedMachine machine) async {
     if (isMachineConnected(machine.machineId)) return;
     if (connectingMachines.contains(machine.machineId)) return;

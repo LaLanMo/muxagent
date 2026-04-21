@@ -142,5 +142,18 @@ void main() {
       expect(find.text('offline'), findsNothing);
       expect(find.text('Tap to reconnect'), findsNothing);
     });
+
+    testWidgets('renders language row in configuration section', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        localizedTestApp(child: const Scaffold(body: SettingsTab())),
+      );
+      await tester.pump();
+
+      expect(find.text('CONFIGURATION'), findsOneWidget);
+      expect(find.text('Speech to Text'), findsOneWidget);
+      expect(find.text('Language'), findsOneWidget);
+    });
   });
 }

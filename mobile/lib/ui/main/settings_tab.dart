@@ -97,6 +97,16 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                                 ),
                                 onTap: controller.navigateToSttSettings,
                               ),
+                              _buildSettingsRow(
+                                icon: LucideIcons.languages,
+                                label: Tx.settingsLanguage.tr,
+                                trailing: Icon(
+                                  LucideIcons.chevronRight,
+                                  size: 16,
+                                  color: AppTheme.textMuted,
+                                ),
+                                onTap: controller.navigateToLanguage,
+                              ),
                               _buildSectionLabel(Tx.settingsAbout.tr),
                               _buildSettingsRow(
                                 icon: LucideIcons.info,

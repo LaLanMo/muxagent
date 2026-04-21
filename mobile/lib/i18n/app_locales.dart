@@ -10,6 +10,36 @@ class AppLocales {
   static Locale initialLocale([Locale? deviceLocale]) =>
       localeFor(deviceLocale ?? PlatformDispatcher.instance.locale);
 
+  static String tagFor(Locale locale) {
+    final normalized = localeFor(locale);
+    return '${normalized.languageCode}_${normalized.countryCode}';
+  }
+
+  static Locale? localeForTag(String? tag) {
+    final normalizedTag = tag?.trim().replaceAll('-', '_');
+    if (normalizedTag == null || normalizedTag.isEmpty) {
+      return null;
+    }
+
+    final parts = normalizedTag
+        .split('_')
+        .where((part) => part.isNotEmpty)
+        .toList(growable: false);
+    if (parts.length < 2) {
+      return null;
+    }
+
+    final languageCode = parts.first.toLowerCase();
+    final countryCode = parts.last.toUpperCase();
+    for (final supportedLocale in supported) {
+      if (supportedLocale.languageCode == languageCode &&
+          supportedLocale.countryCode == countryCode) {
+        return supportedLocale;
+      }
+    }
+    return null;
+  }
+
   static Locale localeFor(Locale? locale) {
     if (locale == null) {
       return defaultLocale;

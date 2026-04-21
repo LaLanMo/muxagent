@@ -10,5 +10,6 @@ abstract class Routes {
   static const newSession = '/new-session';
   static const attachSession = '/attach-session';
   static const sttSettings = '/stt-settings';
+  static const language = '/language';
   static const sessionSettings = '/session-settings';
 }
