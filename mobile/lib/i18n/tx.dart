@@ -241,6 +241,7 @@ class Tx {
   static const chatFilesChanged = 'chat.files_changed';
   static const chatToolCall = 'chat.tool_call';
   static const chatToolCalls = 'chat.tool_calls';
+  static const chatToolCallCompleted = 'chat.tool_call_completed';
   static const chatToolCallsCompleted = 'chat.tool_calls_completed';
   static const chatMoreFailed = 'chat.more_failed';
 
@@ -354,10 +355,8 @@ class Tx {
   }
 
   static String toolCallsCompleted(int count) {
-    if (count == 1 && !isZh) {
-      return '1 tool call completed';
-    }
-    return chatToolCallsCompleted.trParams({'count': count.toString()});
+    final key = count == 1 ? chatToolCallCompleted : chatToolCallsCompleted;
+    return key.trParams({'count': count.toString()});
   }
 
   static String moreFailed(int count) {

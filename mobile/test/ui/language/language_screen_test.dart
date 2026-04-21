@@ -36,7 +36,7 @@ void main() {
       );
     }
 
-    testWidgets('renders only supported language options', (tester) async {
+    testWidgets('renders supported language options', (tester) async {
       registerViewModel();
 
       await tester.pumpWidget(localizedTestApp(child: const LanguageScreen()));
@@ -45,10 +45,19 @@ void main() {
       expect(find.text('English'), findsNWidgets(2));
       expect(find.text('简体中文'), findsOneWidget);
       expect(find.text('Chinese (Simplified)'), findsOneWidget);
-      expect(find.text('Japanese'), findsNothing);
-      expect(find.text('日本語'), findsNothing);
-      expect(find.text('Spanish'), findsNothing);
-      expect(find.text('Español'), findsNothing);
+      expect(find.text('日本語'), findsOneWidget);
+      expect(find.text('Japanese'), findsOneWidget);
+      expect(find.text('한국어'), findsOneWidget);
+      expect(find.text('Korean'), findsOneWidget);
+      expect(find.text('Español'), findsOneWidget);
+      expect(find.text('Spanish'), findsOneWidget);
+      expect(find.text('Français'), findsOneWidget);
+      expect(find.text('French'), findsOneWidget);
+      expect(find.text('Deutsch'), findsOneWidget);
+      expect(find.text('German'), findsOneWidget);
+      expect(find.text('Português (Brasil)'), findsOneWidget);
+      expect(find.text('Portuguese (Brazil)'), findsOneWidget);
+      expect(find.text('Italiano'), findsNothing);
     });
 
     testWidgets('shows selected radio state for the active locale', (

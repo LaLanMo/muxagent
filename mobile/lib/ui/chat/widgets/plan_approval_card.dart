@@ -43,14 +43,18 @@ class PlanApprovalCard extends StatelessWidget {
               children: [
                 Icon(LucideIcons.fileText, size: 14, color: accent),
                 const SizedBox(width: 8),
-                Text(
-                  approval.resolved
-                      ? Tx.chatPlanReview.tr
-                      : Tx.chatReviewPlan.tr,
-                  style: AppTypography.sans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
+                Expanded(
+                  child: Text(
+                    approval.resolved
+                        ? Tx.chatPlanReview.tr
+                        : Tx.chatReviewPlan.tr,
+                    style: AppTypography.sans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -211,6 +215,9 @@ class PlanApprovalCard extends StatelessWidget {
             fontWeight: FontWeight.w500,
             color: AppTheme.surface,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -235,6 +242,9 @@ class PlanApprovalCard extends StatelessWidget {
             fontWeight: FontWeight.w500,
             color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -255,6 +265,9 @@ class PlanApprovalCard extends StatelessWidget {
               fontWeight: FontWeight.w400,
               color: enabled ? AppTheme.textTertiary : AppTheme.textMuted,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
           ),
         ),
       ),

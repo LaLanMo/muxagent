@@ -40,6 +40,28 @@ class LanguageViewModel extends GetxController {
       title: '简体中文',
       subtitle: 'Chinese (Simplified)',
     ),
+    LanguageOption(locale: AppLocales.jaJP, title: '日本語', subtitle: 'Japanese'),
+    LanguageOption(locale: AppLocales.koKR, title: '한국어', subtitle: 'Korean'),
+    LanguageOption(
+      locale: AppLocales.esES,
+      title: 'Español',
+      subtitle: 'Spanish',
+    ),
+    LanguageOption(
+      locale: AppLocales.frFR,
+      title: 'Français',
+      subtitle: 'French',
+    ),
+    LanguageOption(
+      locale: AppLocales.deDE,
+      title: 'Deutsch',
+      subtitle: 'German',
+    ),
+    LanguageOption(
+      locale: AppLocales.ptBR,
+      title: 'Português (Brasil)',
+      subtitle: 'Portuguese (Brazil)',
+    ),
   ];
 
   final selectedLocale = AppLocales.enUS.obs;

@@ -297,12 +297,16 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
           children: [
             const Icon(LucideIcons.layers, size: 16, color: summaryColor),
             const SizedBox(width: 8),
-            Text(
-              Tx.toolCallsCompleted(count),
-              style: AppTypography.sans(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: AppTheme.textTertiary,
+            Expanded(
+              child: Text(
+                Tx.toolCallsCompleted(count),
+                style: AppTypography.sans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: AppTheme.textTertiary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

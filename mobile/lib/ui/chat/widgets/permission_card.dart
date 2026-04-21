@@ -50,12 +50,16 @@ class PermissionCard extends StatelessWidget {
                 size: 16,
               ),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: AppTypography.sans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTypography.sans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -163,6 +167,9 @@ class PermissionCard extends StatelessWidget {
             fontWeight: FontWeight.w500,
             color: enabled ? AppTheme.textPrimary : AppTheme.textMuted,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
       ),
     );
@@ -185,6 +192,8 @@ class PermissionCard extends StatelessWidget {
             fontWeight: FontWeight.w400,
             color: enabled ? color : AppTheme.textMuted,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
         ),
       ),

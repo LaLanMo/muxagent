@@ -142,35 +142,54 @@ class _EditDiffViewState extends State<EditDiffView> {
           child: Row(
             children: [
               _buildStats(),
-              const Spacer(),
-              if (hiddenCount > 0)
-                GestureDetector(
-                  onTap: () => setState(() => _expanded = true),
-                  child: Text(
-                    Tx.showMoreLines(hiddenCount),
-                    style: AppTypography.sans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                      decoration: TextDecoration.underline,
-                      decorationColor: AppTheme.textSecondary,
+              if (hiddenCount > 0) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _expanded = true),
+                      child: Text(
+                        Tx.showMoreLines(hiddenCount),
+                        style: AppTypography.sans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textSecondary,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppTheme.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                      ),
                     ),
                   ),
                 ),
-              if (_expanded && totalLineCount > widget.maxCollapsedLines)
-                GestureDetector(
-                  onTap: () => setState(() => _expanded = false),
-                  child: Text(
-                    Tx.chatCollapse.tr,
-                    style: AppTypography.sans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.textSecondary,
-                      decoration: TextDecoration.underline,
-                      decorationColor: AppTheme.textSecondary,
+              ],
+              if (_expanded && totalLineCount > widget.maxCollapsedLines) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _expanded = false),
+                      child: Text(
+                        Tx.chatCollapse.tr,
+                        style: AppTypography.sans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.textSecondary,
+                          decoration: TextDecoration.underline,
+                          decorationColor: AppTheme.textSecondary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.right,
+                      ),
                     ),
                   ),
                 ),
+              ],
             ],
           ),
         ),

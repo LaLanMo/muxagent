@@ -3,9 +3,24 @@ import 'dart:ui';
 class AppLocales {
   static const enUS = Locale('en', 'US');
   static const zhCN = Locale('zh', 'CN');
+  static const jaJP = Locale('ja', 'JP');
+  static const koKR = Locale('ko', 'KR');
+  static const esES = Locale('es', 'ES');
+  static const frFR = Locale('fr', 'FR');
+  static const deDE = Locale('de', 'DE');
+  static const ptBR = Locale('pt', 'BR');
   static const defaultLocale = enUS;
 
-  static const supported = <Locale>[enUS, zhCN];
+  static const supported = <Locale>[
+    enUS,
+    zhCN,
+    jaJP,
+    koKR,
+    esES,
+    frFR,
+    deDE,
+    ptBR,
+  ];
 
   static Locale initialLocale([Locale? deviceLocale]) =>
       localeFor(deviceLocale ?? PlatformDispatcher.instance.locale);

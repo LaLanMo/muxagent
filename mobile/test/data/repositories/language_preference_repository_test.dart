@@ -35,7 +35,7 @@ void main() {
     });
 
     test('returns null for unsupported or malformed stored values', () async {
-      for (final storedValue in ['fr_FR', 'zh_TW', 'bad-value', '']) {
+      for (final storedValue in ['it_IT', 'zh_TW', 'bad-value', '']) {
         SharedPreferences.setMockInitialValues({
           LanguagePreferenceRepository.preferredLocaleTagKey: storedValue,
         });

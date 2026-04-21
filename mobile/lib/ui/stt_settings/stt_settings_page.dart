@@ -56,7 +56,6 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                         ),
                       ),
                       helperBadge: Row(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             LucideIcons.lock,
@@ -64,12 +63,16 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                             color: AppTheme.successText,
                           ),
                           const SizedBox(width: 5),
-                          Text(
-                            Tx.sttStoredSecurely.tr,
-                            style: AppTypography.sans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: AppTheme.successText,
+                          Flexible(
+                            child: Text(
+                              Tx.sttStoredSecurely.tr,
+                              style: AppTypography.sans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: AppTheme.successText,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -138,12 +141,16 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                Tx.sttTitle.tr,
-                style: AppTypography.sans(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
+              Expanded(
+                child: Text(
+                  Tx.sttTitle.tr,
+                  style: AppTypography.sans(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -411,12 +418,16 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           children: [
             Icon(icon, size: 16, color: iconColor),
             const SizedBox(width: 8),
-            Text(
-              label,
-              style: AppTypography.sans(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: textColor,
+            Flexible(
+              child: Text(
+                label,
+                style: AppTypography.sans(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -453,6 +464,9 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
             fontWeight: FontWeight.w600,
             color: AppTheme.surface,
           ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
         ),
       ),
     );

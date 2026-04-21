@@ -29,6 +29,13 @@ void main() {
       expect(viewModel.selectedLocale.value, AppLocales.zhCN);
     });
 
+    test('language options stay aligned with supported locales', () {
+      expect(
+        LanguageViewModel.options.map((option) => option.locale),
+        AppLocales.supported,
+      );
+    });
+
     testWidgets(
       'selecting Simplified Chinese persists and updates Get locale',
       (tester) async {

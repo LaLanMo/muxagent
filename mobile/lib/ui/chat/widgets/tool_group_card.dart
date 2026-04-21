@@ -166,19 +166,29 @@ class _ToolGroupCardState extends State<ToolGroupCard>
         children: [
           Icon(LucideIcons.layers, size: 16, color: AppTheme.textSecondary),
           const SizedBox(width: 10),
-          Text(
-            Tx.toolCalls(count),
-            style: AppTypography.sans(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: AppTheme.textPrimary,
+          Expanded(
+            flex: 2,
+            child: Text(
+              Tx.toolCalls(count),
+              style: AppTypography.sans(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppTheme.textPrimary,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-          const Spacer(),
-          Text(
-            _headerStatusLabel(),
-            style: _labelStyle.copyWith(
-              color: _hasFailed ? AppTheme.failedRed : AppTheme.successText,
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              _headerStatusLabel(),
+              style: _labelStyle.copyWith(
+                color: _hasFailed ? AppTheme.failedRed : AppTheme.successText,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
             ),
           ),
           const SizedBox(width: 8),
@@ -319,13 +329,19 @@ class _ToolGroupCardState extends State<ToolGroupCard>
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              _kindLabel(kind).toUpperCase(),
-              style: AppTypography.mono(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.8,
-                color: AppTheme.textMetadata,
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 88),
+              child: Text(
+                _kindLabel(kind).toUpperCase(),
+                style: AppTypography.mono(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.8,
+                  color: AppTheme.textMetadata,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.right,
               ),
             ),
           ],

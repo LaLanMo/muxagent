@@ -97,12 +97,16 @@ class ToolCallCard extends StatelessWidget {
             color: AppTheme.textMetadata,
           ),
           const SizedBox(width: 6),
-          Text(
-            Tx.toolCalls(count),
-            style: AppTypography.mono(
-              fontSize: 11,
-              fontWeight: FontWeight.w400,
-              color: AppTheme.textMetadata,
+          Expanded(
+            child: Text(
+              Tx.toolCalls(count),
+              style: AppTypography.mono(
+                fontSize: 11,
+                fontWeight: FontWeight.w400,
+                color: AppTheme.textMetadata,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -203,12 +207,18 @@ class ToolCallCard extends StatelessWidget {
   }
 
   Widget _buildKindBadge(ToolKind kind) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      color: _badgeBackground(kind),
-      child: Text(
-        _badgeLabel(kind),
-        style: _labelStyle.copyWith(color: _badgeForeground(kind)),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 88),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        color: _badgeBackground(kind),
+        child: Text(
+          _badgeLabel(kind),
+          style: _labelStyle.copyWith(color: _badgeForeground(kind)),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+        ),
       ),
     );
   }
