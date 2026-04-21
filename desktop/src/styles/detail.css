@@ -197,7 +197,7 @@
     var(--detail-main-column-content-left) - var(--detail-main-header-left)
   );
   display: grid;
-  grid-template-rows: auto 1px minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto;
   height: 100%;
   overflow: hidden;
 }
@@ -217,6 +217,7 @@
 
 .detail-main-header {
   display: grid;
+  flex: 0 0 auto;
   gap: var(--space-3);
   padding: var(--space-4) var(--space-6) var(--space-3) var(--detail-main-header-left);
 }
@@ -314,7 +315,12 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+}
+
+.detail-main-content > .detail-main-divider,
+.detail-main-content > .detail-history-divider {
+  flex: 0 0 auto;
 }
 
 .detail-inline-support {
@@ -356,6 +362,7 @@
 
 .detail-history {
   display: grid;
+  flex: 0 0 auto;
   gap: var(--space-row);
   padding: 16px calc(var(--space-6) + var(--space-1)) 4px var(--detail-main-header-left);
 }
@@ -510,10 +517,9 @@
 .detail-activity {
   display: grid;
   align-content: start;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   gap: var(--space-row);
   min-height: 0;
-  overflow-y: auto;
   padding: var(--space-4) var(--space-6) 0 var(--detail-main-column-content-left);
 }
 

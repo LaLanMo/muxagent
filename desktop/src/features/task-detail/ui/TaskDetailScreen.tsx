@@ -1130,8 +1130,8 @@ export function TaskDetailScreen({
   const promptLead = task?.task.description ?? title;
   const showHistorySection = historyEntries.length > 0;
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
-  const activityRef = useRef<HTMLElement | null>(null);
-  const shouldStickActivityToBottomRef = useRef(true);
+  const mainContentRef = useRef<HTMLDivElement | null>(null);
+  const shouldStickMainContentToBottomRef = useRef(true);
   const lastTaskIdRef = useRef<string | undefined>(undefined);
   const ungroupedArtifacts = useMemo(() => {
     const groupedArtifactPaths = new Set(
@@ -1205,46 +1205,48 @@ export function TaskDetailScreen({
   }, [task?.task.id]);
 
   useEffect(() => {
-    const activity = activityRef.current;
-    if (!activity) {
+    const mainContent = mainContentRef.current;
+    if (!mainContent) {
       return;
     }
     const updateStickiness = () => {
       const distanceFromBottom =
-        activity.scrollHeight - activity.scrollTop - activity.clientHeight;
-      shouldStickActivityToBottomRef.current = distanceFromBottom <= 24;
+        mainContent.scrollHeight - mainContent.scrollTop - mainContent.clientHeight;
+      shouldStickMainContentToBottomRef.current = distanceFromBottom <= 24;
     };
     updateStickiness();
-    activity.addEventListener("scroll", updateStickiness);
+    mainContent.addEventListener("scroll", updateStickiness);
     return () => {
-      activity.removeEventListener("scroll", updateStickiness);
+      mainContent.removeEventListener("scroll", updateStickiness);
     };
   }, []);
 
   useLayoutEffect(() => {
-    const activity = activityRef.current;
+    const mainContent = mainContentRef.current;
     const taskId = task?.task.id;
-    if (!activity || !taskId) {
+    if (!mainContent || !taskId) {
       return;
     }
     if (lastTaskIdRef.current === taskId) {
       return;
     }
-    activity.scrollTop = activity.scrollHeight;
-    shouldStickActivityToBottomRef.current = true;
+    mainContent.scrollTop = mainContent.scrollHeight;
+    shouldStickMainContentToBottomRef.current = true;
     lastTaskIdRef.current = taskId;
   }, [task?.task.id]);
 
   useLayoutEffect(() => {
-    const activity = activityRef.current;
-    if (!activity || !shouldStickActivityToBottomRef.current) {
+    const mainContent = mainContentRef.current;
+    if (!mainContent || !shouldStickMainContentToBottomRef.current) {
       return;
     }
-    activity.scrollTop = activity.scrollHeight;
+    mainContent.scrollTop = mainContent.scrollHeight;
   }, [
     actionSurface.kind,
     activityPreviewSignature,
     displayedActivityRuns.length,
+    historyCollapsed,
+    historyEntries.length,
     ungroupedArtifacts.length,
   ]);
 
@@ -1360,27 +1362,29 @@ export function TaskDetailScreen({
 
         <div className={detailLayoutClassName}>
           <div className={detailMainColumnClassName}>
-            <header
-              className="detail-main-header"
+            <div
+              className="detail-main-content"
+              data-testid="detail-main-content"
+              ref={mainContentRef}
             >
-              <div className="detail-main-header__prompt">
-                <div
-                  className="detail-main-header__prompt-body"
-                  data-no-window-drag="true"
-                  data-testid="task-detail-header-description"
-                >
-                  <DocumentContent
-                    className="detail-main-header__prompt-text"
-                    content={promptLead}
-                    format="markdown"
-                    variant="compact"
-                  />
+              <header className="detail-main-header">
+                <div className="detail-main-header__prompt">
+                  <div
+                    className="detail-main-header__prompt-body"
+                    data-no-window-drag="true"
+                    data-testid="task-detail-header-description"
+                  >
+                    <DocumentContent
+                      className="detail-main-header__prompt-text"
+                      content={promptLead}
+                      format="markdown"
+                      variant="compact"
+                    />
+                  </div>
                 </div>
-              </div>
-            </header>
-            <div className="detail-main-divider" />
+              </header>
+              <div className="detail-main-divider" />
 
-            <div className="detail-main-content">
               {showHistorySection ? (
                 <>
                   <section
@@ -1451,7 +1455,7 @@ export function TaskDetailScreen({
                 </>
               ) : null}
 
-              <section className="detail-activity" data-testid="detail-activity" ref={activityRef}>
+              <section className="detail-activity" data-testid="detail-activity">
                 <div className="detail-activity__header">
                   <span className="detail-activity__eyebrow">Activity</span>
                   {loading ? (

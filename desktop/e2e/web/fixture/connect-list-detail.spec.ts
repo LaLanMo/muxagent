@@ -68,6 +68,9 @@ async function pasteTinyPngInto(page: Page, textareaTestId: string) {
 }
 
 async function readHeaderAlignment(page: Page) {
+  await page.getByTestId("detail-main-content").evaluate((element) => {
+    element.scrollTop = 0;
+  });
   const [promptBox, activityBox] = await Promise.all([
     page.locator(".detail-main-header__prompt-text").boundingBox(),
     page.locator(".detail-activity__eyebrow").boundingBox(),
@@ -83,6 +86,12 @@ async function readHeaderAlignment(page: Page) {
 
 async function readHistoryGeometry(page: Page) {
   return page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '[data-testid="detail-main-content"]',
+    );
+    if (scroller) {
+      scroller.scrollTop = 0;
+    }
     const history = document.querySelector('[data-testid="detail-task-history"]');
     const historyHeader = history?.querySelector(".detail-history__header");
     const headerIcon = history?.querySelector(".detail-history__header-icon");
@@ -141,6 +150,12 @@ async function readHistoryGeometry(page: Page) {
 
 async function readCollapsedHistoryGeometry(page: Page) {
   return page.evaluate(() => {
+    const scroller = document.querySelector<HTMLElement>(
+      '[data-testid="detail-main-content"]',
+    );
+    if (scroller) {
+      scroller.scrollTop = 0;
+    }
     const topDivider = document.querySelector(".detail-main-divider");
     const history = document.querySelector('[data-testid="detail-task-history"]');
     const historyHeader = history?.querySelector(".detail-history__header");
@@ -243,19 +258,28 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
     "Scope the middleware refactor around the anonymous bypass first",
   );
   await expect(page.getByTestId("detail-run-summary-run-live-plan")).toContainText("plan.md");
-  const activityScroll = await page.getByTestId("detail-activity").evaluate((element) => ({
+  const mainContentScroll = await page.getByTestId("detail-main-content").evaluate((element) => ({
     scrollTop: element.scrollTop,
     scrollHeight: element.scrollHeight,
     clientHeight: element.clientHeight,
   }));
+  const activityOverflowY = await page.getByTestId("detail-activity").evaluate((element) => {
+    return getComputedStyle(element).overflowY;
+  });
   const implementBox = await page.getByTestId("detail-run-run-live-implement").boundingBox();
   const planBox = await page.getByTestId("detail-run-run-live-plan").boundingBox();
-  expect(activityScroll.scrollTop + activityScroll.clientHeight).toBeGreaterThanOrEqual(
-    activityScroll.scrollHeight - 1,
+  expect(mainContentScroll.scrollTop + mainContentScroll.clientHeight).toBeGreaterThanOrEqual(
+    mainContentScroll.scrollHeight - 1,
   );
+  expect(activityOverflowY).not.toBe("auto");
+  expect(activityOverflowY).not.toBe("scroll");
   expect(implementBox).not.toBeNull();
   expect(planBox).not.toBeNull();
   expect(planBox!.y).toBeLessThan(implementBox!.y);
+  await page.getByTestId("detail-main-content").evaluate((element) => {
+    element.scrollTop = 0;
+  });
+  await expect(page.getByTestId("task-detail-header-description")).toBeInViewport();
   await expect(page.getByTestId("transcript-modal")).toHaveCount(0);
   await expect(page.getByTestId("artifact-modal")).toHaveCount(0);
 });
@@ -516,13 +540,13 @@ test("shows running preview rows on the card and keeps the feed pinned on live u
 
   await expect(preview).toContainText("middleware guard patched and ready for verification");
   await expect(preview).toContainText("applying middleware changes");
-  const activityScroll = await page.getByTestId("detail-activity").evaluate((element) => ({
+  const mainContentScroll = await page.getByTestId("detail-main-content").evaluate((element) => ({
     scrollTop: element.scrollTop,
     scrollHeight: element.scrollHeight,
     clientHeight: element.clientHeight,
   }));
-  expect(activityScroll.scrollTop + activityScroll.clientHeight).toBeGreaterThanOrEqual(
-    activityScroll.scrollHeight - 1,
+  expect(mainContentScroll.scrollTop + mainContentScroll.clientHeight).toBeGreaterThanOrEqual(
+    mainContentScroll.scrollHeight - 1,
   );
 
   await runningCard.click();
