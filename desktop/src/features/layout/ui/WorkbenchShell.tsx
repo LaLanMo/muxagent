@@ -652,17 +652,18 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
                   >
                     <SlidersHorizontal size={18} strokeWidth={1.9} />
                   </ActivityBarButton>
-                  <ActivityBarButton
-                    active={activeSidebarView === "settings"}
-                    label="Settings"
-                    onClick={() => selectSidebarView("settings")}
-                  >
-                    <Settings size={18} strokeWidth={1.9} />
-                  </ActivityBarButton>
                 </nav>
               </div>
 
-              <div aria-hidden="true" className="workbench__activity-account" />
+              <nav aria-label="Utility" className="workbench__activity-bottom">
+                <ActivityBarButton
+                  active={activeSidebarView === "settings"}
+                  label="Settings"
+                  onClick={() => selectSidebarView("settings")}
+                >
+                  <Settings size={18} strokeWidth={1.9} />
+                </ActivityBarButton>
+              </nav>
             </aside>
 
             {sidebarOpen ? (

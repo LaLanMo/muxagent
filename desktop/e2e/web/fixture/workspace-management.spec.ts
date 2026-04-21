@@ -25,6 +25,33 @@ function allWorkspacesScope(page: Page): Locator {
   return page.getByTestId("task-scope-all-workspaces");
 }
 
+async function expectSettingsAtActivityBarBottom(page: Page) {
+  const activityBar = page.locator(".workbench__activity-bar");
+  const configsButton = page.getByTestId("workbench-activity-configs");
+  const settingsButton = page.getByTestId("workbench-activity-settings");
+
+  await expect(activityBar).toBeVisible();
+  await expect(configsButton).toBeVisible();
+  await expect(settingsButton).toBeVisible();
+
+  const [activityBarBox, configsBox, settingsBox] = await Promise.all([
+    activityBar.boundingBox(),
+    configsButton.boundingBox(),
+    settingsButton.boundingBox(),
+  ]);
+
+  if (!activityBarBox || !configsBox || !settingsBox) {
+    throw new Error("Unable to measure activity bar placement");
+  }
+
+  expect(settingsBox.y).toBeGreaterThan(configsBox.y + configsBox.height);
+
+  const settingsBottomGap =
+    activityBarBox.y + activityBarBox.height - (settingsBox.y + settingsBox.height);
+  expect(settingsBottomGap).toBeGreaterThanOrEqual(0);
+  expect(settingsBottomGap).toBeLessThanOrEqual(14);
+}
+
 async function removeWorkspaceFromSidebar(page: Page, label: string) {
   const row = workspaceRow(page, label);
   await row.hover();
@@ -40,6 +67,7 @@ test("keeps settings split into runtimes and about while removing legacy workspa
   await connectPrimaryWorkspace(page);
   await connectWorkspace(page, "/tmp/muxagent-alt-workspace");
   await expect(page.locator(".workbench__traffic-lights")).toHaveCount(0);
+  await expectSettingsAtActivityBarBottom(page);
 
   await page.getByTestId("workbench-activity-settings").click();
   await expect(page.getByTestId("settings-panel-nav")).toBeVisible();
