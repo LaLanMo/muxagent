@@ -239,10 +239,6 @@ export function useTaskDetailScreen() {
   const workspaceReconcilePending = useWorkspaceStore(
     (state) => (state.workspaceReconcileCounts[workspaceId] ?? 0) > 0,
   );
-  const taskSurfaceReturnContext = useWorkspaceStore(
-    (state) => state.taskSurfaceReturnContext,
-  );
-  const backHref = taskSurfaceReturnContext?.path ?? "/";
   const { task: resolvedTask, detailEntry, liveEvents, liveEventsRunId, loadDetail } =
     useTaskDetailData({
       workspaceId,
@@ -561,7 +557,6 @@ export function useTaskDetailScreen() {
     shell,
     workspaceId,
     taskId,
-    goBackToTaskSurface: () => navigate(backHref),
     openAncestorTask: (ancestorTaskId: string) =>
       navigate(buildTaskDetailPath(workspaceId, ancestorTaskId)),
     task: resolvedTask,

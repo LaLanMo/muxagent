@@ -33,19 +33,15 @@ function workspaceRow(page: Page, label: string) {
 }
 
 async function readHeaderAlignment(page: Page) {
-  const [backIconBox, backLabelBox, promptBox, activityBox] = await Promise.all([
-    page.locator(".detail-main-header__back-icon").boundingBox(),
-    page.locator(".detail-main-header__back-label").boundingBox(),
+  const [promptBox, activityBox] = await Promise.all([
     page.locator(".detail-main-header__prompt-text").boundingBox(),
     page.locator(".detail-activity__eyebrow").boundingBox(),
   ]);
-  if (!backIconBox || !backLabelBox || !promptBox || !activityBox) {
+  if (!promptBox || !activityBox) {
     throw new Error("Expected task detail header alignment targets to be visible");
   }
   return {
     activityX: activityBox.x,
-    backIconX: backIconBox.x,
-    backLabelX: backLabelBox.x,
     promptX: promptBox.x,
   };
 }
@@ -185,6 +181,8 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
 
   await expect(page).toHaveURL(/\/workspaces\/[^/]+\/tasks\/task-live-fixture$/);
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
+  await expect(page.getByTestId("task-detail-back")).toHaveCount(0);
+  await expect(page.getByTestId("workbench-tab-task-board")).toBeVisible();
   await expect(page.getByTestId("task-detail-header-description")).toContainText(
     "Refactor auth middleware",
   );
@@ -280,9 +278,7 @@ test("aligns the task detail header and section labels on one content column in 
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
 
   const runningAlignment = await readHeaderAlignment(page);
-  expect(Math.abs(runningAlignment.backLabelX - runningAlignment.promptX)).toBeLessThanOrEqual(1);
   expect(Math.abs(runningAlignment.activityX - runningAlignment.promptX)).toBeLessThanOrEqual(1);
-  expect(Math.round(runningAlignment.backLabelX - runningAlignment.backIconX)).toBe(16);
 
   await page.goBack();
   await expect(page).toHaveURL(/\/$/);
@@ -291,9 +287,7 @@ test("aligns the task detail header and section labels on one content column in 
   await expect(page.getByTestId("complete-pane")).toBeVisible();
 
   const followUpAlignment = await readHeaderAlignment(page);
-  expect(Math.abs(followUpAlignment.backLabelX - followUpAlignment.promptX)).toBeLessThanOrEqual(1);
   expect(Math.abs(followUpAlignment.activityX - followUpAlignment.promptX)).toBeLessThanOrEqual(1);
-  expect(Math.round(followUpAlignment.backLabelX - followUpAlignment.backIconX)).toBe(20);
 });
 
 test("shows parent task history in detail and lets the user navigate up the chain", async ({
@@ -886,7 +880,7 @@ test("restores the originating task-surface workspace scope after leaving task d
     page.locator(".tasks-panel__workspace-row.is-active .tasks-panel__workspace-label").first(),
   ).toContainText("muxagent-workspace");
 
-  await page.getByTestId("task-detail-back").click();
+  await page.getByTestId("workbench-tab-task-board").getByRole("tab").click();
   await expect(page).toHaveURL(/\/$/);
   await expect(allWorkspacesScope(page)).toHaveClass(/is-active/);
 
@@ -1124,7 +1118,7 @@ test("resets clarification pager when switching to another clarification task", 
     page.getByText("Should we gate the rollout behind a feature flag?"),
   ).toBeVisible();
 
-  await page.getByTestId("task-detail-back").click();
+  await page.goBack();
   await expect(page).toHaveURL(/\/$/);
 
   await page

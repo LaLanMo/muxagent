@@ -3,7 +3,6 @@ import {
   Bot,
   Check,
   ChevronDown,
-  ChevronLeft,
   CircleDashed,
   CircleDot,
   CircleX,
@@ -491,7 +490,6 @@ function completedRunSummary(run: NodeRunViewDto) {
 
 type TaskDetailScreenProps = {
   shell?: unknown;
-  goBackToTaskSurface: () => void;
   task?: TaskViewDto;
   config?: ConfigViewDto;
   loading: boolean;
@@ -881,7 +879,6 @@ function TaskDetailPropertiesPanel({
 }
 
 export function TaskDetailScreen({
-  goBackToTaskSurface,
   task,
   config,
   loading,
@@ -1358,18 +1355,6 @@ export function TaskDetailScreen({
             <header
               className="detail-main-header"
             >
-              <button
-                aria-label="Back to tasks"
-                className="detail-main-header__back"
-                data-testid="task-detail-back"
-                onClick={goBackToTaskSurface}
-                type="button"
-              >
-                <span aria-hidden="true" className="detail-main-header__back-icon">
-                  <ChevronLeft size={12} strokeWidth={1.9} />
-                </span>
-                <span className="detail-main-header__back-label">Tasks</span>
-              </button>
               <div className="detail-main-header__prompt">
                 <div
                   className="detail-main-header__prompt-body"
