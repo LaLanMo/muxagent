@@ -6,7 +6,11 @@ import 'package:muxagent/domain/tool_activity.dart';
 import 'package:muxagent/ui/chat/widgets/edit_diff_view.dart';
 import 'package:muxagent/ui/chat/widgets/tool_call_card.dart';
 
+import '../../../support/localization_test_utils.dart';
+
 void main() {
+  setUp(registerTestTranslations);
+
   testWidgets('edit tool card renders ACP diff content without input.edit', (
     tester,
   ) async {
@@ -25,8 +29,8 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: ToolCallCard(tool: tool)),
+      localizedTestApp(
+        child: Scaffold(body: ToolCallCard(tool: tool)),
       ),
     );
 
@@ -61,8 +65,8 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: ToolCallCard(tool: tool)),
+      localizedTestApp(
+        child: Scaffold(body: ToolCallCard(tool: tool)),
       ),
     );
 
@@ -83,8 +87,8 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: ToolCallCard(tool: tool)),
+      localizedTestApp(
+        child: Scaffold(body: ToolCallCard(tool: tool)),
       ),
     );
 

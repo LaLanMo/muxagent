@@ -5,6 +5,7 @@ import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/fonts.dart';
 import '../../config/theme.dart';
+import '../../i18n/tx.dart';
 import 'welcome_viewmodel.dart';
 
 class WelcomeScreen extends GetView<WelcomeViewModel> {
@@ -43,7 +44,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                         _buildInstallSection(),
                         const SizedBox(height: 12),
                         Text(
-                          'or',
+                          Tx.welcomeOr.tr,
                           style: AppTypography.sans(
                             fontSize: 13,
                             color: AppTheme.textMuted,
@@ -90,7 +91,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
         SizedBox(
           width: 260,
           child: Text(
-            'Control your coding agents\nfrom anywhere',
+            Tx.welcomeTagline.tr,
             textAlign: TextAlign.center,
             style: AppTypography.sans(
               fontSize: 16,
@@ -118,7 +119,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
             const Icon(LucideIcons.qrCode, size: 18, color: AppTheme.surface),
             const SizedBox(width: 10),
             Text(
-              'Scan QR Code',
+              Tx.welcomeScanQr.tr,
               style: AppTypography.sans(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -138,7 +139,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
       child: Column(
         children: [
           Text(
-            'Run daemon on your machine:',
+            Tx.welcomeRunDaemon.tr,
             textAlign: TextAlign.center,
             style: AppTypography.sans(
               fontSize: 12,
@@ -216,7 +217,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                hintText: 'Enter server URL...',
+                hintText: Tx.welcomeEnterServerUrl.tr,
                 hintStyle: AppTypography.sans(
                   fontSize: 14,
                   color: AppTheme.textMuted,
@@ -253,7 +254,7 @@ class WelcomeScreen extends GetView<WelcomeViewModel> {
           ),
           const SizedBox(width: 6),
           Text(
-            'View on GitHub',
+            Tx.welcomeViewGithub.tr,
             style: AppTypography.sans(
               fontSize: 12,
               color: AppTheme.textMetadata,

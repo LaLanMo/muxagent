@@ -26,6 +26,7 @@ import 'package:muxagent/ui/new_session/new_session_viewmodel.dart';
 import 'package:muxagent/usecases/transcribe_audio.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 const _copilotModeAgentId =
     'https://agentclientprotocol.com/protocol/session-modes#agent';
@@ -147,7 +148,7 @@ void main() {
     late NewSessionViewModel viewModel;
 
     setUp(() async {
-      Get.testMode = true;
+      registerTestTranslations();
       SharedPreferences.setMockInitialValues({});
       dbPath = p.join(
         Directory.systemTemp.path,

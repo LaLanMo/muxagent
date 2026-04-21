@@ -19,6 +19,8 @@ import 'package:muxagent/ui/chat/chat_viewmodel.dart';
 import 'package:muxagent/ui/session_settings/session_settings_screen.dart';
 import 'package:muxagent/usecases/transcribe_audio.dart';
 
+import '../../support/localization_test_utils.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -111,7 +113,7 @@ void main() {
     late _TestChatViewModel chatVm;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       wsRepo = _FakeWsSessionRepository();
       chatVm = _TestChatViewModel(wsRepo: wsRepo);
       Get.put<ChatViewModel>(chatVm);
@@ -134,18 +136,14 @@ void main() {
           name: 'Sonnet',
           description: 'Sonnet 4.6 · Best for everyday tasks',
         ),
-        ModelInfo(
-          value: 'opus',
-          name: 'Opus',
-          description: 'Custom model',
-        ),
+        ModelInfo(value: 'opus', name: 'Opus', description: 'Custom model'),
       ];
       chatVm.currentModel.value = 'opus';
       chatVm.testUsage = _usage();
       chatVm.usageVersion.value = 1;
 
       await tester.pumpWidget(
-        const GetMaterialApp(home: SessionSettingsScreen()),
+        localizedTestApp(child: const SessionSettingsScreen()),
       );
       await tester.pump();
 
@@ -179,7 +177,7 @@ void main() {
       chatVm.usageVersion.value = 1;
 
       await tester.pumpWidget(
-        const GetMaterialApp(home: SessionSettingsScreen()),
+        localizedTestApp(child: const SessionSettingsScreen()),
       );
       await tester.pump();
 

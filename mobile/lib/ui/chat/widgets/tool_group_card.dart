@@ -8,6 +8,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../config/theme.dart';
 import '../../../domain/enums.dart';
 import '../../../domain/tool_activity.dart';
+import '../../../i18n/tx.dart';
 import '../../../routing/routes.dart';
 
 /// Collapses 2+ consecutive tool calls into a single expandable card.
@@ -158,7 +159,6 @@ class _ToolGroupCardState extends State<ToolGroupCard>
 
   Widget _buildHeader() {
     final count = widget.tools.length;
-    final noun = count == 1 ? 'tool call' : 'tool calls';
     return GestureDetector(
       onTap: () => setState(() => _expanded = !_expanded),
       behavior: HitTestBehavior.opaque,
@@ -167,7 +167,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
           Icon(LucideIcons.layers, size: 16, color: AppTheme.textSecondary),
           const SizedBox(width: 10),
           Text(
-            '$count $noun',
+            Tx.toolCalls(count),
             style: AppTypography.sans(
               fontSize: 13,
               fontWeight: FontWeight.w500,
@@ -230,9 +230,9 @@ class _ToolGroupCardState extends State<ToolGroupCard>
   }
 
   String _headerStatusLabel() {
-    if (_hasFailed) return 'FAILED';
-    if (_hasRunning) return 'RUNNING${'.' * _dotCount}';
-    return 'TOOLS';
+    if (_hasFailed) return Tx.toolFailedCaps.tr;
+    if (_hasRunning) return '${Tx.toolRunningCaps.tr}${'.' * _dotCount}';
+    return Tx.toolToolsCaps.tr;
   }
 
   // ---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ class _ToolGroupCardState extends State<ToolGroupCard>
     final first = failed.first;
     final preview = _previewText(first);
     final extra = failed.length - 1;
-    final suffix = extra > 0 ? ' (+$extra more failed)' : '';
+    final suffix = extra > 0 ? ' ${Tx.moreFailed(extra)}' : '';
 
     return Padding(
       padding: const EdgeInsets.only(left: 26, top: 4),
@@ -420,25 +420,25 @@ class _ToolGroupCardState extends State<ToolGroupCard>
   static String _kindLabel(ToolKind kind) {
     switch (kind) {
       case ToolKind.read:
-        return 'Read';
+        return Tx.toolRead.tr;
       case ToolKind.edit:
-        return 'Edit';
+        return Tx.toolEdit.tr;
       case ToolKind.search:
-        return 'Search';
+        return Tx.toolSearch.tr;
       case ToolKind.execute:
-        return 'Bash';
+        return Tx.toolBash.tr;
       case ToolKind.fetch:
-        return 'Fetch';
+        return Tx.toolFetch.tr;
       case ToolKind.delete:
-        return 'Delete';
+        return Tx.toolDelete.tr;
       case ToolKind.move:
-        return 'Move';
+        return Tx.toolMove.tr;
       case ToolKind.think:
-        return 'Think';
+        return Tx.toolThink.tr;
       case ToolKind.switchMode:
-        return 'Mode';
+        return Tx.toolMode.tr;
       case ToolKind.other:
-        return 'Tool';
+        return Tx.toolGenericTool.tr;
     }
   }
 }

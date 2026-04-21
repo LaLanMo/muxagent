@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/reconnect_recovery_coordinator.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
 import 'package:muxagent/data/repositories/session_chat_cache_dto.dart';
@@ -8,10 +9,16 @@ import 'package:muxagent/domain/event.dart';
 import 'package:muxagent/domain/message.dart';
 import 'package:muxagent/domain/mode_option.dart';
 import 'package:muxagent/domain/plan_entry.dart';
+import 'package:muxagent/i18n/app_locales.dart';
 import 'package:muxagent/ui/chat/chat_state.dart';
 import 'package:muxagent/ui/chat/chat_viewmodel.dart';
 
+import '../../support/localization_test_utils.dart';
+
 void main() {
+  setUp(registerTestTranslations);
+  tearDown(Get.reset);
+
   ReconnectRecoveryResult buildResult({
     required TranscriptRecoveryState transcript,
     required MetadataRecoveryState metadata,
@@ -510,7 +517,16 @@ void main() {
           cwd: '/tmp/project',
           restoreError: Exception('missing runtime for session.load'),
         ),
-        'Could not restore this session from the connected daemon: missing runtime for session.load',
+        'This session is missing runtime metadata. Re-attach it from the CLI and try again.',
+      );
+    });
+
+    test('explains missing restore metadata in Chinese', () {
+      registerTestTranslations(locale: AppLocales.zhCN);
+
+      expect(
+        ChatViewModel.restoreUnavailableCopy(runtime: '', cwd: ''),
+        '此会话缺少运行时和工作目录元数据。请从 CLI 重新附加后再试。',
       );
     });
 

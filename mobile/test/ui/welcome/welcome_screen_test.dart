@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:muxagent/data/models/auth_request.dart';
+import 'package:muxagent/i18n/app_locales.dart';
 import 'package:muxagent/ui/welcome/welcome_screen.dart';
 import 'package:muxagent/ui/welcome/welcome_viewmodel.dart';
 
+import '../../support/localization_test_utils.dart';
+
 void main() {
   setUp(() {
-    Get.testMode = true;
+    registerTestTranslations();
   });
 
   tearDown(() {
@@ -22,8 +25,8 @@ void main() {
     );
 
     await tester.pumpWidget(
-      GetMaterialApp(
-        home: MediaQuery(
+      localizedTestApp(
+        child: MediaQuery(
           data: const MediaQueryData(
             size: Size(390, 844),
             viewInsets: EdgeInsets.only(bottom: 320),
@@ -50,7 +53,7 @@ void main() {
       WelcomeViewModel(pairingLinkParser: const AuthRequestPairingLinkParser()),
     );
 
-    await tester.pumpWidget(const GetMaterialApp(home: WelcomeScreen()));
+    await tester.pumpWidget(localizedTestApp(child: const WelcomeScreen()));
     await tester.pumpAndSettle();
 
     final textField = find.byType(TextField);
@@ -82,5 +85,19 @@ void main() {
       viewModel.urlError.value,
       'Invalid URL: missing id or relay parameter',
     );
+  });
+
+  testWidgets('welcome screen renders Chinese copy', (tester) async {
+    Get.put(
+      WelcomeViewModel(pairingLinkParser: const AuthRequestPairingLinkParser()),
+    );
+
+    await tester.pumpWidget(
+      localizedTestApp(locale: AppLocales.zhCN, child: const WelcomeScreen()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('扫描二维码'), findsOneWidget);
+    expect(find.text('随时随地掌控你的编程代理'), findsOneWidget);
   });
 }

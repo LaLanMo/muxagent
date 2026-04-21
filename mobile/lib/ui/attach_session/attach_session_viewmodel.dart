@@ -15,6 +15,7 @@ import '../../domain/paired_machine.dart';
 import '../../domain/runtime_option.dart';
 import '../../domain/session.dart';
 import '../../domain/ui_effect.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 import '../../ui/new_session/new_session_viewmodel.dart';
 
@@ -265,9 +266,7 @@ class AttachSessionViewModel extends GetxController {
       try {
         return await _callListRuntimes(machine.machineId);
       } on TimeoutException {
-        throw Exception(
-          'Runtime list timed out after reconnect. Relay session appears stale.',
-        );
+        throw Exception(Tx.attachRuntimeListStale.tr);
       }
     } catch (e) {
       if (!NewSessionViewModel.isRecoverableTransportError(e)) {
@@ -296,15 +295,15 @@ class AttachSessionViewModel extends GetxController {
     final runtime = selectedRuntime.value;
 
     if (sessionId.isEmpty) {
-      uiEffect.value = ShowToast('Session ID is required');
+      uiEffect.value = ShowToast(Tx.attachSessionIdRequired.tr);
       return;
     }
     if (machine == null) {
-      uiEffect.value = ShowToast('Please select a machine');
+      uiEffect.value = ShowToast(Tx.attachSelectMachineToast.tr);
       return;
     }
     if (runtime == null) {
-      uiEffect.value = ShowToast('Please select a runtime');
+      uiEffect.value = ShowToast(Tx.attachSelectRuntimeToast.tr);
       return;
     }
 
@@ -395,9 +394,7 @@ class AttachSessionViewModel extends GetxController {
           runtime: runtime,
         );
       } on TimeoutException {
-        throw Exception(
-          'Session attach timed out after reconnect. Relay session appears stale.',
-        );
+        throw Exception(Tx.attachSessionAttachStale.tr);
       }
     } catch (e) {
       if (!NewSessionViewModel.isRecoverableTransportError(e)) {

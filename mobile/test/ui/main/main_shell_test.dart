@@ -21,6 +21,7 @@ import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -79,7 +80,7 @@ void main() {
     late MainShellViewModel shell;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       final machine = _buildMachine('machine-1');
       machineRepo = FakePairedMachineRepository([machine]);
       wsRepo = _FakeWsSessionRepository(initialActiveIds: {'machine-1'});
@@ -130,7 +131,7 @@ void main() {
     testWidgets(
       'renders the tab bar as an overlay instead of a scaffold footer',
       (tester) async {
-        await tester.pumpWidget(const GetMaterialApp(home: MainShell()));
+        await tester.pumpWidget(localizedTestApp(child: const MainShell()));
         await tester.pump();
 
         final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));

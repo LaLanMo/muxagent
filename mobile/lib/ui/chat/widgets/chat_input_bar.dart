@@ -2,11 +2,13 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/theme.dart';
 import '../../../domain/enums.dart';
+import '../../../i18n/tx.dart';
 
 class ChatInputBar extends StatelessWidget {
   final TextEditingController controller;
@@ -88,7 +90,7 @@ class ChatInputBar extends StatelessWidget {
                               smartQuotesType: SmartQuotesType.disabled,
                               keyboardType: TextInputType.multiline,
                               decoration: InputDecoration(
-                                hintText: 'Type a message...',
+                                hintText: Tx.chatTypeMessage.tr,
                                 filled: false,
                                 hintStyle: AppTypography.sans(
                                   fontSize: 14,
@@ -240,7 +242,7 @@ class ChatInputBar extends StatelessWidget {
   Widget _buildSendButton() {
     return Semantics(
       button: true,
-      label: 'Send message',
+      label: Tx.chatSendMessage.tr,
       child: _buildControl(
         icon: LucideIcons.arrowUp,
         background: AppTheme.primary,

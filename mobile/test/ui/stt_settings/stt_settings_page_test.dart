@@ -7,6 +7,8 @@ import 'package:muxagent/ui/stt_settings/stt_settings_page.dart';
 import 'package:muxagent/ui/stt_settings/stt_settings_viewmodel.dart';
 import 'package:muxagent/usecases/transcribe_audio.dart';
 
+import '../../support/localization_test_utils.dart';
+
 class _NoopSttRepository extends SttRepository {
   _NoopSttRepository() : super(service: SttService());
 }
@@ -37,7 +39,7 @@ class _TestSttSettingsViewModel extends SttSettingsViewModel {
 
 void main() {
   setUp(() {
-    Get.testMode = true;
+    registerTestTranslations();
   });
 
   tearDown(() {
@@ -49,7 +51,7 @@ void main() {
   ) async {
     Get.put<SttSettingsViewModel>(_TestSttSettingsViewModel());
 
-    await tester.pumpWidget(const GetMaterialApp(home: SttSettingsPage()));
+    await tester.pumpWidget(localizedTestApp(child: const SttSettingsPage()));
     await tester.pump();
 
     expect(find.text('Speech to Text'), findsOneWidget);
@@ -74,7 +76,7 @@ void main() {
       ),
     );
 
-    await tester.pumpWidget(const GetMaterialApp(home: SttSettingsPage()));
+    await tester.pumpWidget(localizedTestApp(child: const SttSettingsPage()));
     await tester.pump();
 
     expect(find.text('Stored securely in device Keychain'), findsOneWidget);

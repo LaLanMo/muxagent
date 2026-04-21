@@ -27,6 +27,7 @@ import '../../domain/plan_entry.dart';
 import '../../domain/prompt_content_block.dart';
 import '../../domain/session_config_snapshot.dart';
 import '../../domain/usage_info.dart';
+import '../../i18n/tx.dart';
 import '../../usecases/transcribe_audio.dart';
 import '../../utils/app_toast.dart';
 import 'chat_state.dart';
@@ -213,26 +214,24 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }) {
     if (restoreError != null) {
       final message = restoreError.toString().trim().replaceFirst(
-        RegExp(r'^(Exception|Bad state):\s*'),
+        RegExp(r'^(Exception|Bad state|TimeoutException):\s*'),
         '',
       );
-      return 'Could not restore this session from the connected daemon: $message';
+      if (message == 'missing runtime for session.load') {
+        return Tx.chatRestoreMissingRuntime.tr;
+      }
+      if (message == 'missing cwd for session.load') {
+        return Tx.chatRestoreMissingCwd.tr;
+      }
+      return Tx.chatRestoreErrorWith(message);
     }
 
-    final missing = <String>[];
-    if (runtime.trim().isEmpty) {
-      missing.add('runtime');
-    }
-    if (cwd.trim().isEmpty) {
-      missing.add('working directory');
-    }
-    if (missing.isEmpty) {
-      return 'This session cannot be restored on this device yet.';
-    }
-    if (missing.length == 2) {
-      return 'This session is missing runtime and working directory metadata. Re-attach it from the CLI and try again.';
-    }
-    return 'This session is missing ${missing.single} metadata. Re-attach it from the CLI and try again.';
+    final missingRuntime = runtime.trim().isEmpty;
+    final missingCwd = cwd.trim().isEmpty;
+    if (!missingRuntime && !missingCwd) return Tx.chatUnsupportedRestore.tr;
+    if (missingRuntime && missingCwd) return Tx.chatRestoreMissingBoth.tr;
+    if (missingRuntime) return Tx.chatRestoreMissingRuntime.tr;
+    return Tx.chatRestoreMissingCwd.tr;
   }
 
   @visibleForTesting
@@ -938,7 +937,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
       final historyCompleted = await _historyCompleter!.future;
       if (!historyCompleted) {
-        throw TimeoutException('session.load did not finish replaying history');
+        throw TimeoutException(Tx.chatRestoreHistoryTimeout.tr);
       }
       if (_hasConfigSnapshotData(snapshot)) {
         await _eventRepo.applySessionConfigSnapshotIfUnchanged(
@@ -973,7 +972,13 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         error: e,
         preserveVisible: preserveVisible,
       )) {
-        AppToast.show('$e');
+        AppToast.show(
+          restoreUnavailableCopy(
+            runtime: loadRuntime,
+            cwd: loadCwd,
+            restoreError: e,
+          ),
+        );
       } else {
         debugPrint(
           '[ChatRecovery] session.load recovered with preserved UI: $e',
@@ -1470,7 +1475,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
     _voiceRecorder = AudioRecorder();
     if (!await _voiceRecorder!.hasPermission()) {
-      AppToast.show('Microphone permission denied');
+      AppToast.show(Tx.newRecordingPermissionDenied.tr);
       isVoiceRecording.value = false;
       _voiceRecorder = null;
       return;
@@ -1488,7 +1493,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         path: path,
       );
     } catch (e) {
-      AppToast.show('Failed to start recording');
+      AppToast.show(Tx.newRecordingStartFailed.tr);
       isVoiceRecording.value = false;
       await _voiceRecorder!.dispose();
       _voiceRecorder = null;
@@ -1496,7 +1501,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     }
 
     if (!await _voiceRecorder!.isRecording()) {
-      AppToast.show('Microphone unavailable');
+      AppToast.show(Tx.newMicrophoneUnavailable.tr);
       isVoiceRecording.value = false;
       await _voiceRecorder!.dispose();
       _voiceRecorder = null;
@@ -1516,7 +1521,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
     if (path == null) {
       isVoiceRecording.value = false;
-      AppToast.show('Recording failed');
+      AppToast.show(Tx.newRecordingFailed.tr);
       return;
     }
 
@@ -1524,7 +1529,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     final size = await file.length();
     if (size < 100) {
       isVoiceRecording.value = false;
-      AppToast.show('No audio captured — microphone may be unavailable');
+      AppToast.show(Tx.newNoAudioCaptured.tr);
       try {
         await file.delete();
       } catch (_) {}
@@ -1550,7 +1555,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         );
       }
     } catch (e) {
-      AppToast.show('Transcription failed: $e');
+      AppToast.show(Tx.transcriptionFailed(e));
     } finally {
       isTranscribing.value = false;
       try {
@@ -1694,7 +1699,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
   Future<void> sendMessage(String text) async {
     if (!canPrompt) {
-      AppToast.show('Chat is read-only right now.');
+      AppToast.show(Tx.chatReadOnly.tr);
       return;
     }
     if (showFilePicker.value) _dismissFilePicker();
@@ -1836,7 +1841,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     );
     chatState.approvals.clear();
     _refreshApprovals();
-    AppToast.show('Session stopped locally');
+    AppToast.show(Tx.chatStoppedLocally.tr);
   }
 
   Future<bool> prepareForClose() async {

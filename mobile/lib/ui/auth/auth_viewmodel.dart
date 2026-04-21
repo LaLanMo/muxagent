@@ -6,6 +6,7 @@ import '../../data/repositories/auth_repository.dart';
 import '../../data/services/api/base_api_client.dart';
 import '../../data/services/api/relay_service.dart';
 import '../../data/services/pairing_deep_link_coordinator.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 
 enum AuthState { checking, pending, approving, approved, expired, error }
@@ -31,7 +32,7 @@ class AuthViewModel extends GetxController {
     _authRequest = _resolveAuthRequest();
     if (_authRequest == null) {
       state.value = AuthState.error;
-      errorMessage.value = 'Missing pairing request.';
+      errorMessage.value = Tx.authMissingRequest.tr;
       return;
     }
     debugPrint('[AuthViewModel] onInit for request ${authRequest.id}');
@@ -42,7 +43,7 @@ class AuthViewModel extends GetxController {
     final request = _authRequest;
     if (request == null) {
       state.value = AuthState.error;
-      errorMessage.value = 'Missing pairing request.';
+      errorMessage.value = Tx.authMissingRequest.tr;
       return;
     }
 
@@ -69,7 +70,7 @@ class AuthViewModel extends GetxController {
       errorMessage.value = e.message;
     } catch (e) {
       state.value = AuthState.error;
-      errorMessage.value = 'Failed to check auth status: $e';
+      errorMessage.value = Tx.authCheckFailedWith(e);
     }
   }
 
@@ -77,7 +78,7 @@ class AuthViewModel extends GetxController {
     final request = _authRequest;
     if (request == null) {
       state.value = AuthState.error;
-      errorMessage.value = 'Missing pairing request.';
+      errorMessage.value = Tx.authMissingRequest.tr;
       return;
     }
 
@@ -90,7 +91,7 @@ class AuthViewModel extends GetxController {
       errorMessage.value = e.message;
     } catch (e) {
       state.value = AuthState.error;
-      errorMessage.value = 'Failed to approve: $e';
+      errorMessage.value = Tx.authApproveFailedWith(e);
     }
   }
 

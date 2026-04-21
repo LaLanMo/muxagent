@@ -23,6 +23,7 @@ import 'package:muxagent/domain/ui_effect.dart';
 import 'package:muxagent/ui/attach_session/attach_session_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -154,7 +155,7 @@ void main() {
     late _TestAttachSessionViewModel viewModel;
 
     setUp(() async {
-      Get.testMode = true;
+      registerTestTranslations();
       SharedPreferences.setMockInitialValues({});
       dbPath = p.join(
         Directory.systemTemp.path,

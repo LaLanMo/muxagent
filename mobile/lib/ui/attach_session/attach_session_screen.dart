@@ -7,6 +7,7 @@ import '../../config/theme.dart';
 import '../../domain/enums.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/runtime_option.dart';
+import '../../i18n/tx.dart';
 import '../common/ui_effect_listener.dart';
 import 'attach_session_viewmodel.dart';
 
@@ -54,7 +55,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'Attach Session',
+                        Tx.attachTitle.tr,
                         style: AppTypography.sans(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -78,15 +79,15 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
                       children: [
                         _buildExplanationCard(),
                         const SizedBox(height: 24),
-                        _buildFieldLabel('Session ID'),
+                        _buildFieldLabel(Tx.attachSessionId.tr),
                         const SizedBox(height: 8),
                         _buildSessionIdInput(),
                         const SizedBox(height: 24),
-                        _buildFieldLabel('Runtime'),
+                        _buildFieldLabel(Tx.attachRuntime.tr),
                         const SizedBox(height: 8),
                         Obx(() => _buildRuntimeSelector()),
                         const SizedBox(height: 24),
-                        _buildFieldLabel('Machine'),
+                        _buildFieldLabel(Tx.attachMachine.tr),
                         const SizedBox(height: 8),
                         Obx(() => _buildMachineSelector()),
                         const SizedBox(height: 24),
@@ -127,7 +128,9 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
         : AppTheme.statusDisconnected;
     final bg = isReconnecting ? AppTheme.warningBg : AppTheme.disconnectedBg;
     final icon = isReconnecting ? LucideIcons.refreshCw : LucideIcons.cloudOff;
-    final label = isReconnecting ? 'Reconnecting...' : 'Server unreachable';
+    final label = isReconnecting
+        ? Tx.commonReconnecting.tr
+        : Tx.commonServerUnreachable.tr;
 
     return Container(
       width: double.infinity,
@@ -160,7 +163,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Continue a session you started in your machine',
+            Tx.attachExplanationTitle.tr,
             style: AppTypography.sans(
               fontSize: 14,
               fontWeight: FontWeight.w500,
@@ -169,7 +172,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Use the session ID from your runtime',
+            Tx.attachExplanationBody.tr,
             style: AppTypography.sans(
               fontSize: 12,
               color: AppTheme.textTertiary,
@@ -235,12 +238,12 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
 
   Widget _buildRuntimeSelector() {
     if (controller.isLoadingRuntimes.value) {
-      return _buildLoadingSelector(label: 'Loading runtimes...');
+      return _buildLoadingSelector(label: Tx.attachLoadingRuntimes.tr);
     }
 
     final options = controller.availableRuntimes;
     if (options.isEmpty) {
-      return _buildEmptySelector(label: 'No runtimes available');
+      return _buildEmptySelector(label: Tx.attachNoRuntimes.tr);
     }
 
     final selected = controller.selectedRuntime.value;
@@ -260,7 +263,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    selected?.label ?? 'Select a runtime',
+                    selected?.label ?? Tx.attachSelectRuntime.tr,
                     style: AppTypography.sans(
                       fontSize: 14,
                       color: selected != null
@@ -310,7 +313,9 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
     final selected = controller.selectedMachine.value;
     final hostname = selected?.hostname?.isNotEmpty == true
         ? selected!.hostname!
-        : (selected != null ? 'Unknown host' : 'Select a machine');
+        : (selected != null
+              ? Tx.commonUnknownHost.tr
+              : Tx.attachSelectMachine.tr);
 
     return ValueListenableBuilder<List<PairedMachine>>(
       valueListenable: controller.machinesListenable,
@@ -446,7 +451,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
   }) {
     final label = machine.hostname?.isNotEmpty == true
         ? machine.hostname!
-        : 'Unknown host';
+        : Tx.commonUnknownHost.tr;
     final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
@@ -547,7 +552,7 @@ class AttachSessionScreen extends GetView<AttachSessionViewModel> {
                   ),
                 )
               : Text(
-                  'Attach Session',
+                  Tx.attachTitle.tr,
                   style: AppTypography.sans(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,

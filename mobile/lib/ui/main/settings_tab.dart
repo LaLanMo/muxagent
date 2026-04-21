@@ -5,6 +5,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
 import '../../domain/paired_machine.dart';
+import '../../i18n/tx.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
 import '../common/ui_effect_listener.dart';
@@ -29,7 +30,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Settings',
+                  Tx.settingsTitle.tr,
                   style: AppTypography.sans(
                     fontSize: 24,
                     fontWeight: FontWeight.w600,
@@ -50,23 +51,24 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                       valueListenable: controller.activeSessionIdsListenable,
                       builder: (context, activeSessionIds, _) {
                         return Obx(() {
-                          final connectingMachines = controller.connectingMachines
+                          final connectingMachines = controller
+                              .connectingMachines
                               .toSet();
                           controller.relayConnected.value;
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildSectionLabel('MACHINES'),
+                              _buildSectionLabel(Tx.settingsMachines.tr),
                               ..._buildMachineRows(
                                 machines: machines,
                                 activeSessionIds: activeSessionIds,
                                 connectingMachines: connectingMachines,
                                 relayConnected: controller.relayConnected.value,
                               ),
-                              _buildSectionLabel('PAIRING'),
+                              _buildSectionLabel(Tx.settingsPairing.tr),
                               _buildSettingsRow(
                                 icon: LucideIcons.qrCode,
-                                label: 'Scan QR Code',
+                                label: Tx.settingsScanQrCode.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -76,7 +78,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                               ),
                               _buildSettingsRow(
                                 icon: LucideIcons.link,
-                                label: 'Enter URL',
+                                label: Tx.settingsEnterUrl.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -84,10 +86,10 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                                 ),
                                 onTap: controller.showPasteUrlDialog,
                               ),
-                              _buildSectionLabel('CONFIGURATION'),
+                              _buildSectionLabel(Tx.settingsConfiguration.tr),
                               _buildSettingsRow(
                                 icon: LucideIcons.mic,
-                                label: 'Speech to Text',
+                                label: Tx.settingsSpeechToText.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -95,13 +97,13 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                                 ),
                                 onTap: controller.navigateToSttSettings,
                               ),
-                              _buildSectionLabel('ABOUT'),
+                              _buildSectionLabel(Tx.settingsAbout.tr),
                               _buildSettingsRow(
                                 icon: LucideIcons.info,
-                                label: 'Version',
+                                label: Tx.settingsVersion.tr,
                                 trailing: Text(
                                   controller.appVersion.value.isEmpty
-                                      ? 'Loading...'
+                                      ? Tx.commonLoading.tr
                                       : controller.appVersion.value,
                                   style: AppTypography.sans(
                                     fontSize: 15,
@@ -111,7 +113,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                               ),
                               _buildSettingsRow(
                                 icon: LucideIcons.github,
-                                label: 'Star us on GitHub',
+                                label: Tx.settingsStarGithub.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -124,7 +126,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                                   size: 18,
                                   color: AppTheme.textTertiary,
                                 ),
-                                label: 'Follow us on X',
+                                label: Tx.settingsFollowX.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -134,7 +136,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                               ),
                               _buildSettingsRow(
                                 icon: LucideIcons.shield,
-                                label: 'Privacy Policy',
+                                label: Tx.settingsPrivacyPolicy.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -144,7 +146,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
                               ),
                               _buildSettingsRow(
                                 icon: LucideIcons.fileText,
-                                label: 'Terms of Use',
+                                label: Tx.settingsTermsOfUse.tr,
                                 trailing: Icon(
                                   LucideIcons.chevronRight,
                                   size: 16,
@@ -172,7 +174,7 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
       child: Text(
-        text,
+        text.toUpperCase(),
         style: AppTypography.mono(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -230,8 +232,10 @@ class SettingsTab extends GetView<SettingsTabViewModel> {
   }) {
     final connected = status == MachineConnectionDisplayState.online;
     final connecting = status == MachineConnectionDisplayState.connecting;
-    final hostname = machine.hostname ?? 'Unknown host';
-    final helperText = !connected && !connecting ? 'Tap to reconnect' : null;
+    final hostname = machine.hostname ?? Tx.commonUnknownHost.tr;
+    final helperText = !connected && !connecting
+        ? Tx.settingsTapToReconnect.tr
+        : null;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

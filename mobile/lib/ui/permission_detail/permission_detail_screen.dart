@@ -7,6 +7,7 @@ import '../../config/fonts.dart';
 import '../../config/theme.dart';
 import '../../domain/approval.dart';
 import '../../domain/enums.dart';
+import '../../i18n/tx.dart';
 import 'permission_detail_viewmodel.dart';
 
 class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
@@ -15,8 +16,9 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
   @override
   Widget build(BuildContext context) {
     final approval = controller.approval;
-    final description =
-        approval.commandText == null ? approval.descriptionText?.trim() : null;
+    final description = approval.commandText == null
+        ? approval.descriptionText?.trim()
+        : null;
 
     return Scaffold(
       backgroundColor: AppTheme.background,
@@ -96,7 +98,7 @@ class PermissionDetailScreen extends GetView<PermissionDetailViewModel> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Permission Request',
+                    Tx.permissionRequest.tr,
                     style: AppTypography.sans(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

@@ -11,6 +11,7 @@ import '../../domain/message.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/plan_entry.dart';
 import '../../domain/tool_activity.dart';
+import '../../i18n/tx.dart';
 import 'chat_viewmodel.dart';
 import 'widgets/chat_input_bar.dart';
 import 'widgets/chat_message_bubble.dart';
@@ -77,7 +78,7 @@ class ChatScreen extends GetView<ChatViewModel> {
                       final message =
                           controller.restoreUnavailableMessage.value.isNotEmpty
                           ? controller.restoreUnavailableMessage.value
-                          : 'This session cannot be restored on this device yet.';
+                          : Tx.chatUnsupportedRestore.tr;
                       return Center(
                         child: Text(
                           message,
@@ -413,16 +414,23 @@ class ChatScreen extends GetView<ChatViewModel> {
       SessionStatus.running => (
         AppTheme.successText,
         AppTheme.successBg,
-        'running',
+        Tx.statusRunning.tr,
       ),
       SessionStatus.waitingApproval => (
         const Color(0xFF8B6D24),
         AppTheme.warningBg,
-        'approval',
+        Tx.statusApproval.tr,
       ),
-      SessionStatus.error => (AppTheme.errorText, AppTheme.errorBg, 'error'),
-      SessionStatus.done ||
-      SessionStatus.idle => (AppTheme.textSecondary, AppTheme.idleBg, 'idle'),
+      SessionStatus.error => (
+        AppTheme.errorText,
+        AppTheme.errorBg,
+        Tx.commonError.tr,
+      ),
+      SessionStatus.done || SessionStatus.idle => (
+        AppTheme.textSecondary,
+        AppTheme.idleBg,
+        Tx.statusIdle.tr,
+      ),
     };
 
     return _buildInfoPill(
@@ -441,19 +449,19 @@ class ChatScreen extends GetView<ChatViewModel> {
       ChatUiMode.rebuildingReadonly => (
         AppTheme.warningBg,
         AppTheme.warning,
-        'Refreshing chat history. Actions are temporarily disabled.',
+        Tx.chatRefreshingHistory.tr,
       ),
       ChatUiMode.viewOnly => (
         AppTheme.idleBg,
         AppTheme.textSecondary,
-        'Showing cached history. Reconnect to continue this conversation.',
+        Tx.chatCachedHistory.tr,
       ),
       ChatUiMode.unsupported => (
         AppTheme.errorBg,
         AppTheme.errorText,
         controller.restoreUnavailableMessage.value.isNotEmpty
             ? controller.restoreUnavailableMessage.value
-            : 'This session cannot be restored on this device yet.',
+            : Tx.chatUnsupportedRestore.tr,
       ),
       ChatUiMode.initialLoading ||
       ChatUiMode.normal => (Colors.transparent, Colors.transparent, ''),
@@ -902,7 +910,9 @@ class ChatScreen extends GetView<ChatViewModel> {
     final IconData icon = isDisconnected
         ? LucideIcons.wifiOff
         : LucideIcons.loader;
-    final String label = isDisconnected ? 'Connection lost' : 'Reconnecting...';
+    final String label = isDisconnected
+        ? Tx.commonConnectionLost.tr
+        : Tx.commonReconnecting.tr;
 
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -1196,7 +1206,7 @@ class _PlanPanelState extends State<_PlanPanel> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Plan',
+                    Tx.chatPlan.tr,
                     style: AppTypography.sans(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,

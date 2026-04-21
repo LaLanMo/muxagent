@@ -6,6 +6,7 @@ import 'package:muxagent/config/app_typography.dart';
 import '../../config/theme.dart';
 import '../../domain/model_info.dart';
 import '../../domain/usage_info.dart';
+import '../../i18n/tx.dart';
 import '../chat/chat_viewmodel.dart';
 
 class SessionSettingsScreen extends StatelessWidget {
@@ -33,7 +34,7 @@ class SessionSettingsScreen extends StatelessWidget {
               return ListView(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                 children: [
-                  _sectionLabel('MODEL'),
+                  _sectionLabel(Tx.sessionSettingsModel.tr),
                   const SizedBox(height: 8),
                   _buildModelSection(
                     models: models,
@@ -41,11 +42,11 @@ class SessionSettingsScreen extends StatelessWidget {
                     onSelect: (value) => chatVm.changeModel(value),
                   ),
                   const SizedBox(height: 16),
-                  _sectionLabel('COST & TOKENS'),
+                  _sectionLabel(Tx.sessionSettingsCostTokens.tr),
                   const SizedBox(height: 8),
                   _buildCostSection(usage),
                   const SizedBox(height: 16),
-                  _sectionLabel('CONTEXT WINDOW'),
+                  _sectionLabel(Tx.sessionSettingsContextWindow.tr),
                   const SizedBox(height: 8),
                   _buildContextCard(usage),
                 ],
@@ -66,9 +67,7 @@ class SessionSettingsScreen extends StatelessWidget {
           height: 56,
           padding: const EdgeInsets.symmetric(horizontal: 16),
           decoration: const BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: AppTheme.borderStrong),
-            ),
+            border: Border(bottom: BorderSide(color: AppTheme.borderStrong)),
           ),
           child: Row(
             children: [
@@ -82,7 +81,7 @@ class SessionSettingsScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                'Session Settings',
+                Tx.sessionSettingsTitle.tr,
                 style: AppTypography.sans(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -98,7 +97,7 @@ class SessionSettingsScreen extends StatelessWidget {
 
   Widget _sectionLabel(String text) {
     return Text(
-      text,
+      text.toUpperCase(),
       style: AppTypography.mono(
         fontSize: 11,
         fontWeight: FontWeight.w600,
@@ -122,7 +121,7 @@ class SessionSettingsScreen extends StatelessWidget {
           border: Border.all(color: AppTheme.borderStrong),
         ),
         child: Text(
-          'No model options available',
+          Tx.sessionSettingsNoModels.tr,
           style: AppTypography.sans(
             fontSize: 14,
             color: AppTheme.textSecondary,
@@ -168,9 +167,7 @@ class SessionSettingsScreen extends StatelessWidget {
           border: isSelected
               ? Border.all(color: AppTheme.textPrimary, width: 1.5)
               : showBottomDivider
-              ? const Border(
-                  bottom: BorderSide(color: AppTheme.border),
-                )
+              ? const Border(bottom: BorderSide(color: AppTheme.border))
               : null,
         ),
         child: Row(
@@ -249,39 +246,39 @@ class SessionSettingsScreen extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildCostRow(
-          label: 'Cost',
+          label: Tx.sessionSettingsCost.tr,
           value: usage != null && usage.hasCost
               ? '\$${usage.costAmount.toStringAsFixed(3)}'
               : '—',
           isPrimary: true,
         ),
         _buildCostRow(
-          label: 'Total tokens',
+          label: Tx.sessionSettingsTotalTokens.tr,
           value: usage != null && usage.totalTokens > 0
               ? _formatNumber(usage.totalTokens)
               : '—',
           isPrimary: true,
         ),
         _buildCostRow(
-          label: 'Input',
+          label: Tx.sessionSettingsInput.tr,
           value: usage != null && usage.inputTokens > 0
               ? _formatNumber(usage.inputTokens)
               : '—',
         ),
         _buildCostRow(
-          label: 'Output',
+          label: Tx.sessionSettingsOutput.tr,
           value: usage != null && usage.outputTokens > 0
               ? _formatNumber(usage.outputTokens)
               : '—',
         ),
         _buildCostRow(
-          label: 'Cache read',
+          label: Tx.sessionSettingsCacheRead.tr,
           value: usage != null && usage.cachedReadTokens > 0
               ? _formatNumber(usage.cachedReadTokens)
               : '—',
         ),
         _buildCostRow(
-          label: 'Cache write',
+          label: Tx.sessionSettingsCacheWrite.tr,
           value: usage != null && usage.cachedWriteTokens > 0
               ? _formatNumber(usage.cachedWriteTokens)
               : '—',
@@ -302,9 +299,7 @@ class SessionSettingsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         border: isLast
             ? null
-            : const Border(
-                bottom: BorderSide(color: AppTheme.border),
-              ),
+            : const Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -313,18 +308,14 @@ class SessionSettingsScreen extends StatelessWidget {
             label,
             style: AppTypography.sans(
               fontSize: isPrimary ? 14 : 13,
-              color: isPrimary
-                  ? AppTheme.textSecondary
-                  : AppTheme.textTertiary,
+              color: isPrimary ? AppTheme.textSecondary : AppTheme.textTertiary,
             ),
           ),
           Text(
             value,
             style: AppTypography.mono(
               fontSize: 13,
-              color: isPrimary
-                  ? AppTheme.textPrimary
-                  : AppTheme.textTertiary,
+              color: isPrimary ? AppTheme.textPrimary : AppTheme.textTertiary,
             ),
           ),
         ],

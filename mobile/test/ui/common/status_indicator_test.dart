@@ -4,13 +4,15 @@ import 'package:muxagent/config/theme.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/ui/common/status_indicator.dart';
 
+import '../../support/localization_test_utils.dart';
+
 void main() {
   testWidgets('awaiting status indicator stays single-line with stable width', (
     tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
+      localizedTestApp(
+        child: const Scaffold(
           body: Center(
             child: StatusIndicator(
               label: 'awaiting',
@@ -42,8 +44,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
+      localizedTestApp(
+        child: Scaffold(
           body: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -57,10 +59,14 @@ void main() {
     );
 
     final runningSize = tester.getSize(
-      find.ancestor(of: find.text('running'), matching: find.byType(Container)).first,
+      find
+          .ancestor(of: find.text('running'), matching: find.byType(Container))
+          .first,
     );
     final awaitingSize = tester.getSize(
-      find.ancestor(of: find.text('awaiting'), matching: find.byType(Container)).first,
+      find
+          .ancestor(of: find.text('awaiting'), matching: find.byType(Container))
+          .first,
     );
 
     expect(runningSize.width, 72);

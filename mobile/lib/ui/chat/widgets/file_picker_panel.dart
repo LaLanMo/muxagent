@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../config/fonts.dart';
 import '../../../config/theme.dart';
 import '../../../domain/fs_entry.dart';
+import '../../../i18n/tx.dart';
 
 class FilePickerPanel extends StatelessWidget {
   final List<FsEntry> entries;
@@ -57,7 +59,7 @@ class FilePickerPanel extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Center(
                 child: Text(
-                  'No files found',
+                  Tx.chatNoFilesFound.tr,
                   style: AppTypography.sans(
                     fontSize: 13,
                     color: AppTheme.textTertiary,

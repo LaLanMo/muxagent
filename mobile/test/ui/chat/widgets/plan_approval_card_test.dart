@@ -4,6 +4,8 @@ import 'package:muxagent/domain/approval.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/ui/chat/widgets/plan_approval_card.dart';
 
+import '../../../support/localization_test_utils.dart';
+
 Finder _findRenderedText(String text) {
   return find.byWidgetPredicate((widget) {
     if (widget is RichText) {
@@ -18,6 +20,8 @@ Finder _findRenderedText(String text) {
 }
 
 void main() {
+  setUp(registerTestTranslations);
+
   testWidgets('plan approval card renders markdown content directly', (
     tester,
   ) async {
@@ -56,8 +60,8 @@ Refactor the ACP client to use a pluggable transport layer, separating the JSON-
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
+      localizedTestApp(
+        child: Scaffold(
           body: PlanApprovalCard(approval: approval, onReply: (_) {}),
         ),
       ),
@@ -65,7 +69,10 @@ Refactor the ACP client to use a pluggable transport layer, separating the JSON-
 
     expect(_findRenderedText('Review Plan'), findsWidgets);
     expect(_findRenderedText('ACP Client Transport Refactor'), findsWidgets);
-    expect(_findRenderedText('Extract JSON-RPC protocol into module'), findsWidgets);
+    expect(
+      _findRenderedText('Extract JSON-RPC protocol into module'),
+      findsWidgets,
+    );
     expect(_findRenderedText('Yes, auto-accept edits'), findsWidgets);
     expect(_findRenderedText('Yes, manually approve edits'), findsWidgets);
     expect(_findRenderedText('No, keep planning'), findsWidgets);
@@ -93,8 +100,8 @@ Refactor the ACP client to use a pluggable transport layer, separating the JSON-
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
+      localizedTestApp(
+        child: Scaffold(
           body: PlanApprovalCard(approval: approval, onReply: (_) {}),
         ),
       ),
@@ -128,8 +135,8 @@ Refactor the ACP client to use a pluggable transport layer, separating the JSON-
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
+      localizedTestApp(
+        child: Scaffold(
           body: PlanApprovalCard(approval: approval, onReply: (_) {}),
         ),
       ),

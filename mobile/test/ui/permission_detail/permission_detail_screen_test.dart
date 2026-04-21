@@ -10,6 +10,8 @@ import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/ui/permission_detail/permission_detail_screen.dart';
 import 'package:muxagent/ui/permission_detail/permission_detail_viewmodel.dart';
 
+import '../../support/localization_test_utils.dart';
+
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
     : super(
@@ -58,7 +60,7 @@ void main() {
     late _FakeWsSessionRepository wsRepo;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       wsRepo = _FakeWsSessionRepository();
     });
 
@@ -108,7 +110,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        const GetMaterialApp(home: PermissionDetailScreen()),
+        localizedTestApp(child: const PermissionDetailScreen()),
       );
       await tester.pump();
 
@@ -149,7 +151,7 @@ void main() {
       );
 
       await tester.pumpWidget(
-        const GetMaterialApp(home: PermissionDetailScreen()),
+        localizedTestApp(child: const PermissionDetailScreen()),
       );
       await tester.pump();
 

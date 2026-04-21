@@ -22,6 +22,7 @@ import 'package:muxagent/ui/new_session/new_session_viewmodel.dart';
 import 'package:muxagent/usecases/transcribe_audio.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -132,7 +133,7 @@ void main() {
     late _TestNewSessionViewModel viewModel;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       wsRepo = _FakeWsSessionRepository();
       viewModel = _TestNewSessionViewModel(wsRepo: wsRepo);
       Get.put<NewSessionViewModel>(viewModel);
@@ -158,7 +159,9 @@ void main() {
       viewModel.selectedMode.value = runtime.modeOptions[1];
       viewModel.useWorktree.value = true;
 
-      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+      await tester.pumpWidget(
+        localizedTestApp(child: const NewSessionScreen()),
+      );
       await tester.pump();
 
       expect(find.text('RUNTIME'), findsOneWidget);
@@ -190,7 +193,9 @@ void main() {
       viewModel.selectedRuntime.value = runtime;
       viewModel.availableModes.clear();
 
-      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+      await tester.pumpWidget(
+        localizedTestApp(child: const NewSessionScreen()),
+      );
       await tester.pump();
 
       expect(find.text('Use runtime default mode'), findsOneWidget);
@@ -212,7 +217,9 @@ void main() {
       ];
       viewModel.filteredCwds.value = List.of(viewModel.recentCwds);
 
-      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+      await tester.pumpWidget(
+        localizedTestApp(child: const NewSessionScreen()),
+      );
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('Working directory'));
@@ -242,7 +249,9 @@ void main() {
       ];
       viewModel.filteredCwds.value = List.of(viewModel.recentCwds);
 
-      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+      await tester.pumpWidget(
+        localizedTestApp(child: const NewSessionScreen()),
+      );
       await tester.pump();
 
       await tester.tap(find.bySemanticsLabel('Working directory'));
@@ -259,7 +268,9 @@ void main() {
         viewModel.machineRepo.setMachines([machine]);
         wsRepo.setActiveSessionIds({machine.machineId});
 
-        await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+        await tester.pumpWidget(
+          localizedTestApp(child: const NewSessionScreen()),
+        );
         await tester.pump();
 
         expect(find.text('Select a machine'), findsOneWidget);
@@ -276,7 +287,9 @@ void main() {
       final machine = _machine();
       viewModel.machineRepo.setMachines([machine]);
 
-      await tester.pumpWidget(const GetMaterialApp(home: NewSessionScreen()));
+      await tester.pumpWidget(
+        localizedTestApp(child: const NewSessionScreen()),
+      );
       await tester.pump();
 
       await tester.tap(find.text('Select a machine'));

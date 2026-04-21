@@ -4,6 +4,7 @@ import 'package:muxagent/config/app_typography.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../config/theme.dart';
+import '../../i18n/tx.dart';
 import 'scan_viewmodel.dart';
 
 class ScanScreen extends GetView<ScanViewModel> {
@@ -17,7 +18,7 @@ class ScanScreen extends GetView<ScanViewModel> {
         backgroundColor: const Color(0xFF111111),
         foregroundColor: Colors.white,
         title: Text(
-          'Scan QR Code',
+          Tx.scanTitle.tr,
           style: AppTypography.sans(
             fontSize: 20,
             fontWeight: FontWeight.w600,
@@ -60,14 +61,12 @@ class ScanScreen extends GetView<ScanViewModel> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Text(
-                'Point camera at the QR code displayed on your CLI',
+                Tx.scanInstruction.tr,
                 textAlign: TextAlign.center,
                 style: AppTypography.sans(
                   color: Colors.white,
                   fontSize: 16,
-                  shadows: const [
-                    Shadow(blurRadius: 4, color: Colors.black),
-                  ],
+                  shadows: const [Shadow(blurRadius: 4, color: Colors.black)],
                 ),
               ),
             ),

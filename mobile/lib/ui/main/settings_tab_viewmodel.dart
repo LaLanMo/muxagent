@@ -14,6 +14,7 @@ import '../../data/repositories/ws_session_repository.dart';
 import '../../data/services/local/crypto_service.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/ui_effect.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 
 enum MachineConnectionDisplayState { online, connecting, serverLost, offline }
@@ -83,11 +84,11 @@ class SettingsTabViewModel extends GetxController {
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       if (packageInfo.version.isEmpty) {
-        return 'Unknown';
+        return Tx.commonUnknown.tr;
       }
       return packageInfo.version;
     } catch (_) {
-      return 'Unknown';
+      return Tx.commonUnknown.tr;
     }
   }
 
@@ -107,13 +108,13 @@ class SettingsTabViewModel extends GetxController {
       final result = await _connectMachine(machine);
       if (result.sessionReady) {
         uiEffect.value = ShowToast(
-          'Connected to ${machine.hostname ?? 'machine'}',
+          Tx.connectedTo(machine.hostname ?? Tx.settingsMachineFallback.tr),
         );
       } else {
-        uiEffect.value = ShowToast('Failed to connect');
+        uiEffect.value = ShowToast(Tx.settingsFailedToConnect.tr);
       }
     } catch (e) {
-      uiEffect.value = ShowToast('Connection failed: $e');
+      uiEffect.value = ShowToast(Tx.connectionFailed(e));
     } finally {
       connectingMachines.remove(machine.machineId);
     }
@@ -154,10 +155,13 @@ class SettingsTabViewModel extends GetxController {
 
     Get.dialog(
       AlertDialog(
-        title: const Text('Paste Connection URL'),
+        title: Text(Tx.settingsPasteConnectionUrl.tr),
         content: buildPasteUrlTextField(controller: textController),
         actions: [
-          TextButton(onPressed: () => Get.back(), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(Tx.commonCancel.tr),
+          ),
           TextButton(
             onPressed: () {
               final url = textController.text.trim();
@@ -170,7 +174,7 @@ class SettingsTabViewModel extends GetxController {
               Get.back();
               Get.toNamed(Routes.auth, arguments: result.authRequest);
             },
-            child: const Text('Connect'),
+            child: Text(Tx.commonConnect.tr),
           ),
         ],
       ),
@@ -205,10 +209,10 @@ class SettingsTabViewModel extends GetxController {
       case PairingLinkParseFailure.malformedUri:
       case PairingLinkParseFailure.invalidScheme:
       case PairingLinkParseFailure.invalidTarget:
-        return 'Invalid URL format';
+        return Tx.settingsInvalidUrl.tr;
       case PairingLinkParseFailure.missingId:
       case PairingLinkParseFailure.missingRelay:
-        return 'Missing id or relay parameter';
+        return Tx.settingsMissingIdRelay.tr;
     }
   }
 }

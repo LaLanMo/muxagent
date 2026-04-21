@@ -8,6 +8,8 @@ import 'package:muxagent/data/services/local/crypto_service.dart';
 import 'package:muxagent/ui/auth/auth_screen.dart';
 import 'package:muxagent/ui/auth/auth_viewmodel.dart';
 
+import '../../support/localization_test_utils.dart';
+
 class _NoopAuthRepository extends AuthRepository {
   _NoopAuthRepository()
     : super(
@@ -59,7 +61,7 @@ class _TestAuthViewModel extends AuthViewModel {
 void main() {
   group('AuthScreen', () {
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
     });
 
     tearDown(() {
@@ -78,7 +80,7 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(const GetMaterialApp(home: AuthScreen()));
+      await tester.pumpWidget(localizedTestApp(child: const AuthScreen()));
       await tester.pump();
 
       expect(find.text('Pair Machine'), findsOneWidget);
@@ -100,7 +102,7 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(const GetMaterialApp(home: AuthScreen()));
+      await tester.pumpWidget(localizedTestApp(child: const AuthScreen()));
       await tester.pump();
 
       expect(find.text('Machine Paired'), findsOneWidget);
@@ -119,7 +121,7 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(const GetMaterialApp(home: AuthScreen()));
+      await tester.pumpWidget(localizedTestApp(child: const AuthScreen()));
       await tester.pump();
 
       expect(find.text('Pairing Failed'), findsOneWidget);

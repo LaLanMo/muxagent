@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 
 import '../../../config/theme.dart';
+import '../../../i18n/tx.dart';
 import '../../../utils/diff_utils.dart';
 
 const _kRemovedBg = Color(0x12EF4444);
@@ -83,10 +85,8 @@ class _EditDiffViewState extends State<EditDiffView> {
   Widget build(BuildContext context) {
     final segs = _segments;
     final totalLineCount = segs.whereType<DiffLine>().length;
-    final limited =
-        !_expanded && totalLineCount > widget.maxCollapsedLines;
-    final hiddenCount =
-        limited ? totalLineCount - widget.maxCollapsedLines : 0;
+    final limited = !_expanded && totalLineCount > widget.maxCollapsedLines;
+    final hiddenCount = limited ? totalLineCount - widget.maxCollapsedLines : 0;
 
     // Build the visible segment list, respecting the collapsed limit
     final visible = <Object?>[];
@@ -101,10 +101,10 @@ class _EditDiffViewState extends State<EditDiffView> {
       visible.addAll(segs);
     }
 
-    final bgColor =
-        widget.dark ? AppTheme.codeBg : const Color(0xFFF8F9FA);
-    final contextTextColor =
-        widget.dark ? const Color(0xFFB0B0B0) : AppTheme.textSecondary;
+    final bgColor = widget.dark ? AppTheme.codeBg : const Color(0xFFF8F9FA);
+    final contextTextColor = widget.dark
+        ? const Color(0xFFB0B0B0)
+        : AppTheme.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -147,7 +147,7 @@ class _EditDiffViewState extends State<EditDiffView> {
                 GestureDetector(
                   onTap: () => setState(() => _expanded = true),
                   child: Text(
-                    'Show $hiddenCount more line${hiddenCount == 1 ? '' : 's'}',
+                    Tx.showMoreLines(hiddenCount),
                     style: AppTypography.sans(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -161,7 +161,7 @@ class _EditDiffViewState extends State<EditDiffView> {
                 GestureDetector(
                   onTap: () => setState(() => _expanded = false),
                   child: Text(
-                    'Collapse',
+                    Tx.chatCollapse.tr,
                     style: AppTypography.sans(
                       fontSize: 11,
                       fontWeight: FontWeight.w500,
@@ -207,10 +207,7 @@ class _EditDiffViewState extends State<EditDiffView> {
           // Fixed-width prefix column
           SizedBox(
             width: 12,
-            child: Text(
-              prefix,
-              style: _codeStyle(color: prefixColor),
-            ),
+            child: Text(prefix, style: _codeStyle(color: prefixColor)),
           ),
           const SizedBox(width: 6),
           // Content — use RichText for inline tokens, Text otherwise
@@ -233,26 +230,18 @@ class _EditDiffViewState extends State<EditDiffView> {
       if (t.added) bg = _kAddedTokenBg;
       return TextSpan(
         text: t.value,
-        style: _codeStyle(color: baseColor).copyWith(
-          backgroundColor: bg,
-        ),
+        style: _codeStyle(color: baseColor).copyWith(backgroundColor: bg),
       );
     }).toList();
 
-    return Text.rich(
-      TextSpan(children: spans),
-      softWrap: false,
-    );
+    return Text.rich(TextSpan(children: spans), softWrap: false);
   }
 
   Widget _buildSeparatorRow(Color textColor) {
     return Container(
       color: const Color(0xFFF0F0F0),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-      child: Text(
-        '···',
-        style: _codeStyle(color: textColor, fontSize: 11),
-      ),
+      child: Text('···', style: _codeStyle(color: textColor, fontSize: 11)),
     );
   }
 

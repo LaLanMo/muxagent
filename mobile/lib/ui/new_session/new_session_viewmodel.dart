@@ -23,6 +23,7 @@ import '../../domain/paired_machine.dart';
 import '../../domain/runtime_option.dart';
 import '../../domain/session.dart';
 import '../../domain/ui_effect.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 
 const _copilotModeAgentId =
@@ -467,7 +468,7 @@ class NewSessionViewModel extends GetxController {
 
     _voiceRecorder = AudioRecorder();
     if (!await _voiceRecorder!.hasPermission()) {
-      AppToast.show('Microphone permission denied');
+      AppToast.show(Tx.newRecordingPermissionDenied.tr);
       isVoiceRecording.value = false;
       _voiceRecorder = null;
       return;
@@ -485,7 +486,7 @@ class NewSessionViewModel extends GetxController {
         path: path,
       );
     } catch (e) {
-      AppToast.show('Failed to start recording');
+      AppToast.show(Tx.newRecordingStartFailed.tr);
       isVoiceRecording.value = false;
       await _voiceRecorder!.dispose();
       _voiceRecorder = null;
@@ -493,7 +494,7 @@ class NewSessionViewModel extends GetxController {
     }
 
     if (!await _voiceRecorder!.isRecording()) {
-      AppToast.show('Microphone unavailable');
+      AppToast.show(Tx.newMicrophoneUnavailable.tr);
       isVoiceRecording.value = false;
       await _voiceRecorder!.dispose();
       _voiceRecorder = null;
@@ -513,7 +514,7 @@ class NewSessionViewModel extends GetxController {
 
     if (path == null) {
       isVoiceRecording.value = false;
-      AppToast.show('Recording failed');
+      AppToast.show(Tx.newRecordingFailed.tr);
       return;
     }
 
@@ -521,7 +522,7 @@ class NewSessionViewModel extends GetxController {
     final size = await file.length();
     if (size < 100) {
       isVoiceRecording.value = false;
-      AppToast.show('No audio captured — microphone may be unavailable');
+      AppToast.show(Tx.newNoAudioCaptured.tr);
       try {
         await file.delete();
       } catch (_) {}
@@ -545,7 +546,7 @@ class NewSessionViewModel extends GetxController {
         );
       }
     } catch (e) {
-      AppToast.show('Transcription failed: $e');
+      AppToast.show(Tx.transcriptionFailed(e));
     } finally {
       isTranscribing.value = false;
       try {
@@ -574,17 +575,15 @@ class NewSessionViewModel extends GetxController {
       // Create session via RPC
       final cwd = cwdController.text.trim();
       if (cwd.isEmpty) {
-        throw Exception('Working directory is required');
+        throw Exception(Tx.newWorkingDirectoryRequired.tr);
       }
       if (!cwd.startsWith('/') && !cwd.startsWith('~')) {
-        throw Exception(
-          'Working directory must be an absolute path or start with ~',
-        );
+        throw Exception(Tx.newWorkingDirectoryAbsolute.tr);
       }
       // Runtime is auto-selected during load when at least one option exists.
       final selectedRuntimeId = selectedRuntime.value?.id ?? '';
       if (selectedRuntimeId.isEmpty) {
-        throw Exception('Please select a runtime');
+        throw Exception(Tx.newSelectRuntimeToast.tr);
       }
 
       final createResponse = await _createSessionWithRecovery(
@@ -597,7 +596,7 @@ class NewSessionViewModel extends GetxController {
 
       final sessionId = createResponse.acp.sessionId;
       if (sessionId.isEmpty) {
-        throw Exception('Failed to create session: no sessionId returned');
+        throw Exception(Tx.newCreateNoSessionId.tr);
       }
       final runtime = createResponse.app.runtime;
       final effectiveRuntime = runtime.isNotEmpty ? runtime : selectedRuntimeId;
@@ -682,9 +681,7 @@ class NewSessionViewModel extends GetxController {
           useWorktree: useWorktree,
         );
       } on TimeoutException {
-        throw Exception(
-          'Session create timed out after reconnect. Relay session appears stale.',
-        );
+        throw Exception(Tx.newSessionCreateStale.tr);
       }
     }
   }
@@ -723,9 +720,7 @@ class NewSessionViewModel extends GetxController {
       try {
         return await _callListRuntimes(machine.machineId);
       } on TimeoutException {
-        throw Exception(
-          'Runtime list timed out after reconnect. Relay session appears stale.',
-        );
+        throw Exception(Tx.newRuntimeListStale.tr);
       }
     } catch (e) {
       if (!isRecoverableTransportError(e)) {

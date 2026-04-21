@@ -8,6 +8,7 @@ import '../../data/repositories/stt_repository.dart';
 import '../../domain/stt_config.dart';
 import '../../domain/stt_result.dart';
 import '../../domain/ui_effect.dart';
+import '../../i18n/tx.dart';
 import '../../usecases/transcribe_audio.dart';
 
 class SttSettingsViewModel extends GetxController {
@@ -66,7 +67,7 @@ class SttSettingsViewModel extends GetxController {
     final model = modelController.text.trim();
 
     if (endpoint.isEmpty || apiKey.isEmpty) {
-      uiEffect.value = ShowToast('Endpoint and API key are required');
+      uiEffect.value = ShowToast(Tx.sttEndpointApiKeyRequired.tr);
       return;
     }
 
@@ -77,13 +78,13 @@ class SttSettingsViewModel extends GetxController {
         model: model.isEmpty ? 'whisper-1' : model,
       ),
     );
-    uiEffect.value = ShowToast('Settings saved');
+    uiEffect.value = ShowToast(Tx.sttSettingsSaved.tr);
   }
 
   Future<void> startTestRecording() async {
     if (!canTest.value) {
       testResult.value = null;
-      testError.value = 'Add endpoint and API key to enable testing';
+      testError.value = Tx.sttEndpointApiKeyEnable.tr;
       return;
     }
 
@@ -92,7 +93,7 @@ class SttSettingsViewModel extends GetxController {
 
     _recorder = AudioRecorder();
     if (!await _recorder!.hasPermission()) {
-      testError.value = 'Microphone permission denied';
+      testError.value = Tx.sttMicPermissionDenied.tr;
       _recorder = null;
       return;
     }
@@ -109,15 +110,14 @@ class SttSettingsViewModel extends GetxController {
         path: _tempPath!,
       );
     } catch (e) {
-      testError.value = 'Failed to start recording: $e';
+      testError.value = Tx.sttStartRecordingFailedWith(e);
       await _recorder!.dispose();
       _recorder = null;
       return;
     }
 
     if (!await _recorder!.isRecording()) {
-      testError.value =
-          'Microphone unavailable. Check microphone permission in Settings.';
+      testError.value = Tx.sttMicUnavailableSettings.tr;
       await _recorder!.dispose();
       _recorder = null;
       return;
@@ -135,16 +135,14 @@ class SttSettingsViewModel extends GetxController {
     _recorder = null;
 
     if (path == null) {
-      testError.value = 'Recording failed — no audio captured';
+      testError.value = Tx.sttRecordingNoAudio.tr;
       return;
     }
 
     final file = File(path);
     final size = await file.length();
     if (size < 100) {
-      testError.value =
-          'No audio captured. Check that the app has microphone '
-          'permission in Settings.';
+      testError.value = Tx.sttNoAudioPermissionSettings.tr;
       try {
         await file.delete();
       } catch (_) {}

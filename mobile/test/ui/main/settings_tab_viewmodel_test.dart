@@ -14,6 +14,7 @@ import 'package:muxagent/domain/ui_effect.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -97,7 +98,7 @@ void main() {
     var connectCalls = 0;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       machineRepo = FakePairedMachineRepository([_buildMachine('machine-1')]);
       wsRepo = _FakeWsSessionRepository();
       connectCalls = 0;

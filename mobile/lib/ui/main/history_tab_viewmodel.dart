@@ -7,6 +7,7 @@ import '../../data/repositories/event_repository.dart';
 import '../../data/repositories/paired_machine_repository.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
+import '../../i18n/tx.dart';
 
 class SessionGroup {
   final String label;
@@ -80,27 +81,8 @@ class HistoryTabViewModel extends GetxController {
     // Group by date
     final groups = <String, List<AgentSession>>{};
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
-
     for (final session in filtered) {
-      final dt = DateTime(
-        session.createdAt.year,
-        session.createdAt.month,
-        session.createdAt.day,
-      );
-      String label;
-      if (dt == today) {
-        label = 'Today';
-      } else if (dt == yesterday) {
-        label = 'Yesterday';
-      } else if (today.difference(dt).inDays <= 7) {
-        label = 'Last Week';
-      } else if (dt.year == now.year) {
-        label = _formatDate(session.createdAt);
-      } else {
-        label = _formatDateWithYear(session.createdAt);
-      }
+      final label = Tx.historyGroupLabel(session.createdAt, now);
       groups.putIfAbsent(label, () => []).add(session);
     }
 
@@ -112,31 +94,11 @@ class HistoryTabViewModel extends GetxController {
   void _handleMachineCatalogChanged() {
     final selected = selectedMachineFilter.value;
     if (selected != null &&
-        !_machineRepo.machines.any((machine) => machine.machineId == selected)) {
+        !_machineRepo.machines.any(
+          (machine) => machine.machineId == selected,
+        )) {
       selectedMachineFilter.value = null;
     }
     _syncSessions();
-  }
-
-  String _formatDate(DateTime dt) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${months[dt.month - 1]} ${dt.day}';
-  }
-
-  String _formatDateWithYear(DateTime dt) {
-    return '${_formatDate(dt)}, ${dt.year}';
   }
 }

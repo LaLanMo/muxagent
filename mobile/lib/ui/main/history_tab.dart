@@ -7,6 +7,7 @@ import '../../data/repositories/event_repository.dart';
 import '../../domain/enums.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
+import '../../i18n/tx.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
 import '../common/pill_tab_bar.dart';
@@ -30,7 +31,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                'History',
+                Tx.historyTitle.tr,
                 style: AppTypography.sans(
                   fontSize: 24,
                   fontWeight: FontWeight.w600,
@@ -80,7 +81,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  _buildChip('All', selected == null, () {
+                  _buildChip(Tx.historyAll.tr, selected == null, () {
                     controller.setMachineFilter(null);
                   }),
                   const SizedBox(width: 8),
@@ -134,7 +135,9 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              hasFilter ? 'No sessions found' : 'No completed sessions yet',
+              hasFilter
+                  ? Tx.historyNoSessionsFound.tr
+                  : Tx.historyNoCompletedSessions.tr,
               style: AppTypography.sans(
                 fontSize: 15,
                 fontWeight: FontWeight.w500,
@@ -144,7 +147,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
             if (hasFilter) ...[
               const SizedBox(height: 4),
               Text(
-                'Try selecting a different machine',
+                Tx.historyTryDifferentMachine.tr,
                 style: AppTypography.mono(
                   fontSize: 12,
                   color: AppTheme.textMetadata,
@@ -190,7 +193,9 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
   }
 
   Widget _buildSessionRow(AgentSession session, List<PairedMachine> machines) {
-    final title = session.title.isNotEmpty ? session.title : 'Untitled';
+    final title = session.title.isNotEmpty
+        ? session.title
+        : Tx.commonUntitled.tr;
     final isEmphasized =
         session.status == SessionStatus.waitingApproval ||
         session.status == SessionStatus.running ||
@@ -323,14 +328,7 @@ class HistoryTab extends GetView<HistoryTabViewModel> {
     if (diff.inDays == 0) {
       return null;
     }
-    if (diff.inDays > 0) {
-      return '${diff.inDays}d';
-    }
-    if (diff.inHours > 0) {
-      return '${diff.inHours}h';
-    }
-    final minutes = diff.inMinutes.clamp(1, 59);
-    return '${minutes}m';
+    return Tx.compactAge(createdAt);
   }
 }
 

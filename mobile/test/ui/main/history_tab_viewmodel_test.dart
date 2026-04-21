@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:get/get.dart';
 import 'package:muxagent/data/repositories/event_repository.dart';
 import 'package:muxagent/data/repositories/session_manager.dart';
 import 'package:muxagent/data/repositories/ws_session_repository.dart';
@@ -11,6 +10,7 @@ import 'package:muxagent/domain/session.dart';
 import 'package:muxagent/ui/main/history_tab_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -56,7 +56,7 @@ void main() {
     late HistoryTabViewModel viewModel;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       wsRepo = _FakeWsSessionRepository();
       eventRepo = EventRepository(wsRepo: wsRepo);
       eventRepo.sessions['session-1'] = _buildSession('session-1', 'machine-1');

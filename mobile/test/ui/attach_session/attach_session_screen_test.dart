@@ -16,6 +16,7 @@ import 'package:muxagent/ui/attach_session/attach_session_screen.dart';
 import 'package:muxagent/ui/attach_session/attach_session_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -113,7 +114,7 @@ void main() {
     late _TestAttachSessionViewModel viewModel;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       wsRepo = _FakeWsSessionRepository();
       viewModel = _TestAttachSessionViewModel(wsRepo: wsRepo);
       Get.put<AttachSessionViewModel>(viewModel);
@@ -137,7 +138,7 @@ void main() {
       viewModel.sessionIdText.value = 'session-123';
 
       await tester.pumpWidget(
-        const GetMaterialApp(home: AttachSessionScreen()),
+        localizedTestApp(child: const AttachSessionScreen()),
       );
       await tester.pump();
 
@@ -158,7 +159,7 @@ void main() {
         viewModel.machineRepo.setMachines([machine]);
 
         await tester.pumpWidget(
-          const GetMaterialApp(home: AttachSessionScreen()),
+          localizedTestApp(child: const AttachSessionScreen()),
         );
         await tester.pump();
 
@@ -177,7 +178,7 @@ void main() {
       viewModel.machineRepo.setMachines([machine]);
 
       await tester.pumpWidget(
-        const GetMaterialApp(home: AttachSessionScreen()),
+        localizedTestApp(child: const AttachSessionScreen()),
       );
       await tester.pump();
 

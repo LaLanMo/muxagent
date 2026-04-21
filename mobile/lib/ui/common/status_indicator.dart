@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
 import '../../domain/enums.dart';
+import '../../i18n/tx.dart';
 
 class StatusIndicator extends StatelessWidget {
   final String label;
@@ -19,37 +21,37 @@ class StatusIndicator extends StatelessWidget {
   });
 
   const StatusIndicator.online({super.key})
-    : label = 'online',
+    : label = Tx.statusOnline,
       color = AppTheme.successText,
       backgroundColor = AppTheme.successBg,
       width = null;
 
   const StatusIndicator.offline({super.key})
-    : label = 'offline',
+    : label = Tx.statusOffline,
       color = AppTheme.statusNeutralText,
       backgroundColor = AppTheme.idleBg,
       width = null;
 
   const StatusIndicator.connecting({super.key})
-    : label = 'connecting',
+    : label = Tx.statusConnecting,
       color = AppTheme.statusConnecting,
       backgroundColor = AppTheme.warningBg,
       width = null;
 
   const StatusIndicator.reconnecting({super.key})
-    : label = 'reconnecting',
+    : label = Tx.statusReconnecting,
       color = AppTheme.statusConnecting,
       backgroundColor = AppTheme.warningBg,
       width = null;
 
   const StatusIndicator.disconnected({super.key})
-    : label = 'offline',
+    : label = Tx.statusOffline,
       color = AppTheme.statusDisconnected,
       backgroundColor = AppTheme.disconnectedBg,
       width = null;
 
   const StatusIndicator.serverLost({super.key})
-    : label = 'offline',
+    : label = Tx.statusOffline,
       color = AppTheme.serverLostText,
       backgroundColor = AppTheme.serverLostBg,
       width = null;
@@ -58,21 +60,21 @@ class StatusIndicator extends StatelessWidget {
     switch (status) {
       case SessionStatus.running:
         return const StatusIndicator(
-          label: 'running',
+          label: Tx.statusRunning,
           color: AppTheme.successText,
           backgroundColor: AppTheme.successBg,
           width: 72,
         );
       case SessionStatus.waitingApproval:
         return const StatusIndicator(
-          label: 'awaiting',
+          label: Tx.statusAwaiting,
           color: AppTheme.warning,
           backgroundColor: AppTheme.warningBg,
           width: 72,
         );
       case SessionStatus.error:
         return const StatusIndicator(
-          label: 'failed',
+          label: Tx.statusFailed,
           color: AppTheme.errorText,
           backgroundColor: AppTheme.errorBg,
           width: 72,
@@ -80,7 +82,7 @@ class StatusIndicator extends StatelessWidget {
       case SessionStatus.done:
       case SessionStatus.idle:
         return const StatusIndicator(
-          label: 'done',
+          label: Tx.statusDone,
           color: AppTheme.statusNeutralText,
           backgroundColor: AppTheme.statusNeutralBg,
           width: 72,
@@ -92,28 +94,28 @@ class StatusIndicator extends StatelessWidget {
     switch (status) {
       case ToolStatus.pending:
         return const StatusIndicator(
-          label: 'pending',
+          label: Tx.statusPending,
           color: AppTheme.statusNeutralText,
           backgroundColor: AppTheme.statusNeutralBg,
           width: 72,
         );
       case ToolStatus.inProgress:
         return const StatusIndicator(
-          label: 'running',
+          label: Tx.statusRunning,
           color: AppTheme.successText,
           backgroundColor: AppTheme.successBg,
           width: 72,
         );
       case ToolStatus.completed:
         return const StatusIndicator(
-          label: 'done',
+          label: Tx.statusDone,
           color: AppTheme.statusNeutralText,
           backgroundColor: AppTheme.statusNeutralBg,
           width: 72,
         );
       case ToolStatus.failed:
         return const StatusIndicator(
-          label: 'failed',
+          label: Tx.statusFailed,
           color: AppTheme.warning,
           backgroundColor: AppTheme.warningBg,
           width: 72,
@@ -135,7 +137,7 @@ class StatusIndicator extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppTheme.radiusXs),
       ),
       child: Text(
-        label,
+        label.tr,
         maxLines: 1,
         softWrap: false,
         overflow: TextOverflow.ellipsis,

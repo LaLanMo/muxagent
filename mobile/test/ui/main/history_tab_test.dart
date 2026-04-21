@@ -18,6 +18,7 @@ import 'package:muxagent/ui/main/history_tab_viewmodel.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -118,7 +119,7 @@ void main() {
     late HistoryTabViewModel history;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       wsRepo = _FakeWsSessionRepository(initialActiveIds: const {'machine-1'});
       eventRepo = EventRepository(wsRepo: wsRepo);
       eventRepo.sessions['session-2'] = _buildSession(
@@ -157,7 +158,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        const GetMaterialApp(home: Scaffold(body: HistoryTab())),
+        localizedTestApp(child: const Scaffold(body: HistoryTab())),
       );
       await tester.pump();
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:gpt_markdown/gpt_markdown.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
@@ -6,6 +7,7 @@ import '../../../config/app_typography.dart';
 import '../../../config/theme.dart';
 import '../../../domain/approval.dart';
 import '../../../domain/enums.dart';
+import '../../../i18n/tx.dart';
 import 'code_block.dart';
 
 class PlanApprovalCard extends StatelessWidget {
@@ -42,7 +44,9 @@ class PlanApprovalCard extends StatelessWidget {
                 Icon(LucideIcons.fileText, size: 14, color: accent),
                 const SizedBox(width: 8),
                 Text(
-                  approval.resolved ? 'Plan Review' : 'Review Plan',
+                  approval.resolved
+                      ? Tx.chatPlanReview.tr
+                      : Tx.chatReviewPlan.tr,
                   style: AppTypography.sans(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -73,7 +77,7 @@ class PlanApprovalCard extends StatelessWidget {
     final markdown = _planMarkdown;
     if (markdown == null) {
       return Text(
-        'Review the proposed implementation before switching to coding.',
+        Tx.chatPlanFallback.tr,
         style: AppTypography.sans(
           fontSize: 12,
           fontWeight: FontWeight.w400,
@@ -110,8 +114,8 @@ class PlanApprovalCard extends StatelessWidget {
     }
 
     final sections = <String>[];
-    final description = _normalizeText(approval.reason) ??
-        _normalizeText(approval.bodyText);
+    final description =
+        _normalizeText(approval.reason) ?? _normalizeText(approval.bodyText);
     if (description != null) {
       sections.add(description);
     }
@@ -120,7 +124,7 @@ class PlanApprovalCard extends StatelessWidget {
       if (sections.isNotEmpty) {
         sections.add('');
       }
-      sections.add('**Requested Permissions**');
+      sections.add('**${Tx.chatRequestedPermissions.tr}**');
       sections.add('');
       sections.addAll(approval.allowedPrompts.map((item) => '- $item'));
     }
@@ -152,7 +156,7 @@ class PlanApprovalCard extends StatelessWidget {
 
     final children = <Widget>[
       Text(
-        'Ready to code?',
+        Tx.chatReadyToCode.tr,
         style: AppTypography.sans(
           fontSize: 13,
           fontWeight: FontWeight.w600,

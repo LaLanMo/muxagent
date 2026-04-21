@@ -8,6 +8,7 @@ import '../../config/theme.dart';
 import '../../data/repositories/ws_session_repository.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/session.dart';
+import '../../i18n/tx.dart';
 import '../common/relay_status_pill.dart';
 import '../common/status_indicator.dart';
 import '../common/pill_tab_bar.dart';
@@ -32,7 +33,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Text(
-                'Active',
+                Tx.activeTitle.tr,
                 style: AppTypography.sans(
                   fontSize: 24,
                   fontWeight: FontWeight.w600,
@@ -74,7 +75,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             Icon(LucideIcons.checkCircle2, size: 40, color: AppTheme.textMuted),
             const SizedBox(height: 16),
             Text(
-              'All clear',
+              Tx.activeAllClear.tr,
               style: AppTypography.sans(
                 fontSize: 20,
                 fontWeight: FontWeight.w500,
@@ -85,7 +86,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             SizedBox(
               width: 280,
               child: Text(
-                'No sessions need your attention right now.',
+                Tx.activeNoAttention.tr,
                 style: AppTypography.mono(
                   fontSize: 12,
                   color: AppTheme.textMetadata,
@@ -103,12 +104,12 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
             ),
             const SizedBox(height: 20),
             Semantics(
-              label: 'Start New Session',
+              label: Tx.activeStartNewSession.tr,
               button: true,
               child: GestureDetector(
                 onTap: shell.navigateToNewSession,
                 child: Text(
-                  'Start New Session',
+                  Tx.activeStartNewSession.tr,
                   style: AppTypography.mono(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -210,9 +211,17 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (approvalSessions.isNotEmpty)
-            _buildSection('APPROVAL', approvalSessions, machines),
+            _buildSection(
+              Tx.activeApprovalSection.tr,
+              approvalSessions,
+              machines,
+            ),
           if (runningSessions.isNotEmpty)
-            _buildSection('RUNNING', runningSessions, machines),
+            _buildSection(
+              Tx.activeRunningSection.tr,
+              runningSessions,
+              machines,
+            ),
         ],
       ),
     );
@@ -231,7 +240,7 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
           Padding(
             padding: const EdgeInsets.only(bottom: 14),
             child: Text(
-              label,
+              label.toUpperCase(),
               style: AppTypography.mono(
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -249,7 +258,9 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   Widget _buildSessionRow(AgentSession session, List<PairedMachine> machines) {
     final machineId = session.machineId;
     final cwd = session.cwd;
-    final title = session.title.isNotEmpty ? session.title : 'Untitled';
+    final title = session.title.isNotEmpty
+        ? session.title
+        : Tx.commonUntitled.tr;
 
     return GestureDetector(
       onTap: () {
@@ -349,16 +360,6 @@ class ActiveTab extends GetView<ActiveTabViewModel> {
   }
 
   String _formatDuration(DateTime updatedAt) {
-    final now = DateTime.now();
-    final diff = now.difference(updatedAt);
-
-    if (diff.inDays > 0) {
-      return '${diff.inDays}d';
-    } else if (diff.inHours > 0) {
-      return '${diff.inHours}h';
-    } else if (diff.inMinutes > 0) {
-      return '${diff.inMinutes}m';
-    }
-    return 'now';
+    return Tx.compactAge(updatedAt);
   }
 }

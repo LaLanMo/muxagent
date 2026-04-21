@@ -4,6 +4,8 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:muxagent/config/theme.dart';
 import 'package:muxagent/ui/common/pill_tab_bar.dart';
 
+import '../../support/localization_test_utils.dart';
+
 void main() {
   testWidgets('pill tab bar exposes selected state and compose action', (
     tester,
@@ -12,8 +14,8 @@ void main() {
     var composeTapCount = 0;
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
+      localizedTestApp(
+        child: Scaffold(
           bottomNavigationBar: PillTabBar(
             currentIndex: 1,
             activeBadgeCount: 2,

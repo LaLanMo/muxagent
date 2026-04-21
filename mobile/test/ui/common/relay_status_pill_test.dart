@@ -17,6 +17,7 @@ import 'package:muxagent/ui/common/relay_status_pill.dart';
 import 'package:muxagent/ui/main/main_shell_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -79,7 +80,7 @@ void main() {
     late MainShellViewModel shell;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       final machine = _buildMachine('machine-1');
       machineRepo = FakePairedMachineRepository([machine]);
       wsRepo = _FakeWsSessionRepository(initialActiveIds: {'machine-1'});
@@ -107,8 +108,8 @@ void main() {
 
     Future<void> pumpPill(WidgetTester tester) async {
       await tester.pumpWidget(
-        const GetMaterialApp(
-          home: Scaffold(body: Center(child: RelayStatusPill())),
+        localizedTestApp(
+          child: const Scaffold(body: Center(child: RelayStatusPill())),
         ),
       );
       await tester.pump();

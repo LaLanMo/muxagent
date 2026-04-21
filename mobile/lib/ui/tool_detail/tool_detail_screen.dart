@@ -10,6 +10,7 @@ import '../../config/theme.dart';
 import '../../domain/enums.dart';
 import '../../domain/event.dart';
 import '../../domain/tool_activity.dart';
+import '../../i18n/tx.dart';
 import '../../ui/chat/widgets/edit_diff_view.dart';
 import 'tool_detail_viewmodel.dart';
 
@@ -55,19 +56,19 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
     }
 
     if (tool.input != null) {
-      pushSection('INPUT', _buildInputSection(tool));
+      pushSection(Tx.toolInput.tr, _buildInputSection(tool));
     }
 
     if (_hasOutput(tool)) {
-      pushSection('OUTPUT', _buildOutputSection(tool));
+      pushSection(Tx.toolOutput.tr, _buildOutputSection(tool));
     }
 
     if (!isSubagent && tool.locations != null && tool.locations!.isNotEmpty) {
-      pushSection('LOCATIONS', _buildLocationsSection(tool.locations!));
+      pushSection(Tx.toolLocations.tr, _buildLocationsSection(tool.locations!));
     }
 
     if (!isSubagent && tool.diffs != null && tool.diffs!.isNotEmpty) {
-      pushSection('DIFFS', _buildDiffsSection(tool.diffs!));
+      pushSection(Tx.toolDiffs.tr, _buildDiffsSection(tool.diffs!));
     }
 
     if (isSubagent && controller.childTools.isNotEmpty) {
@@ -84,7 +85,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
   }
 
   Widget _buildHeader(ToolActivity tool, bool isSubagent) {
-    final primary = isSubagent ? 'Task' : _toolPrimaryTitle(tool);
+    final primary = isSubagent ? Tx.toolTask.tr : _toolPrimaryTitle(tool);
     final secondary = isSubagent
         ? _subagentSubtitle(tool)
         : _toolKindSubtitle(tool.effectiveKind);
@@ -184,10 +185,10 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
         tool.output?.trim().isNotEmpty != true &&
         tool.error?.trim().isNotEmpty == true;
     final (statusColor, statusLabel) = switch (tool.status) {
-      ToolStatus.failed => (AppTheme.errorText, 'failed'),
-      ToolStatus.pending => (AppTheme.textTertiary, 'pending'),
-      ToolStatus.inProgress => (const Color(0xFF4CB782), 'running'),
-      ToolStatus.completed => (const Color(0xFF4CB782), 'success'),
+      ToolStatus.failed => (AppTheme.errorText, Tx.statusFailed.tr),
+      ToolStatus.pending => (AppTheme.textTertiary, Tx.statusPending.tr),
+      ToolStatus.inProgress => (const Color(0xFF4CB782), Tx.statusRunning.tr),
+      ToolStatus.completed => (const Color(0xFF4CB782), Tx.statusSuccess.tr),
     };
 
     return _CodeShell(
@@ -287,7 +288,6 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
 
   Widget _buildChildToolsSection(List<ToolActivity> children) {
     final count = children.length;
-    final noun = count == 1 ? 'tool call' : 'tool calls';
     const summaryColor = Color(0xFF7C3AED);
 
     return Column(
@@ -298,7 +298,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
             const Icon(LucideIcons.layers, size: 16, color: summaryColor),
             const SizedBox(width: 8),
             Text(
-              '$count $noun completed',
+              Tx.toolCallsCompleted(count),
               style: AppTypography.sans(
                 fontSize: 13,
                 fontWeight: FontWeight.w500,
@@ -310,7 +310,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
         const SizedBox(height: 12),
         const Divider(color: AppTheme.borderStrong, height: 1),
         const SizedBox(height: 20),
-        _buildSectionLabel('TOOL CALLS'),
+        _buildSectionLabel(Tx.toolToolCalls.tr),
         const SizedBox(height: 8),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,7 +350,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
 
   Widget _buildSectionLabel(String label) {
     return Text(
-      label,
+      label.toUpperCase(),
       style: AppTypography.mono(
         fontSize: 11,
         fontWeight: FontWeight.w600,
@@ -369,7 +369,7 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
     if (title != null && title.isNotEmpty) {
       return title;
     }
-    return 'tool';
+    return Tx.toolGenericTool.tr;
   }
 
   String _subagentSubtitle(ToolActivity tool) {
@@ -381,52 +381,52 @@ class ToolDetailScreen extends GetView<ToolDetailViewModel> {
     if (preview.isNotEmpty) {
       return preview;
     }
-    return 'Subagent trace';
+    return Tx.toolSubagentTrace.tr;
   }
 
   String _toolKindSubtitle(ToolKind kind) {
     switch (kind) {
       case ToolKind.execute:
-        return 'Tool Execution';
+        return Tx.toolToolExecution.tr;
       case ToolKind.read:
-        return 'File Read';
+        return Tx.toolFileRead.tr;
       case ToolKind.edit:
-        return 'File Edit';
+        return Tx.toolFileEdit.tr;
       case ToolKind.search:
-        return 'Search';
+        return Tx.toolSearch.tr;
       case ToolKind.fetch:
-        return 'Fetch';
+        return Tx.toolFetch.tr;
       case ToolKind.delete:
-        return 'Delete';
+        return Tx.toolDelete.tr;
       case ToolKind.move:
-        return 'Move';
+        return Tx.toolMove.tr;
       case ToolKind.think:
-        return 'Reasoning';
+        return Tx.toolReasoning.tr;
       case ToolKind.switchMode:
-        return 'Mode Change';
+        return Tx.toolModeChange.tr;
       case ToolKind.other:
-        return 'Tool Detail';
+        return Tx.toolToolDetail.tr;
     }
   }
 
   String _inputHeaderLabel(ToolActivity tool) {
     final input = tool.input;
     if (input?.command != null) {
-      return 'command';
+      return Tx.toolCommand.tr;
     }
     if (input?.filePath != null || input?.edit?.filePath != null) {
-      return 'path';
+      return Tx.toolPath.tr;
     }
     if (input?.pattern != null) {
-      return 'pattern';
+      return Tx.toolPattern.tr;
     }
     if (input?.url != null) {
-      return 'url';
+      return Tx.toolUrl.tr;
     }
     if (input?.mode != null) {
-      return 'mode';
+      return Tx.toolMode.tr;
     }
-    return 'input';
+    return Tx.toolGenericInput.tr;
   }
 
   String _inputBody(ToolActivity tool) {

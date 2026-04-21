@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/models/auth_request.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 import '../../utils/app_toast.dart';
 
@@ -68,21 +69,21 @@ class WelcomeViewModel extends GetxController {
   void onCopyCommand() {
     dismissKeyboard();
     Clipboard.setData(const ClipboardData(text: welcomeInstallCommand));
-    AppToast.show('Installation command copied');
+    AppToast.show(Tx.welcomeInstallCopied.tr);
   }
 
   String _errorMessageFor(PairingLinkParseFailure failure) {
     switch (failure) {
       case PairingLinkParseFailure.emptyInput:
-        return 'Please enter a URL';
+        return Tx.welcomeUrlRequired.tr;
       case PairingLinkParseFailure.invalidScheme:
       case PairingLinkParseFailure.invalidTarget:
-        return 'Invalid URL format. Must start with muxagent://auth';
+        return Tx.welcomeInvalidAuthUrl.tr;
       case PairingLinkParseFailure.missingId:
       case PairingLinkParseFailure.missingRelay:
-        return 'Invalid URL: missing id or relay parameter';
+        return Tx.welcomeInvalidUrlMissing.tr;
       case PairingLinkParseFailure.malformedUri:
-        return 'Invalid URL format';
+        return Tx.welcomeInvalidUrl.tr;
     }
   }
 }

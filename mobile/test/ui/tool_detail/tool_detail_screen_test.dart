@@ -7,6 +7,8 @@ import 'package:muxagent/domain/tool_activity.dart';
 import 'package:muxagent/ui/tool_detail/tool_detail_screen.dart';
 import 'package:muxagent/ui/tool_detail/tool_detail_viewmodel.dart';
 
+import '../../support/localization_test_utils.dart';
+
 class _TestToolDetailViewModel extends ToolDetailViewModel {
   _TestToolDetailViewModel({
     required ToolActivity seededTool,
@@ -23,6 +25,7 @@ class _TestToolDetailViewModel extends ToolDetailViewModel {
 
 void main() {
   group('ToolDetailScreen', () {
+    setUp(registerTestTranslations);
     tearDown(Get.reset);
 
     testWidgets('renders the v2 subagent summary and tool list', (
@@ -62,7 +65,9 @@ void main() {
         ),
       );
 
-      await tester.pumpWidget(const GetMaterialApp(home: ToolDetailScreen()));
+      await tester.pumpWidget(
+        localizedTestApp(child: const ToolDetailScreen()),
+      );
       await tester.pump();
 
       expect(find.text('Task'), findsOneWidget);

@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:muxagent/config/app_typography.dart';
+import 'package:get/get.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:muxagent/config/app_typography.dart';
 
 import '../../../config/fonts.dart';
 import '../../../config/theme.dart';
 import '../../../domain/approval.dart';
 import '../../../domain/enums.dart';
+import '../../../i18n/tx.dart';
 
 class PermissionCard extends StatelessWidget {
   final ApprovalRequest approval;
@@ -23,7 +25,7 @@ class PermissionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = approval.title.trim().isNotEmpty
         ? approval.title.trim()
-        : 'Permission Required';
+        : Tx.permissionRequired.tr;
     final description =
         approval.descriptionText != null && approval.descriptionText != title
         ? approval.descriptionText

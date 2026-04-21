@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
+import '../../i18n/tx.dart';
 import '../common/ui_effect_listener.dart';
 import 'stt_settings_viewmodel.dart';
 
@@ -30,19 +31,18 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildSection(
-                      label: 'ENDPOINT URL',
+                      label: Tx.sttEndpointUrl.tr,
                       field: _buildFieldShell(
                         controller: controller.endpointController,
                         hint: 'https://api.example.com/v1',
                         keyboardType: TextInputType.url,
                         textInputAction: TextInputAction.next,
                       ),
-                      helper:
-                          'OpenAI-compatible /v1/audio/transcriptions endpoint',
+                      helper: Tx.sttEndpointHelper.tr,
                     ),
                     const SizedBox(height: 24),
                     _buildSection(
-                      label: 'API KEY',
+                      label: Tx.sttApiKey.tr,
                       field: _buildFieldShell(
                         controller: controller.apiKeyController,
                         hint: 'sk-...',
@@ -65,7 +65,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                           ),
                           const SizedBox(width: 5),
                           Text(
-                            'Stored securely in device Keychain',
+                            Tx.sttStoredSecurely.tr,
                             style: AppTypography.sans(
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
@@ -77,13 +77,13 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
                     ),
                     const SizedBox(height: 24),
                     _buildSection(
-                      label: 'MODEL NAME',
+                      label: Tx.sttModelName.tr,
                       field: _buildFieldShell(
                         controller: controller.modelController,
                         hint: 'whisper-1',
                         textInputAction: TextInputAction.done,
                       ),
-                      helper: 'The STT model identifier used for transcription',
+                      helper: Tx.sttModelHelper.tr,
                     ),
                     const SizedBox(height: 24),
                     Container(
@@ -101,7 +101,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
               top: false,
               minimum: const EdgeInsets.fromLTRB(16, 12, 16, 16),
               child: _buildPrimaryButton(
-                label: 'Save',
+                label: Tx.commonSave.tr,
                 onTap: controller.saveConfig,
               ),
             ),
@@ -139,7 +139,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
               ),
               const SizedBox(width: 12),
               Text(
-                'Speech to Text',
+                Tx.sttTitle.tr,
                 style: AppTypography.sans(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -163,7 +163,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          label,
+          label.toUpperCase(),
           style: AppTypography.mono(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -256,7 +256,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'TEST',
+          Tx.sttTest.tr.toUpperCase(),
           style: AppTypography.mono(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -266,9 +266,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
         ),
         const SizedBox(height: 8),
         Text(
-          hasConfig
-              ? 'Record a short clip to verify your configuration.'
-              : 'Enter your API key above to enable testing',
+          hasConfig ? Tx.sttRecordPrompt.tr : Tx.sttApiKeyEnableTesting.tr,
           style: AppTypography.sans(fontSize: 12, color: AppTheme.textMetadata),
         ),
         const SizedBox(height: 12),
@@ -278,7 +276,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           _buildTestingState()
         else if (recording)
           _buildSecondaryAction(
-            label: 'Stop Recording',
+            label: Tx.sttStopRecording.tr,
             icon: LucideIcons.square,
             iconColor: AppTheme.errorText,
             textColor: AppTheme.errorText,
@@ -288,7 +286,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           )
         else
           _buildSecondaryAction(
-            label: 'Record Test Clip',
+            label: Tx.sttRecordTestClip.tr,
             icon: LucideIcons.mic,
             onTap: controller.startTestRecording,
           ),
@@ -300,7 +298,9 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  result.text.isEmpty ? '(empty transcription)' : result.text,
+                  result.text.isEmpty
+                      ? Tx.sttEmptyTranscription.tr
+                      : result.text,
                   style: AppTypography.sans(
                     fontSize: 14,
                     color: AppTheme.textPrimary,
@@ -346,7 +346,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           const Icon(LucideIcons.lock, size: 20, color: AppTheme.textMuted),
           const SizedBox(height: 8),
           Text(
-            'Add API key to enable',
+            Tx.sttAddApiKeyToEnable.tr,
             style: AppTypography.sans(
               fontSize: 12,
               color: AppTheme.textMetadata,
@@ -376,7 +376,7 @@ class SttSettingsPage extends GetView<SttSettingsViewModel> {
           ),
           const SizedBox(width: 10),
           Text(
-            'Transcribing...',
+            Tx.sttTranscribing.tr,
             style: AppTypography.sans(
               fontSize: 14,
               color: AppTheme.textPrimary,

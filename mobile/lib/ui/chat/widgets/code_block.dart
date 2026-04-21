@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 
 import '../../../config/theme.dart';
 import '../../../config/fonts.dart';
+import '../../../i18n/tx.dart';
 import '../../../utils/app_toast.dart';
 
 class CodeBlock extends StatelessWidget {
@@ -51,7 +53,7 @@ class CodeBlock extends StatelessWidget {
                 ),
                 onPressed: () {
                   Clipboard.setData(ClipboardData(text: text));
-                  AppToast.show('Copied to clipboard');
+                  AppToast.show(Tx.commonCopiedToClipboard.tr);
                 },
                 splashRadius: 16,
                 padding: EdgeInsets.zero,

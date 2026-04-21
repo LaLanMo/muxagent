@@ -17,6 +17,7 @@ import 'package:muxagent/ui/main/settings_tab.dart';
 import 'package:muxagent/ui/main/settings_tab_viewmodel.dart';
 
 import '../../support/fake_paired_machine_repository.dart';
+import '../../support/localization_test_utils.dart';
 
 class _NoopRelayWsClient extends RelayWsClient {
   _NoopRelayWsClient()
@@ -86,7 +87,7 @@ void main() {
     late SettingsTabViewModel settings;
 
     setUp(() {
-      Get.testMode = true;
+      registerTestTranslations();
       final machine = _buildMachine('machine-1');
       machineRepo = FakePairedMachineRepository([machine]);
       wsRepo = _FakeWsSessionRepository();
@@ -127,7 +128,7 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        const GetMaterialApp(home: Scaffold(body: SettingsTab())),
+        localizedTestApp(child: const Scaffold(body: SettingsTab())),
       );
       await tester.pump();
 

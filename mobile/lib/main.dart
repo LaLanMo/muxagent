@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:get/get.dart';
 
 import 'bindings/initial_binding.dart';
@@ -14,6 +15,8 @@ import 'data/repositories/event_repository.dart';
 import 'data/repositories/session_chat_cache_repository.dart';
 import 'data/services/pairing_deep_link_coordinator.dart';
 import 'data/services/push/push_notification_service.dart';
+import 'i18n/app_locales.dart';
+import 'i18n/app_translations.dart';
 import 'routing/router.dart';
 import 'routing/routes.dart';
 
@@ -72,6 +75,15 @@ class MuxAgentApp extends StatelessWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.light,
+      translations: AppTranslations(),
+      locale: AppLocales.initialLocale(),
+      fallbackLocale: AppLocales.enUS,
+      supportedLocales: AppLocales.supported,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       initialRoute: initialRoute,
       getPages: AppRouter.pages,
       routingCallback: (routing) {

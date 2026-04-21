@@ -4,6 +4,7 @@ import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
 import '../../domain/enums.dart';
+import '../../i18n/tx.dart';
 import '../main/main_shell_viewmodel.dart';
 
 class RelayStatusPill extends StatelessWidget {
@@ -31,7 +32,7 @@ class RelayStatusPill extends StatelessWidget {
               ? 'relay-status-pill-reconnecting'
               : 'relay-status-pill-disconnected',
         ),
-        label: isReconnecting ? 'reconnecting' : 'offline',
+        label: (isReconnecting ? Tx.statusReconnecting : Tx.statusOffline).tr,
         textColor: isReconnecting
             ? AppTheme.warning
             : AppTheme.statusDisconnected,

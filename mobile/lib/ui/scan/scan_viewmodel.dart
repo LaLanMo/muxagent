@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../data/models/auth_request.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 
 class ScanViewModel extends GetxController {
@@ -44,7 +45,7 @@ class ScanViewModel extends GetxController {
     try {
       final result = _pairingLinkParser.parseText(qrValue);
       if (!result.isSuccess) {
-        errorMessage.value = 'Invalid QR code format';
+        errorMessage.value = Tx.scanInvalidQr.tr;
         isProcessing.value = false;
         return;
       }
@@ -52,7 +53,7 @@ class ScanViewModel extends GetxController {
       // Navigate to auth approval screen
       Get.offNamed(Routes.auth, arguments: result.authRequest);
     } catch (e) {
-      errorMessage.value = 'Failed to parse QR code: $e';
+      errorMessage.value = Tx.scanParseFailedWith(e);
       isProcessing.value = false;
     }
   }

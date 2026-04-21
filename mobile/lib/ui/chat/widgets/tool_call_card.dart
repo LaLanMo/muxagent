@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../../../config/theme.dart';
 import '../../../domain/enums.dart';
 import '../../../domain/tool_activity.dart';
+import '../../../i18n/tx.dart';
 import '../../../routing/routes.dart';
 import 'edit_diff_view.dart';
 
@@ -62,7 +63,9 @@ class ToolCallCard extends StatelessWidget {
         border: Border(left: BorderSide(width: 3, color: accentColor)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: _shouldShowDiff ? _buildEditLayout(kind) : _buildDefaultLayout(kind),
+      child: _shouldShowDiff
+          ? _buildEditLayout(kind)
+          : _buildDefaultLayout(kind),
     );
   }
 
@@ -84,7 +87,6 @@ class ToolCallCard extends StatelessWidget {
 
   Widget _buildChildSummary() {
     final count = childTools.length;
-    final noun = count == 1 ? 'tool call' : 'tool calls';
     return Padding(
       padding: const EdgeInsets.only(left: 26, top: 6),
       child: Row(
@@ -96,7 +98,7 @@ class ToolCallCard extends StatelessWidget {
           ),
           const SizedBox(width: 6),
           Text(
-            '$count $noun',
+            Tx.toolCalls(count),
             style: AppTypography.mono(
               fontSize: 11,
               fontWeight: FontWeight.w400,
@@ -125,7 +127,7 @@ class ToolCallCard extends StatelessWidget {
               children: [
                 if (extraDiffCount > 0) ...[
                   Text(
-                    'Previewing 1 of ${diffs.length} file changes',
+                    Tx.previewingFileChanges(1, diffs.length),
                     style: AppTypography.mono(
                       fontSize: 11,
                       fontWeight: FontWeight.w400,
@@ -143,7 +145,7 @@ class ToolCallCard extends StatelessWidget {
                 if (extraDiffCount > 0) ...[
                   const SizedBox(height: 6),
                   Text(
-                    '+$extraDiffCount more file ${extraDiffCount == 1 ? 'change' : 'changes'} in details',
+                    Tx.moreFileChanges(extraDiffCount),
                     style: AppTypography.mono(
                       fontSize: 11,
                       fontWeight: FontWeight.w400,
@@ -212,9 +214,9 @@ class ToolCallCard extends StatelessWidget {
   }
 
   String _badgeLabel(ToolKind kind) {
-    if (_isFailed) return 'FAILED';
-    if (_isRunning) return 'RUNNING';
-    if (_isCompleted) return 'DONE';
+    if (_isFailed) return Tx.toolFailedCaps.tr;
+    if (_isRunning) return Tx.toolRunningCaps.tr;
+    if (_isCompleted) return Tx.toolDoneCaps.tr;
     return _kindLabel(kind);
   }
 
@@ -239,25 +241,25 @@ class ToolCallCard extends StatelessWidget {
     if (t.isNotEmpty) return t;
     switch (kind) {
       case ToolKind.execute:
-        return 'Bash';
+        return Tx.toolBash.tr;
       case ToolKind.read:
-        return 'Read';
+        return Tx.toolRead.tr;
       case ToolKind.edit:
-        return 'Edit';
+        return Tx.toolEdit.tr;
       case ToolKind.search:
-        return 'Search';
+        return Tx.toolSearch.tr;
       case ToolKind.fetch:
-        return 'Fetch';
+        return Tx.toolFetch.tr;
       case ToolKind.delete:
-        return 'Delete';
+        return Tx.toolDelete.tr;
       case ToolKind.move:
-        return 'Move';
+        return Tx.toolMove.tr;
       case ToolKind.think:
-        return 'Think';
+        return Tx.toolThink.tr;
       case ToolKind.switchMode:
-        return 'Switch Mode';
+        return Tx.toolSwitchMode.tr;
       case ToolKind.other:
-        return 'Tool';
+        return Tx.toolGenericTool.tr;
     }
   }
 
@@ -350,25 +352,25 @@ class ToolCallCard extends StatelessWidget {
   String _kindLabel(ToolKind kind) {
     switch (kind) {
       case ToolKind.execute:
-        return 'RUN';
+        return Tx.toolKindRun.tr;
       case ToolKind.read:
-        return 'READ';
+        return Tx.toolKindRead.tr;
       case ToolKind.edit:
-        return 'EDIT';
+        return Tx.toolKindEdit.tr;
       case ToolKind.search:
-        return 'SEARCH';
+        return Tx.toolKindSearch.tr;
       case ToolKind.fetch:
-        return 'FETCH';
+        return Tx.toolKindFetch.tr;
       case ToolKind.delete:
-        return 'DELETE';
+        return Tx.toolKindDelete.tr;
       case ToolKind.move:
-        return 'MOVE';
+        return Tx.toolKindMove.tr;
       case ToolKind.think:
-        return 'THINK';
+        return Tx.toolKindThink.tr;
       case ToolKind.switchMode:
-        return 'MODE';
+        return Tx.toolKindMode.tr;
       case ToolKind.other:
-        return 'TOOL';
+        return Tx.toolKindTool.tr;
     }
   }
 }

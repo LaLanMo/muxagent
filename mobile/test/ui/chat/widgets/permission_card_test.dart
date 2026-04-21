@@ -4,7 +4,11 @@ import 'package:muxagent/domain/approval.dart';
 import 'package:muxagent/domain/enums.dart';
 import 'package:muxagent/ui/chat/widgets/permission_card.dart';
 
+import '../../../support/localization_test_utils.dart';
+
 void main() {
+  setUp(registerTestTranslations);
+
   testWidgets('permission card shows approval title and hides cwd line', (
     tester,
   ) async {
@@ -13,10 +17,7 @@ void main() {
       sessionId: 'session-1',
       title: 'Run command',
       bodyText: 'This action needs confirmation.',
-      command: const ApprovalCommand(
-        argv: ['ls', '-la'],
-        display: 'ls -la',
-      ),
+      command: const ApprovalCommand(argv: ['ls', '-la'], display: 'ls -la'),
       cwd: '/Users/by/project',
       options: const [
         PermOption(
@@ -39,8 +40,10 @@ void main() {
     );
 
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: PermissionCard(approval: approval, onReply: (_) {})),
+      localizedTestApp(
+        child: Scaffold(
+          body: PermissionCard(approval: approval, onReply: (_) {}),
+        ),
       ),
     );
 

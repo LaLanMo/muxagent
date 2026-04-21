@@ -1,7 +1,10 @@
 import 'dart:typed_data';
 
+import 'package:get/get.dart';
+
 import '../data/repositories/stt_repository.dart';
 import '../domain/stt_result.dart';
+import '../i18n/tx.dart';
 
 class TranscribeAudioUseCase {
   final SttRepository _repo;
@@ -15,8 +18,7 @@ class TranscribeAudioUseCase {
   Future<SttResult> call(Uint8List audioData, String mimeType) async {
     final hasConfig = await _repo.hasConfig();
     if (!hasConfig) {
-      throw Exception('Speech-to-text is not configured. '
-          'Go to Settings → Speech to Text to set it up.');
+      throw Exception(Tx.sttNotConfigured.tr);
     }
     return _repo.transcribe(audioData, mimeType);
   }

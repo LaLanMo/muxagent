@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../config/theme.dart';
+import '../../i18n/tx.dart';
 
 class PillTabBar extends StatelessWidget {
   static const double shellHeight = 44;
@@ -24,9 +26,9 @@ class PillTabBar extends StatelessWidget {
   });
 
   static const _tabs = [
-    _TabDef(icon: LucideIcons.radio, label: 'Active Sessions'),
-    _TabDef(icon: LucideIcons.clock4, label: 'History'),
-    _TabDef(icon: LucideIcons.settings, label: 'Settings'),
+    _TabDef(icon: LucideIcons.radio, labelKey: Tx.activeTitle),
+    _TabDef(icon: LucideIcons.clock4, labelKey: Tx.historyTitle),
+    _TabDef(icon: LucideIcons.settings, labelKey: Tx.settingsTitle),
   ];
 
   @override
@@ -79,7 +81,7 @@ class PillTabBar extends StatelessWidget {
       width: 44,
       height: 44,
       child: Semantics(
-        label: tab.label,
+        label: tab.labelKey.tr,
         button: true,
         selected: selected,
         child: GestureDetector(
@@ -124,7 +126,7 @@ class PillTabBar extends StatelessWidget {
       width: 44,
       height: 44,
       child: Semantics(
-        label: 'New Session',
+        label: Tx.newTitle.tr,
         button: true,
         child: GestureDetector(
           behavior: HitTestBehavior.opaque,
@@ -181,7 +183,7 @@ class PillTabBar extends StatelessWidget {
 
 class _TabDef {
   final IconData icon;
-  final String label;
+  final String labelKey;
 
-  const _TabDef({required this.icon, required this.label});
+  const _TabDef({required this.icon, required this.labelKey});
 }

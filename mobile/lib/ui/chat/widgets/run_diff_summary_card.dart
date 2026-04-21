@@ -8,6 +8,7 @@ import '../../../domain/enums.dart';
 import '../../../domain/event.dart';
 import '../../../domain/run_diff_summary.dart';
 import '../../../domain/tool_activity.dart';
+import '../../../i18n/tx.dart';
 import '../../../routing/routes.dart';
 
 const _kAddedText = Color(0xFF4CB782);
@@ -34,7 +35,7 @@ class RunDiffSummaryCard extends StatelessWidget {
             child: Row(
               children: [
                 Text(
-                  '${summary.fileCount} file${summary.fileCount == 1 ? '' : 's'} changed',
+                  Tx.filesChanged(summary.fileCount),
                   style: AppTypography.sans(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -129,16 +130,12 @@ class RunDiffSummaryCard extends StatelessWidget {
   static void _openFileDiff(FileDiffStat file) {
     final tool = ToolActivity(
       id: 'run-diff-${file.path.hashCode}',
-      name: 'Edit',
+      name: Tx.toolEdit.tr,
       kind: ToolKind.edit.value,
       status: ToolStatus.completed,
       title: _displayPath(file.path),
       diffs: [
-        ToolDiff(
-          path: file.path,
-          oldText: file.oldText,
-          newText: file.newText,
-        ),
+        ToolDiff(path: file.path, oldText: file.oldText, newText: file.newText),
       ],
     );
     Get.toNamed(

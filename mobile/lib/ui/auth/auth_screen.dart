@@ -4,6 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:muxagent/config/app_typography.dart';
 
 import '../../config/theme.dart';
+import '../../i18n/tx.dart';
 import 'auth_viewmodel.dart';
 
 class AuthScreen extends GetView<AuthViewModel> {
@@ -58,7 +59,7 @@ class AuthScreen extends GetView<AuthViewModel> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Pair Machine',
+                  Tx.authPairMachine.tr,
                   style: AppTypography.sans(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
@@ -78,8 +79,8 @@ class AuthScreen extends GetView<AuthViewModel> {
       case AuthState.checking:
         return _buildProgressState(
           icon: LucideIcons.loader,
-          title: 'Checking Request',
-          description: 'Verifying that this pairing request is still valid.',
+          title: Tx.authCheckingRequest.tr,
+          description: Tx.authCheckingRequestBody.tr,
           spin: true,
         );
       case AuthState.pending:
@@ -87,43 +88,44 @@ class AuthScreen extends GetView<AuthViewModel> {
       case AuthState.approving:
         return _buildProgressState(
           icon: LucideIcons.loader,
-          title: 'Pairing Machine',
-          description: 'Creating approval keys and registering this machine.',
+          title: Tx.authPairingMachine.tr,
+          description: Tx.authPairingMachineBody.tr,
           spin: true,
         );
       case AuthState.approved:
         return _buildResultState(
-          statusTitle: 'Machine Paired',
+          statusTitle: Tx.authMachinePaired.tr,
           statusSubtitle: _machineEndpointLabel,
           cardBackground: AppTheme.successBg,
           statusColor: AppTheme.successText,
           statusIcon: LucideIcons.checkCircle2,
-          statusLabel: 'Pairing complete',
-          actionLabel: 'Done',
+          statusLabel: Tx.authPairingComplete.tr,
+          actionLabel: Tx.commonDone.tr,
           onAction: controller.done,
         );
       case AuthState.expired:
         return _buildResultState(
-          statusTitle: 'Request Expired',
-          statusSubtitle: 'Scan a fresh QR code from the CLI to retry.',
+          statusTitle: Tx.authRequestExpired.tr,
+          statusSubtitle: Tx.authRequestExpiredBody.tr,
           cardBackground: AppTheme.warningBg,
           statusColor: AppTheme.warning,
           statusIcon: LucideIcons.timerOff,
-          statusLabel: 'Request expired',
-          actionLabel: 'Go Back',
+          statusLabel: Tx.authRequestExpiredStatus.tr,
+          actionLabel: Tx.authGoBack.tr,
           onAction: controller.cancel,
         );
       case AuthState.error:
         return _buildResultState(
-          statusTitle: 'Pairing Failed',
-          statusSubtitle: controller.errorMessage.value ?? 'Unknown error',
+          statusTitle: Tx.authPairingFailed.tr,
+          statusSubtitle:
+              controller.errorMessage.value ?? Tx.authUnknownError.tr,
           cardBackground: AppTheme.errorBg,
           statusColor: AppTheme.errorText,
           statusIcon: LucideIcons.alertTriangle,
-          statusLabel: 'Error',
-          actionLabel: 'Retry',
+          statusLabel: Tx.commonError.tr,
+          actionLabel: Tx.commonRetry.tr,
           onAction: controller.retry,
-          secondaryLabel: 'Cancel',
+          secondaryLabel: Tx.commonCancel.tr,
           onSecondary: controller.cancel,
         );
     }
@@ -137,13 +139,13 @@ class AuthScreen extends GetView<AuthViewModel> {
           background: AppTheme.successBg,
           icon: LucideIcons.checkCircle2,
           iconColor: AppTheme.successText,
-          title: 'Machine Found',
+          title: Tx.authMachineFound.tr,
           subtitle: _machineEndpointLabel,
           foreground: AppTheme.successText,
         ),
         const SizedBox(height: 20),
         Text(
-          'MACHINE DETAILS',
+          Tx.authMachineDetails.tr.toUpperCase(),
           style: AppTypography.mono(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -153,12 +155,12 @@ class AuthScreen extends GetView<AuthViewModel> {
         ),
         const SizedBox(height: 8),
         _buildDetailRows(
-          statusLabel: 'Pending',
+          statusLabel: Tx.statusPending.tr,
           statusColor: AppTheme.warning,
         ),
         const Spacer(),
         _buildBottomActions(
-          primaryLabel: 'Pair This Machine',
+          primaryLabel: Tx.authPairThisMachine.tr,
           onPrimary: controller.approve,
         ),
       ],
@@ -213,7 +215,7 @@ class AuthScreen extends GetView<AuthViewModel> {
         ),
         const SizedBox(height: 20),
         Text(
-          'MACHINE DETAILS',
+          Tx.authMachineDetails.tr.toUpperCase(),
           style: AppTypography.mono(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -222,10 +224,7 @@ class AuthScreen extends GetView<AuthViewModel> {
           ),
         ),
         const SizedBox(height: 8),
-        _buildDetailRows(
-          statusLabel: statusLabel,
-          statusColor: statusColor,
-        ),
+        _buildDetailRows(statusLabel: statusLabel, statusColor: statusColor),
         const Spacer(),
         _buildBottomActions(
           primaryLabel: actionLabel,
@@ -299,10 +298,7 @@ class AuthScreen extends GetView<AuthViewModel> {
             Text(
               subtitle,
               textAlign: TextAlign.center,
-              style: AppTypography.mono(
-                fontSize: 12,
-                color: foreground,
-              ),
+              style: AppTypography.mono(fontSize: 12, color: foreground),
             ),
           ],
         ],
@@ -316,11 +312,11 @@ class AuthScreen extends GetView<AuthViewModel> {
   }) {
     return Column(
       children: [
-        _buildDetailRow('Name', _machineDisplayName),
-        _buildDetailRow('Host', _machineHostLabel, monoValue: true),
-        _buildDetailRow('Relay', _relayAuthority, monoValue: true),
+        _buildDetailRow(Tx.authName.tr, _machineDisplayName),
+        _buildDetailRow(Tx.authHost.tr, _machineHostLabel, monoValue: true),
+        _buildDetailRow(Tx.authRelay.tr, _relayAuthority, monoValue: true),
         _buildDetailRow(
-          'Status',
+          Tx.authStatus.tr,
           statusLabel,
           valueColor: statusColor,
           isLast: true,
@@ -341,9 +337,7 @@ class AuthScreen extends GetView<AuthViewModel> {
       decoration: BoxDecoration(
         border: isLast
             ? null
-            : const Border(
-                bottom: BorderSide(color: AppTheme.border),
-              ),
+            : const Border(bottom: BorderSide(color: AppTheme.border)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -429,7 +423,7 @@ class AuthScreen extends GetView<AuthViewModel> {
   String get _machineHostLabel {
     final hostname = controller.machineHostname.value?.trim();
     if (hostname == null || hostname.isEmpty) {
-      return 'Unknown host';
+      return Tx.commonUnknownHost.tr;
     }
     return hostname;
   }
@@ -437,7 +431,7 @@ class AuthScreen extends GetView<AuthViewModel> {
   String get _machineDisplayName {
     final hostname = controller.machineHostname.value?.trim();
     if (hostname == null || hostname.isEmpty) {
-      return 'Unknown Machine';
+      return Tx.commonUnknownMachine.tr;
     }
     final withoutPort = hostname.split(':').first;
     final segment = withoutPort.split('.').first.trim();
@@ -450,7 +444,7 @@ class AuthScreen extends GetView<AuthViewModel> {
   String get _relayAuthority {
     final relay = controller.authRequest.relayUrl.trim();
     if (relay.isEmpty) {
-      return 'Unknown relay';
+      return Tx.commonUnknownRelay.tr;
     }
     final uri = Uri.tryParse(relay);
     if (uri == null) {

@@ -9,6 +9,7 @@ import '../../domain/enums.dart';
 import '../../domain/mode_option.dart';
 import '../../domain/paired_machine.dart';
 import '../../domain/runtime_option.dart';
+import '../../i18n/tx.dart';
 import '../../routing/routes.dart';
 import '../common/ui_effect_listener.dart';
 import 'new_session_viewmodel.dart';
@@ -64,7 +65,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'New Session',
+                        Tx.newTitle.tr,
                         style: AppTypography.sans(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
@@ -89,22 +90,22 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                         _buildAttachBanner(),
                         const SizedBox(height: 24),
 
-                        _buildFieldLabel('Runtime'),
+                        _buildFieldLabel(Tx.newRuntime.tr),
                         const SizedBox(height: 8),
                         Obx(() => _buildRuntimeSelector()),
                         const SizedBox(height: 24),
 
-                        _buildFieldLabel('Machine'),
+                        _buildFieldLabel(Tx.newMachine.tr),
                         const SizedBox(height: 8),
                         Obx(() => _buildMachineSelector()),
                         const SizedBox(height: 24),
 
-                        _buildFieldLabel('Working Directory'),
+                        _buildFieldLabel(Tx.newWorkingDirectory.tr),
                         const SizedBox(height: 8),
                         _buildDirectorySection(),
                         const SizedBox(height: 24),
 
-                        _buildFieldLabel('Initial Prompt'),
+                        _buildFieldLabel(Tx.newInitialPrompt.tr),
                         const SizedBox(height: 8),
                         _buildPromptInput(),
                         const SizedBox(height: 24),
@@ -120,7 +121,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                         Obx(() => _buildModeSelector()),
                         const SizedBox(height: 24),
 
-                        _buildFieldLabel('Git Worktree'),
+                        _buildFieldLabel(Tx.newGitWorktree.tr),
                         const SizedBox(height: 8),
                         Obx(() => _buildWorktreeToggle()),
                         const SizedBox(height: 24),
@@ -166,8 +167,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
         ? LucideIcons.refreshCw
         : LucideIcons.cloudOff;
     final String label = isReconnecting
-        ? 'Reconnecting...'
-        : 'Server unreachable';
+        ? Tx.commonReconnecting.tr
+        : Tx.commonServerUnreachable.tr;
 
     return Container(
       width: double.infinity,
@@ -194,7 +195,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   Widget _buildAttachBanner() {
     return Semantics(
       button: true,
-      label: 'Attach an existing session',
+      label: Tx.newAttachExisting.tr,
       child: GestureDetector(
         onTap: () {
           controller.dismissTransientInputs();
@@ -217,7 +218,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  'Already started a session in your machine?',
+                  Tx.newAlreadyStarted.tr,
                   style: AppTypography.sans(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
@@ -243,8 +244,8 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
     final hostname = selected != null
         ? (selected.hostname?.isNotEmpty == true
               ? selected.hostname!
-              : 'Unknown host')
-        : 'Select a machine';
+              : Tx.commonUnknownHost.tr)
+        : Tx.newSelectMachine.tr;
 
     return ValueListenableBuilder<List<PairedMachine>>(
       valueListenable: controller.machinesListenable,
@@ -338,16 +339,16 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
 
   Widget _buildRuntimeSelector() {
     if (controller.isLoadingRuntimes.value) {
-      return _buildLoadingSelector(label: 'Loading runtimes...');
+      return _buildLoadingSelector(label: Tx.newLoadingRuntimes.tr);
     }
 
     final options = controller.availableRuntimes;
     if (options.isEmpty) {
-      return _buildEmptySelector(label: 'No runtimes available');
+      return _buildEmptySelector(label: Tx.newNoRuntimes.tr);
     }
 
     final selected = controller.selectedRuntime.value;
-    final selectedLabel = selected?.label ?? 'Select a runtime';
+    final selectedLabel = selected?.label ?? Tx.newSelectRuntime.tr;
     final selectedEnabled = selected?.ready ?? false;
 
     return Column(
@@ -432,7 +433,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
           border: Border.all(color: AppTheme.chipBorder),
         ),
         child: Text(
-          'Use runtime default mode',
+          Tx.newUseRuntimeDefaultMode.tr,
           style: AppTypography.mono(
             fontSize: 12,
             fontWeight: FontWeight.w500,
@@ -563,7 +564,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   String _modeSectionLabel(String? runtimeId) {
-    return 'Mode';
+    return Tx.newMode.tr;
   }
 
   Widget _buildMachineOptionRow({
@@ -573,7 +574,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }) {
     final label = machine.hostname?.isNotEmpty == true
         ? machine.hostname!
-        : 'Unknown host';
+        : Tx.commonUnknownHost.tr;
     final row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       child: Row(
@@ -814,7 +815,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     Expanded(
                       child: Semantics(
                         textField: true,
-                        label: 'Working directory',
+                        label: Tx.newWorkingDirectorySemantic.tr,
                         onTap: controller.openCwdDropdown,
                         child: TextField(
                           controller: controller.cwdController,
@@ -874,7 +875,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                     ),
                     padding: const EdgeInsets.fromLTRB(12, 12, 12, 14),
                     child: Text(
-                      'No recent directories',
+                      Tx.newNoRecentDirectories.tr,
                       style: AppTypography.mono(
                         fontSize: 10,
                         color: AppTheme.textMetadata,
@@ -901,7 +902,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                         return Padding(
                           padding: const EdgeInsets.fromLTRB(12, 4, 12, 6),
                           child: Text(
-                            'RECENT',
+                            Tx.newRecent.tr.toUpperCase(),
                             style: AppTypography.mono(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -972,19 +973,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
   }
 
   String _relativeTime(DateTime dt) {
-    final diff = DateTime.now().difference(dt);
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
-    if (diff.inHours < 24) {
-      return '${diff.inHours} ${diff.inHours == 1 ? 'hour' : 'hours'} ago';
-    }
-    if (diff.inDays == 1) return 'Yesterday';
-    if (diff.inDays < 7) return '${diff.inDays} days ago';
-    if (diff.inDays < 14) return 'Last week';
-    if (diff.inDays < 30) {
-      return '${(diff.inDays / 7).floor()} weeks ago';
-    }
-    return 'Last month';
+    return Tx.relativeTime(dt);
   }
 
   String _formatCwdDisplayPath(String path) {
@@ -1028,7 +1017,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Use Worktree',
+                    Tx.newUseWorktree.tr,
                     style: AppTypography.sans(
                       fontSize: 13,
                       fontWeight: FontWeight.w500,
@@ -1037,7 +1026,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Agent works on an isolated branch',
+                    Tx.newWorktreeBody.tr,
                     style: AppTypography.sans(
                       fontSize: 11,
                       color: AppTheme.textTertiary,
@@ -1068,7 +1057,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                 padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
                 child: Semantics(
                   textField: true,
-                  label: 'Initial prompt',
+                  label: Tx.newInitialPromptSemantic.tr,
                   onTap: controller.focusPromptInput,
                   child: TextField(
                     controller: controller.promptController,
@@ -1094,7 +1083,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
-                      hintText: 'Describe what you want to do...',
+                      hintText: Tx.newPromptHint.tr,
                       hintStyle: AppTypography.sans(
                         fontSize: 14,
                         fontWeight: FontWeight.normal,
@@ -1201,7 +1190,7 @@ class NewSessionScreen extends GetView<NewSessionViewModel> {
                   ),
                 )
               : Text(
-                  'Start Session',
+                  Tx.newStartSession.tr,
                   style: AppTypography.sans(
                     fontSize: 15,
                     fontWeight: FontWeight.w600,
