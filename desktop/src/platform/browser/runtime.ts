@@ -428,6 +428,13 @@ class BrowserShellHost implements ShellHost {
   async openPath(path: string): Promise<void> {
     window.open(`file://${path}`, "_blank", "noopener,noreferrer");
   }
+
+  async openExternalUrl(url: string): Promise<void> {
+    const opened = window.open(url, "_blank", "noopener,noreferrer");
+    if (!opened) {
+      throw new Error("Failed to open URL");
+    }
+  }
 }
 
 export function createBrowserRuntime(): DesktopRuntime {

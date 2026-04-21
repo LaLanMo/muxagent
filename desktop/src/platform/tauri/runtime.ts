@@ -338,6 +338,10 @@ class TauriShellHost implements ShellHost {
   async openPath(path: string): Promise<void> {
     await invoke("open_path", { path });
   }
+
+  async openExternalUrl(url: string): Promise<void> {
+    await invoke("open_url", { url });
+  }
 }
 
 export function createTauriRuntime(): DesktopRuntime {

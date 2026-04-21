@@ -207,6 +207,7 @@ function makeRuntime(args: {
     readTextFile: async (path: string) => `fixture:${path}`,
     readBinaryFile: async () => Uint8Array.from([1, 2, 3]),
     openPath: async () => undefined,
+    openExternalUrl: async () => undefined,
     ...args.shell,
   } satisfies ShellHost;
 

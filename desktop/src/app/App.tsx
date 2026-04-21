@@ -41,12 +41,25 @@ import { FileDiffView } from "@/features/source-control/ui/FileDiffView";
 import { SourceControlLanding } from "@/features/source-control/ui/SourceControlLanding";
 import { useTaskDetailScreen } from "@/features/task-detail/model/use-task-detail-screen";
 import { TaskDetailScreen } from "@/features/task-detail/ui/TaskDetailScreen";
+import { getRuntime } from "@/app/runtime";
+import { installExternalLinkClickGuard } from "@/platform/external-link-clicks";
 import { useWorkspaceStore } from "@/state/workspace-store";
 
 function RuntimeEffects() {
   useServerBootstrap();
   useRuntimeSync();
   useTaskSurfaceReturnContext();
+  return null;
+}
+
+function ExternalLinkEffects() {
+  useEffect(
+    () =>
+      installExternalLinkClickGuard({
+        openExternalUrl: (url) => getRuntime().shell.openExternalUrl(url),
+      }),
+    [],
+  );
   return null;
 }
 
@@ -285,6 +298,7 @@ export function App() {
   return (
     <BrowserRouter>
       <RuntimeEffects />
+      <ExternalLinkEffects />
       <OnboardingGate>
         <Routes>
           <Route element={<OnboardingScreen />} path="/onboarding" />

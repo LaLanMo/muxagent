@@ -128,6 +128,7 @@ export interface ShellHost {
   readTextFile(path: string): Promise<string>;
   readBinaryFile(path: string, maxBytes: number): Promise<Uint8Array>;
   openPath(path: string): Promise<void>;
+  openExternalUrl(url: string): Promise<void>;
 }
 
 export interface DesktopRuntime {

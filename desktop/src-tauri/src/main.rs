@@ -21,6 +21,7 @@ use tauri::{
     menu::{IsMenuItem, MenuItem, Submenu},
     Emitter, Manager, State,
 };
+use url::Url;
 
 const JSON_RPC_VERSION: &str = "2.0";
 const PROTOCOL_VERSION: u64 = 1;
@@ -325,6 +326,12 @@ fn open_path(state: State<'_, AppState>, path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    let normalized = normalize_external_url(&url)?;
+    open_url_on_host(&normalized)
+}
+
+#[tauri::command]
 fn pick_directory() -> Result<Option<String>, String> {
     Ok(FileDialog::new()
         .pick_folder()
@@ -482,6 +489,15 @@ fn resolve_absolute_path(path: &str) -> Result<PathBuf, String> {
     fs::canonicalize(requested).map_err(|error| format!("resolve path: {error}"))
 }
 
+fn normalize_external_url(raw_url: &str) -> Result<String, String> {
+    let url = Url::parse(raw_url.trim())
+        .map_err(|_| "URL must be an absolute hosted http or https URL".to_string())?;
+    if !matches!(url.scheme(), "http" | "https") || url.host().is_none() {
+        return Err("URL must be an absolute hosted http or https URL".to_string());
+    }
+    Ok(url.to_string())
+}
+
 fn handle_frame(app: &tauri::AppHandle, session: &Session, frame: &[u8]) -> Result<(), String> {
     let message: Value = serde_json::from_slice(frame)
         .map_err(|error| format!("decode app-server frame: {error}"))?;
@@ -606,6 +622,96 @@ fn open_path_on_host(path: &Path) -> Result<(), String> {
     }
 }
 
+fn open_url_on_host(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let status = Command::new("open")
+            .arg(url)
+            .status()
+            .map_err(|error| format!("open URL: {error}"))?;
+        if status.success() {
+            return Ok(());
+        }
+        return Err(format!("open URL failed with status {status}"));
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        open_url_on_host_windows(url)
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let status = Command::new("xdg-open")
+            .arg(url)
+            .status()
+            .map_err(|error| format!("open URL: {error}"))?;
+        if status.success() {
+            return Ok(());
+        }
+        return Err(format!("open URL failed with status {status}"));
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn open_url_on_host_windows(url: &str) -> Result<(), String> {
+    use std::{ffi::OsStr, os::windows::ffi::OsStrExt, ptr};
+    use windows_sys::Win32::UI::{Shell::ShellExecuteW, WindowsAndMessaging::SW_SHOWNORMAL};
+
+    fn wide_null(value: &str) -> Vec<u16> {
+        OsStr::new(value).encode_wide().chain(Some(0)).collect()
+    }
+
+    let operation = wide_null("open");
+    let target = wide_null(url);
+    let result = unsafe {
+        ShellExecuteW(
+            ptr::null_mut(),
+            operation.as_ptr(),
+            target.as_ptr(),
+            ptr::null(),
+            ptr::null(),
+            SW_SHOWNORMAL,
+        )
+    };
+    let code = result as isize;
+    if code <= 32 {
+        return Err(format!("open URL failed with code {code}"));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_external_url;
+
+    #[test]
+    fn normalize_external_url_accepts_hosted_http_and_https() {
+        assert_eq!(
+            normalize_external_url(" https://example.com/path?a=1&b=2 ").unwrap(),
+            "https://example.com/path?a=1&b=2"
+        );
+        assert_eq!(
+            normalize_external_url("http://localhost:3000/status").unwrap(),
+            "http://localhost:3000/status"
+        );
+    }
+
+    #[test]
+    fn normalize_external_url_blocks_unsupported_or_hostless_urls() {
+        for value in [
+            "file:///tmp/report.md",
+            "javascript:alert(1)",
+            "mailto:test@example.com",
+            "muxagent://task/1",
+            "/relative/path",
+            "http://",
+        ] {
+            assert!(normalize_external_url(value).is_err(), "{value}");
+        }
+    }
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .manage(AppState::default())
@@ -617,6 +723,7 @@ fn main() {
             read_text_file,
             read_binary_file,
             open_path,
+            open_url,
             show_context_menu
         ])
         .build(tauri::generate_context!())
