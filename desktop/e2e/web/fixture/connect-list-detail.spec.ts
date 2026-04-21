@@ -1298,11 +1298,10 @@ test("renders the blocked task surface", async ({ page }) => {
   await connectFixtureWorkspace(page);
 
   await openTaskFromBoard(page, "task-blocked-db");
-  const blockedPane = page.getByTestId("blocked-pane");
-  await expect(blockedPane).toBeVisible();
-  await expect(blockedPane).toContainText(
-    "Waiting for migration window",
-  );
+  const continueButton = page.getByTestId("continue-blocked");
+  await expect(continueButton).toBeVisible();
+  const blockedPane = continueButton.locator("xpath=ancestor::section[1]");
+  await expect(blockedPane).toContainText("Waiting for migration window");
   await expect(blockedPane).not.toContainText("Task paused at");
   const blockedPaneStyles = await blockedPane.evaluate((element) => {
     const styles = getComputedStyle(element);
@@ -1311,7 +1310,6 @@ test("renders the blocked task surface", async ({ page }) => {
     };
   });
   expect(blockedPaneStyles.backgroundColor).toBe("rgba(0, 0, 0, 0)");
-  const continueButton = page.getByTestId("continue-blocked");
   await expect(continueButton).toBeVisible();
   await expect(continueButton.locator(".button__icon--leading svg")).toHaveCount(1);
   await expect(continueButton.locator(".button__icon--trailing")).toHaveCount(0);

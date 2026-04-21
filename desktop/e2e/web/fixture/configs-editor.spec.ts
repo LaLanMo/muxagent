@@ -85,10 +85,8 @@ test("keeps shell peer-region visibility stable while switching workspace tabs",
 
   await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Expand bottom panel" })).toHaveCount(0);
   await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Expand bottom panel" }).click();
-  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
 
   await page.getByTestId("workbench-activity-configs").click();
   await expect(page.getByTestId("configs-panel")).toBeVisible();
@@ -105,12 +103,12 @@ test("keeps shell peer-region visibility stable while switching workspace tabs",
     "Config File",
   );
   await expect(page.getByRole("button", { name: "Collapse right panel" })).toBeEnabled();
-  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+  await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Collapse right panel" }).click();
   await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Expand right panel" })).toBeEnabled();
-  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+  await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
 
   await page
     .getByTestId("workbench-center-tabs")
@@ -120,7 +118,7 @@ test("keeps shell peer-region visibility stable while switching workspace tabs",
   await expect(page.getByTestId("entry-shell")).toBeVisible();
   await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
-  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+  await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
 
   await page
     .getByTestId("workbench-center-tabs")
@@ -129,14 +127,14 @@ test("keeps shell peer-region visibility stable while switching workspace tabs",
   await expect(page.getByTestId("config-editor-screen")).toBeVisible();
   await expect(page.getByTestId("workbench-right-panel")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Expand right panel" })).toBeEnabled();
-  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+  await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
 
   await page.getByTestId("workbench-tab-close-config-detail:default").click();
   await expect(page.getByTestId("workbench-tab-config-detail:default")).toHaveCount(0);
   await expect(page).toHaveURL(/\/configs$/);
   await expect(page.getByTestId("configs-screen")).toBeVisible();
   await expect(page.getByRole("button", { name: "Expand right panel" })).toBeDisabled();
-  await expect(page.getByTestId("workbench-bottom-panel")).toBeVisible();
+  await expect(page.getByTestId("workbench-bottom-panel")).toHaveCount(0);
 
   await page
     .getByTestId("config-card-default")

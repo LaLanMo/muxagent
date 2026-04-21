@@ -1,6 +1,9 @@
 import path from "node:path";
 import { expect, test } from "@playwright/test";
-import { withSpawnedDesktopServer } from "../support/spawned-backend";
+import {
+  configureDefaultBuiltinRuntime,
+  withSpawnedDesktopServer,
+} from "../support/spawned-backend";
 
 test("shows a built-in config as a read-only file inspector through the real backend", async ({
   page,
@@ -9,11 +12,17 @@ test("shows a built-in config as a read-only file inspector through the real bac
 
   await withSpawnedDesktopServer(async ({ url, taskConfigRootDir }) => {
     await page.goto(`${url}/`);
-    await expect(page.getByTestId("workspace-picker-button")).toBeEnabled({
+    await expect(page.getByTestId("onboarding-step-welcome")).toBeVisible({
       timeout: 30_000,
     });
+    await page.getByTestId("onboarding-skip").click();
+    await expect(page.getByTestId("entry-shell")).toBeVisible({
+      timeout: 30_000,
+    });
+    await configureDefaultBuiltinRuntime(page);
 
-    await page.getByRole("link", { name: /^Configs$/i }).click();
+    await page.getByRole("button", { name: /^Configs$/i }).click();
+    await page.getByTestId("configs-panel-view-all").click();
     await expect(page.getByTestId("configs-screen")).toBeVisible();
 
     await page

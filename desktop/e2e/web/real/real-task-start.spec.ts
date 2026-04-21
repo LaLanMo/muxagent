@@ -70,13 +70,8 @@ test("starts a real task through the browser shell against a spawned app-server"
 
     await expect(page).toHaveURL(new RegExp(`/workspaces/[^/]+/tasks/${taskId}$`));
     await expect(page.getByTestId("task-detail-screen")).toBeVisible();
-    await expect(page.getByRole("heading", { name: description })).toBeVisible();
-    await expect(
-      page
-        .locator(
-          '[data-testid="run-pane"], [data-testid="overview-pane"], [data-testid="artifact-pane"]',
-        )
-        .first(),
-    ).toBeVisible();
+    await expect(page.locator(".detail-main-header__prompt-text")).toContainText(
+      description,
+    );
   });
 });

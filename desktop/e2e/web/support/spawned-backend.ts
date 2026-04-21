@@ -267,11 +267,71 @@ export async function withSpawnedDesktopServer(
 }
 
 export async function addWorkspace(page: Page, path: string) {
-  await expect(page.getByTestId("workspace-picker-button")).toBeEnabled({
-    timeout: 30_000,
+  const onboardingStep = page.getByTestId("onboarding-step-welcome");
+  const workspacePickerButton = page.getByTestId("workspace-picker-button");
+  const openNewWorkspaceButton = page.getByTestId("open-new-workspace");
+  const deadline = Date.now() + 30_000;
+  let onboardingVisible = false;
+
+  while (!onboardingVisible && Date.now() < deadline) {
+    if (await onboardingStep.isVisible()) {
+      onboardingVisible = true;
+      break;
+    }
+    if (await openNewWorkspaceButton.isEnabled().catch(() => false)) {
+      break;
+    }
+    if (await workspacePickerButton.isEnabled().catch(() => false)) {
+      break;
+    }
+    await page.waitForTimeout(100);
+  }
+
+  if (
+    !onboardingVisible &&
+    !(await openNewWorkspaceButton.isEnabled().catch(() => false)) &&
+    !(await workspacePickerButton.isEnabled().catch(() => false))
+  ) {
+    throw new Error("Timed out waiting for workspace onboarding or add-workspace action");
+  }
+
+  if (onboardingVisible) {
+    await page.getByTestId("onboarding-skip").click({
+      force: true,
+      noWaitAfter: true,
+      timeout: 5_000,
+    });
+    await expect(page.getByTestId("entry-shell")).toBeVisible({
+      timeout: 30_000,
+    });
+    await configureDefaultBuiltinRuntime(page);
+  }
+
+  const addWorkspaceButton = (await openNewWorkspaceButton.isEnabled().catch(() => false))
+    ? openNewWorkspaceButton
+    : workspacePickerButton;
+
+  await expect(addWorkspaceButton).toBeEnabled({ timeout: 30_000 });
+  page.once("dialog", (dialog) => {
+    void dialog.accept(path);
   });
-  page.once("dialog", (dialog) => dialog.accept(path));
-  await page.getByTestId("workspace-picker-button").click();
+  await addWorkspaceButton.click();
+}
+
+export async function configureDefaultBuiltinRuntime(page: Page) {
+  await page.evaluate(async () => {
+    const runtimeModule = await import("/src/app/runtime.ts");
+    const workspaceStoreModule = await import("/src/state/workspace-store.ts");
+    const state = workspaceStoreModule.useWorkspaceStore.getState();
+    const runtimeId =
+      state.runtimeStatus?.runtimes.find((runtime) => runtime.available)?.runtime_id ??
+      state.runtimeStatus?.runtimes[0]?.runtime_id ??
+      "codex";
+    const catalog = await runtimeModule
+      .getRuntime()
+      .backend.configSetBuiltinRuntimes({ runtime_id: runtimeId });
+    workspaceStoreModule.useWorkspaceStore.getState().setCatalog(catalog);
+  });
 }
 
 export async function startTask(page: Page, description: string) {
