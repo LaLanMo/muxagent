@@ -135,11 +135,11 @@ func (s *Service) Run(ctx context.Context) error {
 func (s *Service) handleCommand(ctx context.Context, cmd RunCommand) error {
 	switch cmd.Type {
 	case CommandStartTask:
-		return s.startTask(ctx, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath, firstNonEmpty(cmd.WorkDir, s.workDir), cmd.UseWorktree)
+		return s.startTask(ctx, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath, firstNonEmpty(cmd.WorkDir, s.workDir), cmd.UseWorktree, cmd.ImageAttachments)
 	case CommandStartFollowUp:
-		return s.startFollowUpTask(ctx, cmd.ParentTaskID, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath, cmd.FollowUpMode)
+		return s.startFollowUpTask(ctx, cmd.ParentTaskID, cmd.Description, cmd.ConfigAlias, cmd.ConfigPath, cmd.FollowUpMode, cmd.ImageAttachments)
 	case CommandSubmitInput:
-		return s.submitInput(ctx, cmd.TaskID, cmd.NodeRunID, cmd.Payload)
+		return s.submitInput(ctx, cmd.TaskID, cmd.NodeRunID, cmd.Payload, cmd.ImageAttachments)
 	case CommandRetryNode:
 		return s.retryNode(ctx, cmd.TaskID, cmd.NodeRunID, cmd.Force)
 	case CommandContinueBlocked:
@@ -151,13 +151,14 @@ func (s *Service) handleCommand(ctx context.Context, cmd RunCommand) error {
 	}
 }
 
-func (s *Service) startTask(ctx context.Context, description, configAlias, configPath, workDir string, useWorktree bool) (err error) {
-	return s.startTaskWithExecution(ctx, "", description, configAlias, configPath, workDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+func (s *Service) startTask(ctx context.Context, description, configAlias, configPath, workDir string, useWorktree bool, attachments ...[]ImageAttachmentInput) (err error) {
+	return s.startTaskWithExecution(ctx, "", description, configAlias, configPath, workDir, optionalImageAttachments(attachments), func(taskID, normalizedWorkDir string) (string, func() error, error) {
 		return prepareTaskExecutionDir(normalizedWorkDir, taskID, useWorktree)
 	})
 }
 
-func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, description, configAlias, configPath string, requestedMode FollowUpMode) error {
+func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, description, configAlias, configPath string, requestedMode FollowUpMode, attachments ...[]ImageAttachmentInput) error {
+	imageAttachments := optionalImageAttachments(attachments)
 	parentTaskID = strings.TrimSpace(parentTaskID)
 	if parentTaskID == "" {
 		return errors.New("parent task id is required")
@@ -191,7 +192,7 @@ func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, descripti
 		if strings.TrimSpace(string(requestedMode)) != "" {
 			return fmt.Errorf("follow-up mode %q requires a repo-backed parent task", requestedMode)
 		}
-		return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+		return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, imageAttachments, func(taskID, normalizedWorkDir string) (string, func() error, error) {
 			return prepareTaskExecutionDir(normalizedWorkDir, taskID, false)
 		})
 	}
@@ -203,7 +204,7 @@ func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, descripti
 		if err := s.ensureCheckoutAvailableForContinueHere(ctx, parentTask.ID, parentCheckoutRoot); err != nil {
 			return err
 		}
-		return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+		return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, imageAttachments, func(taskID, normalizedWorkDir string) (string, func() error, error) {
 			return parentExecutionDir, nil, nil
 		})
 	}
@@ -216,7 +217,7 @@ func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, descripti
 	if err != nil {
 		return err
 	}
-	return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, func(taskID, normalizedWorkDir string) (string, func() error, error) {
+	return s.startTaskWithExecution(ctx, parentTaskID, description, configAlias, configPath, parentTask.WorkDir, imageAttachments, func(taskID, normalizedWorkDir string) (string, func() error, error) {
 		executionDir, childCheckoutRoot, rollback, err := prepareTaskExecutionDirFromRef(parentCheckoutRoot, taskID, parentHead, relativeCWD)
 		if err != nil {
 			return "", rollback, err
@@ -235,7 +236,7 @@ func (s *Service) startFollowUpTask(ctx context.Context, parentTaskID, descripti
 	})
 }
 
-func (s *Service) startTaskWithExecution(ctx context.Context, parentTaskID, description, configAlias, configPath, workDir string, prepareExecution func(taskID, normalizedWorkDir string) (string, func() error, error)) (err error) {
+func (s *Service) startTaskWithExecution(ctx context.Context, parentTaskID, description, configAlias, configPath, workDir string, attachments []ImageAttachmentInput, prepareExecution func(taskID, normalizedWorkDir string) (string, func() error, error)) (err error) {
 	workDir = taskstore.NormalizeWorkDir(workDir)
 	taskID := uuid.NewString()
 	now := time.Now().UTC()
@@ -288,6 +289,9 @@ func (s *Service) startTaskWithExecution(ctx context.Context, parentTaskID, desc
 		NodeName:  entry,
 		Status:    initialStatus(materialized.Config.NodeDefinitions[entry]),
 		StartedAt: now,
+	}
+	if _, err := persistImageAttachments(task, []taskdomain.NodeRun{nodeRun}, nodeRun, attachments); err != nil {
+		return err
 	}
 	if strings.TrimSpace(parentTaskID) == "" {
 		err = s.store.CreateTaskWithEntryRun(ctx, task, nodeRun)
@@ -457,7 +461,8 @@ func followUpMirrorExclusions(task taskdomain.Task, checkoutRoot string) ([]stri
 	return []string{relativePath}, nil
 }
 
-func (s *Service) submitInput(ctx context.Context, taskID, nodeRunID string, payload map[string]interface{}) error {
+func (s *Service) submitInput(ctx context.Context, taskID, nodeRunID string, payload map[string]interface{}, attachments ...[]ImageAttachmentInput) error {
+	imageAttachments := optionalImageAttachments(attachments)
 	task, err := s.store.GetTask(ctx, taskID)
 	if err != nil {
 		return err
@@ -487,7 +492,11 @@ func (s *Service) submitInput(ctx context.Context, taskID, nodeRunID string, pay
 		if err != nil {
 			return err
 		}
-		result, err := materializeHumanNodeArtifact(task, run, runs, payload, now)
+		persistedAttachments, err := persistImageAttachments(task, runs, run, imageAttachments)
+		if err != nil {
+			return err
+		}
+		result, err := materializeHumanNodeArtifact(task, run, runs, payload, now, persistedAttachments)
 		if err != nil {
 			return err
 		}
@@ -614,6 +623,13 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func optionalImageAttachments(values [][]ImageAttachmentInput) []ImageAttachmentInput {
+	if len(values) == 0 {
+		return nil
+	}
+	return values[0]
 }
 
 type reportedTaskFailureError struct {

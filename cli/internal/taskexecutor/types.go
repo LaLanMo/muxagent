@@ -21,6 +21,7 @@ type Request struct {
 	Model               string
 	ThinkingLevel       string
 	Prompt              string
+	ImagePaths          []string
 	ResultSchema        taskconfig.JSONSchema
 }
 

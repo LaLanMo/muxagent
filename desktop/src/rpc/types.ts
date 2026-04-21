@@ -598,6 +598,13 @@ export interface CommandAcceptedResult {
   client_command_id?: string;
 }
 
+export interface ImageAttachmentInputDto {
+  name?: string;
+  mime_type?: string;
+  size_bytes?: number;
+  data_base64?: string;
+}
+
 export interface TaskStartParams {
   workspace_id: string;
   client_command_id?: string;
@@ -605,6 +612,7 @@ export interface TaskStartParams {
   config_alias: string;
   config_path: string;
   use_worktree?: boolean;
+  image_attachments?: ImageAttachmentInputDto[];
 }
 
 export interface TaskStartFollowUpParams {
@@ -615,6 +623,7 @@ export interface TaskStartFollowUpParams {
   config_alias?: string;
   config_path?: string;
   follow_up_mode?: FollowUpModeDto;
+  image_attachments?: ImageAttachmentInputDto[];
 }
 
 export interface TaskSubmitInputParams {
@@ -623,6 +632,7 @@ export interface TaskSubmitInputParams {
   task_id: string;
   node_run_id: string;
   payload?: Record<string, unknown>;
+  image_attachments?: ImageAttachmentInputDto[];
 }
 
 export interface TaskRetryNodeParams {

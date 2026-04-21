@@ -274,6 +274,24 @@ func TestBuildExecArgsAppendsModelAndThinkingLevel(t *testing.T) {
 	assert.Equal(t, `model_reasoning_effort="high"`, args[cIdx+1])
 }
 
+func TestBuildExecArgsAppendsImagePaths(t *testing.T) {
+	req := requestFixture(t.TempDir())
+	req.ImagePaths = []string{"/tmp/screenshot-one.png", " ", "/tmp/screenshot-two.webp"}
+
+	args := buildExecArgs(req, filepath.Join(req.ArtifactDir, "output.json"), "fresh prompt")
+
+	imageIndex := indexOf(args, "--image")
+	require.GreaterOrEqual(t, imageIndex, 0)
+	assert.Less(t, imageIndex, len(args)-1)
+	assert.Equal(t, []string{
+		"--image",
+		"/tmp/screenshot-one.png",
+		"--image",
+		"/tmp/screenshot-two.webp",
+	}, args[imageIndex:len(args)-1])
+	assert.Equal(t, "fresh prompt", args[len(args)-1])
+}
+
 func TestBuildExecArgsOmitsModelAndThinkingWhenUnset(t *testing.T) {
 	req := requestFixture(t.TempDir())
 

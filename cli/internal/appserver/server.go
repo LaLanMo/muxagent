@@ -812,12 +812,13 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "config_path is required"}
 		}
 		cmd := taskruntime.RunCommand{
-			Type:        taskruntime.CommandStartTask,
-			Description: params.Description,
-			ConfigAlias: params.ConfigAlias,
-			ConfigPath:  params.ConfigPath,
-			WorkDir:     workspace.Path,
-			UseWorktree: params.UseWorktree,
+			Type:             taskruntime.CommandStartTask,
+			Description:      params.Description,
+			ConfigAlias:      params.ConfigAlias,
+			ConfigPath:       params.ConfigPath,
+			WorkDir:          workspace.Path,
+			UseWorktree:      params.UseWorktree,
+			ImageAttachments: params.ImageAttachments,
 		}
 		s.enqueuePendingClientCommand(workspace.WorkspaceID, methodTaskStart, params.ClientCommandID, cmd)
 		if err := s.runtimes.dispatch(workspace, cmd); err != nil {
@@ -861,12 +862,13 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "config_alias and config_path must be provided together"}
 		}
 		cmd := taskruntime.RunCommand{
-			Type:         taskruntime.CommandStartFollowUp,
-			ParentTaskID: params.ParentTaskID,
-			Description:  params.Description,
-			ConfigAlias:  params.ConfigAlias,
-			ConfigPath:   params.ConfigPath,
-			FollowUpMode: params.FollowUpMode,
+			Type:             taskruntime.CommandStartFollowUp,
+			ParentTaskID:     params.ParentTaskID,
+			Description:      params.Description,
+			ConfigAlias:      params.ConfigAlias,
+			ConfigPath:       params.ConfigPath,
+			FollowUpMode:     params.FollowUpMode,
+			ImageAttachments: params.ImageAttachments,
 		}
 		s.enqueuePendingClientCommand(workspace.WorkspaceID, methodTaskStartFollowUp, params.ClientCommandID, cmd)
 		if err := s.runtimes.dispatch(workspace, cmd); err != nil {
@@ -894,10 +896,11 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 			payload = map[string]interface{}{}
 		}
 		cmd := taskruntime.RunCommand{
-			Type:      taskruntime.CommandSubmitInput,
-			TaskID:    params.TaskID,
-			NodeRunID: params.NodeRunID,
-			Payload:   payload,
+			Type:             taskruntime.CommandSubmitInput,
+			TaskID:           params.TaskID,
+			NodeRunID:        params.NodeRunID,
+			Payload:          payload,
+			ImageAttachments: params.ImageAttachments,
 		}
 		s.enqueuePendingClientCommand(workspace.WorkspaceID, methodTaskSubmitInput, params.ClientCommandID, cmd)
 		if err := s.runtimes.dispatch(workspace, cmd); err != nil {

@@ -9,6 +9,8 @@ import {
   X,
 } from "lucide-react";
 import { Button } from "@/features/shared/ui/Button";
+import { ImageInputComposer } from "@/features/shared/ui/ImageInputComposer";
+import type { DraftImageAttachment } from "@/features/shared/model/image-attachments";
 import type { ConfigCatalogEntryDto } from "@/rpc/types";
 
 const secondaryIconStyle = {
@@ -68,6 +70,8 @@ type NewTaskModalProps = {
   open: boolean;
   description: string;
   onDescriptionChange: (value: string) => void;
+  imageAttachments: DraftImageAttachment[];
+  onImageAttachmentsChange: (attachments: DraftImageAttachment[]) => void;
   workspaceOptions: Array<{ id: string; label: string; path: string }>;
   selectedTargetWorkspaceId: string;
   onTargetWorkspaceChange: (value: string) => void;
@@ -99,6 +103,8 @@ export function NewTaskModal({
   open,
   description,
   onDescriptionChange,
+  imageAttachments,
+  onImageAttachmentsChange,
   workspaceOptions,
   selectedTargetWorkspaceId,
   onTargetWorkspaceChange,
@@ -235,17 +241,21 @@ export function NewTaskModal({
 
         <div className="task-modal__body">
           {/* Task description */}
-          <label className="field-block">
-            <span className="field-block__label">Task description</span>
-            <textarea
-              className="task-modal__textarea"
-              data-testid="new-task-description"
-              onChange={(event) => onDescriptionChange(event.target.value)}
+          <div className="field-block">
+            <ImageInputComposer
+              ariaLabel="Task description"
+              attachments={imageAttachments}
+              className="image-composer--modal"
+              label="Task description"
+              onAttachmentsChange={onImageAttachmentsChange}
+              onValueChange={onDescriptionChange}
               placeholder="Describe what you want to do..."
-              rows={4}
+              rows={imageAttachments.length > 0 ? 2 : 4}
+              testId="new-task-image-composer"
+              textareaTestId="new-task-description"
               value={description}
             />
-          </label>
+          </div>
 
           {/* Workspace selector */}
           <div className="field-block">

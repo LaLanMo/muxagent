@@ -34,11 +34,17 @@ import { detailStatusLabel } from "@/domain/task-shell";
 import type { FollowUpDockState } from "@/features/task-detail/model/follow-up-dock-state";
 import type { TaskDetailArtifactPreview } from "@/features/task-detail/model/use-task-detail-artifact-preview";
 import type { TranscriptTimelineItem } from "@/features/task-history/model/timeline";
+import {
+  mapImageAttachmentsToDto,
+  type DraftImageAttachment,
+} from "@/features/shared/model/image-attachments";
+import { ImageInputComposer } from "@/features/shared/ui/ImageInputComposer";
 import type {
   ArtifactRefDto,
   BlockedStepDto,
   ConfigCatalogEntryDto,
   FollowUpModeDto,
+  ImageAttachmentInputDto,
   InputQuestionDto,
   NodeRunViewDto,
   TaskFollowUpDto,
@@ -84,8 +90,14 @@ type ArtifactPaneProps = {
 type ApprovalDockProps = {
   requestKey: string;
   submittingDecision: boolean;
-  submitApprove: (feedback: string) => Promise<void>;
-  submitReject: (feedback: string) => Promise<void>;
+  submitApprove: (
+    feedback: string,
+    imageAttachments?: ImageAttachmentInputDto[],
+  ) => Promise<void>;
+  submitReject: (
+    feedback: string,
+    imageAttachments?: ImageAttachmentInputDto[],
+  ) => Promise<void>;
 };
 
 type ClarificationDockProps = {
@@ -113,6 +125,7 @@ type FollowUpDockProps = {
     description: string;
     followUpConfigAlias?: string;
     followUpMode?: FollowUpModeDto;
+    imageAttachments?: ImageAttachmentInputDto[];
   }) => Promise<boolean>;
 };
 
@@ -2143,10 +2156,16 @@ export function TaskApprovalDock({
   submitReject,
 }: ApprovalDockProps) {
   const [feedback, setFeedback] = useState("");
+  const [imageAttachments, setImageAttachments] = useState<DraftImageAttachment[]>([]);
 
   useEffect(() => {
     setFeedback("");
+    setImageAttachments([]);
   }, [requestKey]);
+
+  function approvalAttachmentsPayload() {
+    return mapImageAttachmentsToDto(imageAttachments);
+  }
 
   return (
     <section className="detail-inline-action detail-inline-action--approval" data-testid="approval-pane">
@@ -2154,22 +2173,28 @@ export function TaskApprovalDock({
         The agent has submitted work for your review. Open the artifact above to see the full
         content.
       </p>
-      <label className="detail-inline-action__field">
-        <span className="detail-inline-action__label">Feedback (optional)</span>
-        <textarea
-          className="detail-inline-action__textarea"
-          onChange={(event) => setFeedback(event.target.value)}
+      <div className="detail-inline-action__field">
+        <ImageInputComposer
+          ariaLabel="Feedback"
+          attachments={imageAttachments}
+          className="image-composer--approval"
+          label="Feedback (optional)"
+          onAttachmentsChange={setImageAttachments}
+          onValueChange={setFeedback}
           placeholder="Leave a note for the agent..."
           rows={2}
+          testId="approval-image-composer"
+          textareaClassName="detail-inline-action__textarea"
+          textareaTestId="approval-feedback"
           value={feedback}
         />
-      </label>
+      </div>
 
       <div className="detail-inline-action__footer">
         <Button
           data-testid="approval-reject"
           disabled={submittingDecision}
-          onClick={() => void submitReject(feedback)}
+          onClick={() => void submitReject(feedback, approvalAttachmentsPayload())}
           size="md"
           type="button"
           variant="secondary"
@@ -2179,7 +2204,7 @@ export function TaskApprovalDock({
         <Button
           data-testid="approval-approve"
           disabled={submittingDecision}
-          onClick={() => void submitApprove(feedback)}
+          onClick={() => void submitApprove(feedback, approvalAttachmentsPayload())}
           size="md"
           type="button"
           variant="primary"
@@ -2504,6 +2529,8 @@ export function TaskFollowUpDock({
   const launchable = configEntries.filter((entry) => entry.launchable);
   const [followUpConfigAlias, setFollowUpConfigAlias] = useState<string | undefined>();
   const [followUpMode, setFollowUpMode] = useState<FollowUpModeDto | undefined>();
+  const [description, setDescription] = useState("");
+  const [imageAttachments, setImageAttachments] = useState<DraftImageAttachment[]>([]);
   const selectedEntry =
     launchable.find((entry) => entry.alias === followUpConfigAlias) ??
     launchable.find((entry) => entry.alias === defaultConfigAlias) ??
@@ -2525,10 +2552,9 @@ export function TaskFollowUpDock({
   });
 
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.value = "";
-      syncInputHeight(inputRef.current);
-    }
+    setDescription("");
+    setImageAttachments([]);
+    syncInputHeight(inputRef.current);
     setFollowUpConfigAlias(undefined);
     setConfigPickerOpen(false);
     setModePickerOpen(false);
@@ -2556,6 +2582,10 @@ export function TaskFollowUpDock({
       window.removeEventListener("resize", handleWindowResize);
     };
   }, []);
+
+  useLayoutEffect(() => {
+    syncInputHeight(inputRef.current);
+  }, [description, syncInputHeight]);
 
   const closeOverlays = useEffectEvent(
     (focusTarget?: "config-trigger" | "mode-trigger" | "input") => {
@@ -2616,15 +2646,15 @@ export function TaskFollowUpDock({
   }, [configPickerOpen, modePickerOpen]);
 
   async function startFollowUpSubmission() {
-    const description = inputRef.current?.value ?? "";
     const started = await onStartFollowUp({
       description,
       followUpConfigAlias,
       followUpMode,
+      imageAttachments: mapImageAttachmentsToDto(imageAttachments),
     });
-    if (started && inputRef.current) {
-      inputRef.current.value = "";
-      syncInputHeight(inputRef.current);
+    if (started) {
+      setDescription("");
+      setImageAttachments([]);
     }
   }
 
@@ -2700,16 +2730,23 @@ export function TaskFollowUpDock({
           }
         }}
       >
-        <textarea
-          aria-label="Follow-up description"
-          className="detail-follow-up-rail__input"
-          data-testid="follow-up-description"
+        <ImageInputComposer
+          ariaLabel="Follow-up description"
+          attachments={imageAttachments}
+          className="image-composer--follow-up"
           disabled={submittingFollowUp}
-          onInput={handleDescriptionInput}
-          onKeyDown={handleDescriptionKeyDown}
+          maxVisibleAttachments={4}
+          onAttachmentsChange={setImageAttachments}
+          onTextareaInput={handleDescriptionInput}
+          onTextareaKeyDown={handleDescriptionKeyDown}
+          onValueChange={setDescription}
           placeholder="Send a follow-up request..."
-          ref={inputRef}
           rows={1}
+          testId="follow-up-image-composer"
+          textareaClassName="detail-follow-up-rail__input"
+          textareaRef={inputRef}
+          textareaTestId="follow-up-description"
+          value={description}
         />
         <div className="detail-follow-up-rail__divider" />
         <div className="detail-follow-up-rail__footer">

@@ -14,12 +14,12 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: min(648px, calc(100vw - 48px));
+  width: min(640px, calc(100vw - 48px));
   transform: translate(-50%, -50%);
   display: grid;
   gap: 0;
   border-radius: var(--radius-lg);
-  background: var(--color-surface);
+  background: var(--color-bg-page);
   box-shadow: var(--shadow);
   overflow: hidden;
 }
@@ -63,7 +63,7 @@
 }
 
 .task-modal__footer {
-  padding: var(--space-3) var(--space-6) var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-6) var(--space-5) var(--space-6);
 }
 
 .task-modal__header,
@@ -80,9 +80,9 @@
 
 .task-modal__body {
   display: grid;
-  gap: var(--space-5);
+  gap: var(--space-6);
   padding: var(--space-6);
-  background: var(--color-surface);
+  background: var(--color-bg-page);
 }
 
 .confirm-modal__body {

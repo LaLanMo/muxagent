@@ -290,30 +290,33 @@ type taskRunHistoryParams struct {
 }
 
 type taskStartParams struct {
-	WorkspaceID     string `json:"workspace_id"`
-	ClientCommandID string `json:"client_command_id,omitempty"`
-	Description     string `json:"description,omitempty"`
-	ConfigAlias     string `json:"config_alias,omitempty"`
-	ConfigPath      string `json:"config_path,omitempty"`
-	UseWorktree     bool   `json:"use_worktree,omitempty"`
+	WorkspaceID      string                             `json:"workspace_id"`
+	ClientCommandID  string                             `json:"client_command_id,omitempty"`
+	Description      string                             `json:"description,omitempty"`
+	ConfigAlias      string                             `json:"config_alias,omitempty"`
+	ConfigPath       string                             `json:"config_path,omitempty"`
+	UseWorktree      bool                               `json:"use_worktree,omitempty"`
+	ImageAttachments []taskruntime.ImageAttachmentInput `json:"image_attachments,omitempty"`
 }
 
 type taskStartFollowUpParams struct {
-	WorkspaceID     string                   `json:"workspace_id"`
-	ClientCommandID string                   `json:"client_command_id,omitempty"`
-	ParentTaskID    string                   `json:"parent_task_id"`
-	Description     string                   `json:"description,omitempty"`
-	ConfigAlias     string                   `json:"config_alias,omitempty"`
-	ConfigPath      string                   `json:"config_path,omitempty"`
-	FollowUpMode    taskruntime.FollowUpMode `json:"follow_up_mode,omitempty"`
+	WorkspaceID      string                             `json:"workspace_id"`
+	ClientCommandID  string                             `json:"client_command_id,omitempty"`
+	ParentTaskID     string                             `json:"parent_task_id"`
+	Description      string                             `json:"description,omitempty"`
+	ConfigAlias      string                             `json:"config_alias,omitempty"`
+	ConfigPath       string                             `json:"config_path,omitempty"`
+	FollowUpMode     taskruntime.FollowUpMode           `json:"follow_up_mode,omitempty"`
+	ImageAttachments []taskruntime.ImageAttachmentInput `json:"image_attachments,omitempty"`
 }
 
 type taskSubmitInputParams struct {
-	WorkspaceID     string                 `json:"workspace_id"`
-	ClientCommandID string                 `json:"client_command_id,omitempty"`
-	TaskID          string                 `json:"task_id"`
-	NodeRunID       string                 `json:"node_run_id"`
-	Payload         map[string]interface{} `json:"payload,omitempty"`
+	WorkspaceID      string                             `json:"workspace_id"`
+	ClientCommandID  string                             `json:"client_command_id,omitempty"`
+	TaskID           string                             `json:"task_id"`
+	NodeRunID        string                             `json:"node_run_id"`
+	Payload          map[string]interface{}             `json:"payload,omitempty"`
+	ImageAttachments []taskruntime.ImageAttachmentInput `json:"image_attachments,omitempty"`
 }
 
 type taskRetryNodeParams struct {

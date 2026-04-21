@@ -156,6 +156,7 @@ function GlobalNewTaskModal() {
       onToggleConfigPicker={modal.toggleConfigPicker}
       onCloseConfigPicker={modal.closeConfigPicker}
       description={modal.description}
+      imageAttachments={modal.imageAttachments}
       entries={launchableEntries}
       error={modal.error}
       flowNodes={modal.flowNodes}
@@ -166,6 +167,7 @@ function GlobalNewTaskModal() {
       onAliasChange={modal.setSelectedAlias}
       onClose={() => setModalOpen(false)}
       onDescriptionChange={modal.setDescription}
+      onImageAttachmentsChange={modal.setImageAttachments}
       onSubmit={() => void modal.submit()}
       onToggleWorktree={modal.setUseWorktree}
       open={modalOpen}

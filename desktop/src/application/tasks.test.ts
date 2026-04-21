@@ -8,7 +8,9 @@ import {
   loadTaskAncestry,
   readArtifactPreview,
   retryTaskUntilResumed,
+  startTask,
   startFollowUpFromTask,
+  submitTaskApproval,
 } from "@/application/tasks";
 import type { DesktopRuntime, ShellHost, TaskBackendClient } from "@/platform/contract";
 import type {
@@ -103,7 +105,9 @@ function makeRuntime(args: {
   taskGetAncestryError?: Error;
   taskGetWorktreeCleanupInfoResult?: TaskGetWorktreeCleanupInfoResult;
   onTaskGetAncestry?: () => void;
+  onTaskStart?: (params: unknown) => void;
   onTaskStartFollowUp?: (params: unknown) => void;
+  onTaskSubmitInput?: (params: unknown) => void;
   onTaskRetryNode?: (params: unknown) => void;
   shell?: Partial<ShellHost>;
 }): DesktopRuntime {
@@ -159,11 +163,25 @@ function makeRuntime(args: {
           message: "Remove this worktree.",
         },
       },
+    taskStart: async (params: unknown) => {
+      args.onTaskStart?.(params);
+      return {
+        accepted: true,
+        client_command_id: "cmd-start",
+      } satisfies CommandAcceptedResult;
+    },
     taskStartFollowUp: async (params: unknown) => {
       args.onTaskStartFollowUp?.(params);
       return {
         accepted: true,
         client_command_id: "cmd-follow-up",
+      } satisfies CommandAcceptedResult;
+    },
+    taskSubmitInput: async (params: unknown) => {
+      args.onTaskSubmitInput?.(params);
+      return {
+        accepted: true,
+        client_command_id: "cmd-input",
       } satisfies CommandAcceptedResult;
     },
     taskRetryNode: async (params: unknown) => {
@@ -263,6 +281,49 @@ test("loadTaskWorktreeCleanupInfo returns the backend cleanup payload", async ()
   assert.equal(info.can_remove, true);
 });
 
+test("startTask forwards image attachments", async () => {
+  let captured:
+    | {
+        workspace_id: string;
+        description: string;
+        image_attachments?: unknown[];
+      }
+    | undefined;
+
+  await startTask(
+    makeRuntime({
+      onTaskStart: (params) => {
+        captured = params as typeof captured;
+      },
+    }),
+    {
+      workspace_id: "workspace-1",
+      description: "Inspect screenshot",
+      config_alias: "default",
+      config_path: "/tmp/config.yaml",
+      image_attachments: [
+        {
+          name: "screen.png",
+          mime_type: "image/png",
+          size_bytes: 4,
+          data_base64: "AAAAAA==",
+        },
+      ],
+    },
+  );
+
+  assert.equal(captured?.workspace_id, "workspace-1");
+  assert.equal(captured?.description, "Inspect screenshot");
+  assert.deepEqual(captured?.image_attachments, [
+    {
+      name: "screen.png",
+      mime_type: "image/png",
+      size_bytes: 4,
+      data_base64: "AAAAAA==",
+    },
+  ]);
+});
+
 test("startFollowUpFromTask forwards each supported follow-up mode", async () => {
   const modes = ["continue_here", "fork_head", "fork_with_changes"] as const;
 
@@ -296,6 +357,98 @@ test("startFollowUpFromTask forwards each supported follow-up mode", async () =>
     assert.equal(captured?.description, "Follow up on the current task");
     assert.equal(captured?.follow_up_mode, mode);
   }
+});
+
+test("startFollowUpFromTask forwards image attachments", async () => {
+  let captured:
+    | {
+        parent_task_id: string;
+        image_attachments?: unknown[];
+      }
+    | undefined;
+
+  await startFollowUpFromTask(
+    makeRuntime({
+      onTaskStartFollowUp: (params) => {
+        captured = params as typeof captured;
+      },
+    }),
+    {
+      workspaceId: "workspace-1",
+      taskId: "task-1",
+      task: makeTaskView("task-1"),
+      description: "Follow up with image",
+      imageAttachments: [
+        {
+          name: "follow-up.webp",
+          mime_type: "image/webp",
+          size_bytes: 4,
+          data_base64: "AAAAAA==",
+        },
+      ],
+    },
+  );
+
+  assert.equal(captured?.parent_task_id, "task-1");
+  assert.deepEqual(captured?.image_attachments, [
+    {
+      name: "follow-up.webp",
+      mime_type: "image/webp",
+      size_bytes: 4,
+      data_base64: "AAAAAA==",
+    },
+  ]);
+});
+
+test("submitTaskApproval forwards image attachments outside the payload", async () => {
+  let captured:
+    | {
+        payload?: Record<string, unknown>;
+        image_attachments?: unknown[];
+      }
+    | undefined;
+
+  await submitTaskApproval(
+    makeRuntime({
+      onTaskSubmitInput: (params) => {
+        captured = params as typeof captured;
+      },
+    }),
+    {
+      workspaceId: "workspace-1",
+      taskId: "task-1",
+      inputRequest: {
+        kind: "human_node",
+        task_id: "task-1",
+        node_run_id: "run-approve",
+        node_name: "approve_plan",
+      },
+      approved: true,
+      feedback: "Looks good",
+      imageAttachments: [
+        {
+          name: "approval.png",
+          mime_type: "image/png",
+          size_bytes: 4,
+          data_base64: "AAAAAA==",
+        },
+      ],
+    },
+  );
+
+  assert.deepEqual(captured?.payload, {
+    approved: true,
+    feedback: "Looks good",
+  });
+  assert.deepEqual(captured?.image_attachments, [
+    {
+      name: "approval.png",
+      mime_type: "image/png",
+      size_bytes: 4,
+      data_base64: "AAAAAA==",
+    },
+  ]);
+  assert.equal(Object.hasOwn(captured?.payload ?? {}, "image_attachments"), false);
 });
 
 test("retryTaskUntilResumed polls task detail until the failed state clears", async () => {

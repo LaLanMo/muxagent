@@ -16,6 +16,7 @@ import type { LoadTaskDetailFn } from "@/features/task-detail/model/use-task-det
 import type {
   ConfigCatalogEntryDto,
   FollowUpModeDto,
+  ImageAttachmentInputDto,
   InputRequestDto,
   TaskViewDto,
   WorktreeCleanupInfoDto,
@@ -116,7 +117,11 @@ export function useTaskDetailActions({
     }
   }
 
-  async function submitDecision(approved: boolean, feedback: string): Promise<void> {
+  async function submitDecision(
+    approved: boolean,
+    feedback: string,
+    imageAttachments?: ImageAttachmentInputDto[],
+  ): Promise<void> {
     if (!inputRequest || !taskId || !workspaceId) {
       return;
     }
@@ -129,6 +134,7 @@ export function useTaskDetailActions({
           inputRequest,
           approved,
           feedback,
+          imageAttachments,
         });
         invalidateTaskDetail(workspaceId, taskId);
       });
@@ -173,11 +179,12 @@ export function useTaskDetailActions({
     description: string;
     followUpConfigAlias?: string;
     followUpMode?: FollowUpModeDto;
+    imageAttachments?: ImageAttachmentInputDto[];
   }): Promise<boolean> {
     if (!task || !workspaceId || !taskId) {
       return false;
     }
-    const { description, followUpConfigAlias, followUpMode } = args;
+    const { description, followUpConfigAlias, followUpMode, imageAttachments } = args;
     const selectedConfig = resolveFollowUpConfigEntry({
       configEntries,
       task,
@@ -202,6 +209,7 @@ export function useTaskDetailActions({
             task,
             description: trimmed,
             followUpMode,
+            imageAttachments,
             selectedConfig: selectedConfig
               ? {
                   alias: selectedConfig.alias,
@@ -342,8 +350,10 @@ export function useTaskDetailActions({
     submittingRetry: Boolean(retryingNodeId),
     submittingContinue: continuingBlocked,
     submittingRecovery: Boolean(recoveringNodeId),
-    submitApprove: (feedback: string) => submitDecision(true, feedback),
-    submitReject: (feedback: string) => submitDecision(false, feedback),
+    submitApprove: (feedback: string, imageAttachments?: ImageAttachmentInputDto[]) =>
+      submitDecision(true, feedback, imageAttachments),
+    submitReject: (feedback: string, imageAttachments?: ImageAttachmentInputDto[]) =>
+      submitDecision(false, feedback, imageAttachments),
     submitClarification,
     submitFollowUp,
     openWorktreeCleanupDialog,

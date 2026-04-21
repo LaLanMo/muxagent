@@ -10,6 +10,11 @@ import {
   rememberConfigAlias,
 } from "@/features/app/model/config-memory";
 import { flowNodesForConfig } from "@/domain/task-shell";
+import {
+  mapImageAttachmentsToDto,
+  revokeImageAttachmentUrls,
+  type DraftImageAttachment,
+} from "@/features/shared/model/image-attachments";
 import type { ConfigDraftDto } from "@/rpc/types";
 import { useTaskSnapshotStore } from "@/state/task-snapshot-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
@@ -37,6 +42,7 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   const preferredAlias =
     pickPreferredLaunchableConfig(entries, readRememberedConfigAlias())?.alias ?? "";
   const [description, setDescription] = useState("");
+  const [imageAttachments, setImageAttachments] = useState<DraftImageAttachment[]>([]);
   const [selectedAlias, setSelectedAlias] = useState(preferredAlias);
   const [useWorktree, setUseWorktree] = useState(
     catalog?.default_use_worktree ?? false,
@@ -71,6 +77,17 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
     selectedWorkspaceId,
     workspaces,
   ]);
+
+  useEffect(() => {
+    if (open) {
+      return;
+    }
+    setDescription("");
+    setImageAttachments((current) => {
+      revokeImageAttachmentUrls(current);
+      return [];
+    });
+  }, [open]);
 
   // Fetch full config detail (topology) when selected alias changes
   useEffect(() => {
@@ -117,9 +134,11 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
         config_alias: selectedEntry.alias,
         config_path: selectedEntry.config_path,
         use_worktree: Boolean(selectedWorkspace?.worktree_available && useWorktree),
+        image_attachments: mapImageAttachmentsToDto(imageAttachments),
       });
       rememberConfigAlias(selectedEntry.alias);
       setDescription("");
+      setImageAttachments([]);
       onClose();
       void getRuntime()
         .backend.taskList(workspaceId)
@@ -141,6 +160,8 @@ export function useNewTaskModal({ open, onClose }: UseNewTaskModalArgs) {
   return {
     description,
     setDescription,
+    imageAttachments,
+    setImageAttachments,
     selectedTargetWorkspaceId,
     setSelectedTargetWorkspaceId,
     workspaceOptions: workspaces.map((workspace) => ({

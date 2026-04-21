@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import { skipOnboarding } from "./_helpers";
 
+const tinyPngBase64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+
+const tinyPngFile = {
+  name: "fixture-image.png",
+  mimeType: "image/png",
+};
+
 test.beforeEach(async ({ page }) => {
   await skipOnboarding(page);
 });
@@ -30,6 +38,33 @@ function allWorkspacesScope(page: Page) {
 
 function workspaceRow(page: Page, label: string) {
   return page.locator('[data-testid^="workspace-row-"]').filter({ hasText: label }).first();
+}
+
+async function pasteTinyPngInto(page: Page, textareaTestId: string) {
+  await page.getByTestId(textareaTestId).evaluate(
+    (element, fileData) => {
+      const binary = window.atob(fileData.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      const file = new File([bytes], fileData.name, { type: fileData.mimeType });
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(file);
+      element.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData,
+        }),
+      );
+    },
+    {
+      base64: tinyPngBase64,
+      mimeType: tinyPngFile.mimeType,
+      name: tinyPngFile.name,
+    },
+  );
 }
 
 async function readHeaderAlignment(page: Page) {
@@ -1271,6 +1306,10 @@ test("switches configs from the compact follow-up rail and starts a fixture foll
     .toBe(previousPath);
   const expandedHeight = await descriptionInput.evaluate((element) => element.clientHeight);
   expect(expandedHeight).toBeGreaterThan(initialHeight);
+  await expect(page.getByTestId("follow-up-image-composer-file-input")).toHaveCount(0);
+  await pasteTinyPngInto(page, "follow-up-description");
+  await expect(page.getByTestId("follow-up-image-composer-attachments")).toBeVisible();
+  await expect(page.getByTestId("follow-up-image-composer-attachment").locator("img")).toBeVisible();
   await sendButton.click();
 
   await expect

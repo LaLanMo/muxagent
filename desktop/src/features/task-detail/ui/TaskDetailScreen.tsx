@@ -63,6 +63,7 @@ import type {
   ConfigCatalogEntryDto,
   ConfigViewDto,
   FollowUpModeDto,
+  ImageAttachmentInputDto,
   InputRequestDto,
   NodeRunViewDto,
   TaskFollowUpDto,
@@ -546,13 +547,20 @@ type TaskDetailScreenProps = {
   openTranscript: (runId: string) => void;
   openArtifact: (artifact: ArtifactRefDto) => void;
   openArtifactExternally: () => Promise<void>;
-  submitApprove: (feedback: string) => Promise<void>;
-  submitReject: (feedback: string) => Promise<void>;
+  submitApprove: (
+    feedback: string,
+    imageAttachments?: ImageAttachmentInputDto[],
+  ) => Promise<void>;
+  submitReject: (
+    feedback: string,
+    imageAttachments?: ImageAttachmentInputDto[],
+  ) => Promise<void>;
   submitClarification: (answers: Array<string | string[]>) => Promise<void>;
   submitFollowUp: (args: {
     description: string;
     followUpConfigAlias?: string;
     followUpMode?: FollowUpModeDto;
+    imageAttachments?: ImageAttachmentInputDto[];
   }) => Promise<boolean>;
   openWorktreeCleanupDialog: () => Promise<void>;
   closeWorktreeCleanupDialog: () => void;

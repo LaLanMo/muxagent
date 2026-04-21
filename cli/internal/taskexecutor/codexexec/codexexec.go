@@ -150,6 +150,11 @@ func buildExecArgs(req taskexecutor.Request, outputPath, prompt string) []string
 	if level := strings.TrimSpace(req.ThinkingLevel); level != "" {
 		args = append(args, "-c", fmt.Sprintf("model_reasoning_effort=%q", level))
 	}
+	for _, imagePath := range req.ImagePaths {
+		if imagePath = strings.TrimSpace(imagePath); imagePath != "" {
+			args = append(args, "--image", imagePath)
+		}
+	}
 	if sessionID := taskexecutor.ResumeTargetSessionID(req); sessionID != "" {
 		args = append(args, "resume", sessionID, prompt)
 		return args

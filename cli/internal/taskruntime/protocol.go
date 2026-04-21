@@ -26,18 +26,26 @@ const (
 )
 
 type RunCommand struct {
-	Type         CommandType
-	TaskID       string
-	ParentTaskID string
-	NodeRunID    string
-	Description  string
-	ConfigAlias  string
-	ConfigPath   string
-	WorkDir      string
-	UseWorktree  bool
-	FollowUpMode FollowUpMode
-	Payload      map[string]interface{}
-	Force        bool
+	Type             CommandType
+	TaskID           string
+	ParentTaskID     string
+	NodeRunID        string
+	Description      string
+	ConfigAlias      string
+	ConfigPath       string
+	WorkDir          string
+	UseWorktree      bool
+	FollowUpMode     FollowUpMode
+	ImageAttachments []ImageAttachmentInput
+	Payload          map[string]interface{}
+	Force            bool
+}
+
+type ImageAttachmentInput struct {
+	Name       string `json:"name,omitempty"`
+	MIMEType   string `json:"mime_type,omitempty"`
+	SizeBytes  int64  `json:"size_bytes,omitempty"`
+	DataBase64 string `json:"data_base64,omitempty"`
 }
 
 type EventType string

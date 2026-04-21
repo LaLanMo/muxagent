@@ -12,6 +12,7 @@ import type {
   CommandAcceptedResult,
   ConfigViewDto,
   FollowUpModeDto,
+  ImageAttachmentInputDto,
   InputRequestDto,
   TaskContinueBlockedParams,
   TaskCleanupWorktreeParams,
@@ -59,6 +60,7 @@ type SubmitTaskApprovalArgs = {
   inputRequest: InputRequestDto;
   approved: boolean;
   feedback?: string;
+  imageAttachments?: ImageAttachmentInputDto[];
 };
 
 type SubmitTaskClarificationArgs = {
@@ -74,6 +76,7 @@ type StartFollowUpFromTaskArgs = {
   task: TaskViewDto;
   description: string;
   followUpMode?: FollowUpModeDto;
+  imageAttachments?: ImageAttachmentInputDto[];
   selectedConfig?: {
     alias: string;
     configPath: string;
@@ -395,6 +398,7 @@ export async function submitTaskApproval(
       approved: args.approved,
       ...(args.feedback?.trim() ? { feedback: args.feedback.trim() } : {}),
     },
+    image_attachments: args.imageAttachments,
   });
 }
 
@@ -425,6 +429,7 @@ export async function startFollowUpFromTask(
     config_alias: args.selectedConfig?.alias ?? args.task.task.config_alias,
     config_path: args.selectedConfig?.configPath ?? args.task.task.config_path,
     follow_up_mode: args.followUpMode,
+    image_attachments: args.imageAttachments,
   });
 }
 

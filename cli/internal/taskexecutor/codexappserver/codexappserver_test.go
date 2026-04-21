@@ -84,6 +84,18 @@ func TestExecutorUsesThreadResumeForAnsweredClarification(t *testing.T) {
 	assert.Contains(t, string(data), `"threadId":"thread-123"`)
 }
 
+func TestBuildTurnInputIncludesLocalImages(t *testing.T) {
+	req := requestFixture(t.TempDir())
+	req.ImagePaths = []string{"/tmp/one.png", " ", "/tmp/two.webp"}
+
+	input := buildTurnInput(req, "do it")
+
+	require.Len(t, input, 3)
+	assert.Equal(t, map[string]interface{}{"type": "text", "text": "do it"}, input[0])
+	assert.Equal(t, map[string]interface{}{"type": "localImage", "path": "/tmp/one.png"}, input[1])
+	assert.Equal(t, map[string]interface{}{"type": "localImage", "path": "/tmp/two.webp"}, input[2])
+}
+
 func TestExecutorFailsWhenResumeSwitchesToDifferentThread(t *testing.T) {
 	binaryPath := writeFakeCodexAppServer(t)
 	t.Setenv("FAKE_CODEX_MODE", "resume-different-thread")

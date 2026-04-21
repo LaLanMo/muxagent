@@ -2,6 +2,7 @@ package taskruntime
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -110,6 +111,56 @@ func TestServiceAgentRunPersistsPromptInputArtifact(t *testing.T) {
 	assert.NotContains(t, input, "# Input")
 	assert.NotContains(t, completed.TaskView.ArtifactPaths, inputPath)
 	assert.Contains(t, completed.TaskView.ArtifactPaths, "impl.md")
+}
+
+func TestServiceStartTaskPersistsImageAttachmentsForAgentInput(t *testing.T) {
+	executor := &fakeExecutor{
+		steps: map[string][]taskexecutor.Result{
+			"implement": {{Kind: taskexecutor.ResultKindResult, Result: resultWithArtifact("impl.md")}},
+		},
+	}
+	service := newTestServiceWithConfig(t, singleAgentTerminalFixture(), executor)
+	defer service.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _ = service.Run(ctx) }()
+
+	cmd := startTaskCommand(t, service, "Inspect this screenshot")
+	cmd.ImageAttachments = []ImageAttachmentInput{testImageAttachmentInput(t, "screen shot.png")}
+	service.Dispatch(cmd)
+	completed := waitForEvent(t, service.Events(), EventTaskCompleted)
+	require.NotNil(t, completed.TaskView)
+
+	requests := executor.requestsForNode("implement")
+	require.Len(t, requests, 1)
+	require.Len(t, requests[0].ImagePaths, 1)
+	assert.FileExists(t, requests[0].ImagePaths[0])
+
+	runs, err := service.store.ListNodeRunsByTask(context.Background(), completed.TaskID)
+	require.NoError(t, err)
+	var implementRun taskdomain.NodeRun
+	for _, run := range runs {
+		if run.NodeName == "implement" {
+			implementRun = run
+			break
+		}
+	}
+	images, err := readImageAttachmentManifest(completed.TaskView.Task, runs, implementRun)
+	require.NoError(t, err)
+	require.Len(t, images, 1)
+	assert.Equal(t, "screen shot.png", images[0].OriginalFilename)
+	assert.Equal(t, "image/png", images[0].MIMEType)
+	assert.Equal(t, requests[0].ImagePaths[0], images[0].AbsolutePath)
+	assert.Contains(t, images[0].RelativePath, "001-screen-shot.png")
+
+	manifestPath := mustRunArtifactPathForRun(t, completed.TaskView.Task, runs, implementRun, attachmentManifestName)
+	inputPath := mustRunArtifactPathForRun(t, completed.TaskView.Task, runs, implementRun, inputArtifactName)
+	assert.FileExists(t, manifestPath)
+	input := readTestFile(t, inputPath)
+	assert.Contains(t, input, "Image attachments are available as managed local files")
+	assert.Contains(t, input, images[0].AbsolutePath)
+	assert.Contains(t, requests[0].Prompt, images[0].AbsolutePath)
 }
 
 func TestServiceVerifyRunUsesFilesystemOrientedWorkflowContext(t *testing.T) {
@@ -1747,9 +1798,10 @@ func TestServiceHumanNodeSubmissionCreatesAuditArtifactAndFeedsNextPrompt(t *tes
 	require.Equal(t, InputKindHumanNode, firstApproval.InputRequest.Kind)
 
 	service.Dispatch(RunCommand{
-		Type:      CommandSubmitInput,
-		TaskID:    firstApproval.TaskID,
-		NodeRunID: firstApproval.NodeRunID,
+		Type:             CommandSubmitInput,
+		TaskID:           firstApproval.TaskID,
+		NodeRunID:        firstApproval.NodeRunID,
+		ImageAttachments: []ImageAttachmentInput{testImageAttachmentInput(t, "approval.png")},
 		Payload: map[string]interface{}{
 			"approved": false,
 			"feedback": "Need more detail",
@@ -1790,13 +1842,25 @@ func TestServiceHumanNodeSubmissionCreatesAuditArtifactAndFeedsNextPrompt(t *tes
 	require.True(t, ok)
 	assert.Equal(t, false, result["approved"])
 	assert.Equal(t, "Need more detail", result["feedback"])
+	assert.NotContains(t, string(data), "image_attachments")
+	assert.NotContains(t, string(data), "approval.png")
 	input := readTestFile(t, inputPath)
 	assert.Contains(t, input, "Submitted:")
 	assert.Contains(t, input, "\"approved\": false")
 	assert.Contains(t, input, "\"feedback\": \"Need more detail\"")
+	assert.Contains(t, input, "## Image Attachments")
+	assert.Contains(t, input, "approval.png")
+	images, err := readImageAttachmentManifest(task, runs, approvalRun)
+	require.NoError(t, err)
+	require.Len(t, images, 1)
+	assert.Equal(t, "approval.png", images[0].OriginalFilename)
+	assert.FileExists(t, images[0].AbsolutePath)
 
 	draftPrompts := executor.requestsForNode("draft_plan")
 	require.Len(t, draftPrompts, 2)
+	require.Len(t, draftPrompts[1].ImagePaths, 1)
+	assert.Equal(t, images[0].AbsolutePath, draftPrompts[1].ImagePaths[0])
+	assert.Contains(t, draftPrompts[1].Prompt, images[0].AbsolutePath)
 	assert.NotContains(t, draftPrompts[1].Prompt, outputPath)
 	assert.NotContains(t, draftPrompts[1].Prompt, inputPath)
 
@@ -2782,6 +2846,27 @@ func startTaskCommand(t *testing.T, service *Service, description string) RunCom
 		ConfigAlias: taskconfig.DefaultAlias,
 		ConfigPath:  managedDefaultTestConfigPath(t),
 		WorkDir:     service.workDir,
+	}
+}
+
+func testImageAttachmentInput(t *testing.T, name string) ImageAttachmentInput {
+	t.Helper()
+	data := []byte{
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x04, 0x00, 0x00, 0x00, 0xb5, 0x1c, 0x0c,
+		0x02, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41,
+		0x54, 0x78, 0xda, 0x63, 0xfc, 0xff, 0x1f, 0x00,
+		0x03, 0x03, 0x02, 0x00, 0xef, 0xbf, 0xa7, 0xdb,
+		0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44,
+		0xae, 0x42, 0x60, 0x82,
+	}
+	return ImageAttachmentInput{
+		Name:       name,
+		MIMEType:   "image/png",
+		SizeBytes:  int64(len(data)),
+		DataBase64: base64.StdEncoding.EncodeToString(data),
 	}
 }
 

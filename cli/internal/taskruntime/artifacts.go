@@ -2,11 +2,15 @@ package taskruntime
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -19,8 +23,14 @@ const (
 	inputArtifactName          = "input.md"
 	outputArtifactName         = "output.json"
 	manifestArtifactName       = "manifest.json"
+	attachmentDirName          = "attachments"
+	attachmentManifestName     = "attachments.json"
 	clarificationHistoryMarker = "<!-- muxagent:clarification-history -->"
+	maxImageAttachmentCount    = 6
+	maxImageAttachmentBytes    = 8 * 1024 * 1024
 )
+
+var unsafeAttachmentNameChars = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
 type runManifest struct {
 	TaskID      string                   `json:"task_id"`
@@ -31,6 +41,24 @@ type runManifest struct {
 	SessionID   string                   `json:"session_id,omitempty"`
 	StartedAt   time.Time                `json:"started_at"`
 	CompletedAt *time.Time               `json:"completed_at,omitempty"`
+}
+
+type imageAttachmentManifest struct {
+	Images []ImageAttachmentArtifact `json:"images"`
+}
+
+type ImageAttachmentArtifact struct {
+	OriginalFilename string `json:"original_filename"`
+	MIMEType         string `json:"mime_type"`
+	SizeBytes        int64  `json:"size_bytes"`
+	SHA256           string `json:"sha256"`
+	RelativePath     string `json:"relative_path"`
+	AbsolutePath     string `json:"absolute_path"`
+}
+
+type imageAttachmentContextEntry struct {
+	Run    taskdomain.NodeRun
+	Images []ImageAttachmentArtifact
 }
 
 func runArtifactDirPath(task taskdomain.Task, _ []taskdomain.NodeRun, run taskdomain.NodeRun) (string, error) {
@@ -112,12 +140,12 @@ func persistRunManifest(task taskdomain.Task, runs []taskdomain.NodeRun, run tas
 	return os.WriteFile(filepath.Join(dir, manifestArtifactName), data, 0o644)
 }
 
-func materializeHumanNodeArtifact(task taskdomain.Task, run taskdomain.NodeRun, runs []taskdomain.NodeRun, payload map[string]interface{}, submittedAt time.Time) (map[string]interface{}, error) {
+func materializeHumanNodeArtifact(task taskdomain.Task, run taskdomain.NodeRun, runs []taskdomain.NodeRun, payload map[string]interface{}, submittedAt time.Time, attachments ...[]ImageAttachmentArtifact) (map[string]interface{}, error) {
 	outputPath, err := runArtifactPath(task, runs, run, outputArtifactName)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := writeHumanInputArtifact(task, run, runs, payload, submittedAt); err != nil {
+	if _, err := writeHumanInputArtifact(task, run, runs, payload, submittedAt, optionalImageAttachmentArtifacts(attachments)); err != nil {
 		return nil, err
 	}
 	envelope := map[string]interface{}{
@@ -150,8 +178,8 @@ func cloneMap(src map[string]interface{}) map[string]interface{} {
 	return dst
 }
 
-func writeHumanInputArtifact(task taskdomain.Task, run taskdomain.NodeRun, runs []taskdomain.NodeRun, payload map[string]interface{}, submittedAt time.Time) (string, error) {
-	body, err := renderHumanInputMarkdown(payload, submittedAt)
+func writeHumanInputArtifact(task taskdomain.Task, run taskdomain.NodeRun, runs []taskdomain.NodeRun, payload map[string]interface{}, submittedAt time.Time, attachments []ImageAttachmentArtifact) (string, error) {
+	body, err := renderHumanInputMarkdown(payload, submittedAt, attachments)
 	if err != nil {
 		return "", err
 	}
@@ -208,6 +236,268 @@ func writeInputArtifact(task taskdomain.Task, run taskdomain.NodeRun, runs []tas
 	return path, nil
 }
 
+func persistImageAttachments(task taskdomain.Task, runs []taskdomain.NodeRun, run taskdomain.NodeRun, inputs []ImageAttachmentInput) ([]ImageAttachmentArtifact, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+	if len(inputs) > maxImageAttachmentCount {
+		return nil, fmt.Errorf("too many image attachments: got %d, max %d", len(inputs), maxImageAttachmentCount)
+	}
+	dir, err := runArtifactDir(task, runs, run)
+	if err != nil {
+		return nil, err
+	}
+	attachmentDir := filepath.Join(dir, attachmentDirName)
+	if err := os.MkdirAll(attachmentDir, 0o755); err != nil {
+		return nil, err
+	}
+	images := make([]ImageAttachmentArtifact, 0, len(inputs))
+	for i, input := range inputs {
+		data, mimeType, err := decodeImageAttachmentInput(input)
+		if err != nil {
+			return nil, fmt.Errorf("image attachment %d: %w", i+1, err)
+		}
+		filename := managedAttachmentFilename(input.Name, mimeType, i+1)
+		relativePath := filepath.ToSlash(filepath.Join(attachmentDirName, filename))
+		absolutePath := filepath.Join(dir, filepath.FromSlash(relativePath))
+		sum := sha256.Sum256(data)
+		if err := os.WriteFile(absolutePath, data, 0o644); err != nil {
+			return nil, err
+		}
+		images = append(images, ImageAttachmentArtifact{
+			OriginalFilename: displayAttachmentName(input.Name),
+			MIMEType:         mimeType,
+			SizeBytes:        int64(len(data)),
+			SHA256:           hex.EncodeToString(sum[:]),
+			RelativePath:     relativePath,
+			AbsolutePath:     absolutePath,
+		})
+	}
+	manifest := imageAttachmentManifest{Images: images}
+	payload, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	payload = append(payload, '\n')
+	if err := os.WriteFile(filepath.Join(dir, attachmentManifestName), payload, 0o644); err != nil {
+		return nil, err
+	}
+	return images, nil
+}
+
+func decodeImageAttachmentInput(input ImageAttachmentInput) ([]byte, string, error) {
+	mimeType := strings.ToLower(strings.TrimSpace(input.MIMEType))
+	dataText := strings.TrimSpace(input.DataBase64)
+	if strings.HasPrefix(strings.ToLower(dataText), "data:") {
+		header, body, ok := strings.Cut(dataText, ",")
+		if !ok {
+			return nil, "", errors.New("data URL is missing base64 payload")
+		}
+		if !strings.Contains(strings.ToLower(header), ";base64") {
+			return nil, "", errors.New("data URL must be base64 encoded")
+		}
+		if mimeType == "" {
+			mimeType = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(strings.TrimSuffix(header, ";base64"))), "data:")
+		}
+		dataText = body
+	}
+	if !isAllowedImageMIMEType(mimeType) {
+		return nil, "", fmt.Errorf("unsupported MIME type %q", mimeType)
+	}
+	if dataText == "" {
+		return nil, "", errors.New("base64 data is required")
+	}
+	if input.SizeBytes > maxImageAttachmentBytes {
+		return nil, "", fmt.Errorf("image is too large: %d bytes exceeds %d", input.SizeBytes, maxImageAttachmentBytes)
+	}
+	data, err := base64.StdEncoding.DecodeString(dataText)
+	if err != nil {
+		return nil, "", fmt.Errorf("decode base64: %w", err)
+	}
+	if len(data) == 0 {
+		return nil, "", errors.New("image data is empty")
+	}
+	if len(data) > maxImageAttachmentBytes {
+		return nil, "", fmt.Errorf("image is too large: %d bytes exceeds %d", len(data), maxImageAttachmentBytes)
+	}
+	if input.SizeBytes > 0 && input.SizeBytes != int64(len(data)) {
+		return nil, "", fmt.Errorf("declared size %d does not match decoded size %d", input.SizeBytes, len(data))
+	}
+	return data, mimeType, nil
+}
+
+func isAllowedImageMIMEType(mimeType string) bool {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+		return true
+	default:
+		return false
+	}
+}
+
+func managedAttachmentFilename(originalName, mimeType string, index int) string {
+	name := displayAttachmentName(originalName)
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	stem = unsafeAttachmentNameChars.ReplaceAllString(stem, "-")
+	stem = strings.Trim(stem, ".-_ ")
+	if stem == "" {
+		stem = "image"
+	}
+	if len(stem) > 56 {
+		stem = stem[:56]
+		stem = strings.Trim(stem, ".-_ ")
+		if stem == "" {
+			stem = "image"
+		}
+	}
+	return fmt.Sprintf("%03d-%s%s", index, stem, imageExtensionForMIMEType(mimeType))
+}
+
+func displayAttachmentName(originalName string) string {
+	name := strings.TrimSpace(strings.ReplaceAll(originalName, "\x00", ""))
+	if name == "" {
+		return "image"
+	}
+	name = filepath.Base(filepath.ToSlash(name))
+	name = strings.TrimSpace(name)
+	if name == "." || name == string(filepath.Separator) || name == "" {
+		return "image"
+	}
+	return name
+}
+
+func imageExtensionForMIMEType(mimeType string) string {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg":
+		return ".jpg"
+	case "image/gif":
+		return ".gif"
+	case "image/webp":
+		return ".webp"
+	default:
+		return ".png"
+	}
+}
+
+func readImageAttachmentManifest(task taskdomain.Task, runs []taskdomain.NodeRun, run taskdomain.NodeRun) ([]ImageAttachmentArtifact, error) {
+	path, err := runArtifactPathForExistingRun(task, runs, run, attachmentManifestName)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var manifest imageAttachmentManifest
+	if err := json.Unmarshal(data, &manifest); err != nil {
+		return nil, fmt.Errorf("read image attachment manifest %s: %w", path, err)
+	}
+	return manifest.Images, nil
+}
+
+func collectImageAttachmentContext(task taskdomain.Task, runs []taskdomain.NodeRun, current taskdomain.NodeRun) ([]imageAttachmentContextEntry, error) {
+	ordered := sortedRunsByStart(runs)
+	if !containsRunID(ordered, current.ID) {
+		ordered = append(ordered, current)
+	}
+	entries := make([]imageAttachmentContextEntry, 0)
+	for _, run := range ordered {
+		if strings.TrimSpace(run.ID) == "" {
+			continue
+		}
+		if run.ID != current.ID && run.Status != taskdomain.NodeRunDone {
+			continue
+		}
+		if run.ID != current.ID && current.StartedAt.IsZero() == false && run.StartedAt.After(current.StartedAt) {
+			continue
+		}
+		images, err := readImageAttachmentManifest(task, runs, run)
+		if err != nil {
+			return nil, err
+		}
+		if len(images) == 0 {
+			continue
+		}
+		entries = append(entries, imageAttachmentContextEntry{Run: run, Images: images})
+		if run.ID == current.ID {
+			break
+		}
+	}
+	return entries, nil
+}
+
+func containsRunID(runs []taskdomain.NodeRun, runID string) bool {
+	for _, run := range runs {
+		if run.ID == runID {
+			return true
+		}
+	}
+	return false
+}
+
+func imageAttachmentPaths(task taskdomain.Task, runs []taskdomain.NodeRun, current taskdomain.NodeRun) ([]string, error) {
+	entries, err := collectImageAttachmentContext(task, runs, current)
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, entry := range entries {
+		for _, image := range entry.Images {
+			if strings.TrimSpace(image.AbsolutePath) != "" {
+				paths = append(paths, image.AbsolutePath)
+			}
+		}
+	}
+	return paths, nil
+}
+
+func renderImageAttachmentContext(task taskdomain.Task, runs []taskdomain.NodeRun, current taskdomain.NodeRun) (string, error) {
+	entries, err := collectImageAttachmentContext(task, runs, current)
+	if err != nil {
+		return "", err
+	}
+	if len(entries) == 0 {
+		return "", nil
+	}
+	lines := []string{
+		"Image attachments are available as managed local files. Use these paths when image contents matter:",
+	}
+	for _, entry := range entries {
+		label := fmt.Sprintf("- %s (#%d), run %s", entry.Run.NodeName, runIteration(runs, entry.Run), entry.Run.ID)
+		lines = append(lines, label)
+		for _, image := range entry.Images {
+			lines = append(lines, fmt.Sprintf("  - %s: `%s` (%s, %d bytes, sha256:%s)", image.OriginalFilename, image.AbsolutePath, image.MIMEType, image.SizeBytes, image.SHA256))
+		}
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+func appendAttachmentMarkdown(lines []string, attachments []ImageAttachmentArtifact) []string {
+	if len(attachments) == 0 {
+		return lines
+	}
+	lines = append(lines, "", "## Image Attachments", "")
+	for _, image := range attachments {
+		lines = append(lines, fmt.Sprintf("- %s", image.OriginalFilename))
+		lines = append(lines, fmt.Sprintf("  - MIME type: %s", image.MIMEType))
+		lines = append(lines, fmt.Sprintf("  - Size: %d bytes", image.SizeBytes))
+		lines = append(lines, fmt.Sprintf("  - SHA-256: %s", image.SHA256))
+		lines = append(lines, fmt.Sprintf("  - Relative path: `%s`", image.RelativePath))
+		lines = append(lines, fmt.Sprintf("  - Absolute path: `%s`", image.AbsolutePath))
+	}
+	return lines
+}
+
+func optionalImageAttachmentArtifacts(values [][]ImageAttachmentArtifact) []ImageAttachmentArtifact {
+	if len(values) == 0 {
+		return nil
+	}
+	return values[0]
+}
+
 func readClarificationInputBase(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -240,7 +530,7 @@ func mergeClarificationInputMarkdown(base []byte, history []byte) []byte {
 	return out
 }
 
-func renderHumanInputMarkdown(payload map[string]interface{}, submittedAt time.Time) ([]byte, error) {
+func renderHumanInputMarkdown(payload map[string]interface{}, submittedAt time.Time, attachments []ImageAttachmentArtifact) ([]byte, error) {
 	data, err := json.MarshalIndent(cloneMap(payload), "", "  ")
 	if err != nil {
 		return nil, err
@@ -254,6 +544,7 @@ func renderHumanInputMarkdown(payload map[string]interface{}, submittedAt time.T
 		string(data),
 		"```",
 	}
+	lines = appendAttachmentMarkdown(lines, attachments)
 	return []byte(strings.Join(lines, "\n") + "\n"), nil
 }
 

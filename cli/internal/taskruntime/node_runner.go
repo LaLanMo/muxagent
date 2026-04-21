@@ -111,6 +111,10 @@ func (s *Service) executeAgentNode(ctx context.Context, task taskdomain.Task, cf
 	if err != nil {
 		return err
 	}
+	imagePaths, err := imageAttachmentPaths(task, runs, run)
+	if err != nil {
+		return err
+	}
 	executionDir := task.ExecutionWorkDir()
 	if taskUsesWorktree(task) {
 		executionDir, err = worktree.ResolveWorktreeCWD(task.ExecutionDir, ".")
@@ -135,6 +139,7 @@ func (s *Service) executeAgentNode(ctx context.Context, task taskdomain.Task, cf
 		Model:               nodeExec.Model,
 		ThinkingLevel:       nodeExec.ThinkingLevel,
 		Prompt:              prompt,
+		ImagePaths:          imagePaths,
 		ResultSchema:        cfg.NodeDefinitions[run.NodeName].ResultSchema,
 	}
 	if _, err := ensureAgentInputArtifact(task, run, runs, taskexecutor.AppendOutputContract(req)); err != nil {

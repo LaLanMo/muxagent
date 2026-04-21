@@ -115,7 +115,7 @@ func (e *Executor) Execute(ctx context.Context, req taskexecutor.Request, progre
 		"method": "turn/start",
 		"params": map[string]interface{}{
 			"threadId":     nil,
-			"input":        []map[string]interface{}{{"type": "text", "text": prompt}},
+			"input":        buildTurnInput(req, prompt),
 			"outputSchema": outputSchema,
 		},
 	}
@@ -343,6 +343,19 @@ func buildThreadRequest(req taskexecutor.Request, resumeThreadID string) map[str
 			"sandbox":        "danger-full-access",
 		},
 	}
+}
+
+func buildTurnInput(req taskexecutor.Request, prompt string) []map[string]interface{} {
+	input := []map[string]interface{}{{"type": "text", "text": prompt}}
+	for _, imagePath := range req.ImagePaths {
+		if imagePath = strings.TrimSpace(imagePath); imagePath != "" {
+			input = append(input, map[string]interface{}{
+				"type": "localImage",
+				"path": imagePath,
+			})
+		}
+	}
+	return input
 }
 
 func parseNotification(raw json.RawMessage, method string, params map[string]any, turnID string, state *streamState) ([]taskexecutor.StreamEvent, bool, string, string) {

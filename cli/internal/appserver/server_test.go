@@ -1688,6 +1688,12 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 			ConfigAlias:     "default",
 			ConfigPath:      "/tmp/default/config.yaml",
 			UseWorktree:     true,
+			ImageAttachments: []taskruntime.ImageAttachmentInput{{
+				Name:       "start.png",
+				MIMEType:   "image/png",
+				SizeBytes:  4,
+				DataBase64: "AAAAAA==",
+			}},
 		}),
 	})
 	if rpcErr != nil {
@@ -1704,6 +1710,9 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 	}
 	if got := dispatches[0].WorkDir; got != taskstore.NormalizeWorkDir(workspacePath) {
 		t.Fatalf("dispatch work_dir = %q, want %q", got, taskstore.NormalizeWorkDir(workspacePath))
+	}
+	if got := dispatches[0].ImageAttachments; len(got) != 1 || got[0].Name != "start.png" {
+		t.Fatalf("dispatch image attachments = %#v, want start.png", got)
 	}
 
 	server.handleRuntimeEvent(workspace.WorkspaceID, taskruntime.RunEvent{
@@ -1733,6 +1742,12 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 			TaskID:          "task-123",
 			NodeRunID:       "run-1",
 			Payload:         map[string]interface{}{"approved": true},
+			ImageAttachments: []taskruntime.ImageAttachmentInput{{
+				Name:       "approval.png",
+				MIMEType:   "image/png",
+				SizeBytes:  4,
+				DataBase64: "AAAAAA==",
+			}},
 		}),
 	})
 	if rpcErr != nil {
@@ -1748,6 +1763,9 @@ func TestServerTaskMutationsRouteByWorkspaceAndCorrelateNotifications(t *testing
 	}
 	if dispatches[1].Type != taskruntime.CommandSubmitInput {
 		t.Fatalf("second dispatch type = %q, want %q", dispatches[1].Type, taskruntime.CommandSubmitInput)
+	}
+	if got := dispatches[1].ImageAttachments; len(got) != 1 || got[0].Name != "approval.png" {
+		t.Fatalf("submit image attachments = %#v, want approval.png", got)
 	}
 }
 
@@ -1778,6 +1796,12 @@ func TestServerTaskStartFollowUpForwardsExplicitMode(t *testing.T) {
 			ConfigAlias:     "default",
 			ConfigPath:      "/tmp/default/config.yaml",
 			FollowUpMode:    taskruntime.FollowUpModeForkWithChanges,
+			ImageAttachments: []taskruntime.ImageAttachmentInput{{
+				Name:       "follow-up.webp",
+				MIMEType:   "image/webp",
+				SizeBytes:  4,
+				DataBase64: "AAAAAA==",
+			}},
 		}),
 	})
 	if rpcErr != nil {
@@ -1797,6 +1821,9 @@ func TestServerTaskStartFollowUpForwardsExplicitMode(t *testing.T) {
 	}
 	if got := dispatches[0].FollowUpMode; got != taskruntime.FollowUpModeForkWithChanges {
 		t.Fatalf("dispatch follow_up_mode = %q, want %q", got, taskruntime.FollowUpModeForkWithChanges)
+	}
+	if got := dispatches[0].ImageAttachments; len(got) != 1 || got[0].Name != "follow-up.webp" {
+		t.Fatalf("dispatch image attachments = %#v, want follow-up.webp", got)
 	}
 }
 

@@ -1,6 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 import { skipOnboarding } from "./_helpers";
 
+const tinyPngBase64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=";
+
+const tinyPngFile = {
+  name: "fixture-image.png",
+  mimeType: "image/png",
+};
+
 test.beforeEach(async ({ page }) => {
   await skipOnboarding(page);
 });
@@ -31,6 +39,33 @@ async function delayConfigGet(page: Page, delayMs = 180) {
     };
     backend.__testConfigGetDelayInstalled = true;
   }, { delayMs });
+}
+
+async function pasteTinyPngInto(page: Page, textareaTestId: string) {
+  await page.getByTestId(textareaTestId).evaluate(
+    (element, fileData) => {
+      const binary = window.atob(fileData.base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) {
+        bytes[index] = binary.charCodeAt(index);
+      }
+      const file = new File([bytes], fileData.name, { type: fileData.mimeType });
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(file);
+      element.dispatchEvent(
+        new ClipboardEvent("paste", {
+          bubbles: true,
+          cancelable: true,
+          clipboardData,
+        }),
+      );
+    },
+    {
+      base64: tinyPngBase64,
+      mimeType: tinyPngFile.mimeType,
+      name: tinyPngFile.name,
+    },
+  );
 }
 
 type ModalGeometry = {
@@ -83,6 +118,11 @@ test("opens the new-task modal and validates launch affordances from the shell",
 
   await page.getByTestId("new-task-description").fill("Draft rollback playbook");
   await expect(page.getByTestId("new-task-submit")).toBeEnabled();
+  await expect(page.getByTestId("new-task-image-composer-file-input")).toHaveCount(0);
+  await pasteTinyPngInto(page, "new-task-description");
+  await expect(page.getByTestId("new-task-image-composer-attachments")).toBeVisible();
+  await expect(page.getByTestId("new-task-image-composer-attachment")).toHaveCount(1);
+  await expect(page.getByTestId("new-task-image-composer-attachment").locator("img")).toBeVisible();
   await page.getByTestId("new-task-description").clear();
   await expect(page.getByTestId("new-task-submit")).toBeDisabled();
 });
@@ -229,6 +269,10 @@ test("renders the needs-attention task filter and drills back into task detail",
   await page.getByRole("link", { name: /Review PR #42/i }).click();
   await expect(page.getByTestId("task-detail-screen")).toBeVisible();
   await expect(page.getByTestId("approval-pane")).toBeVisible();
+  await expect(page.getByTestId("approval-image-composer-file-input")).toHaveCount(0);
+  await pasteTinyPngInto(page, "approval-feedback");
+  await expect(page.getByTestId("approval-image-composer-attachments")).toBeVisible();
+  await expect(page.getByTestId("approval-image-composer-attachment").locator("img")).toBeVisible();
 });
 
 test("renders configs and settings from the desktop shell", async ({ page }) => {

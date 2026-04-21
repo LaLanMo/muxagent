@@ -40,7 +40,11 @@ func buildPromptWithInheritedContext(task taskdomain.Task, cfg *taskconfig.Confi
 	if err != nil {
 		return "", err
 	}
-	workflowContext := buildWorkflowContext(task, cfg, runs, run, inherited)
+	imageAttachmentContext, err := renderImageAttachmentContext(task, runs, run)
+	if err != nil {
+		return "", err
+	}
+	workflowContext := buildWorkflowContext(task, cfg, runs, run, inherited, imageAttachmentContext)
 	clarificationContext := summarizeClarificationContext(run.Clarifications)
 	workflowDiagram := buildWorkflowDiagram(cfg)
 	runMetadataXML := buildRunMetadataXML(task, cfg, run, iteration, artifactDir)
@@ -55,7 +59,11 @@ func buildPromptWithInheritedContext(task taskdomain.Task, cfg *taskconfig.Confi
 		"{{WORKFLOW_DIAGRAM}}", workflowDiagram,
 		"{{RUN_METADATA_XML}}", runMetadataXML,
 	)
-	return replacer.Replace(template), nil
+	prompt := replacer.Replace(template)
+	if strings.TrimSpace(imageAttachmentContext) != "" && !strings.Contains(template, "{{WORKFLOW_CONTEXT_XML}}") {
+		prompt = strings.TrimRight(prompt, "\n") + "\n\n" + buildTaggedTextBlock("image_attachments", imageAttachmentContext)
+	}
+	return prompt, nil
 }
 
 func shouldResumeClarificationThread(run taskdomain.NodeRun) bool {
@@ -70,7 +78,11 @@ func shouldResumeClarificationThread(run taskdomain.NodeRun) bool {
 
 func buildClarificationResumePrompt(task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, run taskdomain.NodeRun, artifactDir string, iteration int, inherited *inheritedContext) (string, error) {
 	latest := run.Clarifications[len(run.Clarifications)-1]
-	workflowContextXML := buildTaggedTextBlock("execution_context", buildWorkflowContext(task, cfg, runs, run, inherited))
+	imageAttachmentContext, err := renderImageAttachmentContext(task, runs, run)
+	if err != nil {
+		return "", err
+	}
+	workflowContextXML := buildTaggedTextBlock("execution_context", buildWorkflowContext(task, cfg, runs, run, inherited, imageAttachmentContext))
 	clarificationContextXML := buildTaggedTextBlock("clarification_state", summarizeClarificationContext(run.Clarifications))
 	lines := []string{
 		buildRunMetadataXML(task, cfg, run, iteration, artifactDir),
@@ -232,7 +244,7 @@ func runIteration(runs []taskdomain.NodeRun, current taskdomain.NodeRun) int {
 	return ordinal
 }
 
-func buildWorkflowContext(task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, current taskdomain.NodeRun, inherited *inheritedContext) string {
+func buildWorkflowContext(task taskdomain.Task, cfg *taskconfig.Config, runs []taskdomain.NodeRun, current taskdomain.NodeRun, inherited *inheritedContext, imageAttachmentContext string) string {
 	lines := []string{
 		"- Use the directory paths in `<task_metadata>` when you need to locate the task, run, or current artifact directories.",
 		"- Unless the user explicitly says otherwise, do all project edits, builds, tests, and commands in `<execution_dir>`.",
@@ -257,6 +269,9 @@ func buildWorkflowContext(task taskdomain.Task, cfg *taskconfig.Config, runs []t
 	}
 	if inheritedSummary := summarizeInheritedWorkflowContext(inherited); inheritedSummary != "" {
 		lines = append(lines, "", "Follow-up lineage:", inheritedSummary)
+	}
+	if strings.TrimSpace(imageAttachmentContext) != "" {
+		lines = append(lines, "", imageAttachmentContext)
 	}
 	return strings.Join(lines, "\n")
 }
