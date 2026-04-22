@@ -197,16 +197,18 @@ export function UnifiedDiff({ diff, loading, error, placeholder }: UnifiedDiffPr
               {file.isBinary ? (
                 <div className="diff-view__file-empty">Binary file changed.</div>
               ) : file.hunks.length > 0 ? (
-                <Diff
-                  className="diff-view__table"
-                  diffType={file.type}
-                  gutterType="default"
-                  hunks={file.hunks}
-                  optimizeSelection={viewType === "split"}
-                  viewType={viewType}
-                >
-                  {renderHunks}
-                </Diff>
+                <div className="diff-view__file-body">
+                  <Diff
+                    className="diff-view__table"
+                    diffType={file.type}
+                    gutterType="default"
+                    hunks={file.hunks}
+                    optimizeSelection={viewType === "split"}
+                    viewType={viewType}
+                  >
+                    {renderHunks}
+                  </Diff>
+                </div>
               ) : (
                 <div className="diff-view__file-empty">
                   No textual changes in this file.

@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { skipOnboarding } from "./_helpers";
 
 async function connectFixtureWorkspace(
@@ -18,6 +18,12 @@ async function maybeScreenshot(page: Page, envName: string) {
   const screenshotPath = process.env[envName]?.trim();
   if (!screenshotPath) return;
   await page.getByTestId("workbench-shell").screenshot({ path: screenshotPath });
+}
+
+async function requiredBox(locator: Locator) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return box!;
 }
 
 async function openSourceControlPanel(page: Page) {
@@ -257,6 +263,53 @@ test("selecting a commit under a worktree renders the full commit diff", async (
   );
 
   await maybeScreenshot(page, "MUXAGENT_COMMIT_DIFF_SCREENSHOT");
+});
+
+test("source-control: horizontal diff scroll keeps the diff chrome anchored", async ({
+  page,
+}) => {
+  await connectFixtureWorkspace(page);
+  await page.setViewportSize({ width: 980, height: 760 });
+  await openSourceControlPanel(page);
+
+  await page.getByTestId("source-control-checkout-feat-auth-refactor").click();
+  await expect(
+    page.getByTestId("source-control-checkout-body-feat-auth-refactor"),
+  ).toBeVisible();
+
+  await page.getByTestId("source-control-commit-fa3b2").first().click();
+  await expect(page.getByTestId("source-control-commit-diff")).toBeVisible();
+
+  const diff = page.getByTestId("unified-diff");
+  const toolbar = diff.locator(".diff-view__toolbar");
+  const fileHeader = diff.locator(".diff-view__file-header").first();
+  const fileBody = diff.locator(".diff-view__file-body").first();
+  await expect(fileBody).toBeVisible();
+
+  const outerScroll = await diff.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(outerScroll.scrollWidth).toBeLessThanOrEqual(outerScroll.clientWidth + 2);
+
+  const bodyScroll = await fileBody.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(bodyScroll.scrollWidth).toBeGreaterThan(bodyScroll.clientWidth + 20);
+
+  const toolbarBefore = await requiredBox(toolbar);
+  const headerBefore = await requiredBox(fileHeader);
+  const bodyScrollLeft = await fileBody.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+    return element.scrollLeft;
+  });
+  expect(bodyScrollLeft).toBeGreaterThan(0);
+
+  const toolbarAfter = await requiredBox(toolbar);
+  const headerAfter = await requiredBox(fileHeader);
+  expect(Math.abs(toolbarAfter.x - toolbarBefore.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(headerAfter.x - headerBefore.x)).toBeLessThanOrEqual(1);
 });
 
 test("selecting a task under a worktree opens the task detail screen", async ({

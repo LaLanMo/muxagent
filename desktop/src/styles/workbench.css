@@ -988,7 +988,8 @@ body.platform-tauri-macos .workbench__titlebar {
 
   flex: 1;
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-0);
@@ -1030,7 +1031,7 @@ body.platform-tauri-macos .workbench__titlebar {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-  min-width: max-content;
+  min-width: 0;
   min-height: 36px;
   padding: 0 var(--space-3);
   border-bottom: 1px solid var(--color-border);
@@ -1040,7 +1041,15 @@ body.platform-tauri-macos .workbench__titlebar {
   font-size: var(--font-size-xs);
 }
 
+.diff-view__toolbar > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .diff-view__mode-toggle {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -1070,11 +1079,11 @@ body.platform-tauri-macos .workbench__titlebar {
 }
 
 .diff-view__files {
-  min-width: max-content;
+  min-width: 0;
 }
 
 .diff-view__file {
-  min-width: 100%;
+  min-width: 0;
   background: var(--color-surface-0);
 }
 
@@ -1090,6 +1099,7 @@ body.platform-tauri-macos .workbench__titlebar {
   grid-template-columns: auto minmax(20ch, 1fr) auto;
   align-items: center;
   gap: var(--space-3);
+  min-width: 0;
   min-height: 34px;
   padding: 0 var(--space-3);
   border-bottom: 1px solid var(--color-border-subtle);
@@ -1139,6 +1149,13 @@ body.platform-tauri-macos .workbench__titlebar {
   color: var(--color-text-tertiary);
   font-family: var(--font-ui);
   font-size: var(--font-size-sm);
+}
+
+.diff-view__file-body {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
 }
 
 .diff-view .diff {

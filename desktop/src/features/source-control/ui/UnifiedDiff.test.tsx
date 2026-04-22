@@ -51,6 +51,7 @@ test("UnifiedDiff renders parsed file sections with library diff markup", () => 
   assert.match(markup, /data-testid="unified-diff-file"/);
   assert.match(markup, /src\/auth\.ts/);
   assert.match(markup, /export function signOut/);
+  assert.match(markup, /class="diff-view__file-body"/);
   assert.match(markup, /class="[^"]*diff-split/);
   assert.match(markup, /class="[^"]*diff-gutter/);
 });

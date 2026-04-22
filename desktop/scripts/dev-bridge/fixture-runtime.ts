@@ -2242,6 +2242,7 @@ export class FixtureRuntime {
       "+",
       "+export function signOut() {",
       "+  session.clear();",
+      "+  return session.createAuditTrail(\"fixture-source-control-regression\", \"this intentionally long diff line keeps the fixture wide enough to exercise horizontal scrolling without moving the diff toolbar or file headers\");",
       "+}",
       "diff --git a/src/session.ts b/src/session.ts",
       "index ccccccc..ddddddd 100644",
