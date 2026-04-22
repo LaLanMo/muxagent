@@ -135,14 +135,15 @@ child in `single-run`.
 
 ## Customizing Workflows
 
-The included workflow configs are stored as task config bundles under `~/.muxagent/taskconfigs`.
-You can clone them and modify the YAML to change the workflow graph, prompts,
-runtime, iteration limits, or clarification settings.
+The included workflow configs are managed under
+`~/.muxagent/taskconfigs/builtin/<id>`. You can clone them into normal bundle
+paths under `~/.muxagent/taskconfigs` and modify the YAML to change the
+workflow graph, prompts, runtime, iteration limits, or clarification settings.
 
-If you already have a user config named `plan-only`, `single-run`,
-`autonomous`, or `yolo`, MuxAgent preserves it and installs the built-in
-config under a fallback alias such as `builtin-plan-only`. Existing bundle
-files are never overwritten.
+If you already have a user config named `default`, `plan-only`, `single-run`,
+`autonomous`, or `yolo`, MuxAgent preserves it and installs the built-in config
+under a fallback alias such as `builtin-plan-only`. Existing bundle files are
+never overwritten.
 
 See [Task Config Semantics](docs/task-config-semantics.md) for the full edge,
 iteration, and schema specification.

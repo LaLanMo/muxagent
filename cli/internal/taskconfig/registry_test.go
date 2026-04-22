@@ -43,7 +43,7 @@ func TestLoadCatalogSeedsBuiltinModesAndRegistryMetadata(t *testing.T) {
 	defaultEntry, ok := registryEntryByBuiltinID(reg.Configs, BuiltinIDDefault)
 	require.True(t, ok)
 	assert.Equal(t, DefaultAlias, defaultEntry.Alias)
-	assert.Equal(t, managedDefaultBundleDir, defaultEntry.Path)
+	assert.Equal(t, "builtin/default", defaultEntry.Path)
 
 	planOnlyEntry, ok := registryEntryByBuiltinID(reg.Configs, BuiltinIDPlanOnly)
 	require.True(t, ok)
@@ -73,6 +73,14 @@ func TestTaskConfigPathsHonorInjectedRoot(t *testing.T) {
 	registryPath, err := RegistryPath()
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(root, "taskconfig.json"), registryPath)
+
+	defaultBundlePath, err := DefaultBundlePath()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "taskconfigs", "builtin", "default"), defaultBundlePath)
+
+	defaultConfigPath, err := DefaultConfigPath()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "taskconfigs", "builtin", "default", managedConfigFile), defaultConfigPath)
 }
 
 func TestTaskConfigPathsDeriveFromTaskHome(t *testing.T) {
@@ -116,7 +124,7 @@ func TestLoadCatalogSeedsUserConfigsFromLegacyRoot(t *testing.T) {
 	_, err := SaveRegistry(Registry{
 		DefaultAlias: "reviewer",
 		Configs: []RegistryEntry{
-			{Alias: DefaultAlias, Path: managedDefaultBundleDir},
+			{Alias: DefaultAlias, Path: builtinBundlePath(BuiltinIDDefault), BuiltinID: BuiltinIDDefault},
 			{Alias: "reviewer", Path: mustBundlePathForConfigPath(t, configPath)},
 		},
 	})
@@ -179,68 +187,6 @@ func TestLoadCatalogKeepsBuiltinsFirstAndAllowsBrokenUserBundles(t *testing.T) {
 	assert.Equal(t, filepath.Join(brokenDir, managedConfigFile), catalog.Entries[5].Path)
 }
 
-func TestLoadCatalogClassifiesMissingLegacyDefaultRowAsBuiltin(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	_, err := SaveRegistry(Registry{
-		DefaultAlias: DefaultAlias,
-		Configs: []RegistryEntry{
-			{Alias: DefaultAlias, Path: managedDefaultBundleDir},
-		},
-	})
-	require.NoError(t, err)
-
-	catalog, err := LoadCatalog()
-	require.NoError(t, err)
-	defaultEntry, ok := catalog.Entry(DefaultAlias)
-	require.True(t, ok)
-	assert.True(t, defaultEntry.Builtin)
-	assert.Equal(t, BuiltinIDDefault, defaultEntry.BuiltinID)
-
-	reg, err := LoadRegistry()
-	require.NoError(t, err)
-	entry, ok := registryEntryByAlias(reg.Configs, DefaultAlias)
-	require.True(t, ok)
-	assert.Equal(t, BuiltinIDDefault, entry.BuiltinID)
-}
-
-func TestLoadCatalogStampsLegacyDefaultAsBuiltinAndBacksUpCustomFiles(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	configPath := writeSimpleUserBundle(t, managedDefaultBundleDir, "custom-default")
-	promptPath := filepath.Join(filepath.Dir(configPath), "prompt.md")
-	require.NoError(t, os.WriteFile(promptPath, []byte("# custom default prompt"), 0o644))
-	_, err := SaveRegistry(Registry{
-		DefaultAlias: DefaultAlias,
-		Configs: []RegistryEntry{
-			{Alias: DefaultAlias, Path: managedDefaultBundleDir},
-		},
-	})
-	require.NoError(t, err)
-
-	catalog, err := LoadCatalog()
-	require.NoError(t, err)
-	require.Len(t, catalog.Entries, 5)
-	taskConfigDir, err := TaskConfigDir()
-	require.NoError(t, err)
-
-	defaultEntry, ok := catalog.Entry(DefaultAlias)
-	require.True(t, ok)
-	assert.True(t, defaultEntry.Builtin)
-	data, err := os.ReadFile(filepath.Join(taskConfigDir, "backup-default", "prompt.md"))
-	require.NoError(t, err)
-	assert.Equal(t, "# custom default prompt", string(data))
-	assert.FileExists(t, filepath.Join(filepath.Dir(defaultEntry.Path), managedBuiltinRevisionFile))
-
-	reg, err := LoadRegistry()
-	require.NoError(t, err)
-	entry, ok := registryEntryByAlias(reg.Configs, DefaultAlias)
-	require.True(t, ok)
-	assert.Equal(t, BuiltinIDDefault, entry.BuiltinID)
-}
-
 func TestLoadCatalogSeedsMissingBuiltinConfigAndFollowsPATH(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -248,7 +194,7 @@ func TestLoadCatalogSeedsMissingBuiltinConfigAndFollowsPATH(t *testing.T) {
 
 	taskConfigDir, err := TaskConfigDir()
 	require.NoError(t, err)
-	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	defaultDir := filepath.Join(taskConfigDir, filepath.FromSlash(builtinBundlePath(BuiltinIDDefault)))
 	require.NoError(t, os.MkdirAll(defaultDir, 0o755))
 
 	catalog, err := LoadCatalog()
@@ -277,16 +223,16 @@ func TestLoadCatalogSeedsMissingBuiltinConfigAndFollowsPATH(t *testing.T) {
 	assert.Equal(t, appconfig.RuntimeCodex, reloadedCfg.Runtime)
 }
 
-func TestLoadCatalogBacksUpLegacyBuiltinBundleAndRefreshesAssets(t *testing.T) {
+func TestLoadCatalogBacksUpStaleBuiltinBundleAndRefreshesAssets(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
 	taskConfigDir, err := TaskConfigDir()
 	require.NoError(t, err)
-	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	defaultDir := filepath.Join(taskConfigDir, filepath.FromSlash(builtinBundlePath(BuiltinIDDefault)))
 	writeEmbeddedBuiltinBundleForTest(t, defaultDir, BuiltinIDDefault, nil)
-	legacyPrompt := []byte("legacy draft prompt\n")
-	require.NoError(t, os.WriteFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"), legacyPrompt, 0o644))
+	stalePrompt := []byte("stale draft prompt\n")
+	require.NoError(t, os.WriteFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"), stalePrompt, 0o644))
 
 	catalog, err := LoadCatalog()
 	require.NoError(t, err)
@@ -301,7 +247,7 @@ func TestLoadCatalogBacksUpLegacyBuiltinBundleAndRefreshesAssets(t *testing.T) {
 
 	backupPrompt, err := os.ReadFile(filepath.Join(taskConfigDir, "backup-default", "prompts", "draft_plan.md"))
 	require.NoError(t, err)
-	assert.Equal(t, string(legacyPrompt), string(backupPrompt))
+	assert.Equal(t, string(stalePrompt), string(backupPrompt))
 
 	revision, err := os.ReadFile(filepath.Join(defaultDir, managedBuiltinRevisionFile))
 	require.NoError(t, err)
@@ -314,7 +260,7 @@ func TestLoadCatalogSeedsRevisionWithoutBackingUpCurrentBuiltinBundle(t *testing
 
 	taskConfigDir, err := TaskConfigDir()
 	require.NoError(t, err)
-	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	defaultDir := filepath.Join(taskConfigDir, filepath.FromSlash(builtinBundlePath(BuiltinIDDefault)))
 	runtimeID := appconfig.RuntimeClaudeCode
 	writeEmbeddedBuiltinBundleForTest(t, defaultDir, BuiltinIDDefault, &runtimeID)
 
@@ -337,10 +283,10 @@ func TestLoadCatalogPreservesExplicitRuntimeWhenRefreshingBuiltinBundle(t *testi
 
 	taskConfigDir, err := TaskConfigDir()
 	require.NoError(t, err)
-	defaultDir := filepath.Join(taskConfigDir, managedDefaultBundleDir)
+	defaultDir := filepath.Join(taskConfigDir, filepath.FromSlash(builtinBundlePath(BuiltinIDDefault)))
 	runtimeID := appconfig.RuntimeClaudeCode
 	writeEmbeddedBuiltinBundleForTest(t, defaultDir, BuiltinIDDefault, &runtimeID)
-	require.NoError(t, os.WriteFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"), []byte("legacy draft prompt\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(defaultDir, "prompts", "draft_plan.md"), []byte("stale draft prompt\n"), 0o644))
 
 	_, err = LoadCatalog()
 	require.NoError(t, err)
@@ -505,15 +451,15 @@ func TestCloneConfigCleansUpPartialBundleOnCopyFailure(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestRenameConfigAliasMovesCanonicalUserDefaultAndReleasesBuiltinDefault(t *testing.T) {
+func TestRenameConfigAliasRenamesUserOwnedDefaultAndRestoresBuiltinDefault(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	writeSimpleUserBundle(t, managedDefaultBundleDir, "custom-default")
+	writeSimpleUserBundle(t, "custom-default", "custom-default")
 	_, err := SaveRegistry(Registry{
 		DefaultAlias: DefaultAlias,
 		Configs: []RegistryEntry{
-			{Alias: DefaultAlias, Path: managedDefaultBundleDir},
+			{Alias: DefaultAlias, Path: "custom-default"},
 		},
 	})
 	require.NoError(t, err)
@@ -525,7 +471,7 @@ func TestRenameConfigAliasMovesCanonicalUserDefaultAndReleasesBuiltinDefault(t *
 	renamedEntry, ok := catalog.Entry("deep-review")
 	require.True(t, ok)
 	assert.False(t, renamedEntry.Builtin)
-	assert.Equal(t, "deep-review", mustBundlePathForConfigPath(t, renamedEntry.Path))
+	assert.Equal(t, "custom-default", mustBundlePathForConfigPath(t, renamedEntry.Path))
 	assert.FileExists(t, renamedEntry.Path)
 
 	defaultEntry, ok := catalog.Entry(DefaultAlias)
@@ -745,11 +691,11 @@ func TestDeleteConfigReleasesCustomDefaultAndRestoresBuiltinDefault(t *testing.T
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 
-	writeSimpleUserBundle(t, managedDefaultBundleDir, "custom-default")
+	writeSimpleUserBundle(t, "custom-default", "custom-default")
 	_, err := SaveRegistry(Registry{
 		DefaultAlias: DefaultAlias,
 		Configs: []RegistryEntry{
-			{Alias: DefaultAlias, Path: managedDefaultBundleDir},
+			{Alias: DefaultAlias, Path: "custom-default"},
 		},
 	})
 	require.NoError(t, err)

@@ -20,7 +20,6 @@ import (
 
 const builtinDefaultAlias = "default"
 const managedConfigFile = "config.yaml"
-const managedDefaultBundleDir = builtinDefaultAlias
 const managedBuiltinRevisionFile = ".muxagent-builtin-revision"
 const taskConfigRootEnv = "MUXAGENT_TASKCONFIG_ROOT"
 
@@ -102,7 +101,7 @@ func DefaultBundlePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(taskConfigDir, managedDefaultBundleDir), nil
+	return filepath.Join(taskConfigDir, filepath.FromSlash(builtinBundlePath(BuiltinIDDefault))), nil
 }
 
 func LoadRegistry() (Registry, error) {
@@ -437,15 +436,6 @@ func ensureBuiltinDefaults() (Registry, error) {
 	}
 
 	changed := false
-
-	// Stamp legacy default entries (alias=default, path=default, no builtin ID).
-	for i, entry := range reg.Configs {
-		if entry.Alias == DefaultAlias && entry.Path == managedDefaultBundleDir && !isBuiltinEntry(entry) {
-			reg.Configs[i].BuiltinID = BuiltinIDDefault
-			changed = true
-			break
-		}
-	}
 
 	// Ensure each builtin has a registry entry and bundle.
 	for _, def := range builtinDefs {

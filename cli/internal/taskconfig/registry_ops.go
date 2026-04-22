@@ -89,29 +89,11 @@ func RenameConfigAlias(currentAlias, nextAlias string) (*Catalog, error) {
 		return nil, fmt.Errorf("task config alias %q cannot be renamed", currentAlias)
 	}
 
-	rollback := func() {}
-	if entry.Path == managedDefaultBundleDir {
-		taskConfigDir, err := TaskConfigDir()
-		if err != nil {
-			return nil, err
-		}
-		oldDir := filepath.Join(taskConfigDir, filepath.FromSlash(entry.Path))
-		nextPath := nextAvailableBundlePath(registryWithoutIndex(reg, index), nextAlias)
-		newDir := filepath.Join(taskConfigDir, filepath.FromSlash(nextPath))
-		if err := os.Rename(oldDir, newDir); err != nil {
-			return nil, err
-		}
-		rollback = func() {
-			_ = os.Rename(newDir, oldDir)
-		}
-		reg.Configs[index].Path = nextPath
-	}
 	reg.Configs[index].Alias = nextAlias
 	if reg.DefaultAlias == currentAlias {
 		reg.DefaultAlias = nextAlias
 	}
 	if _, err := SaveRegistry(reg); err != nil {
-		rollback()
 		return nil, err
 	}
 	return LoadCatalog()

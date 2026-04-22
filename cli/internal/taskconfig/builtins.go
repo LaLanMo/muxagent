@@ -65,9 +65,6 @@ func builtinConfigAsset(id string) string {
 }
 
 func builtinBundlePath(id string) string {
-	if id == BuiltinIDDefault {
-		return managedDefaultBundleDir
-	}
 	return "builtin/" + id
 }
 
