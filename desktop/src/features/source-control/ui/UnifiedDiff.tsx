@@ -1,3 +1,14 @@
+import { useMemo, useState } from "react";
+import {
+  Decoration,
+  Diff,
+  Hunk,
+  parseDiff,
+  type DiffType,
+  type FileData,
+  type HunkData,
+  type ViewType,
+} from "react-diff-view";
 import type { GitDiffDto } from "@/rpc/types";
 
 type UnifiedDiffProps = {
@@ -7,62 +18,79 @@ type UnifiedDiffProps = {
   placeholder?: string;
 };
 
-type Line = {
-  kind: "meta" | "hunk" | "add" | "del" | "ctx";
-  text: string;
-  oldNo?: number;
-  newNo?: number;
+const viewModes: ViewType[] = ["split", "unified"];
+
+const diffTypeLabels: Record<DiffType, string> = {
+  add: "Added",
+  copy: "Copied",
+  delete: "Deleted",
+  modify: "Modified",
+  rename: "Renamed",
 };
 
-function parsePatch(patch: string): Line[] {
-  const lines: Line[] = [];
-  const raw = patch.split("\n");
-  let oldNo = 0;
-  let newNo = 0;
-  let inHunk = false;
-
-  for (const rawLine of raw) {
-    if (rawLine.startsWith("diff --git") || rawLine.startsWith("index ") || rawLine.startsWith("--- ") || rawLine.startsWith("+++ ") || rawLine.startsWith("new file") || rawLine.startsWith("deleted file") || rawLine.startsWith("rename ") || rawLine.startsWith("similarity") || rawLine.startsWith("Binary files")) {
-      lines.push({ kind: "meta", text: rawLine });
-      continue;
-    }
-    if (rawLine.startsWith("@@")) {
-      inHunk = true;
-      const match = /@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(rawLine);
-      if (match) {
-        oldNo = Number(match[1]);
-        newNo = Number(match[2]);
-      }
-      lines.push({ kind: "hunk", text: rawLine });
-      continue;
-    }
-    if (!inHunk) {
-      if (rawLine) lines.push({ kind: "meta", text: rawLine });
-      continue;
-    }
-    if (rawLine.startsWith("+")) {
-      lines.push({ kind: "add", text: rawLine.slice(1), newNo });
-      newNo += 1;
-    } else if (rawLine.startsWith("-")) {
-      lines.push({ kind: "del", text: rawLine.slice(1), oldNo });
-      oldNo += 1;
-    } else if (rawLine.startsWith("\\")) {
-      lines.push({ kind: "meta", text: rawLine });
-    } else {
-      const text = rawLine.startsWith(" ") ? rawLine.slice(1) : rawLine;
-      lines.push({ kind: "ctx", text, oldNo, newNo });
-      oldNo += 1;
-      newNo += 1;
-    }
+function defaultViewType(): ViewType {
+  if (
+    typeof window !== "undefined" &&
+    window.matchMedia("(max-width: 860px)").matches
+  ) {
+    return "unified";
   }
-  return lines;
+  return "split";
+}
+
+function cleanPatchForParser(patch: string): string {
+  const trimmed = patch.trimEnd();
+  const firstFile = trimmed.indexOf("diff --git ");
+  return firstFile > 0 ? trimmed.slice(firstFile) : trimmed;
+}
+
+function parsePatch(patch: string): { files: FileData[]; error?: string } {
+  try {
+    return {
+      files: parseDiff(cleanPatchForParser(patch), { nearbySequences: "zip" }),
+    };
+  } catch {
+    return { files: [], error: "Unable to parse this diff." };
+  }
+}
+
+function renderHunks(hunks: HunkData[]) {
+  return hunks.flatMap((hunk) => {
+    const key = `${hunk.oldStart}-${hunk.newStart}-${hunk.content}`;
+    return [
+      <Decoration key={`decoration-${key}`}>{hunk.content}</Decoration>,
+      <Hunk hunk={hunk} key={`hunk-${key}`} />,
+    ];
+  });
+}
+
+function fileTitle(file: FileData): string {
+  if (file.type === "rename" && file.oldPath !== file.newPath) {
+    return `${file.oldPath} -> ${file.newPath}`;
+  }
+  return file.newPath || file.oldPath || "Unknown file";
+}
+
+function revisionLabel(file: FileData): string | undefined {
+  if (!file.oldRevision || !file.newRevision) return undefined;
+  return `${file.oldRevision.slice(0, 7)} -> ${file.newRevision.slice(0, 7)}`;
+}
+
+function formatFileCount(count: number): string {
+  return `${count} ${count === 1 ? "file" : "files"}`;
 }
 
 export function UnifiedDiff({ diff, loading, error, placeholder }: UnifiedDiffProps) {
+  const [viewType, setViewType] = useState<ViewType>(() => defaultViewType());
+  const parsed = useMemo(
+    () => (diff?.patch ? parsePatch(diff.patch) : { files: [] }),
+    [diff?.patch],
+  );
+
   if (loading) {
     return (
       <div className="diff-view diff-view--loading" data-testid="unified-diff">
-        Loading diff…
+        Loading diff...
       </div>
     );
   }
@@ -104,35 +132,90 @@ export function UnifiedDiff({ diff, loading, error, placeholder }: UnifiedDiffPr
       </div>
     );
   }
-
-  const parsed = parsePatch(diff.patch);
+  if (parsed.error) {
+    return (
+      <div className="diff-view diff-view--error" data-testid="unified-diff-error">
+        {parsed.error}
+      </div>
+    );
+  }
+  if (parsed.files.length === 0) {
+    return (
+      <div className="diff-view diff-view--empty" data-testid="unified-diff-empty">
+        No textual diff available.
+      </div>
+    );
+  }
 
   return (
     <div className="diff-view" data-testid="unified-diff">
       {diff.truncated ? (
-        <div className="diff-view__banner">Diff truncated</div>
+        <div className="diff-view__banner">Diff truncated at the preview limit.</div>
       ) : null}
-      <pre className="diff-view__body">
-        {parsed.map((line, idx) => (
-          <span
-            className={`diff-view__line diff-view__line--${line.kind}`}
-            key={`${idx}-${line.kind}`}
-          >
-            <span className="diff-view__gutter">
-              {line.kind === "add"
-                ? "+"
-                : line.kind === "del"
-                  ? "-"
-                  : line.kind === "hunk"
-                    ? "@"
-                    : line.kind === "meta"
-                      ? ""
-                      : " "}
-            </span>
-            <span className="diff-view__text">{line.text}</span>
-          </span>
-        ))}
-      </pre>
+      <div className="diff-view__toolbar">
+        <span>{formatFileCount(diff.file_count ?? parsed.files.length)}</span>
+        <div
+          aria-label="Diff view mode"
+          className="diff-view__mode-toggle"
+          role="group"
+        >
+          {viewModes.map((mode) => (
+            <button
+              aria-pressed={viewType === mode}
+              className={`diff-view__mode-button${
+                viewType === mode ? " is-active" : ""
+              }`}
+              key={mode}
+              onClick={() => setViewType(mode)}
+              type="button"
+            >
+              {mode === "split" ? "Split" : "Unified"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="diff-view__files">
+        {parsed.files.map((file, index) => {
+          const revisions = revisionLabel(file);
+          return (
+            <section
+              className="diff-view__file"
+              data-testid="unified-diff-file"
+              key={`${file.oldPath}-${file.newPath}-${index}`}
+            >
+              <header className="diff-view__file-header">
+                <span
+                  className={`diff-view__file-status diff-view__file-status--${file.type}`}
+                >
+                  {diffTypeLabels[file.type]}
+                </span>
+                <span className="diff-view__file-path">{fileTitle(file)}</span>
+                {revisions ? (
+                  <span className="diff-view__file-revisions">{revisions}</span>
+                ) : null}
+              </header>
+              {file.isBinary ? (
+                <div className="diff-view__file-empty">Binary file changed.</div>
+              ) : file.hunks.length > 0 ? (
+                <Diff
+                  className="diff-view__table"
+                  diffType={file.type}
+                  gutterType="default"
+                  hunks={file.hunks}
+                  optimizeSelection={viewType === "split"}
+                  viewType={viewType}
+                >
+                  {renderHunks}
+                </Diff>
+              ) : (
+                <div className="diff-view__file-empty">
+                  No textual changes in this file.
+                </div>
+              )}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

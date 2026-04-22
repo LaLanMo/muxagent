@@ -105,7 +105,7 @@ func FileDiff(ctx context.Context, checkoutPath, filePath string, opts FileDiffO
 	return Patch{Reachable: false, UnreachableReason: ReasonInternal}, nil
 }
 
-// CommitDiff runs `git show --stat --patch --no-color <hash>`.
+// CommitDiff runs `git show --patch --no-color <hash>`.
 func CommitDiff(ctx context.Context, checkoutPath, hash string, opts CommitDiffOpts) (Patch, error) {
 	maxBytes := opts.MaxPatchBytes
 	if maxBytes <= 0 {
@@ -126,7 +126,7 @@ func CommitDiff(ctx context.Context, checkoutPath, hash string, opts CommitDiffO
 	}
 
 	patchRaw, patchReason, trunc := runGit(ctx, checkoutPath, maxBytes,
-		"show", "--no-color", "--stat", "--patch", "--format=", hash)
+		"show", "--no-color", "--patch", "--format=", hash)
 	if patchReason != "" {
 		return Patch{Reachable: false, UnreachableReason: patchReason}, nil
 	}

@@ -24,6 +24,7 @@
     "elkjs": "^0.11.1",
     "lucide-react": "^1.8.0",
     "react": "^19.2.0",
+    "react-diff-view": "3.3.3",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.9.4",

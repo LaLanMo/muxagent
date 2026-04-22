@@ -2231,18 +2231,7 @@ export class FixtureRuntime {
   }
 
   private fixtureCommitDiff(commitHash: string) {
-    const shortHash = commitHash.slice(0, 7) || "abc1234";
     const patch = [
-      `commit ${shortHash}`,
-      "Author: Fixture Author <fixture@example.com>",
-      "Date:   Mon Jan 01 12:00:00 2026 +0000",
-      "",
-      "    Fixture commit diff",
-      "",
-      " src/auth.ts     | 4 ++++",
-      " src/session.ts  | 2 +-",
-      " 2 files changed, 5 insertions(+), 1 deletion(-)",
-      "",
       "diff --git a/src/auth.ts b/src/auth.ts",
       "index aaaaaaa..bbbbbbb 100644",
       "--- a/src/auth.ts",

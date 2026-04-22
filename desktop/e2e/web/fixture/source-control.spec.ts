@@ -244,7 +244,17 @@ test("selecting a commit under a worktree renders the full commit diff", async (
 
   await page.getByTestId("source-control-commit-fa3b2").first().click();
   await expect(page.getByTestId("source-control-commit-diff")).toBeVisible();
+  await expect(page.getByTestId("source-control-commit-diff-title")).toContainText(
+    "Fixture commit diff",
+  );
   await expect(page.getByTestId("unified-diff")).toBeVisible();
+  await expect(page.getByTestId("unified-diff")).toContainText("src/auth.ts");
+  await expect(page.getByTestId("unified-diff")).toContainText(
+    "export function signOut",
+  );
+  await expect(page.getByTestId("unified-diff")).not.toContainText(
+    "files changed",
+  );
 
   await maybeScreenshot(page, "MUXAGENT_COMMIT_DIFF_SCREENSHOT");
 });

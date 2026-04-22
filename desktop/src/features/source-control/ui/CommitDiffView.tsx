@@ -3,6 +3,11 @@ import { useParams } from "react-router-dom";
 import { useCommitDiff } from "@/features/source-control/model/use-diff-data";
 import { UnifiedDiff } from "@/features/source-control/ui/UnifiedDiff";
 
+const commitDateFormatter = new Intl.DateTimeFormat("en-US", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
 function decode(param: string | undefined): string | undefined {
   if (!param) return undefined;
   try {
@@ -10,6 +15,18 @@ function decode(param: string | undefined): string | undefined {
   } catch {
     return param;
   }
+}
+
+function formatAuthoredAt(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return commitDateFormatter.format(date);
+}
+
+function formatFileCount(count: number | undefined): string | undefined {
+  if (typeof count !== "number") return undefined;
+  return `${count} ${count === 1 ? "file" : "files"}`;
 }
 
 export function CommitDiffView() {
@@ -27,6 +44,8 @@ export function CommitDiffView() {
     checkoutPath,
     commitHash,
   );
+  const authoredAt = formatAuthoredAt(data?.authored_at);
+  const fileCount = formatFileCount(data?.file_count);
 
   return (
     <section
@@ -34,7 +53,9 @@ export function CommitDiffView() {
       data-testid="source-control-commit-diff"
     >
       <header className="diff-pane__header">
-        <GitCommit size={16} strokeWidth={1.8} />
+        <span className="diff-pane__header-icon" aria-hidden="true">
+          <GitCommit size={16} strokeWidth={1.8} />
+        </span>
         <div className="diff-pane__title-group">
           <h1
             className="diff-pane__title"
@@ -45,8 +66,9 @@ export function CommitDiffView() {
           {data ? (
             <p className="diff-pane__meta">
               <span>{data.hash?.slice(0, 10) ?? commitHash}</span>
-              {data.author ? <span>· {data.author}</span> : null}
-              {data.authored_at ? <span>· {data.authored_at}</span> : null}
+              {data.author ? <span>{data.author}</span> : null}
+              {authoredAt ? <span>{authoredAt}</span> : null}
+              {fileCount ? <span>{fileCount}</span> : null}
             </p>
           ) : null}
         </div>
