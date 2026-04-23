@@ -32,11 +32,6 @@ export function ConfigsPanel() {
               </span>
               <span className="configs-panel__row-copy">
                 <span className="configs-panel__row-title">{entry.alias}</span>
-                {entry.runtime_name ? (
-                  <span className="configs-panel__row-subtitle">
-                    {entry.runtime_name}
-                  </span>
-                ) : null}
               </span>
               {entry.builtin ? (
                 <span className="configs-panel__row-badge">builtin</span>

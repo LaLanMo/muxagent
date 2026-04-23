@@ -697,6 +697,13 @@ body.platform-tauri-macos .workbench__titlebar {
   color: var(--color-text-primary);
 }
 
+.configs-panel__row-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 .configs-panel__row-copy {
   display: grid;
   min-width: 0;

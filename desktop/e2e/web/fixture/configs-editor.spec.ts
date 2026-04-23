@@ -24,10 +24,37 @@ test("shows a built-in config as a read-only file inspector", async ({
   await page.getByTestId("workbench-activity-configs").click();
   await expect(page.getByTestId("configs-panel")).toBeVisible();
   await expect(page.getByTestId("configs-panel-new")).toHaveCount(0);
+  await expect(
+    page
+      .getByTestId("configs-panel-row-default")
+      .locator(".configs-panel__row-subtitle"),
+  ).toHaveCount(0);
+  const sidebarConfigIcon = page
+    .getByTestId("configs-panel-row-default")
+    .locator(".configs-panel__row-icon svg");
+  const sidebarConfigTitle = page
+    .getByTestId("configs-panel-row-default")
+    .locator(".configs-panel__row-title");
+  const [sidebarConfigIconBox, sidebarConfigTitleBox] = await Promise.all([
+    sidebarConfigIcon.boundingBox(),
+    sidebarConfigTitle.boundingBox(),
+  ]);
+  expect(sidebarConfigIconBox).not.toBeNull();
+  expect(sidebarConfigTitleBox).not.toBeNull();
+  const sidebarConfigIconCenterY =
+    sidebarConfigIconBox!.y + sidebarConfigIconBox!.height / 2;
+  const sidebarConfigTitleCenterY =
+    sidebarConfigTitleBox!.y + sidebarConfigTitleBox!.height / 2;
+  expect(Math.abs(sidebarConfigIconCenterY - sidebarConfigTitleCenterY)).toBeLessThanOrEqual(
+    2,
+  );
   await page.getByTestId("configs-panel-view-all").click();
   await expect(page.getByTestId("configs-screen")).toBeVisible();
   await expect(page.getByRole("button", { name: /^\+ New Config$/i })).toHaveCount(0);
   await expect(page.getByTestId("config-card-default")).toBeVisible();
+  await expect(
+    page.getByTestId("config-card-default").locator(".config-list-card__meta-line"),
+  ).toHaveText("6 nodes  ·  default");
 
   await page
     .getByTestId("config-card-default")

@@ -31,10 +31,6 @@ export function ConfigsScreen({
   cancelRemove,
   createConfig,
 }: ConfigsScreenProps) {
-  function runtimeLabel(entry: ConfigCardModel) {
-    return entry.runtime_name || entry.runtime_id || "automatic";
-  }
-
   function nodeCountLabel(entry: ConfigCardModel) {
     const nodeCount = entry.node_names?.length ?? 0;
     return `${nodeCount} node${nodeCount === 1 ? "" : "s"}`;
@@ -51,7 +47,7 @@ export function ConfigsScreen({
   }
 
   function summaryLabel(entry: ConfigCardModel) {
-    return [runtimeLabel(entry), nodeCountLabel(entry), locationLabel(entry)].join("  ·  ");
+    return [nodeCountLabel(entry), locationLabel(entry)].join("  ·  ");
   }
 
   function handleSurfaceKeyDown(
