@@ -92,6 +92,49 @@ export function displayWorkspaceName(workDir?: string): string {
   return parts.at(-1) ?? workDir;
 }
 
+function normalizedPathSegments(path: string | undefined): string[] {
+  return normalizeTaskPath(path).split("/").filter(Boolean);
+}
+
+export function inferManagedWorktreeName(executionDir?: string): string | undefined {
+  const segments = normalizedPathSegments(executionDir);
+  const worktreesIndex = segments.lastIndexOf("worktrees");
+  if (worktreesIndex < 0) {
+    return undefined;
+  }
+  const tail = segments.slice(worktreesIndex + 1);
+  if (tail.length === 0) {
+    return undefined;
+  }
+  const looksLikeRepoHash = /^[0-9a-f]{8}$/i.test(tail[0] ?? "");
+  const worktreeId = looksLikeRepoHash ? tail[1] : tail[0];
+  const trimmedWorktreeId = worktreeId?.trim();
+  return trimmedWorktreeId ? `muxagent/${trimmedWorktreeId}` : undefined;
+}
+
+export function checkoutDisplayName(checkout: {
+  path: string;
+  branch?: string;
+}): string {
+  const branch = checkout.branch?.trim();
+  if (branch) {
+    return branch;
+  }
+  return normalizedPathSegments(checkout.path).at(-1) ?? checkout.path;
+}
+
+export function pathIsWithinCheckout(
+  candidatePath: string | undefined,
+  checkoutPath: string | undefined,
+): boolean {
+  const candidate = normalizeTaskPath(candidatePath);
+  const checkout = normalizeTaskPath(checkoutPath);
+  if (!candidate || !checkout) {
+    return false;
+  }
+  return candidate === checkout || candidate.startsWith(`${checkout}/`);
+}
+
 export function taskBucket(task: TaskViewDto): BoardBucket {
   const status = task.status.toLowerCase();
   if (failedStatuses.has(status)) {
@@ -383,6 +426,22 @@ export function isWorktreeTask(task: TaskViewDto): boolean {
   const workDir = normalizeTaskPath(task.task.work_dir);
   const executionDir = normalizeTaskPath(task.task.execution_dir);
   return Boolean(workDir && executionDir && workDir !== executionDir);
+}
+
+export function taskWorktreeName(
+  task: TaskViewDto,
+  checkout?: {
+    path: string;
+    branch?: string;
+  },
+): string | undefined {
+  if (!isWorktreeTask(task)) {
+    return undefined;
+  }
+  if (checkout) {
+    return checkoutDisplayName(checkout);
+  }
+  return inferManagedWorktreeName(task.task.execution_dir);
 }
 
 export function taskLaunchModeLabel(task: TaskViewDto): "Worktree" | "Workspace" {

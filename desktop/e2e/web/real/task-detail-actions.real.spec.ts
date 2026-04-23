@@ -405,6 +405,7 @@ test("shows pending then refine follow-up state for a repo-backed main-checkout 
     await expect(page.getByTestId("task-detail-screen")).toBeVisible();
     await expect(page.locator(".detail-main-header__prompt-text")).toContainText(description);
     await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Worktree");
+    await expect(page.getByTestId("detail-task-launch-mode-name")).toContainText(/muxagent\//i);
   });
 });
 

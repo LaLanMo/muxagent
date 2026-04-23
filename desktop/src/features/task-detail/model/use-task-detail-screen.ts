@@ -9,10 +9,13 @@ import {
   detailStatusTitle,
   findLatestActionableBlockedRun,
   latestRun,
+  pathIsWithinCheckout,
   stageStatusForNode,
   statusTone,
   taskBucket,
+  taskWorktreeName,
 } from "@/domain/task-shell";
+import { useWorkspaceStatus } from "@/features/source-control/model/use-source-control-data";
 import { useShellModel } from "@/features/app/model/use-shell-model";
 import {
   deriveRunningActivityPreview,
@@ -224,6 +227,7 @@ export function useTaskDetailScreen() {
   const shell = useShellModel();
   const navigate = useNavigate();
   const { taskId = "", workspaceId = "" } = useParams();
+  const workspaceStatus = useWorkspaceStatus(workspaceId || undefined);
   const serverMethods =
     useWorkspaceStore((state) => state.server?.capabilities.methods) ?? [];
   const supportsTaskAncestry = serverMethods.includes("task.get_ancestry");
@@ -552,6 +556,17 @@ export function useTaskDetailScreen() {
         : [],
     [resolvedTask, stageNodes],
   );
+  const launchModeName = useMemo(() => {
+    if (!resolvedTask) {
+      return undefined;
+    }
+    const matchingCheckout = workspaceStatus.data
+      ? [workspaceStatus.data.main, ...workspaceStatus.data.worktrees].find((checkout) =>
+          pathIsWithinCheckout(resolvedTask.task.execution_dir, checkout.path),
+        )
+      : undefined;
+    return taskWorktreeName(resolvedTask, matchingCheckout);
+  }, [resolvedTask, workspaceStatus.data]);
 
   return {
     shell,
@@ -606,6 +621,7 @@ export function useTaskDetailScreen() {
     failureReason,
     actionSurface,
     stageNodes: stageNodeStatuses,
+    launchModeName,
     title: resolvedTask?.task.description || resolvedTask?.task.id || "Task detail",
     statusLabel: resolvedTask ? detailStatusTitle(resolvedTask.status) : "Running",
     statusTone: resolvedTask ? statusTone(resolvedTask.status) : "neutral",

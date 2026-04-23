@@ -249,6 +249,9 @@ test("opens a workspace from the shell and drills into task detail", async ({ pa
   await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Launch mode");
   await expect(page.getByTestId("detail-task-launch-mode")).toContainText("Worktree");
   await expect(page.getByTestId("detail-task-launch-mode-icon")).toBeVisible();
+  await expect(page.getByTestId("detail-task-launch-mode-name")).toContainText(
+    "muxagent/task-live-fixture",
+  );
   await expect(page.getByTestId("detail-task-flow")).toContainText("plan");
   await expect(page.getByTestId("detail-task-flow")).toContainText("implement");
   const dividerAlignment = await readWorkbenchDividerAlignment(page);

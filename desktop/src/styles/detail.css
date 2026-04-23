@@ -932,6 +932,13 @@
 
 .detail-properties__launch-mode {
   display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.detail-properties__launch-mode-primary {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
@@ -944,6 +951,11 @@
 
 .detail-properties__launch-mode-icon {
   color: var(--color-text-tertiary);
+}
+
+.detail-properties__launch-mode-name {
+  display: block;
+  max-width: 100%;
 }
 
 .detail-properties__value--accent {

@@ -4,6 +4,7 @@ import {
   buildBoardMetaDetails,
   groupScopedTasksIntoBoardColumns,
   isWorktreeTask,
+  taskWorktreeName,
   type ScopedTaskView,
 } from "@/domain/task-shell";
 import type { TaskViewDto } from "@/rpc/types";
@@ -287,6 +288,40 @@ test("isWorktreeTask 用 execution_dir 和 work_dir 的差异识别 worktree 任
 
   assert.equal(isWorktreeTask(workspaceTask), false);
   assert.equal(isWorktreeTask(worktreeTask), true);
+});
+
+test("taskWorktreeName 优先显示匹配 checkout 的 branch 名称", () => {
+  const task = makeTaskView({
+    taskId: "worktree-task",
+  });
+  task.task.execution_dir = "/tmp/.muxagent/worktrees/worktree-task/workspace";
+
+  assert.equal(
+    taskWorktreeName(task, {
+      path: "/tmp/.muxagent/worktrees/worktree-task",
+      branch: "feat/auth-refactor",
+    }),
+    "feat/auth-refactor",
+  );
+});
+
+test("taskWorktreeName 从 muxagent 托管路径推断名称", () => {
+  const task = makeTaskView({
+    taskId: "worktree-task",
+  });
+  task.task.execution_dir = "/Users/by/.muxagent/worktrees/01cc7cae/worktree-task/packages/app";
+
+  assert.equal(taskWorktreeName(task), "muxagent/worktree-task");
+});
+
+test("taskWorktreeName 兼容没有 repo hash 的 fixture 路径", () => {
+  const task = makeTaskView({
+    taskId: "task-live-fixture",
+  });
+  task.task.work_dir = "/tmp/muxagent-workspace";
+  task.task.execution_dir = "/tmp/.muxagent/worktrees/task-live-fixture/muxagent-workspace";
+
+  assert.equal(taskWorktreeName(task), "muxagent/task-live-fixture");
 });
 
 test("buildBoardMetaDetails 为 board 第二行返回 worktree 作为第一个属性的结构化数据", () => {

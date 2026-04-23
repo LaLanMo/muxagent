@@ -506,6 +506,7 @@ type TaskDetailScreenProps = {
   runningActivityPreviewByRunId: Record<string, RunningActivityPreviewRow[]>;
   activityPreviewSignature: string;
   activityRunActorTypes: Record<string, ActivityRunActorType>;
+  launchModeName?: string;
   artifacts: ArtifactRefDto[];
   selection: TaskDetailSelection;
   modal: TaskDetailModal;
@@ -646,6 +647,7 @@ type TaskDetailPropertiesContentProps = {
   stageNodes: StageNode[];
   launchedInWorktree: boolean;
   launchModeLabel?: string;
+  launchModeName?: string;
   createdLabel: string;
   durationLabel: string;
   runsLabel: string;
@@ -783,6 +785,7 @@ function TaskDetailPropertiesPanel({
   stageNodes,
   launchedInWorktree,
   launchModeLabel,
+  launchModeName,
   createdLabel,
   durationLabel,
   runsLabel,
@@ -821,19 +824,29 @@ function TaskDetailPropertiesPanel({
           <div className="detail-properties__block" data-testid="detail-task-launch-mode">
             <span className="detail-properties__label">Launch mode</span>
             <span className="detail-properties__value detail-properties__launch-mode">
-              {launchedInWorktree ? (
+              <span className="detail-properties__launch-mode-primary">
+                {launchedInWorktree ? (
+                  <span
+                    className="detail-properties__launch-mode-icon-wrap"
+                    data-testid="detail-task-launch-mode-icon"
+                  >
+                    <WorktreeGlyph
+                      className="detail-properties__launch-mode-icon"
+                      size={12}
+                      strokeWidth={1.95}
+                    />
+                  </span>
+                ) : null}
+                <span>{launchModeLabel}</span>
+              </span>
+              {launchedInWorktree && launchModeName ? (
                 <span
-                  className="detail-properties__launch-mode-icon-wrap"
-                  data-testid="detail-task-launch-mode-icon"
+                  className="detail-properties__launch-mode-name detail-properties__mono"
+                  data-testid="detail-task-launch-mode-name"
                 >
-                  <WorktreeGlyph
-                    className="detail-properties__launch-mode-icon"
-                    size={12}
-                    strokeWidth={1.95}
-                  />
+                  {launchModeName}
                 </span>
               ) : null}
-              <span>{launchModeLabel}</span>
             </span>
           </div>
         ) : null}
@@ -914,6 +927,7 @@ export function TaskDetailScreen({
   liveEventsRunId,
   selectedRunHistory,
   selectedRunFullHistory,
+  launchModeName,
   workspaceActorState,
   staleReconcilePending,
   supportsRunRecovery,
@@ -1090,6 +1104,7 @@ export function TaskDetailScreen({
         createdLabel={createdLabel}
         durationLabel={durationLabel}
         launchModeLabel={launchModeLabel}
+        launchModeName={launchModeName}
         launchedInWorktree={launchedInWorktree}
         openWorktreeCleanupDialog={openWorktreeCleanupDialog}
         retryWorktreeCleanupInfo={retryWorktreeCleanupInfo}
@@ -1112,6 +1127,7 @@ export function TaskDetailScreen({
       createdLabel,
       durationLabel,
       launchModeLabel,
+      launchModeName,
       launchedInWorktree,
       openWorktreeCleanupDialog,
       retryWorktreeCleanupInfo,
