@@ -3,30 +3,20 @@ package relayws
 import (
 	"context"
 	"crypto/ed25519"
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"log"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
+	"github.com/LaLanMo/muxagent/cli/internal/agentchat"
 	"github.com/LaLanMo/muxagent/cli/internal/appwire"
-	"github.com/LaLanMo/muxagent/cli/internal/appwireconv"
 	"github.com/LaLanMo/muxagent/cli/internal/auth"
 	"github.com/LaLanMo/muxagent/cli/internal/crypto"
 	"github.com/LaLanMo/muxagent/cli/internal/domain"
 	"github.com/LaLanMo/muxagent/cli/internal/keyring"
-	runtimemanager "github.com/LaLanMo/muxagent/cli/internal/runtime/manager"
-	"github.com/LaLanMo/muxagent/cli/internal/sessionattach"
 	"github.com/LaLanMo/muxagent/cli/internal/worktree"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
@@ -34,13 +24,9 @@ import (
 )
 
 const (
-	pingInterval            = 15 * time.Second
-	pongTimeout             = 10 * time.Second
-	writeWait               = 5 * time.Second
-	defaultResyncPageBytes  = 256 * 1024
-	defaultResyncPageEvents = 128
-	maxResyncPageBytes      = 512 * 1024
-	maxResyncPageEvents     = 256
+	pingInterval = 15 * time.Second
+	pongTimeout  = 10 * time.Second
+	writeWait    = 5 * time.Second
 )
 
 var (
@@ -49,20 +35,7 @@ var (
 	ErrStaleRelaySession = errors.New("stale relay session")
 )
 
-// RuntimeClient is the subset of runtime.Client that the relay needs.
-// Defined here to avoid a circular import with the runtime package.
-type RuntimeClient interface {
-	RuntimeList() []runtimemanager.RuntimeInfo
-	NewSession(ctx context.Context, runtimeID, cwd, permissionMode string) (string, string, acpprotocol.NewSessionResponse, error)
-	LoadSession(ctx context.Context, runtimeID, sessionID, cwd, permissionMode, model string) (string, acpprotocol.LoadSessionResponse, error)
-	ResolveSessions(ctx context.Context, runtimeID string, sessionIDs []string) ([]domain.SessionSummary, error)
-	Prompt(ctx context.Context, sessionID string, content []domain.ContentBlock) (string, *domain.PromptUsage, error)
-	Cancel(ctx context.Context, sessionID string) error
-	SetMode(ctx context.Context, sessionID, modeID string) error
-	SetConfigOption(ctx context.Context, sessionID, configID, value string) error
-	ReplyPermission(ctx context.Context, sessionID, requestID, optionID string) error
-	PendingApprovals() []domain.ApprovalRequest
-}
+type RuntimeClient = agentchat.Runtime
 
 type Client struct {
 	relayURL  string
@@ -85,7 +58,9 @@ type Client struct {
 	session       *Session // installed session used for inbound decrypt/rpc handling
 	activeSession *Session // outbound-eligible session after session-ack is written
 
-	runtime  RuntimeClient
+	runtime  agentchat.Runtime
+	chatMu   sync.Mutex
+	chat     *agentchat.Service
 	eventBuf *EventBuffer
 	wtStore  *worktree.Store
 
@@ -105,6 +80,34 @@ func NewMachineClient(
 	eventBuf *EventBuffer,
 	wtStore *worktree.Store,
 ) (*Client, error) {
+	c, err := NewMachineTransportClient(relayURL, hostname, creds, machineSignPriv, keyringMgr, rt, eventBuf, wtStore)
+	if err != nil {
+		return nil, err
+	}
+	c.SetAgentChat(agentchat.New(agentchat.Config{
+		MachineID:            c.machineID,
+		Runtime:              rt,
+		EventBuffer:          eventBuf,
+		WorktreeStore:        wtStore,
+		Transport:            c,
+		SessionCWD:           c.sessionCWD,
+		SessionStatus:        c.sessionStatus,
+		IgnoreTransportError: isExpectedRelayDrop,
+	}))
+	return c, nil
+}
+
+// NewMachineTransportClient creates only the relay transport adapter. Callers
+// that own the agent chat service should inject it with SetAgentChat.
+func NewMachineTransportClient(
+	relayURL, hostname string,
+	creds *auth.Credentials,
+	machineSignPriv ed25519.PrivateKey,
+	keyringMgr *keyring.Manager,
+	rt RuntimeClient,
+	eventBuf *EventBuffer,
+	wtStore *worktree.Store,
+) (*Client, error) {
 	if creds == nil {
 		return nil, fmt.Errorf("credentials required")
 	}
@@ -114,7 +117,7 @@ func NewMachineClient(
 	if keyringMgr == nil {
 		return nil, fmt.Errorf("keyring required")
 	}
-	return &Client{
+	c := &Client{
 		relayURL:        relayURL,
 		machineID:       creds.MachineID,
 		hostname:        hostname,
@@ -126,7 +129,8 @@ func NewMachineClient(
 		wtStore:         wtStore,
 		sessionCWD:      make(map[string]string),
 		sessionStatus:   make(map[string]domain.SessionStatus),
-	}, nil
+	}
+	return c, nil
 }
 
 func (c *Client) HasSession() bool {
@@ -137,6 +141,37 @@ func (c *Client) HasSession() bool {
 
 func (c *Client) MachineID() string {
 	return c.machineID
+}
+
+func (c *Client) agentChat() *agentchat.Service {
+	c.chatMu.Lock()
+	defer c.chatMu.Unlock()
+	if c.chat != nil {
+		return c.chat
+	}
+	if c.sessionCWD == nil {
+		c.sessionCWD = make(map[string]string)
+	}
+	if c.sessionStatus == nil {
+		c.sessionStatus = make(map[string]domain.SessionStatus)
+	}
+	c.chat = agentchat.New(agentchat.Config{
+		MachineID:            c.machineID,
+		Runtime:              c.runtime,
+		EventBuffer:          c.eventBuf,
+		WorktreeStore:        c.wtStore,
+		Transport:            c,
+		SessionCWD:           c.sessionCWD,
+		SessionStatus:        c.sessionStatus,
+		IgnoreTransportError: isExpectedRelayDrop,
+	})
+	return c.chat
+}
+
+func (c *Client) SetAgentChat(service *agentchat.Service) {
+	c.chatMu.Lock()
+	defer c.chatMu.Unlock()
+	c.chat = service
 }
 
 func (c *Client) Connect(ctx context.Context) error {
@@ -375,121 +410,16 @@ func (c *Client) handleRPC(connEpoch uint64, enc EncryptedMessage) {
 	var result any
 	var respErr string
 
-	switch payload.Method {
-	case "runtime.list":
-		result, respErr = c.rpcRuntimeList(ctx)
-	case "session.create":
-		params, err := appwire.DecodeCreateSessionParams(payload.Params)
-		if err != nil {
-			respErr = "invalid create params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcCreateSession(ctx, params)
-	case "session.load":
-		params, err := appwire.DecodeLoadSessionParams(payload.Params)
-		if err != nil {
-			respErr = "invalid load params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcLoadSession(ctx, params)
-	case "session.attach":
-		params, err := appwire.DecodeAttachSessionParams(payload.Params)
-		if err != nil {
-			respErr = "invalid attach params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcAttachSession(ctx, params)
-	case "session.resolve":
-		params, err := appwire.DecodeResolveSessionsParams(payload.Params)
-		if err != nil {
-			respErr = "invalid resolve params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcResolveSessions(ctx, params)
-	case "session.prompt":
-		params, err := appwire.DecodePromptParams(payload.Params)
-		if err != nil {
-			respErr = "invalid prompt params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcPrompt(ctx, params)
-	case "session.cancel":
-		params, err := appwire.DecodeCancelParams(payload.Params)
-		if err != nil {
-			respErr = "invalid cancel params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcCancel(ctx, params)
-	case "session.setMode":
-		params, err := appwire.DecodeSetModeParams(payload.Params)
-		if err != nil {
-			respErr = "invalid setMode params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcSetMode(ctx, params)
-	case "session.setConfigOption":
-		params, err := appwire.DecodeSetConfigOptionParams(payload.Params)
-		if err != nil {
-			respErr = "invalid setConfigOption params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcSetConfigOption(ctx, params)
-	case "approval.reply":
-		params, err := appwire.DecodeReplyPermissionParams(payload.Params)
-		if err != nil {
-			respErr = "invalid replyPermission params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcReplyPermission(ctx, params)
-	case "events.resync":
-		params, err := appwire.DecodeResyncEventsParams(payload.Params)
-		if err != nil {
-			respErr = "invalid resync params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcResyncEvents(ctx, params)
-	case "events.resyncPage":
-		params, err := appwire.DecodeResyncEventsPageParams(payload.Params)
-		if err != nil {
-			respErr = "invalid resync page params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcResyncEventsPage(ctx, params)
-	case "events.head":
-		result, respErr = c.rpcReplayHead(ctx)
-	case "approvals.pending":
-		result, respErr = c.rpcPendingApprovals(ctx)
-	case "fs.list":
-		params, err := appwire.DecodeFsListParams(payload.Params)
-		if err != nil {
-			respErr = "invalid fs.list params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcFsList(ctx, params)
-	case "fs.search":
-		params, err := appwire.DecodeFsSearchParams(payload.Params)
-		if err != nil {
-			respErr = "invalid fs.search params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcFsSearch(ctx, params)
-	case "session.git_status":
-		params, err := appwire.DecodeSessionGitStatusParams(payload.Params)
-		if err != nil {
-			respErr = "invalid session.git_status params: " + err.Error()
-			break
-		}
-		result, respErr = c.rpcSessionGitStatus(ctx, params)
-	case "echo":
+	if payload.Method == "echo" {
 		params, err := appwire.DecodeEchoParams(payload.Params)
 		if err != nil {
 			respErr = "invalid echo params: " + err.Error()
-			break
+		} else {
+			log.Printf("echo request from client: %v", params)
+			result = params
 		}
-		log.Printf("echo request from client: %v", params)
-		result = params
-	default:
-		respErr = fmt.Sprintf("unknown method: %s", payload.Method)
+	} else {
+		result, respErr = c.agentChat().HandleRPC(ctx, payload)
 	}
 
 	respBytes, err := appwire.MarshalRPCResponse(result, respErr)
@@ -513,627 +443,92 @@ func (c *Client) handleRPC(connEpoch uint64, enc EncryptedMessage) {
 	}
 }
 
-func (c *Client) rpcRuntimeList(_ context.Context) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	runtimes := c.runtime.RuntimeList()
-	items := make([]appwire.RuntimeInfo, 0, len(runtimes))
-	for _, runtime := range runtimes {
-		items = append(items, appwire.RuntimeInfo{
-			ID:            runtime.ID,
-			Label:         runtime.Label,
-			Ready:         runtime.Ready,
-			ConfigOptions: runtime.ConfigOptions,
-		})
-	}
-	return appwire.RuntimeListResult{Runtimes: items}, ""
+func (c *Client) rpcRuntimeList(ctx context.Context) (any, string) {
+	return c.agentChat().RuntimeList(ctx)
 }
 
 func (c *Client) rpcCreateSession(ctx context.Context, params appwire.CreateSessionParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	cwd := params.CWD
-	if cwd == "" {
-		return nil, "missing cwd"
-	}
-	// Expand ~ before any path operations (worktree, git, etc.)
-	if strings.HasPrefix(cwd, "~/") || cwd == "~" {
-		if home, err := os.UserHomeDir(); err == nil {
-			cwd = filepath.Join(home, cwd[1:])
-		}
-	}
-	permissionMode := params.PermissionMode
-	requestedRuntime := c.resolveRequestedRuntime(params.Runtime)
-	if requestedRuntime == "" {
-		return nil, "missing runtime"
-	}
-	useWorktree := params.UseWorktree
-
-	actualCWD := cwd
-	var wtMapping *worktree.Mapping
-
-	if useWorktree {
-		repoRoot, err := worktree.FindRepoRoot(cwd)
-		if err != nil {
-			return nil, "worktree requires a git repository"
-		}
-		wtID, err := randomHex(8)
-		if err != nil {
-			return nil, fmt.Sprintf("failed to generate worktree id: %v", err)
-		}
-		wtPath, err := worktree.Create(repoRoot, wtID)
-		if err != nil {
-			return nil, fmt.Sprintf("failed to create worktree: %v", err)
-		}
-		// Preserve subdirectory offset within the repo.
-		relPath, err := worktree.NormalizeRepoRelativePath(repoRoot, cwd)
-		if err != nil {
-			return nil, fmt.Sprintf("failed to compute relative path: %v", err)
-		}
-		actualCWD, err = worktree.WorktreeCWDPath(wtPath, relPath)
-		if err != nil {
-			cleanupErr := worktree.Cleanup(repoRoot, wtPath, worktree.BranchName(wtID))
-			if cleanupErr != nil {
-				return nil, fmt.Sprintf("failed to resolve worktree path: %v (cleanup: %v)", err, cleanupErr)
-			}
-			return nil, fmt.Sprintf("failed to resolve worktree path: %v", err)
-		}
-		wtMapping = &worktree.Mapping{
-			WorktreeID:   wtID,
-			WorktreePath: wtPath,
-			RepoRoot:     repoRoot,
-			BranchName:   worktree.BranchName(wtID),
-			RelativeCWD:  relPath,
-		}
-	}
-
-	sessionID, actualRuntime, acpResp, err := c.runtime.NewSession(ctx, requestedRuntime, actualCWD, permissionMode)
-	if err != nil {
-		return nil, err.Error()
-	}
-	c.setSessionStatus(sessionID, domain.SessionStatusIdle)
-	c.sessionCWDMu.Lock()
-	c.sessionCWD[sessionID] = actualCWD
-	c.sessionCWDMu.Unlock()
-
-	if wtMapping != nil && c.wtStore != nil {
-		c.wtStore.Set(sessionID, *wtMapping)
-		if err := c.wtStore.Save(); err != nil {
-			log.Printf("worktree store save: %v", err)
-		}
-	}
-
-	resp := appwire.SessionCreateResult{
-		App: appwire.SessionCreateResultApp{
-			Runtime: actualRuntime,
-			CWD:     actualCWD,
-		},
-		ACP: acpResp,
-	}
-	if len(acpResp.ConfigOptions) > 0 {
-		log.Printf("[relay] session.create response includes %d configOptions", len(acpResp.ConfigOptions))
-	} else {
-		log.Printf("[relay] session.create response has NO configOptions")
-	}
-	return resp, ""
+	return c.agentChat().CreateSession(ctx, params)
 }
 
 func (c *Client) rpcLoadSession(ctx context.Context, params appwire.LoadSessionParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	sessionID := params.SessionID
-	if sessionID == "" {
-		return nil, "missing sessionId"
-	}
-	cwd := params.CWD
-	if cwd == "" {
-		return nil, "missing cwd"
-	}
-
-	// If this session was created with a worktree, use that path instead.
-	if c.wtStore != nil {
-		if wt := c.wtStore.Get(sessionID); wt != nil {
-			resolvedCWD, err := worktree.ResolveMappedCWD(wt)
-			if err != nil {
-				return nil, err.Error()
-			}
-			cwd = resolvedCWD
-		}
-	}
-
-	permissionMode := params.PermissionMode
-	model := params.Model
-	requestedRuntime := c.resolveRequestedRuntime(params.Runtime)
-	if requestedRuntime == "" {
-		return nil, "missing runtime"
-	}
-	actualRuntime, acpResp, err := c.runtime.LoadSession(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
-	if err != nil {
-		return nil, err.Error()
-	}
-	c.ensureSessionStatus(sessionID, domain.SessionStatusIdle)
-	c.sessionCWDMu.Lock()
-	c.sessionCWD[sessionID] = cwd
-	c.sessionCWDMu.Unlock()
-	resp := appwire.SessionLoadResult{
-		App: appwire.SessionLoadResultApp{
-			OK:      true,
-			Runtime: actualRuntime,
-			CWD:     cwd,
-		},
-		ACP: acpResp,
-	}
-	return resp, ""
+	return c.agentChat().LoadSession(ctx, params)
 }
 
 func (c *Client) rpcAttachSession(ctx context.Context, params appwire.AttachSessionParams) (any, string) {
-	result, err := sessionattach.Execute(
-		ctx,
-		nil,
-		c,
-		sessionattach.Request{
-			SessionID: params.SessionID,
-			Runtime:   c.resolveRequestedRuntime(params.Runtime),
-		},
-	)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	c.ensureSessionStatus(result.SessionID, result.Status)
-	c.sessionCWDMu.Lock()
-	c.sessionCWD[result.SessionID] = result.CWD
-	c.sessionCWDMu.Unlock()
-
-	return appwire.SessionAttachResult{
-		OK:        true,
-		SessionID: result.SessionID,
-		Runtime:   result.Runtime,
-		CWD:       result.CWD,
-		Title:     result.Title,
-		Status:    sessionStatusToWire(result.Status),
-		CreatedAt: result.CreatedAt,
-		UpdatedAt: result.UpdatedAt,
-	}, ""
+	return c.agentChat().AttachSession(ctx, params)
 }
 
 func (c *Client) rpcResolveSessions(ctx context.Context, params appwire.ResolveSessionsParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	wanted := make(map[string]struct{}, len(params.SessionIDs))
-	for _, id := range params.SessionIDs {
-		if id != "" {
-			wanted[id] = struct{}{}
-		}
-	}
-	runtimeID := params.Runtime
-	targetIDs := make([]string, 0, len(wanted))
-	for id := range wanted {
-		targetIDs = append(targetIDs, id)
-	}
-	all, err := c.runtime.ResolveSessions(ctx, runtimeID, targetIDs)
-	if err != nil {
-		return nil, err.Error()
-	}
-	present := make(map[string]struct{}, len(all))
-	for _, s := range all {
-		present[s.SessionID] = struct{}{}
-	}
-	if len(wanted) > 0 {
-		for id := range wanted {
-			if _, ok := present[id]; !ok {
-				c.clearSessionStatus(id)
-			}
-		}
-	}
-	return appwire.SessionResolveResult{Sessions: c.wireResolvedSessions(all)}, ""
-}
-
-func (c *Client) wireResolvedSessions(
-	sessions []domain.SessionSummary,
-) []appwire.ResolvedSession {
-	resolved := make([]appwire.ResolvedSession, 0, len(sessions))
-	for _, s := range sessions {
-		resolved = append(resolved, appwire.ResolvedSession{
-			SessionID:     s.SessionID,
-			CWD:           s.CWD,
-			Title:         s.Title,
-			Runtime:       s.Runtime,
-			UpdatedAt:     s.UpdatedAt,
-			Status:        sessionStatusToWire(c.resolvedSessionStatus(s.SessionID)),
-			ConfigOptions: s.ConfigOptions,
-		})
-	}
-	return resolved
+	return c.agentChat().ResolveSessions(ctx, params)
 }
 
 func (c *Client) resolveRequestedRuntime(runtimeID string) string {
-	runtimeID = strings.TrimSpace(runtimeID)
-	if runtimeID != "" || c.runtime == nil {
-		return runtimeID
-	}
-
-	runtimes := c.runtime.RuntimeList()
-	for _, runtimeInfo := range runtimes {
-		id := strings.TrimSpace(runtimeInfo.ID)
-		if id == "claude-code" {
-			return id
-		}
-	}
-
-	return ""
+	return c.agentChat().ResolveRequestedRuntime(runtimeID)
 }
 
 func (c *Client) rpcPrompt(ctx context.Context, params appwire.PromptParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	sessionID := params.SessionID
-	if sessionID == "" {
-		return nil, "missing sessionId"
-	}
-	content := appwireconv.ContentBlocksFromWire(params.Content)
-
-	// If no content blocks but there's a text field, create a text block
-	if len(content) == 0 {
-		if params.Text != "" {
-			content = []domain.ContentBlock{{Type: "text", Text: params.Text}}
-		}
-	}
-
-	c.setSessionStatus(sessionID, domain.SessionStatusRunning)
-
-	// Run the prompt asynchronously — return ACK immediately so the
-	// Flutter client's RPC timeout doesn't fire.  Use context.Background()
-	// because the handleRPC ctx lifetime ends when we return.
-	go func() {
-		stopReason, usage, err := c.runtime.Prompt(context.Background(), sessionID, content)
-		now := time.Now()
-		if err != nil {
-			if evErr := c.SendEvent(appwire.Event{
-				Type:      appwire.EventRunFailed,
-				SessionID: sessionID,
-				At:        now,
-				RunFailed: &appwire.RunFailedEvent{
-					App: appwire.RunFailedEventApp{
-						Error: appwire.SessionError{
-							Code:    "prompt_error",
-							Message: err.Error(),
-						},
-					},
-				},
-			}); evErr != nil && !isExpectedRelayDrop(evErr) {
-				log.Printf("send run.failed event: %v", evErr)
-			}
-			return
-		}
-		runFinished := appwire.RunFinishedEventApp{StopReason: stopReason}
-		if usage != nil {
-			runFinished.TotalTokens = usage.TotalTokens
-			runFinished.InputTokens = usage.InputTokens
-			runFinished.OutputTokens = usage.OutputTokens
-			runFinished.CachedReadTokens = usage.CachedReadTokens
-			runFinished.CachedWriteTokens = usage.CachedWriteTokens
-		}
-		if evErr := c.SendEvent(appwire.Event{
-			Type:      appwire.EventRunFinished,
-			SessionID: sessionID,
-			At:        now,
-			RunFinished: &appwire.RunFinishedEvent{
-				App: runFinished,
-			},
-		}); evErr != nil && !isExpectedRelayDrop(evErr) {
-			log.Printf("send run.finished event: %v", evErr)
-		}
-	}()
-
-	return appwire.AcceptedResult{Accepted: true}, ""
+	return c.agentChat().Prompt(ctx, params)
 }
 
 func (c *Client) rpcCancel(ctx context.Context, params appwire.CancelParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	if params.SessionID == "" {
-		return nil, "missing sessionId"
-	}
-	if err := c.runtime.Cancel(ctx, params.SessionID); err != nil {
-		return nil, err.Error()
-	}
-	return appwire.OKResult{OK: true}, ""
+	return c.agentChat().Cancel(ctx, params)
 }
 
 func (c *Client) rpcSetMode(ctx context.Context, params appwire.SetModeParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	if params.SessionID == "" {
-		return nil, "missing sessionId"
-	}
-	if params.PermissionMode == "" {
-		return nil, "missing permissionMode"
-	}
-	if err := c.runtime.SetMode(ctx, params.SessionID, params.PermissionMode); err != nil {
-		return nil, err.Error()
-	}
-	return appwire.OKResult{OK: true}, ""
+	return c.agentChat().SetMode(ctx, params)
 }
 
 func (c *Client) rpcSetConfigOption(ctx context.Context, params appwire.SetConfigOptionParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	if params.SessionID == "" {
-		return nil, "missing sessionId"
-	}
-	if params.ConfigID == "" {
-		return nil, "missing configId"
-	}
-	if params.Value == "" {
-		return nil, "missing value"
-	}
-	if err := c.runtime.SetConfigOption(ctx, params.SessionID, params.ConfigID, params.Value); err != nil {
-		return nil, err.Error()
-	}
-	return appwire.OKResult{OK: true}, ""
+	return c.agentChat().SetConfigOption(ctx, params)
 }
 
 func (c *Client) rpcReplyPermission(ctx context.Context, params appwire.ReplyPermissionParams) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	if params.SessionID == "" {
-		return nil, "missing sessionId"
-	}
-	if params.RequestID == "" {
-		return nil, "missing requestId"
-	}
-	if params.OptionID == "" {
-		return nil, "missing optionId"
-	}
-	if err := c.runtime.ReplyPermission(ctx, params.SessionID, params.RequestID, params.OptionID); err != nil {
-		return nil, err.Error()
-	}
-	if err := c.SendEvent(appwire.Event{
-		Type:      appwire.EventApprovalReplied,
-		SessionID: params.SessionID,
-		At:        time.Now(),
-		Approval: &appwire.ApprovalRequest{
-			App: appwire.ApprovalApp{RequestID: params.RequestID},
-		},
-	}); err != nil && !isExpectedRelayDrop(err) {
-		log.Printf("send approval.replied event: %v", err)
-	}
-	return appwire.OKResult{OK: true}, ""
+	return c.agentChat().ReplyPermission(ctx, params)
 }
 
 func (c *Client) rpcPendingApprovals(ctx context.Context) (any, string) {
-	if c.runtime == nil {
-		return nil, "runtime not available"
-	}
-	approvals := c.runtime.PendingApprovals()
-	return appwire.PendingApprovalsResult{
-		Approvals: appwireconv.ApprovalRequestsFromDomain(approvals),
-	}, ""
+	return c.agentChat().PendingApprovals(ctx)
 }
 
 func (c *Client) rpcResyncEvents(ctx context.Context, params appwire.ResyncEventsParams) (any, string) {
-	if c.eventBuf == nil {
-		return nil, "event buffer not available"
-	}
-	snapshot := c.eventBuf.ReplaySince(params.StreamEpoch, params.LastSeq)
-	return appwire.ResyncEventsResult{
-		Events:             snapshot.Events,
-		Status:             snapshot.Status,
-		StreamEpoch:        snapshot.StreamEpoch,
-		ReplayedThroughSeq: snapshot.ReplayedThroughSeq,
-	}, ""
+	return c.agentChat().ResyncEvents(ctx, params)
 }
 
 func (c *Client) rpcResyncEventsPage(ctx context.Context, params appwire.ResyncEventsPageParams) (any, string) {
-	if c.eventBuf == nil {
-		return nil, "event buffer not available"
-	}
-
-	page := c.eventBuf.ReplaySincePage(
-		params.StreamEpoch,
-		params.LastSeq,
-		clampResyncPageBytes(params.MaxBytes),
-		clampResyncPageEvents(params.MaxEvents),
-	)
-	return appwire.ResyncEventsPageResult{
-		Events:             page.Events,
-		Status:             page.Status,
-		StreamEpoch:        page.StreamEpoch,
-		ReplayedThroughSeq: page.ReplayedThroughSeq,
-		HasMore:            page.HasMore,
-		NextAfterSeq:       page.NextAfterSeq,
-	}, ""
+	return c.agentChat().ResyncEventsPage(ctx, params)
 }
 
 func (c *Client) rpcReplayHead(ctx context.Context) (any, string) {
-	if c.eventBuf == nil {
-		return nil, "event buffer not available"
-	}
-	return appwire.ReplayHeadResult{
-		StreamEpoch:        c.eventBuf.StreamEpoch(),
-		ReplayedThroughSeq: c.eventBuf.Seq(),
-	}, ""
-}
-
-func clampResyncPageBytes(requested int) int {
-	if requested <= 0 {
-		return defaultResyncPageBytes
-	}
-	if requested > maxResyncPageBytes {
-		return maxResyncPageBytes
-	}
-	return requested
-}
-
-func clampResyncPageEvents(requested int) int {
-	if requested <= 0 {
-		return defaultResyncPageEvents
-	}
-	if requested > maxResyncPageEvents {
-		return maxResyncPageEvents
-	}
-	return requested
-}
-
-// --- Filesystem RPCs ---
-
-// safePath resolves relPath under cwd and rejects traversal / symlink escapes.
-func safePath(cwd, relPath string) (string, error) {
-	if relPath == "" || relPath == "." {
-		return filepath.EvalSymlinks(cwd)
-	}
-	target := filepath.Clean(filepath.Join(cwd, relPath))
-	if !strings.HasPrefix(target, cwd+string(filepath.Separator)) && target != cwd {
-		return "", fmt.Errorf("path outside project")
-	}
-	realTarget, err := filepath.EvalSymlinks(target)
-	if err != nil {
-		return "", err
-	}
-	realCWD, err := filepath.EvalSymlinks(cwd)
-	if err != nil {
-		return "", err
-	}
-	if !strings.HasPrefix(realTarget, realCWD+string(filepath.Separator)) && realTarget != realCWD {
-		return "", fmt.Errorf("symlink escape detected")
-	}
-	return realTarget, nil
-}
-
-func (c *Client) rpcFsList(_ context.Context, params appwire.FsListParams) (any, string) {
-	if params.SessionID == "" {
-		return nil, "missing sessionId"
-	}
-	c.sessionCWDMu.RLock()
-	cwd, ok := c.sessionCWD[params.SessionID]
-	c.sessionCWDMu.RUnlock()
-	if !ok || cwd == "" {
-		return nil, "unknown session"
-	}
-
-	relPath := params.Path
-	target, err := safePath(cwd, relPath)
-	if err != nil {
-		if strings.Contains(err.Error(), "path outside project") || strings.Contains(err.Error(), "symlink escape") {
-			return nil, err.Error()
-		}
-		return nil, err.Error()
-	}
-
-	dirEntries, err := os.ReadDir(target)
-	if err != nil {
-		return nil, err.Error()
-	}
-
-	sort.Slice(dirEntries, func(i, j int) bool {
-		di, dj := dirEntries[i].IsDir(), dirEntries[j].IsDir()
-		if di != dj {
-			return di
-		}
-		return dirEntries[i].Name() < dirEntries[j].Name()
-	})
-
-	const maxEntries = 200
-	entries := make([]appwire.FsEntry, 0, min(len(dirEntries), maxEntries))
-	// Normalize relPath so entry paths are clean.
-	if relPath == "." {
-		relPath = ""
-	}
-	for _, e := range dirEntries {
-		if len(entries) >= maxEntries {
-			break
-		}
-		entryPath := e.Name()
-		if relPath != "" {
-			entryPath = filepath.Join(relPath, e.Name())
-		}
-		entries = append(entries, appwire.FsEntry{
-			Name:  e.Name(),
-			Path:  entryPath,
-			IsDir: e.IsDir(),
-		})
-	}
-	return appwire.FsListResult{Entries: entries}, ""
+	return c.agentChat().ReplayHead(ctx)
 }
 
 func (c *Client) rpcFsSearch(ctx context.Context, params appwire.FsSearchParams) (any, string) {
-	if params.SessionID == "" {
-		return nil, "missing sessionId"
-	}
-	if params.Query == "" {
-		return nil, "missing query"
-	}
-	c.sessionCWDMu.RLock()
-	cwd, ok := c.sessionCWD[params.SessionID]
-	c.sessionCWDMu.RUnlock()
-	if !ok || cwd == "" {
-		return nil, "unknown session"
-	}
+	return c.agentChat().FsSearch(ctx, params)
+}
 
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	const maxResults = 50
-	lowerQuery := strings.ToLower(params.Query)
-	var results []appwire.FsSearchEntry
-
-	_ = filepath.WalkDir(cwd, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if d.IsDir() && d.Name() == ".git" {
-			return filepath.SkipDir
-		}
-		if path == cwd {
-			return nil
-		}
-		if strings.Contains(strings.ToLower(d.Name()), lowerQuery) {
-			rel, _ := filepath.Rel(cwd, path)
-			results = append(results, appwire.FsSearchEntry{
-				Path:  rel,
-				IsDir: d.IsDir(),
-			})
-		}
-		return nil
-	})
-
-	sort.Slice(results, func(i, j int) bool {
-		di, dj := results[i].IsDir, results[j].IsDir
-		if di != dj {
-			return di
-		}
-		return len(results[i].Path) < len(results[j].Path)
-	})
-
-	if len(results) > maxResults {
-		results = results[:maxResults]
-	}
-	return appwire.FsSearchResult{Results: results}, ""
+func (c *Client) rpcFsList(ctx context.Context, params appwire.FsListParams) (any, string) {
+	return c.agentChat().FsList(ctx, params)
 }
 
 // --- Event forwarding ---
 
-// SendEvent encrypts an app transport event and sends it to the connected client via WS.
+// SendEvent tracks, buffers, and sends an app transport event.
 func (c *Client) SendEvent(event appwire.Event) error {
-	c.applyEventStatus(event)
-	event = normalizeEventForTransport(event)
-	if c.eventBuf != nil {
-		event = c.eventBuf.Push(event)
-	}
+	return c.agentChat().SendEvent(event)
+}
 
+func (c *Client) DeliverEvent(event appwire.Event) error {
+	return c.deliverEvent(event, true)
+}
+
+func (c *Client) DeliverLiveEvent(event appwire.Event) error {
+	return c.deliverEvent(event, false)
+}
+
+// deliverEvent encrypts an already-normalized app transport event and sends it
+// to the connected client via WS.
+func (c *Client) deliverEvent(event appwire.Event, includeHints bool) error {
 	msgID := uuid.New().String()
 	body, err := marshalEvent(event)
 	if err != nil {
@@ -1151,9 +546,11 @@ func (c *Client) SendEvent(event appwire.Event) error {
 			Nonce:      nonce,
 			Ciphertext: ciphertext,
 		}
-		switch event.Type {
-		case appwire.EventApprovalRequested, appwire.EventRunFailed, appwire.EventRunFinished:
-			msg.Hint = &EventHint{Event: string(event.Type)}
+		if includeHints {
+			switch event.Type {
+			case appwire.EventApprovalRequested, appwire.EventRunFailed, appwire.EventRunFinished:
+				msg.Hint = &EventHint{Event: string(event.Type)}
+			}
 		}
 		return msg, nil
 	})
@@ -1162,102 +559,39 @@ func (c *Client) SendEvent(event appwire.Event) error {
 // SendLiveEvent writes an event only to the current active phone session.
 // Unlike SendEvent, it does not enter the replay buffer when delivery fails.
 func (c *Client) SendLiveEvent(event appwire.Event) error {
-	event = normalizeEventForTransport(event)
-	msgID := uuid.New().String()
-	body, err := marshalEvent(event)
-	if err != nil {
-		return err
-	}
-	if err := c.writeEncryptedForActiveSession(func(session *Session) (EncryptedMessage, error) {
-		nonce, ciphertext, err := session.encrypt(string(MessageTypeEvent), msgID, body)
-		if err != nil {
-			return EncryptedMessage{}, err
-		}
-		return EncryptedMessage{
-			Type:       MessageTypeEvent,
-			MachineID:  c.machineID,
-			MsgID:      msgID,
-			Nonce:      nonce,
-			Ciphertext: ciphertext,
-		}, nil
-	}); err != nil {
-		return err
-	}
-	c.applyEventStatus(event)
-	return nil
-}
-
-func (c *Client) applyEventStatus(event appwire.Event) {
-	if event.SessionID == "" {
-		return
-	}
-	switch event.Type {
-	case appwire.EventApprovalRequested:
-		c.setSessionStatus(event.SessionID, domain.SessionStatusWaitingApproval)
-	case appwire.EventApprovalReplied:
-		c.setSessionStatus(event.SessionID, domain.SessionStatusRunning)
-	case appwire.EventRunFinished:
-		c.setSessionStatus(event.SessionID, domain.SessionStatusIdle)
-	case appwire.EventRunFailed:
-		c.setSessionStatus(event.SessionID, domain.SessionStatusError)
-	case appwire.EventSessionStatus:
-		if event.SessionInfo != nil {
-			c.setSessionStatus(event.SessionID, sessionStatusFromWire(event.SessionInfo.App.Status))
-		}
-	}
+	return c.agentChat().SendLiveEvent(event)
 }
 
 func (c *Client) setSessionStatus(sessionID string, status domain.SessionStatus) {
-	if sessionID == "" {
-		return
-	}
-	c.statusMu.Lock()
-	defer c.statusMu.Unlock()
-	if c.sessionStatus == nil {
-		c.sessionStatus = make(map[string]domain.SessionStatus)
-	}
-	c.sessionStatus[sessionID] = status
+	c.agentChat().SetSessionStatus(sessionID, status)
 }
 
 func (c *Client) ensureSessionStatus(sessionID string, status domain.SessionStatus) {
-	if sessionID == "" {
-		return
-	}
-	c.statusMu.Lock()
-	defer c.statusMu.Unlock()
-	if c.sessionStatus == nil {
-		c.sessionStatus = make(map[string]domain.SessionStatus)
-	}
-	if _, ok := c.sessionStatus[sessionID]; ok {
-		return
-	}
-	c.sessionStatus[sessionID] = status
+	c.agentChat().EnsureSessionStatus(sessionID, status)
 }
 
 func (c *Client) resolvedSessionStatus(sessionID string) domain.SessionStatus {
-	c.statusMu.RLock()
-	defer c.statusMu.RUnlock()
-	if status, ok := c.sessionStatus[sessionID]; ok {
-		return status
-	}
-	return domain.SessionStatusIdle
+	return c.agentChat().ResolvedSessionStatus(sessionID)
 }
 
 func (c *Client) clearSessionStatus(sessionID string) {
-	if sessionID == "" {
-		return
-	}
-	c.statusMu.Lock()
-	defer c.statusMu.Unlock()
-	delete(c.sessionStatus, sessionID)
+	c.agentChat().ClearSessionStatus(sessionID)
 }
 
-func sessionStatusToWire(status domain.SessionStatus) appwire.SessionStatus {
-	return appwire.SessionStatus(status)
+func (c *Client) setSessionCWD(sessionID, cwd string) {
+	c.agentChat().SetSessionCWD(sessionID, cwd)
 }
 
-func sessionStatusFromWire(status appwire.SessionStatus) domain.SessionStatus {
-	return domain.SessionStatus(status)
+func (c *Client) sessionCWDFor(sessionID string) (string, bool) {
+	return c.agentChat().SessionCWD(sessionID)
+}
+
+func (c *Client) eventBuffer() *EventBuffer {
+	return c.agentChat().EventBuffer()
+}
+
+func (c *Client) worktreeStore() *worktree.Store {
+	return c.agentChat().WorktreeStore()
 }
 
 // --- Response handling ---
@@ -1313,14 +647,6 @@ func (c *Client) SendEcho(params map[string]any) error {
 			Ciphertext: ciphertext,
 		}, nil
 	})
-}
-
-func randomHex(n int) (string, error) {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		return "", fmt.Errorf("random bytes: %w", err)
-	}
-	return hex.EncodeToString(b)[:n], nil
 }
 
 func (c *Client) Close() error {

@@ -92,6 +92,9 @@ func (o SessionConfigSelectOptions) MarshalJSON() ([]byte, error) {
 	if len(o.Grouped) > 0 {
 		return json.Marshal(o.Grouped)
 	}
+	if len(o.Ungrouped) == 0 {
+		return []byte("[]"), nil
+	}
 	return json.Marshal(o.Ungrouped)
 }
 

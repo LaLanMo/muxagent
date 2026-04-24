@@ -116,6 +116,24 @@ func TestSessionUpdateContractsRoundTrip(t *testing.T) {
 		require.Len(t, decoded.ConfigOptions[0].Options.Grouped, 1)
 	})
 
+	t.Run("empty config option choices encode as list", func(t *testing.T) {
+		modeCategory := "mode"
+		encoded, err := json.Marshal(SessionConfigOption{
+			ID:           "mode",
+			Name:         "Mode",
+			Category:     &modeCategory,
+			Type:         "select",
+			CurrentValue: "read-only",
+		})
+		require.NoError(t, err)
+
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(encoded, &payload))
+		options, ok := payload["options"].([]any)
+		require.True(t, ok)
+		require.Empty(t, options)
+	})
+
 	t.Run("plan update", func(t *testing.T) {
 		fixture := `{
 			"_meta": {"source":"schema-fixture"},

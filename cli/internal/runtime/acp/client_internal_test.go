@@ -119,6 +119,26 @@ func TestModeConfigOptionEventSynthesizesStubWhenOptionsMissing(t *testing.T) {
 	if len(option.Options.Flatten()) != 0 {
 		t.Fatalf("len(flattened options) = %d, want 0", len(option.Options.Flatten()))
 	}
+
+	encoded, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal event: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(encoded, &payload); err != nil {
+		t.Fatalf("unmarshal event: %v", err)
+	}
+	modeChanged := payload["modeChanged"].(map[string]any)
+	acpPayload := modeChanged["acp"].(map[string]any)
+	configOptions := acpPayload["configOptions"].([]any)
+	wireOption := configOptions[0].(map[string]any)
+	options, ok := wireOption["options"].([]any)
+	if !ok {
+		t.Fatalf("wire options = %#v, want []", wireOption["options"])
+	}
+	if len(options) != 0 {
+		t.Fatalf("len(wire options) = %d, want 0", len(options))
+	}
 }
 
 func TestBuildToolEventPreservesDiffsOnPendingToolCall(t *testing.T) {

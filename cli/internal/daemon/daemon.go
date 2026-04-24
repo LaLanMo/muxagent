@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LaLanMo/muxagent/cli/internal/agentchat"
 	"github.com/LaLanMo/muxagent/cli/internal/auth"
 	"github.com/LaLanMo/muxagent/cli/internal/config"
 	"github.com/LaLanMo/muxagent/cli/internal/control"
@@ -37,7 +38,8 @@ type Daemon struct {
 	relay           *relayws.Client
 	relayURL        string
 	rt              *runtimemanager.Manager
-	eventBuf        *relayws.EventBuffer
+	chat            *agentchat.Service
+	eventBuf        *agentchat.EventBuffer
 	attachResolvers *sessionattach.Registry
 	attachPublisher sessionattach.Publisher
 	stopOnce        sync.Once
@@ -66,7 +68,7 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	d.rt = runtimemanager.New(cfg)
-	d.eventBuf = relayws.NewEventBufferWithByteBudget(
+	d.eventBuf = agentchat.NewEventBufferWithByteBudget(
 		relayReplayEventLimit,
 		relayReplayByteBudget,
 	)
@@ -148,13 +150,23 @@ func (d *Daemon) Start() error {
 		return fmt.Errorf("failed to load worktree store: %w", err)
 	}
 
-	relayClient, err := relayws.NewMachineClient(d.relayURL, hostname, creds, machineSignPriv, keyringMgr, d.rt, d.eventBuf, wtStore)
+	relayClient, err := relayws.NewMachineTransportClient(d.relayURL, hostname, creds, machineSignPriv, keyringMgr, d.rt, d.eventBuf, wtStore)
 	if err != nil {
 		return fmt.Errorf("failed to create relay client: %w", err)
 	}
+	chatService := agentchat.New(agentchat.Config{
+		MachineID:            creds.MachineID,
+		Runtime:              d.rt,
+		EventBuffer:          d.eventBuf,
+		WorktreeStore:        wtStore,
+		Transport:            relayClient,
+		AttachRegistry:       d.attachResolvers,
+		IgnoreTransportError: isExpectedRelayDrop,
+	})
+	relayClient.SetAgentChat(chatService)
 
-	// Start event bridge: runtime events → ring buffer → relay (to mobile)
-	go d.runEventBridge(context.Background(), relayClient)
+	// Start event bridge: runtime events → agentchat → relay (to mobile)
+	go d.runEventBridge(context.Background(), chatService)
 
 	go func() {
 		backoff := time.Second
@@ -175,13 +187,14 @@ func (d *Daemon) Start() error {
 	}()
 
 	d.relay = relayClient
-	d.attachPublisher = relayClient
+	d.chat = chatService
+	d.attachPublisher = chatService
 	return nil
 }
 
-// runEventBridge reads events from the ACP runtime and hands them to the relay,
-// which owns status tracking, buffering, and best-effort WS delivery.
-func (d *Daemon) runEventBridge(ctx context.Context, relay *relayws.Client) {
+// runEventBridge reads events from the ACP runtime and hands them to agentchat,
+// which owns status tracking, buffering, and best-effort transport delivery.
+func (d *Daemon) runEventBridge(ctx context.Context, chat *agentchat.Service) {
 	events := d.rt.Events()
 	for {
 		select {
@@ -191,14 +204,17 @@ func (d *Daemon) runEventBridge(ctx context.Context, relay *relayws.Client) {
 			if !ok {
 				return
 			}
-			if err := relay.SendEvent(ev); err != nil &&
-				!errors.Is(err, relayws.ErrRelayNotConnected) &&
-				!errors.Is(err, relayws.ErrNoActiveSession) &&
-				!errors.Is(err, relayws.ErrStaleRelaySession) {
+			if err := chat.SendEvent(ev); err != nil && !isExpectedRelayDrop(err) {
 				log.Printf("event forward error: %v", err)
 			}
 		}
 	}
+}
+
+func isExpectedRelayDrop(err error) bool {
+	return errors.Is(err, relayws.ErrRelayNotConnected) ||
+		errors.Is(err, relayws.ErrNoActiveSession) ||
+		errors.Is(err, relayws.ErrStaleRelaySession)
 }
 
 func (d *Daemon) Stop(ctx context.Context) error {

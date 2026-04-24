@@ -1,4 +1,4 @@
-package relayws
+package agentchat
 
 import (
 	"runtime"
@@ -216,7 +216,7 @@ func TestEventBuffer_ReplaySincePageRespectsMaxBytes(t *testing.T) {
 		},
 	})
 
-	firstSize, err := marshalEvent(first)
+	firstSize, err := MarshalEvent(first)
 	require.NoError(t, err)
 
 	page := buf.ReplaySincePage(buf.StreamEpoch(), 0, len(firstSize)+32, 10)
