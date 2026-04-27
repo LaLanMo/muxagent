@@ -13,28 +13,6 @@ import (
 
 var ErrEventTransportUnavailable = errors.New("event transport unavailable")
 
-type scopedEventSinkKey struct{}
-
-type ScopedEventSink func(appwire.Event)
-
-func WithScopedEventSink(ctx context.Context, sink ScopedEventSink) context.Context {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if sink == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, scopedEventSinkKey{}, sink)
-}
-
-func scopedEventSinkFromContext(ctx context.Context) ScopedEventSink {
-	if ctx == nil {
-		return nil
-	}
-	sink, _ := ctx.Value(scopedEventSinkKey{}).(ScopedEventSink)
-	return sink
-}
-
 type EventTransport interface {
 	DeliverEvent(event appwire.Event) error
 	DeliverLiveEvent(event appwire.Event) error
@@ -314,14 +292,6 @@ func (s *Service) applyEventStatus(event appwire.Event) {
 		return
 	}
 	switch event.Type {
-	case appwire.EventApprovalRequested:
-		s.SetSessionStatus(event.SessionID, domain.SessionStatusWaitingApproval)
-	case appwire.EventApprovalReplied:
-		s.SetSessionStatus(event.SessionID, domain.SessionStatusRunning)
-	case appwire.EventRunFinished:
-		s.SetSessionStatus(event.SessionID, domain.SessionStatusIdle)
-	case appwire.EventRunFailed:
-		s.SetSessionStatus(event.SessionID, domain.SessionStatusError)
 	case appwire.EventSessionStatus:
 		if event.SessionInfo != nil {
 			s.SetSessionStatus(event.SessionID, domain.SessionStatus(event.SessionInfo.App.Status))

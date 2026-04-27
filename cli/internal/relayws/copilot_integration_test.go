@@ -145,11 +145,8 @@ func TestCopilotRemoteControlEndToEnd(t *testing.T) {
 	require.Equal(t, string(config.RuntimeCopilot), loadResp.App.Runtime)
 	require.Equal(t, copilotModePlanID, currentConfigValue(loadResp.ACP.ConfigOptions, "mode"))
 	require.Equal(t, targetModel, currentConfigValue(loadResp.ACP.ConfigOptions, "model"))
-
-	historyEvent := waitForRuntimeEvent(t, rt2.Events(), 30*time.Second, func(ev appwire.Event) bool {
-		return ev.Type == appwire.EventHistoryComplete && ev.SessionID == sessionID
-	})
-	require.Equal(t, sessionID, historyEvent.SessionID)
+	require.True(t, loadResp.App.Replay.Complete)
+	require.NotEmpty(t, loadResp.App.Replay.Events)
 
 	resolveAny, errStr := client2.rpcResolveSessions(ctx, appwire.ResolveSessionsParams{
 		Runtime:    string(config.RuntimeCopilot),

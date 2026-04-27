@@ -12,6 +12,11 @@ type RPCRequest struct {
 	Params json.RawMessage `json:"params,omitempty"`
 }
 
+type RPCResponse struct {
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  string          `json:"error,omitempty"`
+}
+
 type rpcResponseEnvelope struct {
 	Result any    `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
@@ -245,14 +250,24 @@ type SessionCreateResult struct {
 }
 
 type SessionLoadResultApp struct {
-	OK      bool   `json:"ok"`
-	Runtime string `json:"runtime"`
-	CWD     string `json:"cwd"`
+	OK        bool              `json:"ok"`
+	SessionID string            `json:"sessionId"`
+	Runtime   string            `json:"runtime"`
+	CWD       string            `json:"cwd"`
+	Title     string            `json:"title,omitempty"`
+	Status    SessionStatus     `json:"status,omitempty"`
+	UpdatedAt *time.Time        `json:"updatedAt,omitempty"`
+	Replay    SessionLoadReplay `json:"replay"`
 }
 
 type SessionLoadResult struct {
 	App SessionLoadResultApp            `json:"app"`
 	ACP acpprotocol.LoadSessionResponse `json:"acp"`
+}
+
+type SessionLoadReplay struct {
+	Events   []Event `json:"events"`
+	Complete bool    `json:"complete"`
 }
 
 type SessionAttachResult struct {

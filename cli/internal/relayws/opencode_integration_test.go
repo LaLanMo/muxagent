@@ -150,11 +150,8 @@ func TestOpenCodeRemoteControlEndToEnd(t *testing.T) {
 	require.Equal(t, string(config.RuntimeOpenCode), loadResp.App.Runtime)
 	require.Equal(t, "build", currentConfigValue(loadResp.ACP.ConfigOptions, "mode"))
 	require.Equal(t, originalModel, currentConfigValue(loadResp.ACP.ConfigOptions, "model"))
-
-	historyEvent := waitForRuntimeEvent(t, rt.Events(), 30*time.Second, func(ev appwire.Event) bool {
-		return ev.Type == appwire.EventHistoryComplete && ev.SessionID == sessionID
-	})
-	require.Equal(t, sessionID, historyEvent.SessionID)
+	require.True(t, loadResp.App.Replay.Complete)
+	require.NotEmpty(t, loadResp.App.Replay.Events)
 
 	resolveAny, errStr := client.rpcResolveSessions(ctx, appwire.ResolveSessionsParams{
 		Runtime:    string(config.RuntimeOpenCode),

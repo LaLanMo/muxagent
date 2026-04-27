@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
-	"github.com/LaLanMo/muxagent/cli/internal/control"
 	"github.com/LaLanMo/muxagent/cli/internal/filelock"
 	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
@@ -437,7 +437,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodRuntimeStatus,
 					methodAgentChatRPC,
 				},
-				Notifications: []string{methodNotification, notificationAgentChatEvent},
+				Notifications: []string{methodNotification, notificationAgentChatStreamItem},
 			},
 		}, notifications, stopModeContinue, nil
 
@@ -1308,7 +1308,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 		return probeAppServerRuntimeStatus(s.lookPath), nil, stopModeContinue, nil
 
 	case methodAgentChatRPC:
-		params, err := decodeParams[agentChatRPCParams](req.Params)
+		params, err := decodeParams[appwire.RPCRequest](req.Params)
 		if err != nil {
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
 		}
@@ -1316,7 +1316,7 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 		if params.Method == "" {
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "method is required"}
 		}
-		resp, err := s.agentChatClient.Call(ctx, control.AgentChatRPCRequest{
+		resp, err := s.agentChatClient.Call(ctx, appwire.RPCRequest{
 			Method: params.Method,
 			Params: params.Params,
 		})
@@ -1326,20 +1326,10 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 		if strings.TrimSpace(resp.Error) != "" {
 			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: resp.Error}
 		}
-		notifications := make([]notification, 0, len(resp.Events))
-		if session != nil {
-			for _, event := range resp.Events {
-				notifications = append(notifications, notification{
-					JSONRPC: jsonRPCVersion,
-					Method:  notificationAgentChatEvent,
-					Params:  event,
-				})
-			}
-		}
 		if len(resp.Result) == 0 {
-			return map[string]any{}, notifications, stopModeContinue, nil
+			return map[string]any{}, nil, stopModeContinue, nil
 		}
-		return resp.Result, notifications, stopModeContinue, nil
+		return resp.Result, nil, stopModeContinue, nil
 
 	default:
 		return nil, nil, stopModeContinue, &rpcError{Code: errorCodeMethodNotFound, Message: fmt.Sprintf("method %q not found", req.Method)}

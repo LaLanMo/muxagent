@@ -26,17 +26,19 @@ func (t *recordingTransport) DeliverLiveEvent(event appwire.Event) error {
 	return t.liveErr
 }
 
-func TestServiceSendEventBuffersAndTracksStatusBeforeTransport(t *testing.T) {
+func TestServiceSendEventBuffersAndTracksExplicitStatusBeforeTransport(t *testing.T) {
 	transportErr := errors.New("offline")
 	buf := NewEventBuffer(8)
 	transport := &recordingTransport{eventErr: transportErr}
 	svc := New(Config{EventBuffer: buf, Transport: transport})
 
 	err := svc.SendEvent(appwire.Event{
-		Type:      appwire.EventApprovalRequested,
+		Type:      appwire.EventSessionStatus,
 		SessionID: "sid",
 		At:        time.Now(),
-		Approval:  &appwire.ApprovalRequest{App: appwire.ApprovalApp{RequestID: "req-1"}},
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{ID: "sid", Status: appwire.SessionStatusWaitingApproval},
+		},
 	})
 
 	if !errors.Is(err, transportErr) {

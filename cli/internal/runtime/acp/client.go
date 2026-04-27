@@ -546,7 +546,7 @@ func (c *Client) handleNotifications() {
 	var pendingLoad *historyDrainRequest
 	for {
 		if pendingLoad != nil {
-			if err := c.drainAndEmitHistoryComplete(pendingLoad.sessionID); err != nil {
+			if err := c.drainHistoryNotifications(pendingLoad.sessionID); err != nil {
 				pendingLoad.done <- err
 				return
 			}
@@ -575,13 +575,13 @@ func (c *Client) dispatchNotification(notif *Notification) {
 	}
 }
 
-// drainAndEmitHistoryComplete processes any remaining notifications in the
-// channel, then emits the history.complete sentinel. This is safe because
+// drainHistoryNotifications processes any remaining notifications in the
+// channel. This is safe because
 // session/load blocks until the agent has emitted all history notifications
 // on stdout, and readLoop enqueues them before delivering the RPC response
 // that unblocks transport.Call — so they are already buffered by the time
 // LoadSession sends on historyDone.
-func (c *Client) drainAndEmitHistoryComplete(sessionID string) error {
+func (c *Client) drainHistoryNotifications(sessionID string) error {
 	for {
 		select {
 		case notif, ok := <-c.transport.Notifications():
@@ -590,11 +590,6 @@ func (c *Client) drainAndEmitHistoryComplete(sessionID string) error {
 			}
 			c.dispatchNotification(notif)
 		default:
-			c.emit(appwire.Event{
-				Type:      appwire.EventHistoryComplete,
-				SessionID: sessionID,
-				At:        time.Now(),
-			})
 			return nil
 		}
 	}
@@ -646,6 +641,18 @@ func (c *Client) handlePermissionRequest(req *IncomingMessage) {
 	c.permMu.Unlock()
 
 	// Emit approval event for the mobile client
+	c.emit(appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: permReq.SessionID,
+		At:        time.Now(),
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{
+				ID:        permReq.SessionID,
+				Status:    appwire.SessionStatusWaitingApproval,
+				UpdatedAt: time.Now(),
+			},
+		},
+	})
 	c.emit(appwire.Event{
 		Type:      appwire.EventApprovalRequested,
 		SessionID: permReq.SessionID,

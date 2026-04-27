@@ -609,6 +609,19 @@ func TestSendEventBuffersLocalEventsAndTracksStatus(t *testing.T) {
 	}
 
 	err := client.SendEvent(appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: "sid",
+		At:        time.Now(),
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{
+				ID:     "sid",
+				Status: appwire.SessionStatusWaitingApproval,
+			},
+		},
+	})
+	require.ErrorIs(t, err, ErrRelayNotConnected)
+
+	err = client.SendEvent(appwire.Event{
 		Type:      appwire.EventApprovalRequested,
 		SessionID: "sid",
 		At:        time.Now(),
@@ -634,6 +647,19 @@ func TestSendEventBuffersLocalEventsAndTracksStatus(t *testing.T) {
 	})
 	require.ErrorIs(t, err, ErrRelayNotConnected)
 
+	err = client.SendEvent(appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: "sid",
+		At:        time.Now(),
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{
+				ID:     "sid",
+				Status: appwire.SessionStatusIdle,
+			},
+		},
+	})
+	require.ErrorIs(t, err, ErrRelayNotConnected)
+
 	result, errStr = client.rpcResolveSessions(
 		context.Background(),
 		appwire.ResolveSessionsParams{SessionIDs: []string{"sid"}},
@@ -644,11 +670,15 @@ func TestSendEventBuffersLocalEventsAndTracksStatus(t *testing.T) {
 
 	snapshot := client.eventBuf.ReplaySince(client.eventBuf.StreamEpoch(), 0)
 	require.Equal(t, appwire.ResyncStatusOK, snapshot.Status)
-	require.Len(t, snapshot.Events, 2)
+	require.Len(t, snapshot.Events, 4)
 	require.EqualValues(t, 1, snapshot.Events[0].Seq)
-	require.Equal(t, appwire.EventApprovalRequested, snapshot.Events[0].Type)
+	require.Equal(t, appwire.EventSessionStatus, snapshot.Events[0].Type)
 	require.EqualValues(t, 2, snapshot.Events[1].Seq)
-	require.Equal(t, appwire.EventRunFinished, snapshot.Events[1].Type)
+	require.Equal(t, appwire.EventApprovalRequested, snapshot.Events[1].Type)
+	require.EqualValues(t, 3, snapshot.Events[2].Seq)
+	require.Equal(t, appwire.EventRunFinished, snapshot.Events[2].Type)
+	require.EqualValues(t, 4, snapshot.Events[3].Seq)
+	require.Equal(t, appwire.EventSessionStatus, snapshot.Events[3].Type)
 }
 
 func TestSendLiveEventDoesNotBufferOrTrackStatusWithoutActivePhone(t *testing.T) {
@@ -1171,10 +1201,12 @@ func TestRpcPromptUpdatesResolvedStatus(t *testing.T) {
 
 	snapshot := client.eventBuf.ReplaySince(client.eventBuf.StreamEpoch(), 0)
 	require.Equal(t, appwire.ResyncStatusOK, snapshot.Status)
-	require.Len(t, snapshot.Events, 1)
-	require.Equal(t, appwire.EventRunFinished, snapshot.Events[0].Type)
-	require.NotNil(t, snapshot.Events[0].RunFinished)
-	require.Equal(t, "end_turn", snapshot.Events[0].RunFinished.App.StopReason)
+	require.Len(t, snapshot.Events, 3)
+	require.Equal(t, appwire.EventSessionStatus, snapshot.Events[0].Type)
+	require.Equal(t, appwire.EventRunFinished, snapshot.Events[1].Type)
+	require.NotNil(t, snapshot.Events[1].RunFinished)
+	require.Equal(t, "end_turn", snapshot.Events[1].RunFinished.App.StopReason)
+	require.Equal(t, appwire.EventSessionStatus, snapshot.Events[2].Type)
 }
 
 func TestRpcPromptParsesTypedContentBlocks(t *testing.T) {

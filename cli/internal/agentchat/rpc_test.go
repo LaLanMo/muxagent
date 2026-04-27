@@ -240,13 +240,42 @@ func TestHandleRPCSessionListUsesRuntimeSummaries(t *testing.T) {
 	}
 }
 
-func TestLoadSessionWithScopedSinkDoesNotUseGlobalReplay(t *testing.T) {
+func TestLoadSessionReturnsScopedReplayInResultDoesNotUseGlobalReplay(t *testing.T) {
 	buf := NewEventBuffer(8)
 	transport := &recordingTransport{}
+	updated := time.Date(2026, 4, 27, 10, 30, 0, 0, time.UTC)
 	rt := &scopedLoadFakeRuntime{
+		metadata: []domain.SessionSummary{{
+			SessionID: "sid",
+			CWD:       "/tmp/project",
+			Title:     "Existing chat",
+			Runtime:   "codex",
+			UpdatedAt: updated,
+		}},
 		events: []appwire.Event{
 			{Type: appwire.EventMessageDelta, SessionID: "sid"},
-			{Type: appwire.EventHistoryComplete, SessionID: "sid"},
+			{Type: appwire.EventRunFinished, SessionID: "sid"},
+			{
+				Type:      appwire.EventSessionStatus,
+				SessionID: "sid",
+				SessionInfo: &appwire.SessionStatusEvent{
+					App: appwire.SessionStatusEventApp{ID: "sid", Status: appwire.SessionStatusIdle},
+				},
+			},
+			{
+				Type:      appwire.EventModeChanged,
+				SessionID: "sid",
+				ModeChanged: &appwire.ModeChangedEvent{
+					App: appwire.ModeChangedEventApp{CurrentModeID: "full-access"},
+				},
+			},
+			{
+				Type:      appwire.EventModelChanged,
+				SessionID: "sid",
+				ConfigChanged: &appwire.ConfigChangedEvent{
+					App: appwire.ConfigChangedEventApp{ConfigID: "model", CurrentValue: "gpt-5.5"},
+				},
+			},
 		},
 	}
 	svc := New(Config{
@@ -254,12 +283,9 @@ func TestLoadSessionWithScopedSinkDoesNotUseGlobalReplay(t *testing.T) {
 		EventBuffer: buf,
 		Transport:   transport,
 	})
+	svc.SetSessionStatus("sid", domain.SessionStatusRunning)
 
-	var scoped []appwire.Event
-	ctx := WithScopedEventSink(context.Background(), func(event appwire.Event) {
-		scoped = append(scoped, event)
-	})
-	result, errStr := svc.LoadSession(ctx, appwire.LoadSessionParams{
+	result, errStr := svc.LoadSession(context.Background(), appwire.LoadSessionParams{
 		SessionID: "sid",
 		CWD:       "/tmp/project",
 		Runtime:   "codex",
@@ -267,17 +293,36 @@ func TestLoadSessionWithScopedSinkDoesNotUseGlobalReplay(t *testing.T) {
 	if errStr != "" {
 		t.Fatalf("LoadSession error = %q", errStr)
 	}
-	if _, ok := result.(appwire.SessionLoadResult); !ok {
+	load, ok := result.(appwire.SessionLoadResult)
+	if !ok {
 		t.Fatalf("LoadSession result type = %T, want appwire.SessionLoadResult", result)
 	}
 	if !rt.scopedCalled {
 		t.Fatal("scoped runtime load was not used")
 	}
-	if len(scoped) != 2 {
-		t.Fatalf("scoped events = %#v, want 2", scoped)
+	if load.App.Title != "Existing chat" {
+		t.Fatalf("load title = %q, want Existing chat", load.App.Title)
 	}
-	if scoped[0].Seq != 0 || scoped[1].Seq != 0 {
-		t.Fatalf("scoped events got global seqs: %#v", scoped)
+	if load.App.UpdatedAt == nil || !load.App.UpdatedAt.Equal(updated) {
+		t.Fatalf("load updatedAt = %v, want %s", load.App.UpdatedAt, updated)
+	}
+	if len(load.App.Replay.Events) != 2 {
+		t.Fatalf("replay events = %#v, want transcript-only events", load.App.Replay.Events)
+	}
+	if !load.App.Replay.Complete {
+		t.Fatal("replay complete = false, want true")
+	}
+	for _, event := range load.App.Replay.Events {
+		if event.Seq != 0 {
+			t.Fatalf("scoped replay event got global seq: %#v", event)
+		}
+		switch event.Type {
+		case appwire.EventSessionStatus, appwire.EventModeChanged, appwire.EventModelChanged:
+			t.Fatalf("scoped replay included truth event: %#v", event)
+		}
+	}
+	if got := svc.ResolvedSessionStatus("sid"); got != domain.SessionStatusRunning {
+		t.Fatalf("status = %q, want running; scoped replay must not mutate truth", got)
 	}
 	if got := buf.Seq(); got != 0 {
 		t.Fatalf("event buffer seq = %d, want 0", got)
@@ -366,12 +411,17 @@ func (r *createMetadataRuntime) NewSession(context.Context, string, string, stri
 type scopedLoadFakeRuntime struct {
 	blockingPromptRuntime
 	events       []appwire.Event
+	metadata     []domain.SessionSummary
 	scopedCalled bool
 }
 
 func (r *scopedLoadFakeRuntime) LoadSessionScoped(context.Context, string, string, string, string, string) (string, acpprotocol.LoadSessionResponse, []appwire.Event, error) {
 	r.scopedCalled = true
 	return "codex", acpprotocol.LoadSessionResponse{}, r.events, nil
+}
+
+func (r *scopedLoadFakeRuntime) ResolveSessions(context.Context, string, []string) ([]domain.SessionSummary, error) {
+	return r.metadata, nil
 }
 
 type listingAgentRuntime struct {

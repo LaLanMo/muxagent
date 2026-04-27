@@ -64,13 +64,13 @@ func TestHandleAgentChatRPCUsesDaemonOwnedService(t *testing.T) {
 	}
 }
 
-func TestHandleAgentChatRPCReturnsScopedLoadEvents(t *testing.T) {
+func TestHandleAgentChatRPCReturnsLoadReplayInResult(t *testing.T) {
 	buf := agentchat.NewEventBuffer(8)
 	d := &Daemon{chat: agentchat.New(agentchat.Config{
 		EventBuffer: buf,
 		Runtime: &scopedLoadRuntime{
 			events: []appwire.Event{{
-				Type:      appwire.EventHistoryComplete,
+				Type:      appwire.EventMessageDelta,
 				SessionID: "sid-scoped",
 			}},
 		},
@@ -101,8 +101,15 @@ func TestHandleAgentChatRPCReturnsScopedLoadEvents(t *testing.T) {
 	if resp.Error != "" {
 		t.Fatalf("error = %q, want empty", resp.Error)
 	}
-	if len(resp.Events) != 1 || resp.Events[0].Type != appwire.EventHistoryComplete {
-		t.Fatalf("events = %#v, want scoped history.complete", resp.Events)
+	var load appwire.SessionLoadResult
+	if err := json.Unmarshal(resp.Result, &load); err != nil {
+		t.Fatalf("Unmarshal result: %v", err)
+	}
+	if len(load.App.Replay.Events) != 1 || load.App.Replay.Events[0].Type != appwire.EventMessageDelta {
+		t.Fatalf("replay events = %#v, want scoped message event", load.App.Replay.Events)
+	}
+	if !load.App.Replay.Complete {
+		t.Fatal("replay complete = false, want true")
 	}
 	if got := buf.Seq(); got != 0 {
 		t.Fatalf("buffer seq = %d, want 0", got)
@@ -274,8 +281,11 @@ func TestLocalAgentChatTransportDoesNotGateLiveEventsOnExpectedRelayDrop(t *test
 	})
 
 	err := svc.SendLiveEvent(appwire.Event{
-		Type:      appwire.EventApprovalRequested,
+		Type:      appwire.EventSessionStatus,
 		SessionID: "sid-1",
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{ID: "sid-1", Status: appwire.SessionStatusWaitingApproval},
+		},
 	})
 	if err != nil {
 		t.Fatalf("SendLiveEvent error = %v, want nil", err)
@@ -301,8 +311,11 @@ func TestLocalAgentChatTransportDoesNotGateBufferedEventsOnExpectedRelayDrop(t *
 	})
 
 	err := svc.SendEvent(appwire.Event{
-		Type:      appwire.EventRunFailed,
+		Type:      appwire.EventSessionStatus,
 		SessionID: "sid-1",
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{ID: "sid-1", Status: appwire.SessionStatusError},
+		},
 	})
 	if err != nil {
 		t.Fatalf("SendEvent error = %v, want nil", err)
@@ -356,8 +369,11 @@ func TestLocalAgentChatTransportDoesNotGateBufferedEventsOnRelayErrorWhenLocalAv
 	svc := agentchat.New(agentchat.Config{EventBuffer: buf, Transport: transport})
 
 	err := svc.SendEvent(appwire.Event{
-		Type:      appwire.EventRunFailed,
+		Type:      appwire.EventSessionStatus,
 		SessionID: "sid-1",
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{ID: "sid-1", Status: appwire.SessionStatusError},
+		},
 	})
 	if err != nil {
 		t.Fatalf("SendEvent error = %v, want nil", err)

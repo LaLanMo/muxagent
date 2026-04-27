@@ -24,10 +24,10 @@ the protocol, but they must not create a second source of truth.
 | --- | --- | --- | --- | --- |
 | `session.create` result | Yes, create metadata only | Empty session is loaded | Create pending only | `app.sessionId` is canonical; `acp.sessionId` must be empty-or-equal and normalized by the adapter. |
 | `session.list` included row | Yes | No | Can reconcile stop/config/mode if row is authoritative | Omission is not delete, idle, or terminal. |
-| `session.load` result | Yes, loaded metadata/config snapshot | Opens scoped replay gate | Load enters `acceptingReplay` | The result does not by itself mark transcript replay complete. |
-| Positive `seq > 0` event | Yes | Yes | Yes, if event is post-baseline evidence | Duplicate positive seq must be dropped before any mutation. |
-| Scoped replay `seq <= 0` event | No | Staged transcript only | No | Only the active load scope can accept it. |
-| `history.complete` | No | Commits active replay snapshot | Load pending only | Unscoped or stale completion markers are ignored. |
+| `session.load` result | Yes, loaded metadata/config snapshot | Yes, via `app.replay` snapshot | Load pending only | `app.updatedAt` is last-known session metadata, not load time. `app.replay.complete` commits the scoped snapshot; replay events never arrive through notifications. |
+| Committed stream item event with `seq > 0` | Yes | Yes | Yes, if event is post-baseline evidence | Duplicate positive seq must be dropped before any mutation. |
+| Scoped replay event inside `session.load.app.replay` | No | Snapshot only | No | Replay events are normalized to `seq: 0` and scoped to that load token. |
+| Stream item replay with committed `seq > 0` events | Yes | Yes | Yes, if event is post-baseline evidence | `gap/reset` can clear committed continuity but must preserve request-scoped snapshots until reload. |
 | `session.prompt` acknowledgement | No | No | `submitting -> awaitingLiveEvidence` only | RPC failure must preserve draft and must not add a committed user message. |
 | `session.cancel` acknowledgement | No | No | `canceling -> reconciling` only | Send stays disabled until terminal truth or authoritative reconciliation. |
 | `session.setMode` / `session.setConfigOption` acknowledgement | No | No | `submitting -> awaitingTruth` only | Matching authoritative truth clears pending; acknowledgement does not write current value. |
@@ -36,15 +36,22 @@ the protocol, but they must not create a second source of truth.
 
 Events are classified before they mutate any state:
 
-- Positive `seq > 0` events are live authoritative events.
+- Positive `seq > 0` events are daemon-committed events. They can arrive as
+  `EventStreamItem{kind:"event"}` or inside a committed stream replay item.
 - Duplicate positive seq events are ignored before transcript, session, or config
   mutation.
-- `seq <= 0` events are request-scoped replay events. They can hydrate a transcript
-  snapshot for the active `session.load`, but they must not update current session
-  status, metadata, config, or request pending state.
-- `history.complete` is the completion barrier for a scoped replay. A load without
-  `history.complete` is partial and must be discardable or retryable without
-  accumulating duplicate transcript items.
+- `seq <= 0` events are request-scoped replay events only when they are inside
+  `session.load.app.replay`. They hydrate that load snapshot, but must not update
+  current session status, metadata, config, or request pending state.
+- `session.load.app.replay` is transcript-only. It must not contain
+  `session.status`, `mode.changed`, `model.changed`, or `config.changed`; current
+  metadata and config come from the load result fields instead.
+- `session.load.app.replay.complete` is the completion marker for the scoped replay.
+  A failed load has no committed snapshot and must not accumulate partial transcript
+  items.
+- `session.status` is the only event type that changes session status. Transcript-ish
+  events such as `message.delta`, `approval.requested`, `run.finished`, and
+  `run.failed` do not imply status truth.
 
 `appwire.Event` must round-trip through JSON. Any custom `MarshalJSON` envelope must
 have a matching `UnmarshalJSON`, and tests must cover every event type that the
@@ -73,6 +80,16 @@ type AgentChatStreamItem =
       event: AgentChatEventDto;
     };
 ```
+
+`agentchat.streamItem` is a strict envelope. Producers must include required
+fields and decoders must reject malformed items:
+
+- `kind: "event"` requires `streamEpoch` and `event`.
+- `kind: "replay"` requires `status`, `streamEpoch`, `replayedThroughSeq`, and
+  `events`.
+- `status` is limited to `ok`, `gap`, and `reset`.
+- Replay items encode an empty replay as `events: []`, never by omitting the
+  field.
 
 `events.head` returns the current `streamEpoch` and the latest positive event seq as
 `replayedThroughSeq`.
@@ -118,8 +135,9 @@ echo after the prompt baseline seq, never by replay text or event array length.
 
 Desktop fixture runtime is a contract mirror, not a convenience mock.
 
-- `session.load` replay uses `seq: 0`, does not advance `events.head`, does not
-  persist durable events, and emits `history.complete` only when replay is complete.
+- `session.load` returns `app.replay.events` with `seq: 0`, does not advance
+  `events.head`, does not persist durable events, and emits no notifications.
+- Live committed fixture events are emitted only as `agentchat.streamItem` items.
 - `session.cancel` returns acknowledgement only. It must not immediately emit idle,
   `run.finished`, or another terminal event.
 - `session.create` requires the same required fields as appwire and returns the same
@@ -133,9 +151,9 @@ Desktop fixture runtime is a contract mirror, not a convenience mock.
 
 Contract changes should be verified in this order:
 
-1. `cd cli && go test ./internal/appwire ./internal/agentchat ./internal/appserver ./internal/daemon`
-2. `cd desktop && pnpm typecheck`
-3. `cd desktop && pnpm test:unit`
+1. `cd cli && go test ./internal/appwire ./internal/agentchat ./internal/appserver ./internal/daemon ./internal/runtime/acp ./internal/relayws`
+2. `cd desktop && npm run typecheck`
+3. `cd desktop && npm run test:unit`
 4. Fixture Playwright for load, create, prompt, config, and cancel ack-only behavior.
 5. Real Playwright for create, prompt, reload/session.load replay, stop/cancel
    reconciliation, and repeated prompt text after history.

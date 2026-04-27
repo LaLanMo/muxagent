@@ -118,9 +118,6 @@ func (s *sessionSnapshotStore) Put(
 	defer s.mu.Unlock()
 
 	runtimeSnapshots := s.ensureRuntimeSnapshotsLocked(runtimeID)
-	if snapshot.UpdatedAt.IsZero() {
-		snapshot.UpdatedAt = time.Now().UTC()
-	}
 	runtimeSnapshots[sessionID] = mergeSessionSnapshot(runtimeSnapshots[sessionID], snapshot)
 	return s.saveLocked()
 }

@@ -238,7 +238,7 @@ func (d *Daemon) handleAgentChatRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req control.AgentChatRPCRequest
+	var req appwire.RPCRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		control.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
@@ -248,11 +248,7 @@ func (d *Daemon) handleAgentChatRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var scopedEvents []appwire.Event
-	ctx := agentchat.WithScopedEventSink(r.Context(), func(event appwire.Event) {
-		scopedEvents = append(scopedEvents, event)
-	})
-	result, errStr := d.chat.HandleRPC(ctx, appwire.RPCRequest{
+	result, errStr := d.chat.HandleRPC(r.Context(), appwire.RPCRequest{
 		Method: strings.TrimSpace(req.Method),
 		Params: req.Params,
 	})
@@ -265,10 +261,9 @@ func (d *Daemon) handleAgentChatRPC(w http.ResponseWriter, r *http.Request) {
 		}
 		raw = payload
 	}
-	control.WriteJSON(w, http.StatusOK, control.AgentChatRPCResponse{
+	control.WriteJSON(w, http.StatusOK, appwire.RPCResponse{
 		Result: raw,
 		Error:  errStr,
-		Events: scopedEvents,
 	})
 }
 

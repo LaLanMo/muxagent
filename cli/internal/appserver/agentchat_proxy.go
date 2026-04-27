@@ -15,11 +15,10 @@ import (
 
 	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 	"github.com/LaLanMo/muxagent/cli/internal/config"
-	"github.com/LaLanMo/muxagent/cli/internal/control"
 )
 
 type agentChatClient interface {
-	Call(ctx context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error)
+	Call(ctx context.Context, req appwire.RPCRequest) (appwire.RPCResponse, error)
 	Subscribe(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.EventStreamItem, error)
 }
 
@@ -42,14 +41,14 @@ func newDaemonAgentChatClient() *daemonAgentChatClient {
 	}
 }
 
-func (c *daemonAgentChatClient) Call(ctx context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+func (c *daemonAgentChatClient) Call(ctx context.Context, req appwire.RPCRequest) (appwire.RPCResponse, error) {
 	state, token, err := c.daemonAccess(ctx)
 	if err != nil {
-		return control.AgentChatRPCResponse{}, err
+		return appwire.RPCResponse{}, err
 	}
 	body, err := json.Marshal(req)
 	if err != nil {
-		return control.AgentChatRPCResponse{}, err
+		return appwire.RPCResponse{}, err
 	}
 	httpReq, err := http.NewRequestWithContext(
 		ctx,
@@ -58,7 +57,7 @@ func (c *daemonAgentChatClient) Call(ctx context.Context, req control.AgentChatR
 		bytes.NewReader(body),
 	)
 	if err != nil {
-		return control.AgentChatRPCResponse{}, err
+		return appwire.RPCResponse{}, err
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+token)
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -69,16 +68,16 @@ func (c *daemonAgentChatClient) Call(ctx context.Context, req control.AgentChatR
 	}
 	resp, err := client.Do(httpReq)
 	if err != nil {
-		return control.AgentChatRPCResponse{}, err
+		return appwire.RPCResponse{}, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return control.AgentChatRPCResponse{}, decodeControlError(resp, "agentchat rpc")
+		return appwire.RPCResponse{}, decodeControlError(resp, "agentchat rpc")
 	}
-	var decoded control.AgentChatRPCResponse
+	var decoded appwire.RPCResponse
 	if err := json.NewDecoder(resp.Body).Decode(&decoded); err != nil {
-		return control.AgentChatRPCResponse{}, fmt.Errorf("decode agentchat rpc response: %w", err)
+		return appwire.RPCResponse{}, fmt.Errorf("decode agentchat rpc response: %w", err)
 	}
 	return decoded, nil
 }
@@ -128,7 +127,7 @@ func (c *daemonAgentChatClient) Subscribe(ctx context.Context, streamEpoch, afte
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 		for scanner.Scan() {
-			item, ok := decodeAgentChatStreamItem(scanner.Bytes(), streamEpoch)
+			item, ok := decodeAgentChatStreamItem(scanner.Bytes())
 			if !ok {
 				continue
 			}
@@ -142,24 +141,12 @@ func (c *daemonAgentChatClient) Subscribe(ctx context.Context, streamEpoch, afte
 	return items, nil
 }
 
-func decodeAgentChatStreamItem(raw []byte, fallbackStreamEpoch uint64) (appwire.EventStreamItem, bool) {
+func decodeAgentChatStreamItem(raw []byte) (appwire.EventStreamItem, bool) {
 	var item appwire.EventStreamItem
 	if err := json.Unmarshal(raw, &item); err == nil && item.Kind != "" {
-		if item.Kind == appwire.EventStreamItemReplay && item.Events == nil {
-			item.Events = make([]appwire.Event, 0)
-		}
 		return item, true
 	}
-
-	var event appwire.Event
-	if err := json.Unmarshal(raw, &event); err != nil || event.Type == "" {
-		return appwire.EventStreamItem{}, false
-	}
-	return appwire.EventStreamItem{
-		Kind:        appwire.EventStreamItemEvent,
-		StreamEpoch: fallbackStreamEpoch,
-		Event:       &event,
-	}, true
+	return appwire.EventStreamItem{}, false
 }
 
 func (c *daemonAgentChatClient) daemonAccess(ctx context.Context) (config.DaemonState, string, error) {
@@ -259,31 +246,20 @@ func (s *Server) startAgentChatEventProxy(session *connectionSession) {
 			}
 			backoff = agentChatEventReconnectInitialBackoff
 			for item := range items {
+				if item.StreamEpoch != 0 {
+					streamEpoch = item.StreamEpoch
+				}
 				switch item.Kind {
 				case appwire.EventStreamItemReplay:
-					if item.StreamEpoch != 0 {
-						streamEpoch = item.StreamEpoch
-					}
 					afterSeq = item.ReplayedThroughSeq
-					for _, event := range item.Events {
-						s.forwardAgentChatEvent(session, event)
-						if event.Seq > afterSeq {
-							afterSeq = event.Seq
-						}
-					}
 				case appwire.EventStreamItemEvent:
-					if item.StreamEpoch != 0 {
-						streamEpoch = item.StreamEpoch
+					if item.Event != nil && item.Event.Seq > afterSeq {
+						afterSeq = item.Event.Seq
 					}
-					if item.Event == nil {
-						continue
-					}
-					event := *item.Event
-					if event.Seq > afterSeq {
-						afterSeq = event.Seq
-					}
-					s.forwardAgentChatEvent(session, event)
+				default:
+					continue
 				}
+				s.forwardAgentChatStreamItem(session, item)
 			}
 			if !sleepContext(ctx, backoff) {
 				return
@@ -293,14 +269,14 @@ func (s *Server) startAgentChatEventProxy(session *connectionSession) {
 	}()
 }
 
-func (s *Server) forwardAgentChatEvent(session *connectionSession, event appwire.Event) {
+func (s *Server) forwardAgentChatStreamItem(session *connectionSession, item appwire.EventStreamItem) {
 	if session == nil {
 		return
 	}
 	session.enqueueNotification(notification{
 		JSONRPC: jsonRPCVersion,
-		Method:  notificationAgentChatEvent,
-		Params:  event,
+		Method:  notificationAgentChatStreamItem,
+		Params:  item,
 	})
 }
 
@@ -308,7 +284,7 @@ func (s *Server) agentChatInitialCursor(ctx context.Context, replay bool) (uint6
 	if s == nil || s.agentChatClient == nil {
 		return 0, 0
 	}
-	resp, err := s.agentChatClient.Call(ctx, control.AgentChatRPCRequest{Method: "events.head"})
+	resp, err := s.agentChatClient.Call(ctx, appwire.RPCRequest{Method: "events.head"})
 	if err != nil || resp.Error != "" || len(resp.Result) == 0 {
 		return 0, 0
 	}

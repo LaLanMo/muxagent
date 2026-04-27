@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/LaLanMo/muxagent/cli/internal/acpbin"
 	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
@@ -217,7 +218,7 @@ func (m *Manager) NewSession(
 		permissionMode,
 	)
 	m.setSessionRuntime(resp.SessionID, rid)
-	m.persistSessionSnapshot(resp.SessionID, rid, cwd, resp.ConfigOptions)
+	m.persistSessionSnapshot(resp.SessionID, rid, cwd, resp.ConfigOptions, time.Now().UTC())
 	return resp.SessionID, string(rid), resp, nil
 }
 
@@ -330,9 +331,6 @@ func (m *Manager) LoadSessionScoped(
 	)
 	m.setSessionRuntime(sessionID, rid)
 	m.persistSessionSnapshot(sessionID, rid, cwd, resp.ConfigOptions)
-	for _, ev := range events {
-		m.captureSessionSnapshotFromEvent(ev)
-	}
 	return string(rid), resp, events, nil
 }
 
@@ -1119,13 +1117,19 @@ func (m *Manager) persistSessionSnapshot(
 	runtimeID config.RuntimeID,
 	cwd string,
 	configOptions []acpprotocol.SessionConfigOption,
+	updatedAt ...time.Time,
 ) {
 	if sessionID == "" || runtimeID == "" || m.snapshotStore == nil {
 		return
 	}
+	var snapshotUpdatedAt time.Time
+	if len(updatedAt) > 0 {
+		snapshotUpdatedAt = updatedAt[0].UTC()
+	}
 	if err := m.snapshotStore.Put(string(runtimeID), sessionID, sessionSnapshot{
 		ConfigOptions: configOptions,
 		CWD:           cwd,
+		UpdatedAt:     snapshotUpdatedAt,
 	}); err != nil {
 		log.Printf("[runtime] save session snapshot failed: %v", err)
 	}

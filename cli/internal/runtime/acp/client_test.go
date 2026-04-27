@@ -440,12 +440,8 @@ func TestClient_LoadSessionReplaysHistory(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "")
+	_, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "")
 	require.NoError(t, err)
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 
 	// Verify replayed events
 	typeMap := make(map[appwire.EventType]int)
@@ -456,7 +452,6 @@ func TestClient_LoadSessionReplaysHistory(t *testing.T) {
 	assert.GreaterOrEqual(t, typeMap[appwire.EventMessageDelta], 2, "expected replayed message chunks")
 	assert.GreaterOrEqual(t, typeMap[appwire.EventToolStarted], 1, "expected replayed tool.started")
 	assert.GreaterOrEqual(t, typeMap[appwire.EventToolCompleted], 1, "expected replayed tool.completed")
-	assert.Equal(t, 1, typeMap[appwire.EventHistoryComplete], "expected exactly one history.complete")
 
 	// Verify content
 	var messageParts []string
@@ -497,7 +492,6 @@ func TestClient_LoadSessionScopedCapturesHistoryWithoutGlobalEvents(t *testing.T
 	assert.GreaterOrEqual(t, typeMap[appwire.EventMessageDelta], 2, "expected scoped replayed message chunks")
 	assert.GreaterOrEqual(t, typeMap[appwire.EventToolStarted], 1, "expected scoped replayed tool.started")
 	assert.GreaterOrEqual(t, typeMap[appwire.EventToolCompleted], 1, "expected scoped replayed tool.completed")
-	assert.Equal(t, 1, typeMap[appwire.EventHistoryComplete], "expected exactly one scoped history.complete")
 
 	globalEvents := collectEvents(client.Events(), time.Second)
 	for _, ev := range globalEvents {
@@ -507,7 +501,7 @@ func TestClient_LoadSessionScopedCapturesHistoryWithoutGlobalEvents(t *testing.T
 	}
 }
 
-func TestClient_LoadSessionFailsWithoutHistoryCompleteWhenAgentExitsDuringReplay(t *testing.T) {
+func TestClient_LoadSessionFailsWithoutGlobalReplayEventsWhenAgentExitsDuringReplay(t *testing.T) {
 	bin := buildMockAgent(t)
 	client := newTestClientWithEnv(t, bin, map[string]string{
 		"MOCKAGENT_EXIT_DURING_LOAD": "1",
@@ -516,21 +510,9 @@ func TestClient_LoadSessionFailsWithoutHistoryCompleteWhenAgentExitsDuringReplay
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	done := make(chan []appwire.Event, 1)
-	go func() {
-		done <- collectEvents(client.Events(), 2*time.Second)
-	}()
-
-	_, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "")
+	_, _, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "")
 	require.Error(t, err)
 	require.ErrorContains(t, err, "session/load")
-
-	events := <-done
-	for _, ev := range events {
-		if ev.Type == appwire.EventHistoryComplete {
-			t.Fatalf("unexpected history.complete after failed load: %#v", ev)
-		}
-	}
 }
 
 func TestClient_LoadSessionRejectsConcurrentReplay(t *testing.T) {
@@ -573,12 +555,8 @@ func TestClient_LoadSessionReplaysCompletedToolCallWithDiff(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "")
+	_, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "")
 	require.NoError(t, err)
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 
 	completed := findToolEvent(events, appwire.EventToolCompleted, func(tool *appwire.ToolEvent) bool {
 		return tool.App.CallID == "hist-tool-edit-1"
@@ -600,12 +578,8 @@ func TestClient_LoadSessionReplaysClaudeStyleEditDiffAcrossPendingAndCompletedUp
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "")
+	_, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "")
 	require.NoError(t, err)
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 
 	started := findToolEvent(events, appwire.EventToolStarted, func(tool *appwire.ToolEvent) bool {
 		return tool.App.CallID == "hist-tool-edit-1"
@@ -636,12 +610,8 @@ func TestClient_LoadSessionReplaysClaudeStyleReadOutput(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "")
+	_, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "")
 	require.NoError(t, err)
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 
 	completed := findToolEvent(events, appwire.EventToolCompleted, func(tool *appwire.ToolEvent) bool {
 		return tool.App.CallID == "hist-tool-read-1"
@@ -660,13 +630,9 @@ func TestClient_LoadSessionFallsBackToRuntimeModeWhenSetModeFails(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	resp, err := client.LoadSession(ctx, "test-session-001", "/tmp", domain.ModeAcceptEdits, "")
+	resp, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", domain.ModeAcceptEdits, "")
 	require.NoError(t, err)
 	assert.Equal(t, "default", findCurrentValue(resp.ConfigOptions, "mode"))
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 	modeEvent := findEvent(events, appwire.EventModeChanged)
 	require.NotNil(t, modeEvent)
 	assert.Equal(t, "default", eventCurrentModeID(modeEvent))
@@ -679,13 +645,9 @@ func TestClient_LoadSessionReturnsRequestedModeWhenSetModeSucceeds(t *testing.T)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	resp, err := client.LoadSession(ctx, "test-session-001", "/tmp", domain.ModeAcceptEdits, "")
+	resp, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", domain.ModeAcceptEdits, "")
 	require.NoError(t, err)
 	assert.Equal(t, domain.ModeAcceptEdits, findCurrentValue(resp.ConfigOptions, "mode"))
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 	modeEvent := findEvent(events, appwire.EventModeChanged)
 	require.NotNil(t, modeEvent)
 	assert.Equal(t, domain.ModeAcceptEdits, eventCurrentModeID(modeEvent))
@@ -700,13 +662,9 @@ func TestClient_LoadSessionFallsBackToSetModelWhenSetConfigOptionFails(t *testin
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	resp, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "opus")
+	resp, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "opus")
 	require.NoError(t, err)
 	assert.Equal(t, "opus", findCurrentValue(resp.ConfigOptions, "model"))
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 	modelEvent := findEvent(events, appwire.EventModelChanged)
 	require.NotNil(t, modelEvent)
 	assert.Equal(t, "opus", modelEvent.ConfigChanged.App.CurrentValue)
@@ -722,13 +680,9 @@ func TestClient_LoadSessionKeepsRuntimeModelWhenSetConfigAndSetModelFail(t *test
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	resp, err := client.LoadSession(ctx, "test-session-001", "/tmp", "", "opus")
+	resp, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "opus")
 	require.NoError(t, err)
 	assert.Equal(t, "default", findCurrentValue(resp.ConfigOptions, "model"))
-
-	events := collectEventsUntil(client.Events(), 3*time.Second, func(events []appwire.Event) bool {
-		return countEvents(events, appwire.EventHistoryComplete) >= 1
-	})
 	modelEvent := findEvent(events, appwire.EventModelChanged)
 	require.NotNil(t, modelEvent)
 	assert.Equal(t, "default", modelEvent.ConfigChanged.App.CurrentValue)

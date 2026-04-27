@@ -257,6 +257,22 @@ func (f *fakeRuntimeClient) ReplyPermission(context.Context, string, string, str
 func (f *fakeRuntimeClient) Events() <-chan appwire.Event { return nil }
 func (f *fakeRuntimeClient) IsAlive() bool                { return f.alive }
 
+type scopedFakeRuntimeClient struct {
+	*fakeRuntimeClient
+	events []appwire.Event
+}
+
+func (f *scopedFakeRuntimeClient) LoadSessionScoped(
+	ctx context.Context,
+	sessionID string,
+	cwd string,
+	permissionMode string,
+	model string,
+) (acpprotocol.LoadSessionResponse, []appwire.Event, error) {
+	resp, err := f.fakeRuntimeClient.LoadSession(ctx, sessionID, cwd, permissionMode, model)
+	return resp, append([]appwire.Event(nil), f.events...), err
+}
+
 type fakeRuntimeError string
 
 func (e fakeRuntimeError) Error() string { return string(e) }
@@ -918,6 +934,61 @@ func TestLoadSessionEnrichesModeConfigFromStoredSnapshotAndRuntimeCatalog(t *tes
 	}
 	if got := len(modeOption.Options.Flatten()); got != 3 {
 		t.Fatalf("len(mode options) = %d, want 3", got)
+	}
+}
+
+func TestLoadSessionScopedDoesNotMutateSnapshotFromReplayEvents(t *testing.T) {
+	cfg := config.Default()
+	originalUpdatedAt := time.Date(2026, 4, 27, 9, 0, 0, 0, time.UTC)
+	m := New(cfg)
+	m.setSessionRuntime("session-123", config.RuntimeCodex)
+	m.persistSessionSnapshot(
+		"session-123",
+		config.RuntimeCodex,
+		"/tmp/project",
+		[]acpprotocol.SessionConfigOption{{
+			ID:           "mode",
+			Name:         "Mode",
+			Type:         "select",
+			CurrentValue: "read-only",
+		}},
+		originalUpdatedAt,
+	)
+	client := &scopedFakeRuntimeClient{
+		fakeRuntimeClient: &fakeRuntimeClient{alive: true},
+		events: []appwire.Event{{
+			Type:      appwire.EventModeChanged,
+			SessionID: "session-123",
+			ModeChanged: &appwire.ModeChangedEvent{
+				App: appwire.ModeChangedEventApp{CurrentModeID: "full-access"},
+			},
+		}},
+	}
+	m.runtimes[config.RuntimeCodex].client = client
+
+	_, _, events, err := m.LoadSessionScoped(
+		context.Background(),
+		string(config.RuntimeCodex),
+		"session-123",
+		"/tmp/project",
+		"",
+		"",
+	)
+	if err != nil {
+		t.Fatalf("LoadSessionScoped: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("events = %#v, want scoped replay event returned", events)
+	}
+	snapshot, ok := m.sessionSnapshot(config.RuntimeCodex, "session-123")
+	if !ok {
+		t.Fatal("expected stored snapshot")
+	}
+	if got := findConfigOptionValue(snapshot.ConfigOptions, "mode"); got != "read-only" {
+		t.Fatalf("stored mode = %q, want read-only; scoped replay must not mutate snapshot truth", got)
+	}
+	if !snapshot.UpdatedAt.Equal(originalUpdatedAt) {
+		t.Fatalf("stored updatedAt = %s, want %s", snapshot.UpdatedAt, originalUpdatedAt)
 	}
 }
 

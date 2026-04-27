@@ -3,6 +3,7 @@ package appwire
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/LaLanMo/muxagent/cli/internal/acpprotocol"
@@ -26,9 +27,6 @@ const (
 	EventModeChanged       EventType = "mode.changed"
 	EventModelChanged      EventType = "model.changed"
 	EventUsageUpdate       EventType = "usage.update"
-
-	// Custom app-level events (not part of ACP protocol).
-	EventHistoryComplete EventType = "history.complete" // sentinel: all history replay events delivered
 )
 
 type MessagePartEventApp struct {
@@ -301,11 +299,147 @@ const (
 
 type EventStreamItem struct {
 	Kind               EventStreamItemKind `json:"kind"`
-	Status             ResyncStatus        `json:"status,omitempty"`
-	StreamEpoch        uint64              `json:"streamEpoch,omitempty"`
-	ReplayedThroughSeq uint64              `json:"replayedThroughSeq,omitempty"`
-	Events             []Event             `json:"events,omitempty"`
-	Event              *Event              `json:"event,omitempty"`
+	Status             ResyncStatus        `json:"status"`
+	StreamEpoch        uint64              `json:"streamEpoch"`
+	ReplayedThroughSeq uint64              `json:"replayedThroughSeq"`
+	Events             []Event             `json:"events"`
+	Event              *Event              `json:"event"`
+}
+
+type eventStreamReplayWire struct {
+	Kind               EventStreamItemKind `json:"kind"`
+	Status             ResyncStatus        `json:"status"`
+	StreamEpoch        uint64              `json:"streamEpoch"`
+	ReplayedThroughSeq uint64              `json:"replayedThroughSeq"`
+	Events             []Event             `json:"events"`
+}
+
+type eventStreamEventWire struct {
+	Kind        EventStreamItemKind `json:"kind"`
+	StreamEpoch uint64              `json:"streamEpoch"`
+	Event       *Event              `json:"event"`
+}
+
+func (i EventStreamItem) MarshalJSON() ([]byte, error) {
+	switch i.Kind {
+	case EventStreamItemReplay:
+		if !isValidResyncStatus(i.Status) {
+			return nil, fmt.Errorf("agentchat stream replay has invalid status %q", i.Status)
+		}
+		if i.StreamEpoch == 0 {
+			return nil, fmt.Errorf("agentchat stream replay missing streamEpoch")
+		}
+		events := i.Events
+		if events == nil {
+			events = make([]Event, 0)
+		}
+		return json.Marshal(eventStreamReplayWire{
+			Kind:               i.Kind,
+			Status:             i.Status,
+			StreamEpoch:        i.StreamEpoch,
+			ReplayedThroughSeq: i.ReplayedThroughSeq,
+			Events:             events,
+		})
+	case EventStreamItemEvent:
+		if i.StreamEpoch == 0 {
+			return nil, fmt.Errorf("agentchat stream event missing streamEpoch")
+		}
+		if i.Event == nil {
+			return nil, fmt.Errorf("agentchat stream event missing event")
+		}
+		return json.Marshal(eventStreamEventWire{
+			Kind:        i.Kind,
+			StreamEpoch: i.StreamEpoch,
+			Event:       i.Event,
+		})
+	default:
+		return nil, fmt.Errorf("unknown agentchat stream item kind %q", i.Kind)
+	}
+}
+
+func (i *EventStreamItem) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	var head struct {
+		Kind EventStreamItemKind `json:"kind"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return err
+	}
+
+	switch head.Kind {
+	case EventStreamItemReplay:
+		if _, ok := fields["status"]; !ok {
+			return fmt.Errorf("agentchat stream replay missing status")
+		}
+		if _, ok := fields["streamEpoch"]; !ok {
+			return fmt.Errorf("agentchat stream replay missing streamEpoch")
+		}
+		if _, ok := fields["replayedThroughSeq"]; !ok {
+			return fmt.Errorf("agentchat stream replay missing replayedThroughSeq")
+		}
+		if _, ok := fields["events"]; !ok {
+			return fmt.Errorf("agentchat stream replay missing events")
+		}
+		var wire eventStreamReplayWire
+		if err := json.Unmarshal(data, &wire); err != nil {
+			return err
+		}
+		if !isValidResyncStatus(wire.Status) {
+			return fmt.Errorf("agentchat stream replay has invalid status %q", wire.Status)
+		}
+		if wire.StreamEpoch == 0 {
+			return fmt.Errorf("agentchat stream replay missing streamEpoch")
+		}
+		events := wire.Events
+		if events == nil {
+			events = make([]Event, 0)
+		}
+		*i = EventStreamItem{
+			Kind:               wire.Kind,
+			Status:             wire.Status,
+			StreamEpoch:        wire.StreamEpoch,
+			ReplayedThroughSeq: wire.ReplayedThroughSeq,
+			Events:             events,
+		}
+		return nil
+	case EventStreamItemEvent:
+		if _, ok := fields["streamEpoch"]; !ok {
+			return fmt.Errorf("agentchat stream event missing streamEpoch")
+		}
+		if _, ok := fields["event"]; !ok {
+			return fmt.Errorf("agentchat stream event missing event")
+		}
+		var wire eventStreamEventWire
+		if err := json.Unmarshal(data, &wire); err != nil {
+			return err
+		}
+		if wire.StreamEpoch == 0 {
+			return fmt.Errorf("agentchat stream event missing streamEpoch")
+		}
+		if wire.Event == nil {
+			return fmt.Errorf("agentchat stream event missing event")
+		}
+		*i = EventStreamItem{
+			Kind:        wire.Kind,
+			StreamEpoch: wire.StreamEpoch,
+			Event:       wire.Event,
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown agentchat stream item kind %q", head.Kind)
+	}
+}
+
+func isValidResyncStatus(status ResyncStatus) bool {
+	switch status {
+	case ResyncStatusOK, ResyncStatusGap, ResyncStatusReset:
+		return true
+	default:
+		return false
+	}
 }
 
 type eventEnvelopeWire struct {

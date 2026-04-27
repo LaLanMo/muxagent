@@ -298,24 +298,15 @@ func (s *Service) LoadSession(ctx context.Context, params appwire.LoadSessionPar
 		return nil, "missing runtime"
 	}
 	return s.withSessionMutation(sessionID, func() (any, string) {
-		if sink := scopedEventSinkFromContext(ctx); sink != nil {
-			if scoped, ok := s.runtime.(scopedLoadRuntime); ok {
-				actualRuntime, acpResp, events, err := scoped.LoadSessionScoped(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
-				if err != nil {
-					return nil, err.Error()
-				}
-				s.EnsureSessionStatus(sessionID, domain.SessionStatusIdle)
-				s.SetSessionCWD(sessionID, cwd)
-				s.deliverScopedEvents(sink, events)
-				return appwire.SessionLoadResult{
-					App: appwire.SessionLoadResultApp{
-						OK:      true,
-						Runtime: actualRuntime,
-						CWD:     cwd,
-					},
-					ACP: acpResp,
-				}, ""
+		if scoped, ok := s.runtime.(scopedLoadRuntime); ok {
+			actualRuntime, acpResp, events, err := scoped.LoadSessionScoped(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
+			if err != nil {
+				return nil, err.Error()
 			}
+			s.EnsureSessionStatus(sessionID, domain.SessionStatusIdle)
+			s.SetSessionCWD(sessionID, cwd)
+			metadata := s.loadSessionMetadata(ctx, actualRuntime, sessionID)
+			return s.sessionLoadResult(sessionID, actualRuntime, cwd, metadata, acpResp, events), ""
 		}
 
 		actualRuntime, acpResp, err := s.runtime.LoadSession(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
@@ -324,25 +315,93 @@ func (s *Service) LoadSession(ctx context.Context, params appwire.LoadSessionPar
 		}
 		s.EnsureSessionStatus(sessionID, domain.SessionStatusIdle)
 		s.SetSessionCWD(sessionID, cwd)
-		resp := appwire.SessionLoadResult{
-			App: appwire.SessionLoadResultApp{
-				OK:      true,
-				Runtime: actualRuntime,
-				CWD:     cwd,
-			},
-			ACP: acpResp,
-		}
-		return resp, ""
+		metadata := s.loadSessionMetadata(ctx, actualRuntime, sessionID)
+		return s.sessionLoadResult(sessionID, actualRuntime, cwd, metadata, acpResp, nil), ""
 	})
 }
 
-func (s *Service) deliverScopedEvents(sink ScopedEventSink, events []appwire.Event) {
-	if sink == nil {
-		return
+func (s *Service) sessionLoadResult(
+	sessionID string,
+	runtime string,
+	cwd string,
+	metadata domain.SessionSummary,
+	acpResp acpprotocol.LoadSessionResponse,
+	events []appwire.Event,
+) appwire.SessionLoadResult {
+	return appwire.SessionLoadResult{
+		App: appwire.SessionLoadResultApp{
+			OK:        true,
+			SessionID: sessionID,
+			Runtime:   runtime,
+			CWD:       cwd,
+			Title:     strings.TrimSpace(metadata.Title),
+			Status:    sessionStatusToWire(s.ResolvedSessionStatus(sessionID)),
+			UpdatedAt: timePtrIfNonZero(metadata.UpdatedAt),
+			Replay: appwire.SessionLoadReplay{
+				Events:   normalizeScopedReplayEvents(events),
+				Complete: true,
+			},
+		},
+		ACP: acpResp,
 	}
+}
+
+func (s *Service) loadSessionMetadata(ctx context.Context, runtimeID, sessionID string) domain.SessionSummary {
+	if s == nil || s.runtime == nil || strings.TrimSpace(sessionID) == "" {
+		return domain.SessionSummary{}
+	}
+	summaries, err := s.runtime.ResolveSessions(ctx, runtimeID, []string{sessionID})
+	if err != nil {
+		log.Printf("[agentchat] resolve loaded session metadata failed: %v", err)
+		return domain.SessionSummary{}
+	}
+	for _, summary := range summaries {
+		if summary.SessionID == sessionID {
+			return summary
+		}
+	}
+	return domain.SessionSummary{}
+}
+
+func timePtrIfNonZero(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	normalized := value.UTC()
+	return &normalized
+}
+
+func normalizeScopedReplayEvents(events []appwire.Event) []appwire.Event {
+	if events == nil {
+		return make([]appwire.Event, 0)
+	}
+	normalized := make([]appwire.Event, 0, len(events))
 	for _, event := range events {
-		s.applyEventStatus(event)
-		sink(NormalizeEventForTransport(event))
+		if !isScopedReplayTranscriptEvent(event.Type) {
+			continue
+		}
+		event.Seq = 0
+		normalized = append(normalized, NormalizeEventForTransport(event))
+	}
+	return normalized
+}
+
+func isScopedReplayTranscriptEvent(eventType appwire.EventType) bool {
+	switch eventType {
+	case appwire.EventMessageDelta,
+		appwire.EventToolStarted,
+		appwire.EventToolUpdated,
+		appwire.EventToolCompleted,
+		appwire.EventToolFailed,
+		appwire.EventReasoning,
+		appwire.EventApprovalRequested,
+		appwire.EventApprovalReplied,
+		appwire.EventRunFinished,
+		appwire.EventRunFailed,
+		appwire.EventPlanUpdated:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -480,11 +539,13 @@ func (s *Service) Prompt(_ context.Context, params appwire.PromptParams) (any, s
 		content = []domain.ContentBlock{{Type: "text", Text: params.Text}}
 	}
 
-	s.SetSessionStatus(sessionID, domain.SessionStatusRunning)
-
 	if !s.startBackground(func(ctx context.Context) {
-		stopReason, usage, err := s.runtime.Prompt(ctx, sessionID, content)
 		now := time.Now()
+		if evErr := s.SendEvent(sessionStatusEvent(sessionID, domain.SessionStatusRunning, now)); evErr != nil && !s.shouldIgnoreTransportError(evErr) {
+			log.Printf("send session.status running event: %v", evErr)
+		}
+		stopReason, usage, err := s.runtime.Prompt(ctx, sessionID, content)
+		now = time.Now()
 		if err != nil {
 			if evErr := s.SendEvent(appwire.Event{
 				Type:      appwire.EventRunFailed,
@@ -500,6 +561,9 @@ func (s *Service) Prompt(_ context.Context, params appwire.PromptParams) (any, s
 				},
 			}); evErr != nil && !s.shouldIgnoreTransportError(evErr) {
 				log.Printf("send run.failed event: %v", evErr)
+			}
+			if evErr := s.SendEvent(sessionStatusEvent(sessionID, domain.SessionStatusError, now)); evErr != nil && !s.shouldIgnoreTransportError(evErr) {
+				log.Printf("send session.status error event: %v", evErr)
 			}
 			return
 		}
@@ -521,11 +585,29 @@ func (s *Service) Prompt(_ context.Context, params appwire.PromptParams) (any, s
 		}); evErr != nil && !s.shouldIgnoreTransportError(evErr) {
 			log.Printf("send run.finished event: %v", evErr)
 		}
+		if evErr := s.SendEvent(sessionStatusEvent(sessionID, domain.SessionStatusIdle, now)); evErr != nil && !s.shouldIgnoreTransportError(evErr) {
+			log.Printf("send session.status idle event: %v", evErr)
+		}
 	}) {
 		return nil, "agentchat closed"
 	}
 
 	return appwire.AcceptedResult{Accepted: true}, ""
+}
+
+func sessionStatusEvent(sessionID string, status domain.SessionStatus, at time.Time) appwire.Event {
+	return appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: sessionID,
+		At:        at,
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{
+				ID:        sessionID,
+				Status:    appwire.SessionStatus(status),
+				UpdatedAt: at,
+			},
+		},
+	}
 }
 
 func (s *Service) Cancel(ctx context.Context, params appwire.CancelParams) (any, string) {
@@ -608,6 +690,9 @@ func (s *Service) ReplyPermission(ctx context.Context, params appwire.ReplyPermi
 			},
 		}); err != nil && !s.shouldIgnoreTransportError(err) {
 			log.Printf("send approval.replied event: %v", err)
+		}
+		if err := s.SendEvent(sessionStatusEvent(params.SessionID, domain.SessionStatusRunning, time.Now())); err != nil && !s.shouldIgnoreTransportError(err) {
+			log.Printf("send session.status running event: %v", err)
 		}
 		return appwire.OKResult{OK: true}, ""
 	})
