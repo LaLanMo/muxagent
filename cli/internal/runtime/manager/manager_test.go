@@ -197,15 +197,23 @@ func TestSelectRuntimeStartupCWD_FallsBackToHome(t *testing.T) {
 }
 
 type fakeRuntimeClient struct {
-	alive          bool
-	newSessionResp acpprotocol.NewSessionResponse
-	loadResp       acpprotocol.LoadSessionResponse
-	listSessions   []domain.SessionSummary
-	loadErr        error
-	listErr        error
-	loadCalls      int
-	listCalls      int
-	stopCalls      int
+	alive                  bool
+	newSessionResp         acpprotocol.NewSessionResponse
+	newSessionErr          error
+	loadResp               acpprotocol.LoadSessionResponse
+	listSessions           []domain.SessionSummary
+	loadErr                error
+	listErr                error
+	promptErrs             []error
+	promptStopReason       string
+	newSessionCalls        int
+	loadCalls              int
+	listCalls              int
+	promptCalls            int
+	stopCalls              int
+	lastLoadCWD            string
+	lastLoadPermissionMode string
+	lastLoadModel          string
 }
 
 func (f *fakeRuntimeClient) Start(context.Context) error { return nil }
@@ -215,10 +223,14 @@ func (f *fakeRuntimeClient) Stop() error {
 	return nil
 }
 func (f *fakeRuntimeClient) NewSession(context.Context, string, string) (acpprotocol.NewSessionResponse, error) {
-	return f.newSessionResp, nil
+	f.newSessionCalls++
+	return f.newSessionResp, f.newSessionErr
 }
-func (f *fakeRuntimeClient) LoadSession(context.Context, string, string, string, string) (acpprotocol.LoadSessionResponse, error) {
+func (f *fakeRuntimeClient) LoadSession(_ context.Context, _ string, cwd string, permissionMode string, model string) (acpprotocol.LoadSessionResponse, error) {
 	f.loadCalls++
+	f.lastLoadCWD = cwd
+	f.lastLoadPermissionMode = permissionMode
+	f.lastLoadModel = model
 	return f.loadResp, f.loadErr
 }
 func (f *fakeRuntimeClient) ListSessions(context.Context, string) ([]domain.SessionSummary, error) {
@@ -226,7 +238,11 @@ func (f *fakeRuntimeClient) ListSessions(context.Context, string) ([]domain.Sess
 	return f.listSessions, f.listErr
 }
 func (f *fakeRuntimeClient) Prompt(context.Context, string, []domain.ContentBlock) (string, *domain.PromptUsage, error) {
-	return "", nil, nil
+	f.promptCalls++
+	if idx := f.promptCalls - 1; idx >= 0 && idx < len(f.promptErrs) && f.promptErrs[idx] != nil {
+		return "", nil, f.promptErrs[idx]
+	}
+	return f.promptStopReason, nil, nil
 }
 func (f *fakeRuntimeClient) Cancel(context.Context, string) error { return nil }
 func (f *fakeRuntimeClient) SetMode(context.Context, string, string) error {
@@ -275,8 +291,14 @@ func TestShouldRetryRuntimeCallForStaleTransportErrors(t *testing.T) {
 	}
 }
 
-func TestLoadSessionRetiresStaleRuntimeWithoutRetryingReplay(t *testing.T) {
+func TestLoadSessionRetiresStaleRuntimeBeforeRetry(t *testing.T) {
+	t.Setenv("MUXAGENT_RUNTIMES_CODEX_COMMAND", "/definitely/missing-codex-acp")
+
 	cfg := config.Default()
+	cfg.Runtimes[config.RuntimeCodex] = config.RuntimeSettings{
+		Command: "/definitely/missing-codex-acp",
+		CWD:     "/tmp/project",
+	}
 	m := New(cfg)
 
 	client := &fakeRuntimeClient{
@@ -291,8 +313,11 @@ func TestLoadSessionRetiresStaleRuntimeWithoutRetryingReplay(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected load session to fail")
 	}
-	if !strings.Contains(err.Error(), "broken pipe") {
-		t.Fatalf("error = %v, want broken pipe", err)
+	if !strings.Contains(err.Error(), "restart failed") {
+		t.Fatalf("error = %v, want restart failed context", err)
+	}
+	if !strings.Contains(err.Error(), "start runtime") {
+		t.Fatalf("error = %v, want start runtime failure", err)
 	}
 	if client.loadCalls != 1 {
 		t.Fatalf("loadCalls = %d, want 1", client.loadCalls)
@@ -302,6 +327,116 @@ func TestLoadSessionRetiresStaleRuntimeWithoutRetryingReplay(t *testing.T) {
 	}
 	if got := m.runtimes[rid].client; got != nil {
 		t.Fatalf("runtime client = %#v, want nil after retirement", got)
+	}
+}
+
+func TestNewSessionRetiresStaleRuntimeBeforeRetry(t *testing.T) {
+	t.Setenv("MUXAGENT_RUNTIMES_CODEX_COMMAND", "/definitely/missing-codex-acp")
+
+	cfg := config.Default()
+	cfg.Runtimes[config.RuntimeCodex] = config.RuntimeSettings{
+		Command: "/definitely/missing-codex-acp",
+		CWD:     "/tmp/project",
+	}
+	m := New(cfg)
+
+	client := &fakeRuntimeClient{
+		alive:         true,
+		newSessionErr: fakeRuntimeError("transport stopped: process exited"),
+	}
+	rid := config.RuntimeCodex
+	m.runtimes[rid].client = client
+
+	_, _, _, err := m.NewSession(
+		context.Background(),
+		string(rid),
+		"/tmp/project",
+		"read-only",
+	)
+	if err == nil {
+		t.Fatal("expected new session to fail")
+	}
+	if !strings.Contains(err.Error(), "restart failed") {
+		t.Fatalf("error = %v, want restart failed context", err)
+	}
+	if !strings.Contains(err.Error(), "start runtime") {
+		t.Fatalf("error = %v, want start runtime failure", err)
+	}
+	if client.newSessionCalls != 1 {
+		t.Fatalf("newSessionCalls = %d, want 1", client.newSessionCalls)
+	}
+	if client.stopCalls != 1 {
+		t.Fatalf("stopCalls = %d, want 1", client.stopCalls)
+	}
+	if got := m.runtimes[rid].client; got != nil {
+		t.Fatalf("runtime client = %#v, want nil after retirement", got)
+	}
+}
+
+func TestPromptReloadsStoredSessionWhenRuntimeDoesNotKnowSession(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	cfg := config.Default()
+	m := New(cfg)
+	sessionID := "session-123"
+	modeCategory := "mode"
+	modelCategory := "model"
+	m.persistSessionSnapshot(
+		sessionID,
+		config.RuntimeCodex,
+		"/tmp/project",
+		[]acpprotocol.SessionConfigOption{
+			{
+				ID:           "mode",
+				Name:         "Approval Preset",
+				Type:         "select",
+				Category:     &modeCategory,
+				CurrentValue: "full-access",
+			},
+			{
+				ID:           "model",
+				Name:         "Model",
+				Type:         "select",
+				Category:     &modelCategory,
+				CurrentValue: "gpt-5.5",
+			},
+		},
+	)
+
+	client := &fakeRuntimeClient{
+		alive:            true,
+		promptErrs:       []error{&runtimeacp.RPCError{Code: -32000, Message: "Resource not found"}},
+		promptStopReason: "end_turn",
+	}
+	m.runtimes[config.RuntimeCodex].client = client
+	m.setSessionRuntime(sessionID, config.RuntimeCodex)
+
+	stopReason, _, err := m.Prompt(
+		context.Background(),
+		sessionID,
+		[]domain.ContentBlock{{Type: "text", Text: "hello"}},
+	)
+	if err != nil {
+		t.Fatalf("Prompt: %v", err)
+	}
+	if stopReason != "end_turn" {
+		t.Fatalf("stopReason = %q, want end_turn", stopReason)
+	}
+	if client.promptCalls != 2 {
+		t.Fatalf("promptCalls = %d, want 2", client.promptCalls)
+	}
+	if client.loadCalls != 1 {
+		t.Fatalf("loadCalls = %d, want 1", client.loadCalls)
+	}
+	if client.lastLoadCWD != "/tmp/project" {
+		t.Fatalf("load cwd = %q, want /tmp/project", client.lastLoadCWD)
+	}
+	if client.lastLoadPermissionMode != "full-access" {
+		t.Fatalf("load mode = %q, want full-access", client.lastLoadPermissionMode)
+	}
+	if client.lastLoadModel != "gpt-5.5" {
+		t.Fatalf("load model = %q, want gpt-5.5", client.lastLoadModel)
 	}
 }
 

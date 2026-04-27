@@ -141,3 +141,27 @@ func TestTransportStopReapsProcessAfterWriteFailure(t *testing.T) {
 		t.Fatal("expected Stop to reap the child process")
 	}
 }
+
+func TestTransportProcessOutlivesStartupContext(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "wait-for-stop.sh")
+	scriptBody := "#!/bin/sh\ntrap 'exit 0' TERM\nwhile :; do sleep 1; done\n"
+	if err := os.WriteFile(script, []byte(scriptBody), 0o755); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	transport := NewTransport(script, nil, dir, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	if err := transport.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	cancel()
+
+	time.Sleep(100 * time.Millisecond)
+	if !transport.IsAlive() {
+		t.Fatal("runtime process should not be tied to the startup context after Start returns")
+	}
+	if err := transport.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+}

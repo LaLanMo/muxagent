@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -190,7 +191,24 @@ func (m *Manager) NewSession(
 	}
 	resp, err := client.NewSession(ctx, cwd, permissionMode)
 	if err != nil {
-		return "", "", acpprotocol.NewSessionResponse{}, err
+		if shouldRetryRuntimeCall(client, err) {
+			m.retireRuntimeClient(rid, client)
+			retryClient, _, retryErr := m.ensureRuntime(ctx, string(rid), cwd)
+			if retryErr != nil {
+				return "", "", acpprotocol.NewSessionResponse{}, fmt.Errorf(
+					"retired stale runtime after %v; restart failed: %w",
+					err,
+					retryErr,
+				)
+			}
+			resp, err = retryClient.NewSession(ctx, cwd, permissionMode)
+			if err != nil && shouldRetryRuntimeCall(retryClient, err) {
+				m.retireRuntimeClient(rid, retryClient)
+			}
+		}
+		if err != nil {
+			return "", "", acpprotocol.NewSessionResponse{}, err
+		}
 	}
 	resp.ConfigOptions = m.enrichSessionConfigOptions(
 		rid,
@@ -223,8 +241,22 @@ func (m *Manager) LoadSession(
 	if err != nil {
 		if shouldRetryRuntimeCall(client, err) {
 			m.retireRuntimeClient(rid, client)
+			retryClient, _, retryErr := m.ensureRuntime(ctx, string(rid), cwd)
+			if retryErr != nil {
+				return "", acpprotocol.LoadSessionResponse{}, fmt.Errorf(
+					"retired stale runtime after %v; restart failed: %w",
+					err,
+					retryErr,
+				)
+			}
+			resp, err = retryClient.LoadSession(ctx, sessionID, cwd, permissionMode, model)
+			if err != nil && shouldRetryRuntimeCall(retryClient, err) {
+				m.retireRuntimeClient(rid, retryClient)
+			}
 		}
-		return "", acpprotocol.LoadSessionResponse{}, err
+		if err != nil {
+			return "", acpprotocol.LoadSessionResponse{}, err
+		}
 	}
 	resp.ConfigOptions = m.enrichSessionConfigOptions(
 		rid,
@@ -268,8 +300,27 @@ func (m *Manager) LoadSessionScoped(
 	if err != nil {
 		if shouldRetryRuntimeCall(client, err) {
 			m.retireRuntimeClient(rid, client)
+			retryClient, _, retryErr := m.ensureRuntime(ctx, string(rid), cwd)
+			if retryErr != nil {
+				return "", acpprotocol.LoadSessionResponse{}, nil, fmt.Errorf(
+					"retired stale runtime after %v; restart failed: %w",
+					err,
+					retryErr,
+				)
+			}
+			events = nil
+			if scoped, ok := retryClient.(scopedLoadClient); ok {
+				resp, events, err = scoped.LoadSessionScoped(ctx, sessionID, cwd, permissionMode, model)
+			} else {
+				resp, err = retryClient.LoadSession(ctx, sessionID, cwd, permissionMode, model)
+			}
+			if err != nil && shouldRetryRuntimeCall(retryClient, err) {
+				m.retireRuntimeClient(rid, retryClient)
+			}
 		}
-		return "", acpprotocol.LoadSessionResponse{}, nil, err
+		if err != nil {
+			return "", acpprotocol.LoadSessionResponse{}, nil, err
+		}
 	}
 	resp.ConfigOptions = m.enrichSessionConfigOptions(
 		rid,
@@ -468,11 +519,45 @@ func (m *Manager) Prompt(
 	sessionID string,
 	content []domain.ContentBlock,
 ) (string, *domain.PromptUsage, error) {
-	client, _, err := m.runtimeForSession(ctx, sessionID)
+	client, rid, err := m.runtimeForSession(ctx, sessionID)
 	if err != nil {
 		return "", nil, err
 	}
-	return client.Prompt(ctx, sessionID, content)
+	stopReason, usage, err := client.Prompt(ctx, sessionID, content)
+	if err == nil {
+		return stopReason, usage, nil
+	}
+
+	if shouldRetryRuntimeCall(client, err) {
+		snapshot, hasSnapshot := m.sessionSnapshot(rid, sessionID)
+		m.retireRuntimeClient(rid, client)
+		retryClient, _, retryErr := m.ensureRuntime(ctx, string(rid), snapshot.CWD)
+		if retryErr != nil {
+			return "", nil, fmt.Errorf(
+				"retired stale runtime after %v; restart failed: %w",
+				err,
+				retryErr,
+			)
+		}
+		if loadErr := m.loadPromptSession(ctx, retryClient, rid, sessionID, snapshot, hasSnapshot); loadErr != nil {
+			return "", nil, fmt.Errorf("reload session before prompt after stale runtime: %w", loadErr)
+		}
+		stopReason, usage, err = retryClient.Prompt(ctx, sessionID, content)
+		if err != nil && shouldRetryRuntimeCall(retryClient, err) {
+			m.retireRuntimeClient(rid, retryClient)
+		}
+		return stopReason, usage, err
+	}
+
+	if isSessionUnavailableForPrompt(err) {
+		snapshot, hasSnapshot := m.sessionSnapshot(rid, sessionID)
+		if loadErr := m.loadPromptSession(ctx, client, rid, sessionID, snapshot, hasSnapshot); loadErr != nil {
+			return "", nil, fmt.Errorf("reload session before prompt: %w", loadErr)
+		}
+		return client.Prompt(ctx, sessionID, content)
+	}
+
+	return "", nil, err
 }
 
 func (m *Manager) Cancel(ctx context.Context, sessionID string) error {
@@ -683,6 +768,51 @@ func shouldRetryRuntimeCall(client runtime.Client, err error) bool {
 	return strings.Contains(message, "broken pipe") ||
 		strings.Contains(message, "transport stopped") ||
 		strings.Contains(message, "process exited")
+}
+
+func isSessionUnavailableForPrompt(err error) bool {
+	if err == nil {
+		return false
+	}
+	var rpcErr *acp.RPCError
+	if errors.As(err, &rpcErr) {
+		message := strings.ToLower(rpcErr.Message)
+		return strings.Contains(message, "resource not found") ||
+			strings.Contains(message, "session not found") ||
+			strings.Contains(message, "unknown session")
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "resource not found") ||
+		strings.Contains(message, "session not found") ||
+		strings.Contains(message, "unknown session")
+}
+
+func (m *Manager) loadPromptSession(
+	ctx context.Context,
+	client runtime.Client,
+	rid config.RuntimeID,
+	sessionID string,
+	snapshot sessionSnapshot,
+	hasSnapshot bool,
+) error {
+	if !hasSnapshot || strings.TrimSpace(snapshot.CWD) == "" {
+		return fmt.Errorf("session %q is not loaded and no cwd snapshot is available", sessionID)
+	}
+	permissionMode := currentConfigOptionValue(snapshot.ConfigOptions, "mode")
+	model := currentConfigOptionValue(snapshot.ConfigOptions, "model")
+	resp, err := client.LoadSession(ctx, sessionID, snapshot.CWD, permissionMode, model)
+	if err != nil {
+		return err
+	}
+	resp.ConfigOptions = m.enrichSessionConfigOptions(
+		rid,
+		sessionID,
+		resp.ConfigOptions,
+		permissionMode,
+	)
+	m.setSessionRuntime(sessionID, rid)
+	m.persistSessionSnapshot(sessionID, rid, snapshot.CWD, resp.ConfigOptions)
+	return nil
 }
 
 func (m *Manager) retireRuntimeClient(rid config.RuntimeID, target runtime.Client) {

@@ -56,7 +56,16 @@ func NewTransport(command string, args []string, cwd string, env map[string]stri
 
 // Start spawns the child process and begins reading from stdout.
 func (t *Transport) Start(ctx context.Context) error {
-	t.cmd = exec.CommandContext(ctx, t.command, t.args...)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	t.cmd = exec.Command(t.command, t.args...)
 	if t.cwd != "" {
 		t.cmd.Dir = t.cwd
 	}
