@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  cancelAgentChatSession,
   createAgentChatSession,
   listAgentChatSessions,
   loadAgentChatRuntimes,
   loadAgentChatSession,
   promptAgentChatSession,
+  setAgentChatSessionConfigOption,
+  setAgentChatSessionMode,
 } from "@/application/chat";
 import { getRuntime } from "@/app/runtime";
+import {
+  configOptionByCategory,
+  configValueByCategory,
+} from "@/domain/agent-chat-config";
 import { buildChatPath, type WorkbenchTabId } from "@/domain/routes";
 import {
   buildChatTranscriptMessages,
@@ -16,6 +23,7 @@ import {
 } from "@/state/chat-store";
 import { useWorkspaceStore } from "@/state/workspace-store";
 import type {
+  AgentChatEventDto,
   AgentChatRuntimeDto,
   AgentChatSessionDto,
   AgentChatSessionStatusDto,
@@ -29,8 +37,13 @@ export type ChatPermissionOption = {
 export type ChatScreenModel = {
   activeSession?: AgentChatSessionDto;
   activeSessionId?: string;
+  canCancel: boolean;
+  canRetryLoad: boolean;
   canStart: boolean;
   canSend: boolean;
+  changingMode: boolean;
+  changingModel: boolean;
+  configControlsDisabled: boolean;
   cwd: string;
   error?: string;
   loading: boolean;
@@ -38,20 +51,27 @@ export type ChatScreenModel = {
   messages: ChatTranscriptMessage[];
   permissionMode: string;
   permissionOptions: ChatPermissionOption[];
+  pendingConfigValues: Record<string, string>;
+  pendingMode?: string;
   promptDraft: string;
   runtimes: AgentChatRuntimeDto[];
   selectedRuntimeId: string;
   sending: boolean;
   sessions: AgentChatSessionDto[];
+  stopping: boolean;
   tabId: WorkbenchTabId;
   clearError: () => void;
   refresh: () => Promise<void>;
+  retryLoadSession: () => void;
   sendPrompt: () => Promise<void>;
+  setActiveConfigOption: (configId: string, value: string) => Promise<void>;
+  setActiveMode: (permissionMode: string) => Promise<void>;
   setCwd: (cwd: string) => void;
   setPermissionMode: (permissionMode: string) => void;
   setPromptDraft: (prompt: string) => void;
   setSelectedRuntimeId: (runtimeId: string) => void;
   startNewChat: () => Promise<void>;
+  stopSession: () => Promise<void>;
 };
 
 const permissionOptions: ChatPermissionOption[] = [
@@ -88,7 +108,7 @@ function sessionRouteTabId(sessionId?: string): WorkbenchTabId {
 }
 
 function sessionRouteTitle(session?: AgentChatSessionDto): string {
-  return session?.title?.trim() || "Chat";
+  return session?.title?.trim() || "New chat";
 }
 
 function sessionIsLoadable(
@@ -97,11 +117,56 @@ function sessionIsLoadable(
   return Boolean(session?.sessionId && session.cwd && session.runtime);
 }
 
-function sessionStatusAfterCreate(
-  existing?: AgentChatSessionDto,
-): AgentChatSessionStatusDto {
-  return existing?.status ?? "idle";
+function sessionStatusIsBusy(
+  status: AgentChatSessionStatusDto | undefined,
+): boolean {
+  return status === "running" || status === "waiting_approval";
 }
+
+function sessionIsBusy(session: AgentChatSessionDto | undefined): boolean {
+  return sessionStatusIsBusy(session?.status);
+}
+
+function eventIsPromptEvidence(event: AgentChatEventDto): boolean {
+  if (event.seq == null || event.seq <= 0) {
+    return false;
+  }
+  if (event.messagePart || event.tool || event.runFailed || event.runFinished) {
+    return true;
+  }
+  if (event.approval || event.plan || event.usage) {
+    return true;
+  }
+  return sessionStatusIsBusy(event.sessionStatus?.app.status);
+}
+
+function currentSessionMode(
+  session: AgentChatSessionDto | undefined,
+  fallback: string,
+): string {
+  return configValueByCategory(session?.configOptions, "mode") || fallback;
+}
+
+function promptErrorMessage(errorValue: unknown): string {
+  return errorValue instanceof Error ? errorValue.message : "Failed to send prompt";
+}
+
+function promptNotAcceptedError(): Error {
+  return new Error("Prompt was not accepted");
+}
+
+function sessionConfigValue(
+  session: AgentChatSessionDto,
+  category: string,
+): string | undefined {
+  return configValueByCategory(session.configOptions, category) || undefined;
+}
+
+function runtimeDefaultMode(runtime: AgentChatRuntimeDto | undefined): string {
+  return configOptionByCategory(runtime?.configOptions, "mode")?.currentValue ?? "";
+}
+
+const stopReconcileTimeoutMs = 5000;
 
 export function useChatScreen(): ChatScreenModel {
   const { sessionId } = useParams<{ sessionId?: string }>();
@@ -119,11 +184,16 @@ export function useChatScreen(): ChatScreenModel {
   const sendingSessionIds = useChatStore((state) => state.sendingSessionIds);
   const error = useChatStore((state) => state.error);
   const setRuntimes = useChatStore((state) => state.setRuntimes);
-  const setSessions = useChatStore((state) => state.setSessions);
-  const upsertSession = useChatStore((state) => state.upsertSession);
+  const mergeSessionCatalogPage = useChatStore(
+    (state) => state.mergeSessionCatalogPage,
+  );
+  const mergeCreatedSession = useChatStore((state) => state.mergeCreatedSession);
+  const mergeLoadedSession = useChatStore((state) => state.mergeLoadedSession);
   const setActiveSession = useChatStore((state) => state.setActiveSession);
   const appendLocalMessage = useChatStore((state) => state.appendLocalMessage);
   const markSessionLoaded = useChatStore((state) => state.markSessionLoaded);
+  const beginSessionLoad = useChatStore((state) => state.beginSessionLoad);
+  const failSessionLoad = useChatStore((state) => state.failSessionLoad);
   const setLoadingRuntimes = useChatStore((state) => state.setLoadingRuntimes);
   const setLoadingSessions = useChatStore((state) => state.setLoadingSessions);
   const setLoadingSession = useChatStore((state) => state.setLoadingSession);
@@ -137,11 +207,42 @@ export function useChatScreen(): ChatScreenModel {
   const [cwd, setCwdState] = useState(() => workspaceDefaultPath);
   const [cwdTouched, setCwdTouched] = useState(false);
   const [permissionMode, setPermissionMode] = useState("default");
+  const [permissionModeTouched, setPermissionModeTouched] = useState(false);
   const [promptDraft, setPromptDraft] = useState("");
+  const promptDraftVersion = useRef(0);
+  const promptEventBaselines = useRef<Record<string, number>>({});
+  const loadRequestCounter = useRef(0);
+  const activeLoadRequest = useRef<
+    { sessionId: string; token: number } | undefined
+  >(undefined);
+  const stoppingReconcileTimers = useRef<
+    Record<string, ReturnType<typeof setTimeout>>
+  >({});
+  const [failedLoadSessionIds, setFailedLoadSessionIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [stoppingSessionIds, setStoppingSessionIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [changingModeSessionIds, setChangingModeSessionIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [changingModelSessionIds, setChangingModelSessionIds] = useState<
+    Record<string, boolean>
+  >({});
+  const [pendingModeBySessionId, setPendingModeBySessionId] = useState<
+    Record<string, string>
+  >({});
+  const [pendingConfigValuesBySessionId, setPendingConfigValuesBySessionId] =
+    useState<Record<string, Record<string, string>>>({});
 
   const activeSession = useMemo(
     () => sessions.find((session) => session.sessionId === sessionId),
     [sessionId, sessions],
+  );
+  const selectedRuntime = useMemo(
+    () => runtimes.find((runtime) => runtime.id === selectedRuntimeId),
+    [runtimes, selectedRuntimeId],
   );
   const activeSessionId = activeSession?.sessionId ?? sessionId;
   const messages = useMemo(
@@ -159,9 +260,33 @@ export function useChatScreen(): ChatScreenModel {
     ? loadingSessionId === activeSessionId
     : loadingSessionId === "new";
   const sending = activeSessionId ? Boolean(sendingSessionIds[activeSessionId]) : false;
+  const stopping = activeSessionId
+    ? Boolean(stoppingSessionIds[activeSessionId])
+    : false;
+  const changingMode = activeSessionId
+    ? Boolean(
+        changingModeSessionIds[activeSessionId] ||
+          pendingModeBySessionId[activeSessionId],
+      )
+    : false;
+  const changingModel = activeSessionId
+    ? Boolean(
+        changingModelSessionIds[activeSessionId] ||
+          Object.keys(pendingConfigValuesBySessionId[activeSessionId] ?? {})
+            .length > 0,
+      )
+    : false;
+  const pendingMode = activeSessionId
+    ? pendingModeBySessionId[activeSessionId]
+    : undefined;
+  const pendingConfigValues = activeSessionId
+    ? pendingConfigValuesBySessionId[activeSessionId] ?? {}
+    : {};
+  const sessionBusy = sessionIsBusy(activeSession);
+  const configControlsDisabled = loadingSession || sending || stopping || sessionBusy;
   const trimmedPrompt = promptDraft.trim();
   const canStart =
-    Boolean(selectedRuntimeId.trim()) &&
+    Boolean(selectedRuntime?.ready) &&
     Boolean(cwd.trim()) &&
     !loading &&
     !loadingSession &&
@@ -170,8 +295,209 @@ export function useChatScreen(): ChatScreenModel {
     Boolean(activeSessionId) &&
     Boolean(trimmedPrompt) &&
     !sending &&
+    !stopping &&
+    !loadingSession &&
+    !sessionBusy;
+  const canCancel =
+    Boolean(activeSessionId) &&
+    (sessionBusy || sending) &&
+    !stopping &&
     !loadingSession;
+  const canRetryLoad = Boolean(
+    activeSessionId && failedLoadSessionIds[activeSessionId],
+  );
   const tabId = sessionRouteTabId(activeSessionId);
+
+  function clearStoppingTimer(sessionIdToClear: string) {
+    const timer = stoppingReconcileTimers.current[sessionIdToClear];
+    if (timer) {
+      clearTimeout(timer);
+      delete stoppingReconcileTimers.current[sessionIdToClear];
+    }
+  }
+
+  function scheduleStoppingReconcile(sessionIdToReconcile: string) {
+    clearStoppingTimer(sessionIdToReconcile);
+    stoppingReconcileTimers.current[sessionIdToReconcile] = setTimeout(() => {
+      void reconcileStoppingSession(sessionIdToReconcile);
+    }, stopReconcileTimeoutMs);
+  }
+
+  function setPromptDraftValue(nextPromptDraft: string) {
+    promptDraftVersion.current += 1;
+    setPromptDraft(nextPromptDraft);
+  }
+
+  function clearSubmittedPromptDraft(submittedText: string, submittedVersion: number) {
+    setPromptDraft((current) => {
+      if (
+        promptDraftVersion.current !== submittedVersion ||
+        current.trim() !== submittedText
+      ) {
+        return current;
+      }
+      promptDraftVersion.current += 1;
+      return "";
+    });
+  }
+
+  function clearPendingMode(sessionIdToClear: string) {
+    setPendingModeBySessionId((current) => {
+      if (!current[sessionIdToClear]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[sessionIdToClear];
+      return next;
+    });
+  }
+
+  function clearPendingConfigValue(sessionIdToClear: string, configId: string) {
+    setPendingConfigValuesBySessionId((current) => {
+      const sessionValues = current[sessionIdToClear];
+      if (!sessionValues?.[configId]) {
+        return current;
+      }
+      const nextSessionValues = { ...sessionValues };
+      delete nextSessionValues[configId];
+      const next = { ...current };
+      if (Object.keys(nextSessionValues).length === 0) {
+        delete next[sessionIdToClear];
+      } else {
+        next[sessionIdToClear] = nextSessionValues;
+      }
+      return next;
+    });
+  }
+
+  async function refreshSessionsOnly(): Promise<void> {
+    const result = await listAgentChatSessions(getRuntime(), { limit: 50 });
+    mergeSessionCatalogPage(result.sessions);
+  }
+
+  async function reconcileStoppingSession(sessionIdToReconcile: string) {
+    clearStoppingTimer(sessionIdToReconcile);
+    let stopConfirmed = false;
+    try {
+      const result = await listAgentChatSessions(getRuntime(), { limit: 50 });
+      mergeSessionCatalogPage(result.sessions);
+      const reconciledSession = result.sessions.find(
+        (entry) => entry.sessionId === sessionIdToReconcile,
+      );
+      if (!reconciledSession) {
+        setError("Stop is still pending. Waiting for session status.");
+        scheduleStoppingReconcile(sessionIdToReconcile);
+        return;
+      }
+      if (sessionIsBusy(reconciledSession)) {
+        setError("Stop is still pending. Waiting for the session to stop.");
+        scheduleStoppingReconcile(sessionIdToReconcile);
+        return;
+      }
+      stopConfirmed = true;
+    } catch (errorValue) {
+      setError(
+        errorValue instanceof Error
+          ? errorValue.message
+          : "Failed to reconcile stopped chat",
+      );
+      scheduleStoppingReconcile(sessionIdToReconcile);
+    } finally {
+      if (stopConfirmed) {
+        setStoppingSessionIds((current) => {
+          const next = { ...current };
+          delete next[sessionIdToReconcile];
+          return next;
+        });
+      }
+    }
+  }
+
+  useEffect(() => {
+    setStoppingSessionIds((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const stoppedSessionId of Object.keys(current)) {
+        const session = sessions.find(
+          (entry) => entry.sessionId === stoppedSessionId,
+        );
+        if (!sessionIsBusy(session)) {
+          clearStoppingTimer(stoppedSessionId);
+          delete next[stoppedSessionId];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [sessions]);
+
+  useEffect(() => {
+    for (const sendingSessionId of Object.keys(sendingSessionIds)) {
+      const baseline = promptEventBaselines.current[sendingSessionId] ?? 0;
+      const eventsAfterSubmit =
+        eventsBySessionId[sendingSessionId]?.slice(baseline) ?? [];
+      const session = sessions.find(
+        (entry) => entry.sessionId === sendingSessionId,
+      );
+      if (eventsAfterSubmit.some(eventIsPromptEvidence) || sessionIsBusy(session)) {
+        delete promptEventBaselines.current[sendingSessionId];
+        setSendingSession(sendingSessionId, false);
+      }
+    }
+  }, [eventsBySessionId, sendingSessionIds, sessions, setSendingSession]);
+
+  useEffect(() => {
+    setPendingModeBySessionId((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const session of sessions) {
+        const pendingValue = next[session.sessionId];
+        if (
+          pendingValue &&
+          configValueByCategory(session.configOptions, "mode") === pendingValue
+        ) {
+          delete next[session.sessionId];
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+    setPendingConfigValuesBySessionId((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const session of sessions) {
+        const pendingValues = next[session.sessionId];
+        if (!pendingValues) {
+          continue;
+        }
+        const nextPendingValues = { ...pendingValues };
+        for (const [configId, pendingValue] of Object.entries(pendingValues)) {
+          const option = session.configOptions?.find(
+            (entry) => entry.id === configId,
+          );
+          if (option?.currentValue === pendingValue) {
+            delete nextPendingValues[configId];
+            changed = true;
+          }
+        }
+        if (Object.keys(nextPendingValues).length === 0) {
+          delete next[session.sessionId];
+        } else {
+          next[session.sessionId] = nextPendingValues;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [sessions]);
+
+  useEffect(() => {
+    return () => {
+      for (const timer of Object.values(stoppingReconcileTimers.current)) {
+        clearTimeout(timer);
+      }
+      stoppingReconcileTimers.current = {};
+    };
+  }, []);
 
   useEffect(() => {
     setActiveSession(sessionId);
@@ -190,9 +516,20 @@ export function useChatScreen(): ChatScreenModel {
     setSelectedRuntimeIdState(chooseDefaultRuntime(runtimes));
   }, [runtimeTouched, runtimes, selectedRuntimeId]);
 
+  useEffect(() => {
+    if (permissionModeTouched || !selectedRuntimeId) {
+      return;
+    }
+    const defaultMode = runtimeDefaultMode(selectedRuntime) || "default";
+    if (defaultMode !== permissionMode) {
+      setPermissionMode(defaultMode);
+    }
+  }, [permissionMode, permissionModeTouched, selectedRuntime, selectedRuntimeId]);
+
   async function refresh(): Promise<void> {
     const runtime = getRuntime();
     setError(undefined);
+    setFailedLoadSessionIds({});
     setLoadingRuntimes(true);
     setLoadingSessions(true);
     try {
@@ -201,7 +538,7 @@ export function useChatScreen(): ChatScreenModel {
         listAgentChatSessions(runtime, { limit: 50 }),
       ]);
       setRuntimes(runtimeResult.runtimes);
-      setSessions(sessionResult.sessions);
+      mergeSessionCatalogPage(sessionResult.sessions);
       if (!runtimeTouched) {
         setSelectedRuntimeIdState(chooseDefaultRuntime(runtimeResult.runtimes));
       }
@@ -225,7 +562,13 @@ export function useChatScreen(): ChatScreenModel {
     if (!activeSessionId || loadedSessionIds[activeSessionId]) {
       return;
     }
+    if (failedLoadSessionIds[activeSessionId]) {
+      return;
+    }
     if (loadingSessionId === activeSessionId) {
+      return;
+    }
+    if (loadingSessionId) {
       return;
     }
     if (!sessionIsLoadable(activeSession)) {
@@ -233,28 +576,63 @@ export function useChatScreen(): ChatScreenModel {
     }
 
     const sessionToLoad = activeSession;
+    const token = loadRequestCounter.current + 1;
+    loadRequestCounter.current = token;
+    activeLoadRequest.current = { sessionId: sessionToLoad.sessionId, token };
     const runtime = getRuntime();
+    const loadPermissionMode = sessionConfigValue(sessionToLoad, "mode");
+    const loadModel = sessionConfigValue(sessionToLoad, "model");
+    let loadAccepted = false;
     setError(undefined);
-    setLoadingSession(activeSessionId);
+    beginSessionLoad(sessionToLoad.sessionId);
     void loadAgentChatSession(runtime, {
       sessionId: sessionToLoad.sessionId,
       cwd: sessionToLoad.cwd,
       runtime: sessionToLoad.runtime ?? "",
-      permissionMode,
+      ...(loadPermissionMode ? { permissionMode: loadPermissionMode } : {}),
+      ...(loadModel ? { model: loadModel } : {}),
     })
       .then((result) => {
-        upsertSession({
+        const currentSession = useChatStore
+          .getState()
+          .sessions.find((entry) => entry.sessionId === sessionToLoad.sessionId);
+        const requestIsCurrent =
+          activeLoadRequest.current?.sessionId === sessionToLoad.sessionId &&
+          activeLoadRequest.current.token === token;
+        if (!requestIsCurrent) {
+          return;
+        }
+        loadAccepted = true;
+        mergeLoadedSession({
           sessionId: sessionToLoad.sessionId,
           cwd: result.app.cwd,
-          title: sessionToLoad.title,
           runtime: result.app.runtime,
-          updatedAt: new Date().toISOString(),
-          status: sessionStatusAfterCreate(sessionToLoad),
-          configOptions: result.acp.configOptions ?? sessionToLoad.configOptions,
+          configOptions:
+            result.acp.configOptions ??
+            currentSession?.configOptions ??
+            sessionToLoad.configOptions,
         });
-        markSessionLoaded(sessionToLoad.sessionId);
+        setFailedLoadSessionIds((current) => {
+          if (!current[sessionToLoad.sessionId]) {
+            return current;
+          }
+          const next = { ...current };
+          delete next[sessionToLoad.sessionId];
+          return next;
+        });
       })
       .catch((errorValue: unknown) => {
+        const requestIsCurrent =
+          activeLoadRequest.current?.sessionId === sessionToLoad.sessionId &&
+          activeLoadRequest.current.token === token;
+        if (!requestIsCurrent) {
+          return;
+        }
+        failSessionLoad(sessionToLoad.sessionId);
+        setFailedLoadSessionIds((current) => ({
+          ...current,
+          [sessionToLoad.sessionId]: true,
+        }));
         setError(
           errorValue instanceof Error
             ? errorValue.message
@@ -262,22 +640,36 @@ export function useChatScreen(): ChatScreenModel {
         );
       })
       .finally(() => {
-        setLoadingSession(undefined);
+        const currentRequest = activeLoadRequest.current;
+        if (
+          currentRequest?.sessionId === sessionToLoad.sessionId &&
+          currentRequest.token === token
+        ) {
+          activeLoadRequest.current = undefined;
+          if (
+            !loadAccepted ||
+            useChatStore.getState().loadedSessionIds[sessionToLoad.sessionId]
+          ) {
+            setLoadingSession(undefined);
+          }
+        }
       });
   }, [
     activeSession,
     activeSessionId,
+    failedLoadSessionIds,
+    beginSessionLoad,
+    failSessionLoad,
     loadedSessionIds,
     loadingSessionId,
-    markSessionLoaded,
-    permissionMode,
+    mergeLoadedSession,
     setError,
     setLoadingSession,
-    upsertSession,
   ]);
 
   function setSelectedRuntimeId(runtimeId: string) {
     setRuntimeTouched(true);
+    setPermissionModeTouched(false);
     setSelectedRuntimeIdState(runtimeId);
   }
 
@@ -286,25 +678,56 @@ export function useChatScreen(): ChatScreenModel {
     setCwdState(nextCwd);
   }
 
-  async function sendPrompt(): Promise<void> {
-    if (!activeSessionId || !trimmedPrompt) {
+  function setDraftPermissionMode(nextPermissionMode: string) {
+    setPermissionModeTouched(true);
+    setPermissionMode(nextPermissionMode);
+  }
+
+  function retryLoadSession() {
+    if (!activeSessionId) {
       return;
     }
     setError(undefined);
-    appendLocalMessage(activeSessionId, trimmedPrompt);
-    setPromptDraft("");
-    setSendingSession(activeSessionId, true);
+    setFailedLoadSessionIds((current) => {
+      if (!current[activeSessionId]) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[activeSessionId];
+      return next;
+    });
+  }
+
+  async function sendPrompt(): Promise<void> {
+    if (!activeSessionId || !trimmedPrompt || sessionBusy || stopping || sending) {
+      return;
+    }
+    const promptedSessionId = activeSessionId;
+    const promptText = trimmedPrompt;
+    const submittedDraftVersion = promptDraftVersion.current;
+    setError(undefined);
+    const submitEventBaseline = eventsBySessionId[promptedSessionId]?.length ?? 0;
+    promptEventBaselines.current[promptedSessionId] = submitEventBaseline;
+    setSendingSession(promptedSessionId, true);
+    let accepted = false;
     try {
-      await promptAgentChatSession(getRuntime(), {
-        sessionId: activeSessionId,
-        text: trimmedPrompt,
+      const result = await promptAgentChatSession(getRuntime(), {
+        sessionId: promptedSessionId,
+        text: promptText,
       });
+      if (!result.accepted) {
+        throw promptNotAcceptedError();
+      }
+      accepted = true;
+      appendLocalMessage(promptedSessionId, promptText, submitEventBaseline);
+      clearSubmittedPromptDraft(promptText, submittedDraftVersion);
     } catch (errorValue) {
-      setError(
-        errorValue instanceof Error ? errorValue.message : "Failed to send prompt",
-      );
+      delete promptEventBaselines.current[promptedSessionId];
+      setError(promptErrorMessage(errorValue));
     } finally {
-      setSendingSession(activeSessionId, false);
+      if (!accepted) {
+        setSendingSession(promptedSessionId, false);
+      }
     }
   }
 
@@ -314,6 +737,7 @@ export function useChatScreen(): ChatScreenModel {
     }
     const runtime = getRuntime();
     const initialPrompt = trimmedPrompt;
+    const submittedDraftVersion = promptDraftVersion.current;
     setError(undefined);
     setLoadingSession("new");
     try {
@@ -322,30 +746,43 @@ export function useChatScreen(): ChatScreenModel {
         runtime: selectedRuntimeId.trim(),
         permissionMode,
       });
-      const createdSessionId = result.acp.sessionId;
-      upsertSession({
+      const createdSessionId = result.app.sessionId;
+      mergeCreatedSession({
         sessionId: createdSessionId,
         cwd: result.app.cwd,
-        title: "New chat",
+        title: result.app.title,
         runtime: result.app.runtime,
-        updatedAt: new Date().toISOString(),
-        status: "idle",
+        updatedAt: result.app.updatedAt,
+        status: result.app.status,
         configOptions: result.acp.configOptions,
       });
       markSessionLoaded(createdSessionId);
       setActiveSession(createdSessionId);
       navigate(buildChatPath(createdSessionId));
       if (initialPrompt) {
-        appendLocalMessage(createdSessionId, initialPrompt);
-        setPromptDraft("");
+        const submitEventBaseline =
+          eventsBySessionId[createdSessionId]?.length ?? 0;
+        promptEventBaselines.current[createdSessionId] = submitEventBaseline;
         setSendingSession(createdSessionId, true);
+        let promptAccepted = false;
         try {
-          await promptAgentChatSession(runtime, {
+          const result = await promptAgentChatSession(runtime, {
             sessionId: createdSessionId,
             text: initialPrompt,
           });
+          if (!result.accepted) {
+            throw promptNotAcceptedError();
+          }
+          promptAccepted = true;
+          appendLocalMessage(createdSessionId, initialPrompt, submitEventBaseline);
+          clearSubmittedPromptDraft(initialPrompt, submittedDraftVersion);
+        } catch (errorValue) {
+          delete promptEventBaselines.current[createdSessionId];
+          setError(promptErrorMessage(errorValue));
         } finally {
-          setSendingSession(createdSessionId, false);
+          if (!promptAccepted) {
+            setSendingSession(createdSessionId, false);
+          }
         }
       }
     } catch (errorValue) {
@@ -357,11 +794,131 @@ export function useChatScreen(): ChatScreenModel {
     }
   }
 
+  async function stopSession(): Promise<void> {
+    if (!activeSessionId || (!sessionBusy && !sending) || stopping) {
+      return;
+    }
+    const stoppedSessionId = activeSessionId;
+    setError(undefined);
+    setStoppingSessionIds((current) => ({ ...current, [stoppedSessionId]: true }));
+    let cancelAccepted = false;
+    try {
+      await cancelAgentChatSession(getRuntime(), { sessionId: stoppedSessionId });
+      cancelAccepted = true;
+      delete promptEventBaselines.current[stoppedSessionId];
+      setSendingSession(stoppedSessionId, false);
+      scheduleStoppingReconcile(stoppedSessionId);
+    } catch (errorValue) {
+      setError(
+        errorValue instanceof Error ? errorValue.message : "Failed to stop chat",
+      );
+    } finally {
+      if (!cancelAccepted) {
+        setStoppingSessionIds((current) => {
+          const next = { ...current };
+          delete next[stoppedSessionId];
+          return next;
+        });
+      }
+    }
+  }
+
+  async function setActiveMode(nextPermissionMode: string): Promise<void> {
+    if (changingMode || configControlsDisabled) {
+      return;
+    }
+    const previousMode = currentSessionMode(activeSession, permissionMode);
+    if (!activeSessionId || nextPermissionMode === previousMode) {
+      return;
+    }
+    const modeSessionId = activeSessionId;
+    setError(undefined);
+    setPendingModeBySessionId((current) => ({
+      ...current,
+      [modeSessionId]: nextPermissionMode,
+    }));
+    setChangingModeSessionIds((current) => ({
+      ...current,
+      [modeSessionId]: true,
+    }));
+    try {
+      await setAgentChatSessionMode(getRuntime(), {
+        sessionId: modeSessionId,
+        permissionMode: nextPermissionMode,
+      });
+      await refreshSessionsOnly();
+    } catch (errorValue) {
+      clearPendingMode(modeSessionId);
+      setError(
+        errorValue instanceof Error
+          ? errorValue.message
+          : "Failed to change chat mode",
+      );
+    } finally {
+      setChangingModeSessionIds((current) => {
+        const next = { ...current };
+        delete next[modeSessionId];
+        return next;
+      });
+    }
+  }
+
+  async function setActiveConfigOption(
+    configId: string,
+    value: string,
+  ): Promise<void> {
+    if (changingModel || !activeSessionId || !configId.trim() || !value.trim()) {
+      return;
+    }
+    if (configControlsDisabled) {
+      return;
+    }
+    const configSessionId = activeSessionId;
+    setError(undefined);
+    setPendingConfigValuesBySessionId((current) => ({
+      ...current,
+      [configSessionId]: {
+        ...(current[configSessionId] ?? {}),
+        [configId]: value,
+      },
+    }));
+    setChangingModelSessionIds((current) => ({
+      ...current,
+      [configSessionId]: true,
+    }));
+    try {
+      await setAgentChatSessionConfigOption(getRuntime(), {
+        sessionId: configSessionId,
+        configId,
+        value,
+      });
+      await refreshSessionsOnly();
+    } catch (errorValue) {
+      clearPendingConfigValue(configSessionId, configId);
+      setError(
+        errorValue instanceof Error
+          ? errorValue.message
+          : "Failed to change chat option",
+      );
+    } finally {
+      setChangingModelSessionIds((current) => {
+        const next = { ...current };
+        delete next[configSessionId];
+        return next;
+      });
+    }
+  }
+
   return {
     activeSession,
     activeSessionId,
+    canCancel,
+    canRetryLoad,
     canStart,
     canSend,
+    changingMode,
+    changingModel,
+    configControlsDisabled,
     cwd,
     error,
     loading,
@@ -369,20 +926,27 @@ export function useChatScreen(): ChatScreenModel {
     messages,
     permissionMode,
     permissionOptions,
+    pendingConfigValues,
+    pendingMode,
     promptDraft,
     runtimes,
     selectedRuntimeId,
     sending,
     sessions,
+    stopping,
     tabId,
     clearError: () => setError(undefined),
     refresh,
+    retryLoadSession,
     sendPrompt,
+    setActiveConfigOption,
+    setActiveMode,
     setCwd,
-    setPermissionMode,
-    setPromptDraft,
+    setPermissionMode: setDraftPermissionMode,
+    setPromptDraft: setPromptDraftValue,
     setSelectedRuntimeId,
     startNewChat,
+    stopSession,
   };
 }
 

@@ -154,6 +154,7 @@ function attachSpawnSession(session: Session, child: ChildProcessWithoutNullStre
       sharedSpawnSessionId = null;
     }
     session.exitReason = `app-server exited${code != null ? ` (${code})` : signal ? ` (${signal})` : ""}`;
+    process.stderr.write(`[muxagent app-server:${session.id}] ${session.exitReason}\n`);
     closeAndClearSessionSockets(session, 1011, session.exitReason);
   });
 }
@@ -228,6 +229,20 @@ function broadcastNotification(
   }
 }
 
+function broadcastAgentChatEvent(session: Session, event: unknown) {
+  const encoded = JSON.stringify({
+    jsonrpc: "2.0",
+    method: "agentchat.event",
+    params: event,
+  });
+
+  for (const socket of session.sockets) {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.send(encoded);
+    }
+  }
+}
+
 function handleFixtureRpc(session: Session, payload: Record<string, unknown>) {
   if (!session.fixtureState) {
     throw new Error("fixture session missing fixture state");
@@ -235,6 +250,9 @@ function handleFixtureRpc(session: Session, payload: Record<string, unknown>) {
   return fixtureRuntime.handleRpc(session.fixtureState, payload, {
     emitNotification: (kind, workspaceId, params) => {
       broadcastNotification(session, kind, workspaceId, params);
+    },
+    emitAgentChatEvent: (event) => {
+      broadcastAgentChatEvent(session, event);
     },
   });
 }

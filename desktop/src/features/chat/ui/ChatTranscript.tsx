@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { Bot, User } from "lucide-react";
+import { Bot } from "lucide-react";
 import type { ChatTranscriptMessage } from "@/state/chat-store";
 
 type ChatTranscriptProps = {
@@ -14,6 +14,8 @@ function roleLabel(role: string): string {
       return "Agent";
     case "user":
       return "You";
+    case "system":
+      return "System";
     default:
       return role;
   }
@@ -34,41 +36,48 @@ export function ChatTranscript({ loading = false, messages }: ChatTranscriptProp
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [contentKey]);
 
-  if (messages.length === 0) {
-    return (
-      <div className="chat-transcript chat-transcript--empty">
+  return (
+    <div
+      aria-live="polite"
+      aria-relevant="additions text"
+      className={`chat-transcript${
+        messages.length === 0 ? " chat-transcript--empty" : ""
+      }`}
+      data-testid="chat-transcript"
+      role="log"
+    >
+      {messages.length === 0 ? (
         <div className="chat-transcript__empty">
           <Bot aria-hidden="true" size={18} strokeWidth={1.9} />
           <span>{loading ? "Loading messages" : "No messages"}</span>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="chat-transcript" data-testid="chat-transcript">
-      <div className="chat-transcript__stack">
-        {messages.map((message) => {
-          const user = isUserRole(message.role);
-          return (
-            <article
-              className={`chat-message${user ? " chat-message--user" : " chat-message--agent"}`}
-              key={message.id}
-            >
-              <div className="chat-message__avatar" aria-hidden="true">
-                {user ? <User size={14} strokeWidth={1.9} /> : <Bot size={14} strokeWidth={1.9} />}
-              </div>
-              <div className="chat-message__body">
-                <div className="chat-message__meta">
-                  <span>{roleLabel(message.role)}</span>
+      ) : (
+        <div className="chat-transcript__stack">
+          {messages.map((message) => {
+            const user = isUserRole(message.role);
+            return (
+              <article
+                className={`chat-message${
+                  user
+                    ? " chat-message--user"
+                    : message.role === "system"
+                      ? " chat-message--system"
+                      : " chat-message--agent"
+                }`}
+                key={message.id}
+              >
+                <div className="chat-message__body">
+                  <div className="chat-message__meta sr-only">
+                    <span>{roleLabel(message.role)}</span>
+                  </div>
+                  <p className="chat-message__text">{message.text}</p>
                 </div>
-                <p className="chat-message__text">{message.text}</p>
-              </div>
-            </article>
-          );
-        })}
-        <div ref={bottomRef} />
-      </div>
+              </article>
+            );
+          })}
+          <div ref={bottomRef} />
+        </div>
+      )}
     </div>
   );
 }

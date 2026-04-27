@@ -169,6 +169,7 @@ export async function withSpawnedDesktopServer(
   const workDir = path.join(tempRoot, "workspace");
   const altWorkDir = path.join(tempRoot, "workspace-alt");
   const cliBinary = path.join(tempRoot, "muxagent-test");
+  const localKeyFile = path.join(tempRoot, ".muxagent", "localkey");
   const workspaceSeedBinary = path.join(tempRoot, "muxagent-workspace-seed");
   const webPort = String(await getAvailablePort());
   const bridgePort = String(await getAvailablePort());
@@ -198,6 +199,7 @@ export async function withSpawnedDesktopServer(
       MUXAGENT_BRIDGE_MODE: "spawn",
       MUXAGENT_CLI_PATH: cliBinary,
       MUXAGENT_APP_SERVER_STATE_DIR: appServerStateDir,
+      MUXAGENT_LOCALKEY_FILE: localKeyFile,
       MUXAGENT_TASK_HOME: taskHomeDir,
       MUXAGENT_TASKCONFIG_ROOT: taskConfigRootDir,
       MUXAGENT_WEB_PORT: webPort,
@@ -207,7 +209,11 @@ export async function withSpawnedDesktopServer(
     stdio: ["ignore", "pipe", "pipe"],
   });
 
+  let serverStdout = "";
   let serverStderr = "";
+  server.stdout.on("data", (chunk) => {
+    serverStdout += chunk.toString();
+  });
   server.stderr.on("data", (chunk) => {
     serverStderr += chunk.toString();
   });
@@ -252,11 +258,21 @@ export async function withSpawnedDesktopServer(
   } catch (error) {
     throw new Error(
       `${error instanceof Error ? error.message : String(error)}${
+        serverStdout ? `\nspawn dev:web stdout:\n${serverStdout}` : ""
+      }${
         serverStderr ? `\nspawn dev:web stderr:\n${serverStderr}` : ""
       }`,
     );
   } finally {
     await stopProcess(server);
+    await runCommandAndCapture(cliBinary, ["daemon", "stop"], {
+      cwd: desktopRoot,
+      env: {
+        ...process.env,
+        HOME: tempRoot,
+        MUXAGENT_LOCALKEY_FILE: localKeyFile,
+      },
+    }).catch(() => undefined);
     await rm(tempRoot, {
       recursive: true,
       force: true,

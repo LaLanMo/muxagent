@@ -1,12 +1,16 @@
 import type { DesktopRuntime, RuntimeNotification } from "@/platform/contract";
 import type {
   AgentChatAcceptedResult,
+  AgentChatCancelParams,
   AgentChatCreateSessionParams,
   AgentChatEventDto,
   AgentChatListSessionsParams,
   AgentChatLoadSessionParams,
+  AgentChatOkResult,
   AgentChatPromptParams,
   AgentChatRuntimeListResult,
+  AgentChatSetConfigOptionParams,
+  AgentChatSetModeParams,
   AgentChatSessionCreateResult,
   AgentChatSessionListResult,
   AgentChatSessionLoadResult,
@@ -88,4 +92,34 @@ export function promptAgentChatSession(
     AgentChatAcceptedResult,
     AgentChatPromptParams
   >("session.prompt", params);
+}
+
+export function cancelAgentChatSession(
+  runtime: DesktopRuntime,
+  params: AgentChatCancelParams,
+): Promise<AgentChatOkResult> {
+  return runtime.backend.agentChatRPC<AgentChatOkResult, AgentChatCancelParams>(
+    "session.cancel",
+    params,
+  );
+}
+
+export function setAgentChatSessionMode(
+  runtime: DesktopRuntime,
+  params: AgentChatSetModeParams,
+): Promise<AgentChatOkResult> {
+  return runtime.backend.agentChatRPC<AgentChatOkResult, AgentChatSetModeParams>(
+    "session.setMode",
+    params,
+  );
+}
+
+export function setAgentChatSessionConfigOption(
+  runtime: DesktopRuntime,
+  params: AgentChatSetConfigOptionParams,
+): Promise<AgentChatOkResult> {
+  return runtime.backend.agentChatRPC<
+    AgentChatOkResult,
+    AgentChatSetConfigOptionParams
+  >("session.setConfigOption", params);
 }

@@ -83,14 +83,28 @@ export interface AgentChatSessionConfigValueDto {
   description?: string;
 }
 
+export interface AgentChatSessionConfigGroupDto {
+  group: string;
+  name: string;
+  options: AgentChatSessionConfigValueDto[];
+}
+
+export type AgentChatSessionConfigOptionEntryDto =
+  | AgentChatSessionConfigValueDto
+  | AgentChatSessionConfigGroupDto;
+
+export type AgentChatSessionConfigOptionsDto =
+  | AgentChatSessionConfigValueDto[]
+  | AgentChatSessionConfigGroupDto[];
+
 export interface AgentChatSessionConfigOptionDto {
   id: string;
   name: string;
   description?: string;
   category?: string;
-  type?: string;
-  currentValue?: string;
-  options?: AgentChatSessionConfigValueDto[];
+  type: "select" | string;
+  currentValue: string;
+  options: AgentChatSessionConfigOptionsDto;
 }
 
 export interface AgentChatRuntimeDto {
@@ -139,8 +153,12 @@ export interface AgentChatCreateSessionParams {
 
 export interface AgentChatSessionCreateResult {
   app: {
+    sessionId: string;
     runtime: string;
     cwd: string;
+    title: string;
+    status: AgentChatSessionStatusDto;
+    updatedAt: string;
   };
   acp: {
     sessionId: string;
@@ -183,8 +201,27 @@ export interface AgentChatPromptParams {
   }>;
 }
 
+export interface AgentChatCancelParams {
+  sessionId: string;
+}
+
+export interface AgentChatSetModeParams {
+  sessionId: string;
+  permissionMode: string;
+}
+
+export interface AgentChatSetConfigOptionParams {
+  sessionId: string;
+  configId: string;
+  value: string;
+}
+
 export interface AgentChatAcceptedResult {
   accepted: boolean;
+}
+
+export interface AgentChatOkResult {
+  ok: boolean;
 }
 
 export interface AgentChatReplayHeadResult {
@@ -213,8 +250,23 @@ export interface AgentChatToolEventDto {
     kind?: string;
     title?: string;
     status: string;
+    input?: unknown;
+    inputTruncated?: boolean;
     output?: string;
+    outputTruncated?: boolean;
     error?: string;
+    errorTruncated?: boolean;
+    diffs?: Array<{
+      path: string;
+      oldText?: string | null;
+      newText: string;
+    }>;
+    diffsTruncated?: boolean;
+    claudeCode?: unknown;
+    locations?: Array<{
+      path: string;
+      line?: number;
+    }>;
   };
   acp?: unknown;
 }
@@ -225,6 +277,11 @@ export interface AgentChatSessionStatusEventDto {
     title?: string;
     status: AgentChatSessionStatusDto;
     model?: string;
+    cost?: {
+      costAmount?: number;
+      costCurrency?: string;
+      totalTokens?: number;
+    };
     machineId?: string;
     runtime?: string;
     cwd?: string;
@@ -252,6 +309,23 @@ export interface AgentChatRunFinishedEventDto {
   };
 }
 
+export interface AgentChatModeChangedEventDto {
+  app: {
+    currentModeId: string;
+  };
+  acp?: unknown;
+}
+
+export interface AgentChatConfigChangedEventDto {
+  app: {
+    configId: string;
+    currentValue: string;
+    category?: string;
+    values?: AgentChatSessionConfigValueDto[];
+  };
+  acp?: unknown;
+}
+
 export interface AgentChatEventDto {
   type: string;
   sessionId?: string;
@@ -265,8 +339,8 @@ export interface AgentChatEventDto {
   approval?: unknown;
   plan?: unknown;
   usage?: unknown;
-  modeChanged?: unknown;
-  configChanged?: unknown;
+  modeChanged?: AgentChatModeChangedEventDto;
+  configChanged?: AgentChatConfigChangedEventDto;
 }
 
 export interface TaskCountsDto {

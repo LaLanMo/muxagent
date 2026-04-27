@@ -315,6 +315,9 @@ export type FixtureState = {
   configs: FixtureConfig[];
   runtimes: FixtureRuntimeOption[];
   runtimeStatus: FixtureRuntimeStatus;
+  agentChatSessions: FixtureAgentChatSession[];
+  agentChatEventsBySessionId: Record<string, FixtureAgentChatEvent[]>;
+  agentChatSeq: number;
 };
 
 type FixtureRuntimeOption = {
@@ -343,6 +346,109 @@ type FixtureRuntimeStatusEntry = {
   runtime_name: string;
   launcher?: string;
   available: boolean;
+};
+
+type FixtureAgentChatStatus =
+  | "idle"
+  | "running"
+  | "waiting_approval"
+  | "error"
+  | "done";
+
+type FixtureAgentChatConfigOption = {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  type: "select" | string;
+  currentValue: string;
+  options: FixtureAgentChatConfigOptions;
+};
+
+type FixtureAgentChatConfigValue = {
+  value: string;
+  name: string;
+  description?: string;
+};
+
+type FixtureAgentChatConfigGroup = {
+  group: string;
+  name: string;
+  options: FixtureAgentChatConfigValue[];
+};
+
+type FixtureAgentChatConfigOptionEntry =
+  | FixtureAgentChatConfigValue
+  | FixtureAgentChatConfigGroup;
+
+type FixtureAgentChatConfigOptions =
+  | FixtureAgentChatConfigValue[]
+  | FixtureAgentChatConfigGroup[];
+
+type FixtureAgentChatSession = {
+  sessionId: string;
+  cwd: string;
+  title: string;
+  runtime?: string;
+  updatedAt: string;
+  status: FixtureAgentChatStatus;
+  configOptions?: FixtureAgentChatConfigOption[];
+};
+
+type FixtureAgentChatEvent = {
+  type: string;
+  sessionId?: string;
+  seq?: number;
+  at?: string;
+  messagePart?: {
+    app: {
+      partId: string;
+      messageId: string;
+      role?: string;
+      delta: string;
+      partType: string;
+      fullText: string;
+    };
+  };
+  sessionStatus?: {
+    app: {
+      id: string;
+      title?: string;
+      status: FixtureAgentChatStatus;
+      runtime?: string;
+      cwd?: string;
+      updatedAt?: string;
+    };
+  };
+  runFailed?: {
+    app: {
+      error: {
+        code?: string;
+        message: string;
+      };
+    };
+  };
+  runFinished?: {
+    app: {
+      stopReason?: string;
+      inputTokens?: number;
+      outputTokens?: number;
+      totalTokens?: number;
+    };
+  };
+  modeChanged?: {
+    app: {
+      currentModeId: string;
+    };
+  };
+  configChanged?: {
+    app: {
+      configId: string;
+      currentValue: string;
+      category?: string;
+      values?: FixtureAgentChatConfigValue[];
+    };
+  };
 };
 
 type FixtureConfigDraft = {
@@ -407,6 +513,7 @@ type FixtureNotificationEmitter = (
 
 type HandleFixtureRpcOptions = {
   emitNotification: FixtureNotificationEmitter;
+  emitAgentChatEvent: (event: FixtureAgentChatEvent) => void;
 };
 
 type FixtureHistoryEvent = NonNullable<
@@ -537,6 +644,27 @@ function buildFixtureImageArtifactBytes(args: {
   return encoder.encode(svg);
 }
 
+function isAgentChatConfigValue(
+  entry: FixtureAgentChatConfigOptionEntry,
+): entry is FixtureAgentChatConfigValue {
+  return "value" in entry;
+}
+
+function fixtureAgentChatConfigValues(
+  option: FixtureAgentChatConfigOption | undefined,
+): FixtureAgentChatConfigValue[] {
+  return (option?.options ?? []).flatMap((entry) =>
+    isAgentChatConfigValue(entry) ? [entry] : entry.options,
+  );
+}
+
+function fixtureAgentChatConfigOptionWithValue(
+  option: FixtureAgentChatConfigOption,
+  value: string,
+): FixtureAgentChatConfigOption {
+  return { ...option, currentValue: value };
+}
+
 export class FixtureRuntime {
   private readonly fileContents = new Map<string, string>();
   private readonly binaryFileContents = new Map<string, Uint8Array>();
@@ -554,6 +682,587 @@ export class FixtureRuntime {
       configs: this.defaultConfigs(),
       runtimes: this.defaultRuntimes(),
       runtimeStatus: this.defaultRuntimeStatus(),
+      agentChatSessions: this.defaultAgentChatSessions(),
+      agentChatEventsBySessionId: this.defaultAgentChatEvents(),
+      agentChatSeq: 12,
+    };
+  }
+
+  private defaultAgentChatConfigOptions(
+    runtimeId = "codex",
+    overrides: { model?: string; permissionMode?: string } = {},
+  ): FixtureAgentChatConfigOption[] {
+    const modeOptionsByRuntime: Record<
+      string,
+      { currentValue: string; options: FixtureAgentChatConfigValue[] }
+    > = {
+      codex: {
+        currentValue: "read-only",
+        options: [
+          { value: "read-only", name: "Read Only" },
+          { value: "auto", name: "Default" },
+          { value: "full-access", name: "Full Access" },
+        ],
+      },
+      "claude-code": {
+        currentValue: "bypassPermissions",
+        options: [
+          { value: "default", name: "Default" },
+          { value: "acceptEdits", name: "Accept Edits" },
+          { value: "plan", name: "Plan" },
+          { value: "dontAsk", name: "Don't Ask" },
+          { value: "bypassPermissions", name: "Skip Perms" },
+        ],
+      },
+      gemini: {
+        currentValue: "default",
+        options: [
+          { value: "default", name: "Default" },
+          { value: "autoEdit", name: "Auto Edit" },
+          { value: "yolo", name: "YOLO" },
+          { value: "plan", name: "Plan" },
+        ],
+      },
+    };
+    const modeConfig = modeOptionsByRuntime[runtimeId] ?? modeOptionsByRuntime.codex;
+    return [
+      {
+        id: "model",
+        name: "Model",
+        category: "model",
+        type: "select",
+        currentValue: overrides.model ?? "gpt-5.4",
+        options: [
+          {
+            group: "openai",
+            name: "OpenAI",
+            options: [
+              { value: "gpt-5.4", name: "GPT-5.4" },
+              { value: "gpt-5.4-mini", name: "GPT-5.4 Mini" },
+              { value: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
+            ],
+          },
+        ],
+      },
+      {
+        id: "mode",
+        name:
+          runtimeId === "codex" || runtimeId === "claude-code"
+            ? "Approval Preset"
+            : "Mode",
+        category: "mode",
+        type: "select",
+        currentValue: overrides.permissionMode ?? modeConfig?.currentValue ?? "auto",
+        options: modeConfig?.options ?? [],
+      },
+    ];
+  }
+
+  private defaultAgentChatSessions(): FixtureAgentChatSession[] {
+    return [
+      {
+        sessionId: "fixture-chat-1",
+        cwd: "/tmp/muxagent-desktop/workspace",
+        title: "Refactor streaming transcript layout",
+        runtime: "codex",
+        updatedAt: "2026-04-27T08:00:00.000Z",
+        status: "idle",
+        configOptions: this.defaultAgentChatConfigOptions(),
+      },
+    ];
+  }
+
+  private defaultAgentChatEvents(): Record<string, FixtureAgentChatEvent[]> {
+    return {
+      "fixture-chat-1": [
+        this.agentChatMessageEvent({
+          sessionId: "fixture-chat-1",
+          seq: 1,
+          at: "2026-04-27T07:59:58.000Z",
+          role: "user",
+          messageId: "fixture-user-1",
+          text: "Make the desktop chat feel closer to the Pencil mock.",
+        }),
+        this.agentChatMessageEvent({
+          sessionId: "fixture-chat-1",
+          seq: 2,
+          at: "2026-04-27T08:00:00.000Z",
+          role: "agent",
+          messageId: "fixture-agent-1",
+          text: "I tightened the shell structure, kept the composer anchored to the bottom, and moved runtime identity into the thread header.",
+        }),
+      ],
+    };
+  }
+
+  private handleAgentChatRpc(
+    state: FixtureState,
+    id: number | undefined,
+    params: Record<string, unknown>,
+    options: HandleFixtureRpcOptions,
+  ): string {
+    const method = String(params.method ?? "");
+    const rpcParams = (params.params ?? {}) as Record<string, unknown>;
+
+    switch (method) {
+      case "runtime.list":
+        return this.respond(id, {
+          runtimes: [
+            {
+              id: "codex",
+              label: "Codex",
+              ready: true,
+              configOptions: this.defaultAgentChatConfigOptions("codex"),
+            },
+            {
+              id: "claude-code",
+              label: "Claude Code",
+              ready: true,
+              configOptions: this.defaultAgentChatConfigOptions("claude-code"),
+            },
+            {
+              id: "gemini",
+              label: "Gemini",
+              ready: false,
+              configOptions: this.defaultAgentChatConfigOptions("gemini"),
+            },
+          ],
+        });
+      case "session.list":
+      case "session.recent": {
+        const runtimeFilter = String(rpcParams.runtime ?? "").trim();
+        const rawLimit = Number(rpcParams.limit ?? 0);
+        const limit =
+          Number.isFinite(rawLimit) && rawLimit > 0
+            ? Math.min(Math.trunc(rawLimit), 200)
+            : 0;
+        const sessions = state.agentChatSessions
+          .filter((session) =>
+            runtimeFilter ? session.runtime === runtimeFilter : true,
+          )
+          .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+        return this.respond(id, {
+          sessions: limit > 0 ? sessions.slice(0, limit) : sessions,
+        });
+      }
+      case "session.load": {
+        const cwd = String(rpcParams.cwd ?? "").trim();
+        const runtime = String(rpcParams.runtime ?? "").trim();
+        const permissionMode = String(rpcParams.permissionMode ?? "").trim();
+        const model = String(rpcParams.model ?? "").trim();
+        if (!cwd) {
+          return this.fail(id, -32602, "missing cwd");
+        }
+        if (!runtime) {
+          return this.fail(id, -32602, "missing runtime");
+        }
+        if (!this.agentChatRuntimeExists(runtime)) {
+          return this.fail(id, -32602, "unsupported runtime");
+        }
+        const session = this.requireAgentChatSession(
+          state,
+          String(rpcParams.sessionId ?? ""),
+        );
+        if (!session) {
+          return this.fail(id, -32010, "chat session not found");
+        }
+        session.cwd = cwd;
+        session.runtime = runtime;
+        if (!session.configOptions) {
+          session.configOptions = this.defaultAgentChatConfigOptions(runtime);
+        }
+        const scopedConfigEvents: FixtureAgentChatEvent[] = [];
+        if (permissionMode && permissionMode !== "default") {
+          if (!this.agentChatConfigOptionHasValue(session, "mode", permissionMode)) {
+            return this.fail(id, -32602, "unsupported permissionMode");
+          }
+          this.updateAgentChatConfigOption(session, "mode", permissionMode);
+          scopedConfigEvents.push(
+            this.agentChatModeChangedEvent(session, permissionMode),
+          );
+        }
+        if (model && model !== "default") {
+          if (!this.agentChatConfigOptionHasValue(session, "model", model)) {
+            return this.fail(id, -32602, "unsupported model");
+          }
+          this.updateAgentChatConfigOption(session, "model", model);
+          scopedConfigEvents.push(
+            this.agentChatConfigChangedEvent(session, "model", model),
+          );
+        }
+        const replayEvents = [
+          ...scopedConfigEvents,
+          ...(state.agentChatEventsBySessionId[session.sessionId] ?? []).filter(
+            (event) => event.type !== "run.finished",
+          ),
+          {
+            type: "history.complete",
+            sessionId: session.sessionId,
+            at: new Date().toISOString(),
+          },
+        ].map((event) => ({ ...event, seq: 0 }));
+        this.emitAgentChatEventsAsync(options, replayEvents);
+        return this.respond(id, {
+          app: {
+            ok: true,
+            runtime: session.runtime,
+            cwd: session.cwd,
+          },
+          acp: {
+            configOptions: session.configOptions,
+          },
+        });
+      }
+      case "session.create": {
+        const cwd = String(rpcParams.cwd ?? "").trim();
+        const runtime = String(rpcParams.runtime ?? "").trim();
+        const permissionMode = String(rpcParams.permissionMode ?? "").trim();
+        if (!cwd) {
+          return this.fail(id, -32602, "missing cwd");
+        }
+        if (!runtime) {
+          return this.fail(id, -32602, "missing runtime");
+        }
+        if (!this.agentChatRuntimeExists(runtime)) {
+          return this.fail(id, -32602, "unsupported runtime");
+        }
+        const configOptions = this.defaultAgentChatConfigOptions(runtime);
+        if (permissionMode && permissionMode !== "default") {
+          const modeOption = configOptions.find((option) => option.category === "mode");
+          if (
+            !fixtureAgentChatConfigValues(modeOption).some(
+              (entry) => entry.value === permissionMode,
+            )
+          ) {
+            return this.fail(id, -32602, "unsupported permissionMode");
+          }
+          const modeIndex = configOptions.findIndex(
+            (option) => option.category === "mode",
+          );
+          if (modeIndex >= 0 && configOptions[modeIndex]) {
+            configOptions[modeIndex] = fixtureAgentChatConfigOptionWithValue(
+              configOptions[modeIndex],
+              permissionMode,
+            );
+          }
+        }
+        const now = new Date().toISOString();
+        const session: FixtureAgentChatSession = {
+          sessionId: `fixture-chat-${randomUUID().slice(0, 8)}`,
+          cwd,
+          title: "New chat",
+          runtime,
+          updatedAt: now,
+          status: "idle",
+          configOptions,
+        };
+        state.agentChatSessions.unshift(session);
+        state.agentChatEventsBySessionId[session.sessionId] = [];
+        return this.respond(id, {
+          app: {
+            sessionId: session.sessionId,
+            runtime: session.runtime,
+            cwd: session.cwd,
+            title: session.title,
+            status: session.status,
+            updatedAt: session.updatedAt,
+          },
+          acp: {
+            sessionId: session.sessionId,
+            configOptions: session.configOptions,
+          },
+        });
+      }
+      case "session.prompt": {
+        const session = this.requireAgentChatSession(
+          state,
+          String(rpcParams.sessionId ?? ""),
+        );
+        if (!session) {
+          return this.fail(id, -32010, "chat session not found");
+        }
+        const text = String(rpcParams.text ?? "").trim() || "Hello";
+        const startedAt = new Date().toISOString();
+        this.updateAgentChatSessionStatus(session, "running", startedAt);
+        const statusEvent = this.agentChatStatusEvent(
+          session,
+          startedAt,
+          ++state.agentChatSeq,
+        );
+        const userEvent = this.agentChatMessageEvent({
+          sessionId: session.sessionId,
+          seq: ++state.agentChatSeq,
+          at: startedAt,
+          role: "user",
+          messageId: `fixture-user-${state.agentChatSeq}`,
+          text,
+        });
+        const replyAt = new Date().toISOString();
+        const replyEvent = this.agentChatMessageEvent({
+          sessionId: session.sessionId,
+          seq: ++state.agentChatSeq,
+          at: replyAt,
+          role: "agent",
+          messageId: `fixture-agent-${state.agentChatSeq}`,
+          text: `Fixture reply: ${text}`,
+        });
+        const finishedEvent: FixtureAgentChatEvent = {
+          type: "run.finished",
+          sessionId: session.sessionId,
+          seq: ++state.agentChatSeq,
+          at: replyAt,
+          runFinished: {
+            app: {
+              stopReason: "end_turn",
+              inputTokens: 8,
+              outputTokens: 12,
+              totalTokens: 20,
+            },
+          },
+        };
+        this.updateAgentChatSessionStatus(session, "idle", replyAt);
+        state.agentChatEventsBySessionId[session.sessionId] = [
+          ...(state.agentChatEventsBySessionId[session.sessionId] ?? []),
+          userEvent,
+          replyEvent,
+          finishedEvent,
+        ];
+        this.emitAgentChatEventsAsync(options, [
+          statusEvent,
+          userEvent,
+          replyEvent,
+          finishedEvent,
+        ]);
+        return this.respond(id, { accepted: true });
+      }
+      case "session.cancel": {
+        const session = this.requireAgentChatSession(
+          state,
+          String(rpcParams.sessionId ?? ""),
+        );
+        if (!session) {
+          return this.fail(id, -32010, "chat session not found");
+        }
+        return this.respond(id, { ok: true });
+      }
+      case "session.setMode": {
+        const session = this.requireAgentChatSession(
+          state,
+          String(rpcParams.sessionId ?? ""),
+        );
+        if (!session) {
+          return this.fail(id, -32010, "chat session not found");
+        }
+        const nextMode = String(rpcParams.permissionMode ?? "").trim();
+        if (!nextMode) {
+          return this.fail(id, -32602, "missing permissionMode");
+        }
+        if (!this.agentChatConfigOptionHasValue(session, "mode", nextMode)) {
+          return this.fail(id, -32602, "unsupported permissionMode");
+        }
+        this.updateAgentChatConfigOption(
+          session,
+          "mode",
+          nextMode,
+        );
+        this.emitAgentChatEventsAsync(options, [
+          this.agentChatModeChangedEvent(session, nextMode, ++state.agentChatSeq),
+        ]);
+        return this.respond(id, { ok: true });
+      }
+      case "session.setConfigOption": {
+        const session = this.requireAgentChatSession(
+          state,
+          String(rpcParams.sessionId ?? ""),
+        );
+        if (!session) {
+          return this.fail(id, -32010, "chat session not found");
+        }
+        const configId = String(rpcParams.configId ?? "").trim();
+        const value = String(rpcParams.value ?? "").trim();
+        if (!configId) {
+          return this.fail(id, -32602, "missing configId");
+        }
+        if (!value) {
+          return this.fail(id, -32602, "missing value");
+        }
+        if (!this.agentChatConfigOptionHasValue(session, configId, value)) {
+          return this.fail(id, -32602, "unsupported config option value");
+        }
+        this.updateAgentChatConfigOption(
+          session,
+          configId,
+          value,
+        );
+        this.emitAgentChatEventsAsync(options, [
+          this.agentChatConfigChangedEvent(
+            session,
+            configId,
+            value,
+            ++state.agentChatSeq,
+          ),
+        ]);
+        return this.respond(id, { ok: true });
+      }
+      case "events.head":
+        return this.respond(id, {
+          streamEpoch: 1,
+          replayedThroughSeq: state.agentChatSeq,
+        });
+      default:
+        return this.fail(id, -32601, `unknown agentchat method: ${method}`);
+    }
+  }
+
+  private requireAgentChatSession(
+    state: FixtureState,
+    sessionId: string,
+  ): FixtureAgentChatSession | undefined {
+    return state.agentChatSessions.find((session) => session.sessionId === sessionId);
+  }
+
+  private agentChatRuntimeExists(runtimeId: string): boolean {
+    return ["codex", "claude-code", "gemini"].includes(runtimeId);
+  }
+
+  private updateAgentChatSessionStatus(
+    session: FixtureAgentChatSession,
+    status: FixtureAgentChatStatus,
+    updatedAt = new Date().toISOString(),
+  ) {
+    session.status = status;
+    session.updatedAt = updatedAt;
+  }
+
+  private updateAgentChatConfigOption(
+    session: FixtureAgentChatSession,
+    configId: string,
+    value: string,
+  ) {
+    session.configOptions = session.configOptions?.map((option) =>
+      option.id === configId || option.category === configId
+        ? { ...option, currentValue: value }
+        : option,
+    );
+  }
+
+  private agentChatConfigOption(
+    session: FixtureAgentChatSession,
+    configIdOrCategory: string,
+  ): FixtureAgentChatConfigOption | undefined {
+    return session.configOptions?.find(
+      (option) =>
+        option.id === configIdOrCategory || option.category === configIdOrCategory,
+    );
+  }
+
+  private agentChatConfigOptionHasValue(
+    session: FixtureAgentChatSession,
+    configIdOrCategory: string,
+    value: string,
+  ): boolean {
+    const option = this.agentChatConfigOption(session, configIdOrCategory);
+    return fixtureAgentChatConfigValues(option).some((entry) => entry.value === value);
+  }
+
+  private emitAgentChatEventsAsync(
+    options: HandleFixtureRpcOptions,
+    events: FixtureAgentChatEvent[],
+  ) {
+    queueMicrotask(() => {
+      for (const event of events) {
+        options.emitAgentChatEvent(event);
+      }
+    });
+  }
+
+  private agentChatStatusEvent(
+    session: FixtureAgentChatSession,
+    at = new Date().toISOString(),
+    seq?: number,
+  ): FixtureAgentChatEvent {
+    return {
+      type: "session.status",
+      sessionId: session.sessionId,
+      ...(seq == null ? {} : { seq }),
+      at,
+      sessionStatus: {
+        app: {
+          id: session.sessionId,
+          title: session.title,
+          status: session.status,
+          runtime: session.runtime,
+          cwd: session.cwd,
+          updatedAt: session.updatedAt,
+        },
+      },
+    };
+  }
+
+  private agentChatModeChangedEvent(
+    session: FixtureAgentChatSession,
+    currentModeId: string,
+    seq?: number,
+  ): FixtureAgentChatEvent {
+    return {
+      type: "mode.changed",
+      sessionId: session.sessionId,
+      ...(seq == null ? {} : { seq }),
+      at: new Date().toISOString(),
+      modeChanged: {
+        app: {
+          currentModeId,
+        },
+      },
+    };
+  }
+
+  private agentChatConfigChangedEvent(
+    session: FixtureAgentChatSession,
+    configId: string,
+    currentValue: string,
+    seq?: number,
+  ): FixtureAgentChatEvent {
+    const option = this.agentChatConfigOption(session, configId);
+    return {
+      type: "model.changed",
+      sessionId: session.sessionId,
+      ...(seq == null ? {} : { seq }),
+      at: new Date().toISOString(),
+      configChanged: {
+        app: {
+          configId,
+          currentValue,
+          category: option?.category,
+          values: fixtureAgentChatConfigValues(option),
+        },
+      },
+    };
+  }
+
+  private agentChatMessageEvent(args: {
+    sessionId: string;
+    seq: number;
+    at: string;
+    role: string;
+    messageId: string;
+    text: string;
+  }): FixtureAgentChatEvent {
+    return {
+      type: "message.delta",
+      sessionId: args.sessionId,
+      seq: args.seq,
+      at: args.at,
+      messagePart: {
+        app: {
+          partId: `${args.messageId}-part`,
+          messageId: args.messageId,
+          role: args.role,
+          delta: args.text,
+          partType: "text",
+          fullText: "",
+        },
+      },
     };
   }
 
@@ -651,6 +1360,7 @@ export class FixtureRuntime {
               "config.prompt.save",
               "runtime.list",
               "runtime.status",
+              "agentchat.rpc",
               "task.list",
               "task.get",
               "task.get_ancestry",
@@ -663,7 +1373,7 @@ export class FixtureRuntime {
               "task.recover_stale",
               "artifact.list",
             ],
-            notifications: ["notification"],
+            notifications: ["notification", "agentchat.event"],
           },
         });
       case "service.status":
@@ -1062,6 +1772,8 @@ export class FixtureRuntime {
         });
       case "runtime.status":
         return this.respond(id, state.runtimeStatus);
+      case "agentchat.rpc":
+        return this.handleAgentChatRpc(state, id, params, options);
       case "task.list": {
         const workspace = this.requireWorkspace(
           state,

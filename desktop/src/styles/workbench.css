@@ -171,6 +171,7 @@ body.platform-tauri-macos .workbench__titlebar {
 .workbench__tab {
   display: inline-flex;
   align-items: center;
+  max-width: 260px;
   min-width: 0;
   min-height: 40px;
   padding-right: 6px;
@@ -183,6 +184,7 @@ body.platform-tauri-macos .workbench__titlebar {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  max-width: 230px;
   min-width: 0;
   min-height: 40px;
   padding: 0 10px 0 14px;
