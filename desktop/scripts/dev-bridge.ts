@@ -229,11 +229,11 @@ function broadcastNotification(
   }
 }
 
-function broadcastAgentChatEvent(session: Session, event: unknown) {
+function broadcastAgentChatStreamItem(session: Session, item: unknown) {
   const encoded = JSON.stringify({
     jsonrpc: "2.0",
-    method: "agentchat.event",
-    params: event,
+    method: "agentchat.streamItem",
+    params: item,
   });
 
   for (const socket of session.sockets) {
@@ -251,8 +251,8 @@ function handleFixtureRpc(session: Session, payload: Record<string, unknown>) {
     emitNotification: (kind, workspaceId, params) => {
       broadcastNotification(session, kind, workspaceId, params);
     },
-    emitAgentChatEvent: (event) => {
-      broadcastAgentChatEvent(session, event);
+    emitAgentChatStreamItem: (item) => {
+      broadcastAgentChatStreamItem(session, item);
     },
   });
 }

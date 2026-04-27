@@ -1,10 +1,15 @@
 import { create } from "zustand";
-import { eventSessionId } from "@/application/chat";
+import {
+  eventSeq,
+  eventSessionId,
+  isCommittedAgentChatEvent,
+} from "@/domain/agent-chat-events";
 import type {
   AgentChatEventDto,
   AgentChatRuntimeDto,
   AgentChatSessionDto,
   AgentChatSessionStatusDto,
+  AgentChatStreamItemDto,
 } from "@/rpc/types";
 
 export type ChatTranscriptMessage = {
@@ -16,36 +21,42 @@ export type ChatTranscriptMessage = {
   submitEventBaseline?: number;
 };
 
+type ChatSessionLoadSnapshot = {
+  sessionId: string;
+  loadToken: number;
+  session: Pick<AgentChatSessionDto, "sessionId"> & Partial<AgentChatSessionDto>;
+  replayEvents: AgentChatEventDto[];
+  complete: boolean;
+};
+
 type ChatStoreState = {
   runtimes: AgentChatRuntimeDto[];
   sessions: AgentChatSessionDto[];
   activeSessionId?: string;
   eventsBySessionId: Record<string, AgentChatEventDto[]>;
+  committedEventKeysBySessionId: Record<string, Record<string, true>>;
   localMessagesBySessionId: Record<string, ChatTranscriptMessage[]>;
   loadedSessionIds: Record<string, boolean>;
-  loadReplayBaselinesBySessionId: Record<string, number>;
+  loadingSessionIds: Record<string, number>;
   loadingRuntimes: boolean;
   loadingSessions: boolean;
   loadingSessionId?: string;
   sendingSessionIds: Record<string, boolean>;
+  streamEpoch?: number;
   error?: string;
   setRuntimes: (runtimes: AgentChatRuntimeDto[]) => void;
   mergeSessionCatalogPage: (sessions: AgentChatSessionDto[]) => void;
   mergeCreatedSession: (session: AgentChatSessionDto) => void;
-  mergeLoadedSession: (
-    session: Pick<AgentChatSessionDto, "sessionId" | "cwd"> &
-      Partial<Pick<AgentChatSessionDto, "runtime" | "configOptions">>,
-  ) => void;
   setActiveSession: (sessionId?: string) => void;
-  appendEvent: (event: AgentChatEventDto) => void;
+  applyCommittedStreamItem: (item: AgentChatStreamItemDto) => void;
+  applySessionLoadSnapshot: (snapshot: ChatSessionLoadSnapshot) => void;
   appendLocalMessage: (
     sessionId: string,
     text: string,
     submitEventBaseline?: number,
   ) => void;
-  markSessionLoaded: (sessionId: string) => void;
-  beginSessionLoad: (sessionId: string) => void;
-  failSessionLoad: (sessionId: string) => void;
+  beginSessionLoad: (sessionId: string, loadToken: number) => void;
+  failSessionLoad: (sessionId: string, loadToken: number) => void;
   setLoadingRuntimes: (loading: boolean) => void;
   setLoadingSessions: (loading: boolean) => void;
   setLoadingSession: (sessionId?: string) => void;
@@ -89,27 +100,10 @@ function latestTimestamp(
 function statusFromEvent(
   event: AgentChatEventDto,
 ): AgentChatSessionStatusDto | undefined {
-  const isLiveEvent = event.seq != null && event.seq > 0;
   if (event.sessionStatus?.app.status) {
-    return isLiveEvent ? event.sessionStatus.app.status : undefined;
+    return isCommittedAgentChatEvent(event) ? event.sessionStatus.app.status : undefined;
   }
-  switch (event.type) {
-    case "approval.requested":
-      return isLiveEvent ? "waiting_approval" : undefined;
-    case "approval.replied":
-      return isLiveEvent ? "running" : undefined;
-    case "message.delta":
-    case "tool.started":
-    case "tool.updated":
-      return isLiveEvent ? "running" : undefined;
-    case "run.failed":
-    case "tool.failed":
-      return isLiveEvent ? "error" : undefined;
-    case "run.finished":
-      return isLiveEvent ? "idle" : undefined;
-    default:
-      return undefined;
-  }
+  return undefined;
 }
 
 function mergeSession(
@@ -152,9 +146,6 @@ function eventPatch(event: AgentChatEventDto): Partial<AgentChatSessionDto> & {
 } | null {
   const sessionId = eventSessionId(event);
   if (!sessionId) {
-    return null;
-  }
-  if (event.type === "history.complete") {
     return null;
   }
   const sessionStatus = event.sessionStatus?.app;
@@ -250,17 +241,23 @@ function configOptionsFromEvent(
 }
 
 function eventAlreadyPresent(
-  events: AgentChatEventDto[],
+  eventKeys: Record<string, true> | undefined,
   event: AgentChatEventDto,
+  streamEpoch: number | undefined,
 ): boolean {
-  if (event.seq == null || event.seq <= 0) {
+  const seq = eventSeq(event);
+  if (seq == null || seq <= 0) {
     return false;
   }
-  return events.some((entry) => entry.seq === event.seq);
+  const eventKey = committedEventKey(streamEpoch, seq);
+  return Boolean(eventKeys?.[eventKey]);
 }
 
-function isLiveEvent(event: AgentChatEventDto): boolean {
-  return event.seq != null && event.seq > 0;
+function committedEventKey(
+  streamEpoch: number | undefined,
+  seq: number,
+): string {
+  return `${streamEpoch ?? 0}:${seq}`;
 }
 
 function nextLocalMessageId(): string {
@@ -284,6 +281,115 @@ function runFailedMessage(
     role: "system",
     text: message,
     at: event.at,
+  };
+}
+
+function normalizeReplayEvents(
+  sessionId: string,
+  events: AgentChatEventDto[],
+): AgentChatEventDto[] {
+  return events
+    .filter((event) => {
+      const eventSession = eventSessionId(event);
+      return !eventSession || eventSession === sessionId;
+    })
+    .map((event) => ({
+      ...event,
+      sessionId: event.sessionId || sessionId,
+      seq: 0,
+    }));
+}
+
+function replaceScopedReplayEvents(
+  existingEvents: AgentChatEventDto[],
+  replayEvents: AgentChatEventDto[],
+): AgentChatEventDto[] {
+  return [
+    ...existingEvents.filter(isCommittedAgentChatEvent),
+    ...replayEvents,
+  ];
+}
+
+function stripCommittedEventsBySession(
+  eventsBySessionId: Record<string, AgentChatEventDto[]>,
+): Record<string, AgentChatEventDto[]> {
+  const next: Record<string, AgentChatEventDto[]> = {};
+  for (const [sessionId, events] of Object.entries(eventsBySessionId)) {
+    const replayEvents = events.filter((event) => !isCommittedAgentChatEvent(event));
+    if (replayEvents.length > 0) {
+      next[sessionId] = replayEvents;
+    }
+  }
+  return next;
+}
+
+function applyCommittedEventsToState(
+  state: ChatStoreState,
+  incomingEvents: AgentChatEventDto[],
+  options: { resetCommittedEvents?: boolean; streamEpoch?: number } = {},
+): Partial<ChatStoreState> {
+  let eventsBySessionId = options.resetCommittedEvents
+    ? stripCommittedEventsBySession(state.eventsBySessionId)
+    : state.eventsBySessionId;
+  let committedEventKeysBySessionId = options.resetCommittedEvents
+    ? {}
+    : state.committedEventKeysBySessionId;
+  let sessions = state.sessions;
+  let eventsChanged = Boolean(options.resetCommittedEvents);
+  let eventKeysChanged = Boolean(options.resetCommittedEvents);
+  let sessionsChanged = false;
+  const streamEpoch = options.streamEpoch ?? state.streamEpoch;
+
+  for (const event of incomingEvents) {
+    if (!isCommittedAgentChatEvent(event)) {
+      continue;
+    }
+    const eventSession = eventSessionId(event);
+    if (!eventSession) {
+      continue;
+    }
+    const existingEvents = eventsBySessionId[eventSession] ?? [];
+    const existingEventKeys = committedEventKeysBySessionId[eventSession];
+    if (eventAlreadyPresent(existingEventKeys, event, streamEpoch)) {
+      continue;
+    }
+    if (eventsBySessionId === state.eventsBySessionId) {
+      eventsBySessionId = { ...eventsBySessionId };
+    }
+    eventsBySessionId[eventSession] = [...existingEvents, event];
+    eventsChanged = true;
+    if (committedEventKeysBySessionId === state.committedEventKeysBySessionId) {
+      committedEventKeysBySessionId = { ...committedEventKeysBySessionId };
+    }
+    committedEventKeysBySessionId[eventSession] = {
+      ...(existingEventKeys ?? {}),
+      [committedEventKey(streamEpoch, eventSeq(event) ?? 0)]: true,
+    };
+    eventKeysChanged = true;
+
+    const patch = eventPatch(event);
+    if (!patch) {
+      continue;
+    }
+    const existingSession = sessions.find(
+      (entry) => entry.sessionId === eventSession,
+    );
+    const nextSession = mergeSession(existingSession, {
+      ...patch,
+      configOptions: configOptionsFromEvent(event, existingSession),
+    });
+    sessions = existingSession
+      ? sessions.map((entry) =>
+          entry.sessionId === eventSession ? nextSession : entry,
+        )
+      : [nextSession, ...sessions];
+    sessionsChanged = true;
+  }
+
+  return {
+    ...(eventsChanged ? { eventsBySessionId } : {}),
+    ...(eventKeysChanged ? { committedEventKeysBySessionId } : {}),
+    ...(sessionsChanged ? { sessions: sortSessions(sessions) } : {}),
   };
 }
 
@@ -334,17 +440,13 @@ export function buildChatTranscriptMessages(
   const consumedEventEchoes = new Set<string>();
   const dedupedLocalMessages = localMessages.filter((message) => {
     const text = message.text.trim();
-    const submitEventBaseline = message.submitEventBaseline ?? 0;
     const matchingEcho = messages.find((eventMessage) => {
       if (eventMessage.role !== "user" || eventMessage.text.trim() !== text) {
         return false;
       }
-      if ((eventMessage.eventIndex ?? 0) < submitEventBaseline) {
-        return false;
-      }
       if (
         message.submitEventBaseline != null &&
-        ((eventMessage.eventSeq ?? 0) <= 0)
+        ((eventMessage.eventSeq ?? 0) <= message.submitEventBaseline)
       ) {
         return false;
       }
@@ -380,13 +482,15 @@ export const useChatStore = create<ChatStoreState>((set) => ({
   sessions: [],
   activeSessionId: undefined,
   eventsBySessionId: {},
+  committedEventKeysBySessionId: {},
   localMessagesBySessionId: {},
   loadedSessionIds: {},
-  loadReplayBaselinesBySessionId: {},
+  loadingSessionIds: {},
   loadingRuntimes: false,
   loadingSessions: false,
   loadingSessionId: undefined,
   sendingSessionIds: {},
+  streamEpoch: undefined,
   error: undefined,
   setRuntimes: (runtimes) => set({ runtimes }),
   mergeSessionCatalogPage: (sessions) =>
@@ -404,107 +508,82 @@ export const useChatStore = create<ChatStoreState>((set) => ({
             entry.sessionId === session.sessionId ? nextSession : entry,
           )
         : [nextSession, ...state.sessions];
-      return { sessions: sortSessions(nextSessions) };
-    }),
-  mergeLoadedSession: (session) =>
-    set((state) => {
-      const existing = state.sessions.find(
-        (entry) => entry.sessionId === session.sessionId,
-      );
-      if (!existing) {
-        return {};
-      }
-      const nextSession = mergeSession(existing, {
-        sessionId: session.sessionId,
-        cwd: session.cwd,
-        runtime: session.runtime,
-        configOptions: session.configOptions,
-      });
       return {
-        sessions: sortSessions(
-          state.sessions.map((entry) =>
-            entry.sessionId === session.sessionId ? nextSession : entry,
-          ),
-        ),
+        sessions: sortSessions(nextSessions),
+        loadedSessionIds: {
+          ...state.loadedSessionIds,
+          [session.sessionId]: true,
+        },
       };
     }),
   setActiveSession: (sessionId) => set({ activeSessionId: sessionId }),
-  appendEvent: (event) =>
+  applyCommittedStreamItem: (item) =>
     set((state) => {
-      const eventSession = eventSessionId(event);
-      if (!eventSession) {
-        return {};
-      }
-      if (event.type === "history.complete") {
-        const baseline = state.loadReplayBaselinesBySessionId[eventSession];
-        if (baseline == null) {
-          return {};
-        }
-        const existingEvents = state.eventsBySessionId[eventSession] ?? [];
-        const nextEvents =
-          [
-            ...existingEvents.slice(0, baseline).filter(isLiveEvent),
-            ...existingEvents.slice(baseline),
-          ];
-        const loadReplayBaselinesBySessionId = {
-          ...state.loadReplayBaselinesBySessionId,
-        };
-        delete loadReplayBaselinesBySessionId[eventSession];
-        const loadedSessionIds = state.loadedSessionIds[eventSession]
-          ? state.loadedSessionIds
-          : {
-              ...state.loadedSessionIds,
-              [eventSession]: true,
-            };
+      if (item.kind === "event") {
+        const streamEpochChanged =
+          state.streamEpoch != null &&
+          item.streamEpoch !== 0 &&
+          state.streamEpoch !== item.streamEpoch;
         return {
-          eventsBySessionId: {
-            ...state.eventsBySessionId,
-            [eventSession]: nextEvents,
-          },
-          loadReplayBaselinesBySessionId,
-          loadedSessionIds,
-          loadingSessionId:
-            state.loadingSessionId === eventSession
-              ? undefined
-              : state.loadingSessionId,
+          ...applyCommittedEventsToState(state, item.event ? [item.event] : [], {
+            resetCommittedEvents: streamEpochChanged,
+            streamEpoch: item.streamEpoch,
+          }),
+          streamEpoch: item.streamEpoch || state.streamEpoch,
         };
       }
-      const patch = eventPatch(event);
-      if (!patch) {
+      const streamEpochChanged =
+        state.streamEpoch != null &&
+        item.streamEpoch !== 0 &&
+        state.streamEpoch !== item.streamEpoch;
+      const resetCommittedEvents =
+        streamEpochChanged || item.status === "gap" || item.status === "reset";
+      return {
+        ...applyCommittedEventsToState(state, item.events, {
+          resetCommittedEvents,
+          streamEpoch: item.streamEpoch,
+        }),
+        streamEpoch: item.streamEpoch || state.streamEpoch,
+      };
+    }),
+  applySessionLoadSnapshot: (snapshot) =>
+    set((state) => {
+      if (state.loadingSessionIds[snapshot.sessionId] !== snapshot.loadToken) {
         return {};
-      }
-      const sessionId = patch.sessionId;
-      const existingEvents = state.eventsBySessionId[sessionId] ?? [];
-      if (eventAlreadyPresent(existingEvents, event)) {
-        return {};
-      }
-      const nextEvents = [...existingEvents, event];
-      if (!isLiveEvent(event)) {
-        return {
-          eventsBySessionId: {
-            ...state.eventsBySessionId,
-            [sessionId]: nextEvents,
-          },
-        };
       }
       const existingSession = state.sessions.find(
-        (entry) => entry.sessionId === sessionId,
+        (entry) => entry.sessionId === snapshot.sessionId,
       );
-      const nextSession = mergeSession(existingSession, {
-        ...patch,
-        configOptions: configOptionsFromEvent(event, existingSession),
-      });
+      const nextSession = mergeSession(existingSession, snapshot.session);
       const nextSessions = existingSession
         ? state.sessions.map((entry) =>
-            entry.sessionId === sessionId ? nextSession : entry,
+            entry.sessionId === snapshot.sessionId ? nextSession : entry,
           )
         : [nextSession, ...state.sessions];
+      const loadingSessionIds = { ...state.loadingSessionIds };
+      delete loadingSessionIds[snapshot.sessionId];
+      const loadedSessionIds = { ...state.loadedSessionIds };
+      if (snapshot.complete) {
+        loadedSessionIds[snapshot.sessionId] = true;
+      } else {
+        delete loadedSessionIds[snapshot.sessionId];
+      }
+      const replayEvents = normalizeReplayEvents(
+        snapshot.sessionId,
+        snapshot.replayEvents,
+      );
+      const existingEvents = state.eventsBySessionId[snapshot.sessionId] ?? [];
       return {
+        sessions: sortSessions(nextSessions),
         eventsBySessionId: {
           ...state.eventsBySessionId,
-          [sessionId]: nextEvents,
+          [snapshot.sessionId]: replaceScopedReplayEvents(
+            existingEvents,
+            replayEvents,
+          ),
         },
-        sessions: sortSessions(nextSessions),
+        loadedSessionIds,
+        loadingSessionIds,
       };
     }),
   appendLocalMessage: (sessionId, text, submitEventBaseline) =>
@@ -531,55 +610,27 @@ export const useChatStore = create<ChatStoreState>((set) => ({
         },
       };
     }),
-  markSessionLoaded: (sessionId) =>
-    set((state) =>
-      state.loadedSessionIds[sessionId]
-        ? {}
-        : {
-            loadedSessionIds: {
-              ...state.loadedSessionIds,
-              [sessionId]: true,
-            },
-          },
-    ),
-  beginSessionLoad: (sessionId) =>
+  beginSessionLoad: (sessionId, loadToken) =>
     set((state) => {
       const loadedSessionIds = { ...state.loadedSessionIds };
       delete loadedSessionIds[sessionId];
       return {
         loadedSessionIds,
-        loadReplayBaselinesBySessionId: {
-          ...state.loadReplayBaselinesBySessionId,
-          [sessionId]: state.eventsBySessionId[sessionId]?.length ?? 0,
+        loadingSessionIds: {
+          ...state.loadingSessionIds,
+          [sessionId]: loadToken,
         },
-        loadingSessionId: sessionId,
       };
     }),
-  failSessionLoad: (sessionId) =>
+  failSessionLoad: (sessionId, loadToken) =>
     set((state) => {
-      const baseline = state.loadReplayBaselinesBySessionId[sessionId];
-      const loadReplayBaselinesBySessionId = {
-        ...state.loadReplayBaselinesBySessionId,
-      };
-      delete loadReplayBaselinesBySessionId[sessionId];
-      const events = state.eventsBySessionId[sessionId] ?? [];
-      const nextEvents =
-        baseline == null
-          ? events
-          : [
-              ...events.slice(0, baseline),
-              ...events.slice(baseline).filter(isLiveEvent),
-            ];
+      if (state.loadingSessionIds[sessionId] !== loadToken) {
+        return {};
+      }
+      const loadingSessionIds = { ...state.loadingSessionIds };
+      delete loadingSessionIds[sessionId];
       return {
-        eventsBySessionId: {
-          ...state.eventsBySessionId,
-          [sessionId]: nextEvents,
-        },
-        loadReplayBaselinesBySessionId,
-        loadingSessionId:
-          state.loadingSessionId === sessionId
-            ? undefined
-            : state.loadingSessionId,
+        loadingSessionIds,
       };
     }),
   setLoadingRuntimes: (loading) => set({ loadingRuntimes: loading }),
@@ -602,13 +653,15 @@ export const useChatStore = create<ChatStoreState>((set) => ({
       sessions: [],
       activeSessionId: undefined,
       eventsBySessionId: {},
+      committedEventKeysBySessionId: {},
       localMessagesBySessionId: {},
       loadedSessionIds: {},
-      loadReplayBaselinesBySessionId: {},
+      loadingSessionIds: {},
       loadingRuntimes: false,
       loadingSessions: false,
       loadingSessionId: undefined,
       sendingSessionIds: {},
+      streamEpoch: undefined,
       error: undefined,
     }),
 }));

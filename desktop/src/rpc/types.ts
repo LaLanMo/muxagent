@@ -176,11 +176,21 @@ export interface AgentChatLoadSessionParams {
   model?: string;
 }
 
+export interface AgentChatSessionLoadReplayDto {
+  events: AgentChatEventDto[];
+  complete: boolean;
+}
+
 export interface AgentChatSessionLoadResult {
   app: {
     ok: boolean;
+    sessionId: string;
     runtime: string;
     cwd: string;
+    title?: string;
+    status?: AgentChatSessionStatusDto;
+    updatedAt?: string;
+    replay: AgentChatSessionLoadReplayDto;
   };
   acp: {
     models?: unknown;
@@ -342,6 +352,20 @@ export interface AgentChatEventDto {
   modeChanged?: AgentChatModeChangedEventDto;
   configChanged?: AgentChatConfigChangedEventDto;
 }
+
+export type AgentChatStreamItemDto =
+  | {
+      kind: "event";
+      streamEpoch: number;
+      event: AgentChatEventDto;
+    }
+  | {
+      kind: "replay";
+      status: "ok" | "gap" | "reset";
+      streamEpoch: number;
+      replayedThroughSeq: number;
+      events: AgentChatEventDto[];
+    };
 
 export interface TaskCountsDto {
   running: number;

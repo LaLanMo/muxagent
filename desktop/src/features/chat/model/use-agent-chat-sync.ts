@@ -1,18 +1,20 @@
 import { useEffect, useEffectEvent } from "react";
-import { agentChatEventFromNotification } from "@/application/chat";
+import { agentChatStreamItemFromNotification } from "@/application/chat";
 import { getRuntime } from "@/app/runtime";
 import type { RuntimeNotification } from "@/platform/contract";
 import { useChatStore } from "@/state/chat-store";
 
 export function useAgentChatSync(): void {
-  const appendEvent = useChatStore((state) => state.appendEvent);
+  const applyCommittedStreamItem = useChatStore(
+    (state) => state.applyCommittedStreamItem,
+  );
   const reset = useChatStore((state) => state.reset);
 
   const handleNotification = useEffectEvent(
     (notification: RuntimeNotification) => {
-      const event = agentChatEventFromNotification(notification);
-      if (event) {
-        appendEvent(event);
+      const streamItem = agentChatStreamItemFromNotification(notification);
+      if (streamItem) {
+        applyCommittedStreamItem(streamItem);
       }
     },
   );

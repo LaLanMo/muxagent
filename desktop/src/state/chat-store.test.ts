@@ -6,6 +6,53 @@ import {
 } from "@/state/chat-store";
 import type { AgentChatEventDto } from "@/rpc/types";
 
+let loadToken = 0;
+
+function appendCommittedEvent(event: AgentChatEventDto) {
+  useChatStore.getState().applyCommittedStreamItem({
+    kind: "event",
+    streamEpoch: 1,
+    event,
+  });
+}
+
+function loadSessionReplay(args: {
+  sessionId: string;
+  session?: {
+    cwd?: string;
+    title?: string;
+    runtime?: string;
+    updatedAt?: string;
+    status?: "idle" | "running" | "waiting_approval" | "error" | "done";
+  };
+  events?: AgentChatEventDto[];
+  complete?: boolean;
+}) {
+  loadToken += 1;
+  const currentSession = useChatStore
+    .getState()
+    .sessions.find((entry) => entry.sessionId === args.sessionId);
+  useChatStore.getState().beginSessionLoad(args.sessionId, loadToken);
+  useChatStore.getState().applySessionLoadSnapshot({
+    sessionId: args.sessionId,
+    loadToken,
+    session: {
+      sessionId: args.sessionId,
+      cwd: args.session?.cwd ?? currentSession?.cwd ?? "/tmp/workspace",
+      title: args.session?.title ?? currentSession?.title ?? "Local chat",
+      runtime: args.session?.runtime ?? currentSession?.runtime ?? "codex",
+      updatedAt:
+        args.session?.updatedAt ??
+        currentSession?.updatedAt ??
+        "2026-04-27T00:00:00.000Z",
+      status: args.session?.status ?? currentSession?.status ?? "idle",
+      configOptions: currentSession?.configOptions,
+    },
+    replayEvents: args.events ?? [],
+    complete: args.complete ?? true,
+  });
+}
+
 test("buildChatTranscriptMessages folds message deltas by message id", () => {
   const messages = buildChatTranscriptMessages(
     [
@@ -81,8 +128,8 @@ test("chat store derives sessions from agentchat events without task state", () 
     at: "2026-04-27T00:00:01.000Z",
   };
 
-  useChatStore.getState().appendEvent(sessionStatusEvent);
-  useChatStore.getState().appendEvent(runEvent);
+  appendCommittedEvent(sessionStatusEvent);
+  appendCommittedEvent(runEvent);
 
   assert.equal(useChatStore.getState().sessions.length, 1);
   assert.deepEqual(useChatStore.getState().sessions[0], {
@@ -91,7 +138,7 @@ test("chat store derives sessions from agentchat events without task state", () 
     title: "Local chat",
     runtime: "codex",
     updatedAt: "2026-04-27T00:00:01.000Z",
-    status: "running",
+    status: "idle",
     configOptions: undefined,
   });
   assert.equal(useChatStore.getState().eventsBySessionId["session-1"]?.length, 2);
@@ -100,42 +147,47 @@ test("chat store derives sessions from agentchat events without task state", () 
 test("chat store keeps request-scoped replay events with zero seq", () => {
   useChatStore.getState().reset();
 
-  useChatStore.getState().appendEvent({
-    type: "message.delta",
+  loadSessionReplay({
     sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:00.000Z",
-    messagePart: {
-      app: {
-        partId: "user-part",
-        messageId: "user-message",
-        role: "user",
-        delta: "hello",
-        partType: "text",
-        fullText: "",
+    events: [
+      {
+        type: "message.delta",
+        sessionId: "session-1",
+        seq: 0,
+        at: "2026-04-27T00:00:00.000Z",
+        messagePart: {
+          app: {
+            partId: "user-part",
+            messageId: "user-message",
+            role: "user",
+            delta: "hello",
+            partType: "text",
+            fullText: "",
+          },
+        },
       },
-    },
-  });
-  useChatStore.getState().appendEvent({
-    type: "message.delta",
-    sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:01.000Z",
-    messagePart: {
-      app: {
-        partId: "agent-part",
-        messageId: "agent-message",
-        role: "agent",
-        delta: "hi",
-        partType: "text",
-        fullText: "",
+      {
+        type: "message.delta",
+        sessionId: "session-1",
+        seq: 0,
+        at: "2026-04-27T00:00:01.000Z",
+        messagePart: {
+          app: {
+            partId: "agent-part",
+            messageId: "agent-message",
+            role: "agent",
+            delta: "hi",
+            partType: "text",
+            fullText: "",
+          },
+        },
       },
-    },
+    ],
   });
 
   const events = useChatStore.getState().eventsBySessionId["session-1"] ?? [];
   assert.equal(events.length, 2);
-  assert.equal(useChatStore.getState().sessions.length, 0);
+  assert.equal(useChatStore.getState().sessions.length, 1);
   assert.deepEqual(buildChatTranscriptMessages(events, []), [
     {
       id: "user-message",
@@ -152,37 +204,40 @@ test("chat store keeps request-scoped replay events with zero seq", () => {
   ]);
 });
 
-test("chat store marks session load complete only from history complete", () => {
+test("chat store marks session load complete from load snapshot", () => {
   useChatStore.getState().reset();
-  useChatStore.getState().beginSessionLoad("session-1");
 
-  useChatStore.getState().appendEvent({
-    type: "history.complete",
-    sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:02.000Z",
-  });
+  loadSessionReplay({ sessionId: "session-1" });
 
   assert.equal(useChatStore.getState().loadedSessionIds["session-1"], true);
-  assert.equal(useChatStore.getState().loadingSessionId, undefined);
+  assert.equal(useChatStore.getState().loadingSessionIds["session-1"], undefined);
   assert.equal(
     useChatStore.getState().eventsBySessionId["session-1"]?.length ?? 0,
     0,
   );
 });
 
-test("chat store ignores stale history complete outside an active load", () => {
+test("chat store ignores stale load snapshots by token", () => {
   useChatStore.getState().reset();
+  useChatStore.getState().beginSessionLoad("session-1", 1);
 
-  useChatStore.getState().appendEvent({
-    type: "history.complete",
+  useChatStore.getState().applySessionLoadSnapshot({
     sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:02.000Z",
+    loadToken: 2,
+    session: {
+      sessionId: "session-1",
+      cwd: "/tmp/workspace",
+      title: "Local chat",
+      runtime: "codex",
+      updatedAt: "2026-04-27T00:00:00.000Z",
+      status: "idle",
+    },
+    replayEvents: [],
+    complete: true,
   });
 
   assert.equal(useChatStore.getState().loadedSessionIds["session-1"], undefined);
-  assert.equal(useChatStore.getState().loadingSessionId, undefined);
+  assert.equal(useChatStore.getState().loadingSessionIds["session-1"], 1);
 });
 
 test("chat store ignores request-scoped replay status as run truth", () => {
@@ -206,29 +261,38 @@ test("chat store ignores request-scoped replay status as run truth", () => {
     ],
   });
 
-  useChatStore.getState().appendEvent({
-    type: "session.status",
+  loadSessionReplay({
     sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:01.000Z",
-    sessionStatus: {
-      app: {
-        id: "session-1",
-        status: "idle",
-        updatedAt: "2026-04-27T00:00:01.000Z",
-      },
+    session: {
+      status: "running",
+      updatedAt: "2026-04-27T00:00:00.000Z",
     },
-  });
-  useChatStore.getState().appendEvent({
-    type: "mode.changed",
-    sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:02.000Z",
-    modeChanged: {
-      app: {
-        currentModeId: "full-access",
+    events: [
+      {
+        type: "session.status",
+        sessionId: "session-1",
+        seq: 0,
+        at: "2026-04-27T00:00:01.000Z",
+        sessionStatus: {
+          app: {
+            id: "session-1",
+            status: "idle",
+            updatedAt: "2026-04-27T00:00:01.000Z",
+          },
+        },
       },
-    },
+      {
+        type: "mode.changed",
+        sessionId: "session-1",
+        seq: 0,
+        at: "2026-04-27T00:00:02.000Z",
+        modeChanged: {
+          app: {
+            currentModeId: "full-access",
+          },
+        },
+      },
+    ],
   });
 
   const session = useChatStore.getState().sessions[0];
@@ -248,13 +312,13 @@ test("chat store replaces scoped replay snapshot when load completes", () => {
     updatedAt: "2026-04-27T00:00:00.000Z",
     status: "idle",
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "message.delta",
     sessionId: "session-1",
     seq: 10,
     at: "2026-04-27T00:00:00.500Z",
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "message.delta",
     sessionId: "session-1",
     seq: 0,
@@ -271,28 +335,26 @@ test("chat store replaces scoped replay snapshot when load completes", () => {
     },
   });
 
-  useChatStore.getState().beginSessionLoad("session-1");
-  useChatStore.getState().appendEvent({
-    type: "message.delta",
+  loadSessionReplay({
     sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:02.000Z",
-    messagePart: {
-      app: {
-        partId: "new-part",
-        messageId: "new-replay",
-        role: "user",
-        delta: "new replay",
-        partType: "text",
-        fullText: "",
+    events: [
+      {
+        type: "message.delta",
+        sessionId: "session-1",
+        seq: 0,
+        at: "2026-04-27T00:00:02.000Z",
+        messagePart: {
+          app: {
+            partId: "new-part",
+            messageId: "new-replay",
+            role: "user",
+            delta: "new replay",
+            partType: "text",
+            fullText: "",
+          },
+        },
       },
-    },
-  });
-  useChatStore.getState().appendEvent({
-    type: "history.complete",
-    sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:03.000Z",
+    ],
   });
 
   const events = useChatStore.getState().eventsBySessionId["session-1"] ?? [];
@@ -307,7 +369,7 @@ test("chat store replaces scoped replay snapshot when load completes", () => {
   assert.equal(useChatStore.getState().loadedSessionIds["session-1"], true);
 });
 
-test("chat store discards partial scoped replay when load fails", () => {
+test("chat store clears load token when load fails", () => {
   useChatStore.getState().reset();
   useChatStore.getState().mergeCreatedSession({
     sessionId: "session-1",
@@ -317,37 +379,21 @@ test("chat store discards partial scoped replay when load fails", () => {
     updatedAt: "2026-04-27T00:00:00.000Z",
     status: "idle",
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "message.delta",
     sessionId: "session-1",
     seq: 1,
     at: "2026-04-27T00:00:00.500Z",
   });
 
-  useChatStore.getState().beginSessionLoad("session-1");
-  useChatStore.getState().appendEvent({
-    type: "message.delta",
-    sessionId: "session-1",
-    seq: 0,
-    at: "2026-04-27T00:00:02.000Z",
-    messagePart: {
-      app: {
-        partId: "partial-part",
-        messageId: "partial-replay",
-        role: "user",
-        delta: "partial replay",
-        partType: "text",
-        fullText: "",
-      },
-    },
-  });
-  useChatStore.getState().appendEvent({
+  useChatStore.getState().beginSessionLoad("session-1", 1);
+  appendCommittedEvent({
     type: "message.delta",
     sessionId: "session-1",
     seq: 2,
     at: "2026-04-27T00:00:02.500Z",
   });
-  useChatStore.getState().failSessionLoad("session-1");
+  useChatStore.getState().failSessionLoad("session-1", 1);
 
   const events = useChatStore.getState().eventsBySessionId["session-1"] ?? [];
   assert.deepEqual(
@@ -355,7 +401,7 @@ test("chat store discards partial scoped replay when load fails", () => {
     [1, 2],
   );
   assert.equal(useChatStore.getState().loadedSessionIds["session-1"], undefined);
-  assert.equal(useChatStore.getState().loadingSessionId, undefined);
+  assert.equal(useChatStore.getState().loadingSessionIds["session-1"], undefined);
 });
 
 test("chat transcript includes run failed events", () => {
@@ -603,13 +649,13 @@ test("chat store ignores duplicate seq events before mutating session state", ()
     ],
   });
 
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "message.delta",
     sessionId: "session-1",
     seq: 7,
     at: "2026-04-27T00:00:01.000Z",
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "run.finished",
     sessionId: "session-1",
     seq: 7,
@@ -620,7 +666,7 @@ test("chat store ignores duplicate seq events before mutating session state", ()
       },
     },
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "mode.changed",
     sessionId: "session-1",
     seq: 8,
@@ -631,7 +677,7 @@ test("chat store ignores duplicate seq events before mutating session state", ()
       },
     },
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "mode.changed",
     sessionId: "session-1",
     seq: 8,
@@ -644,7 +690,7 @@ test("chat store ignores duplicate seq events before mutating session state", ()
   });
 
   const session = useChatStore.getState().sessions[0];
-  assert.equal(session.status, "running");
+  assert.equal(session.status, "idle");
   assert.equal(session.configOptions?.[1]?.currentValue, "read-only");
   assert.equal(useChatStore.getState().eventsBySessionId["session-1"]?.length, 2);
 });
@@ -667,7 +713,7 @@ test("chat store treats session list as a catalog page, not full replacement", (
 
 test("chat store accepts catalog truth even when metadata updatedAt is older", () => {
   useChatStore.getState().reset();
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "message.delta",
     sessionId: "session-1",
     seq: 1,
@@ -730,7 +776,7 @@ test("chat store applies config change events from agentchat", () => {
     ],
   });
 
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "mode.changed",
     sessionId: "session-1",
     seq: 2,
@@ -741,7 +787,7 @@ test("chat store applies config change events from agentchat", () => {
       },
     },
   });
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "model.changed",
     sessionId: "session-1",
     seq: 3,
@@ -770,7 +816,7 @@ test("chat store applies config change events from agentchat", () => {
 
 test("chat store creates a mode config stub from mode changed events", () => {
   useChatStore.getState().reset();
-  useChatStore.getState().appendEvent({
+  appendCommittedEvent({
     type: "mode.changed",
     sessionId: "session-1",
     seq: 1,

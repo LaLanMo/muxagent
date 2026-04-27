@@ -451,6 +451,20 @@ type FixtureAgentChatEvent = {
   };
 };
 
+type FixtureAgentChatStreamItem =
+  | {
+      kind: "event";
+      streamEpoch: number;
+      event: FixtureAgentChatEvent;
+    }
+  | {
+      kind: "replay";
+      status: "ok" | "gap" | "reset";
+      streamEpoch: number;
+      replayedThroughSeq: number;
+      events: FixtureAgentChatEvent[];
+    };
+
 type FixtureConfigDraft = {
   version: number;
   description?: string;
@@ -513,7 +527,7 @@ type FixtureNotificationEmitter = (
 
 type HandleFixtureRpcOptions = {
   emitNotification: FixtureNotificationEmitter;
-  emitAgentChatEvent: (event: FixtureAgentChatEvent) => void;
+  emitAgentChatStreamItem: (item: FixtureAgentChatStreamItem) => void;
 };
 
 type FixtureHistoryEvent = NonNullable<
@@ -895,18 +909,20 @@ export class FixtureRuntime {
           ...(state.agentChatEventsBySessionId[session.sessionId] ?? []).filter(
             (event) => event.type !== "run.finished",
           ),
-          {
-            type: "history.complete",
-            sessionId: session.sessionId,
-            at: new Date().toISOString(),
-          },
         ].map((event) => ({ ...event, seq: 0 }));
-        this.emitAgentChatEventsAsync(options, replayEvents);
         return this.respond(id, {
           app: {
             ok: true,
+            sessionId: session.sessionId,
             runtime: session.runtime,
             cwd: session.cwd,
+            title: session.title,
+            status: session.status,
+            updatedAt: session.updatedAt,
+            replay: {
+              events: replayEvents,
+              complete: true,
+            },
           },
           acp: {
             configOptions: session.configOptions,
@@ -1021,6 +1037,11 @@ export class FixtureRuntime {
           },
         };
         this.updateAgentChatSessionStatus(session, "idle", replyAt);
+        const idleStatusEvent = this.agentChatStatusEvent(
+          session,
+          replyAt,
+          ++state.agentChatSeq,
+        );
         state.agentChatEventsBySessionId[session.sessionId] = [
           ...(state.agentChatEventsBySessionId[session.sessionId] ?? []),
           userEvent,
@@ -1032,6 +1053,7 @@ export class FixtureRuntime {
           userEvent,
           replyEvent,
           finishedEvent,
+          idleStatusEvent,
         ]);
         return this.respond(id, { accepted: true });
       }
@@ -1171,7 +1193,11 @@ export class FixtureRuntime {
   ) {
     queueMicrotask(() => {
       for (const event of events) {
-        options.emitAgentChatEvent(event);
+        options.emitAgentChatStreamItem({
+          kind: "event",
+          streamEpoch: 1,
+          event,
+        });
       }
     });
   }
@@ -1373,7 +1399,7 @@ export class FixtureRuntime {
               "task.recover_stale",
               "artifact.list",
             ],
-            notifications: ["notification", "agentchat.event"],
+            notifications: ["notification", "agentchat.streamItem"],
           },
         });
       case "service.status":

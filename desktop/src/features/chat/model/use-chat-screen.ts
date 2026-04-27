@@ -15,6 +15,7 @@ import {
   configOptionByCategory,
   configValueByCategory,
 } from "@/domain/agent-chat-config";
+import { eventSeq } from "@/domain/agent-chat-events";
 import { buildChatPath, type WorkbenchTabId } from "@/domain/routes";
 import {
   buildChatTranscriptMessages,
@@ -140,6 +141,13 @@ function eventIsPromptEvidence(event: AgentChatEventDto): boolean {
   return sessionStatusIsBusy(event.sessionStatus?.app.status);
 }
 
+function latestCommittedSeq(events: AgentChatEventDto[] | undefined): number {
+  return (events ?? []).reduce((latest, event) => {
+    const seq = eventSeq(event) ?? 0;
+    return seq > latest ? seq : latest;
+  }, 0);
+}
+
 function currentSessionMode(
   session: AgentChatSessionDto | undefined,
   fallback: string,
@@ -178,6 +186,7 @@ export function useChatScreen(): ChatScreenModel {
     (state) => state.localMessagesBySessionId,
   );
   const loadedSessionIds = useChatStore((state) => state.loadedSessionIds);
+  const loadingSessionIds = useChatStore((state) => state.loadingSessionIds);
   const loadingRuntimes = useChatStore((state) => state.loadingRuntimes);
   const loadingSessions = useChatStore((state) => state.loadingSessions);
   const loadingSessionId = useChatStore((state) => state.loadingSessionId);
@@ -188,10 +197,11 @@ export function useChatScreen(): ChatScreenModel {
     (state) => state.mergeSessionCatalogPage,
   );
   const mergeCreatedSession = useChatStore((state) => state.mergeCreatedSession);
-  const mergeLoadedSession = useChatStore((state) => state.mergeLoadedSession);
   const setActiveSession = useChatStore((state) => state.setActiveSession);
+  const applySessionLoadSnapshot = useChatStore(
+    (state) => state.applySessionLoadSnapshot,
+  );
   const appendLocalMessage = useChatStore((state) => state.appendLocalMessage);
-  const markSessionLoaded = useChatStore((state) => state.markSessionLoaded);
   const beginSessionLoad = useChatStore((state) => state.beginSessionLoad);
   const failSessionLoad = useChatStore((state) => state.failSessionLoad);
   const setLoadingRuntimes = useChatStore((state) => state.setLoadingRuntimes);
@@ -212,9 +222,6 @@ export function useChatScreen(): ChatScreenModel {
   const promptDraftVersion = useRef(0);
   const promptEventBaselines = useRef<Record<string, number>>({});
   const loadRequestCounter = useRef(0);
-  const activeLoadRequest = useRef<
-    { sessionId: string; token: number } | undefined
-  >(undefined);
   const stoppingReconcileTimers = useRef<
     Record<string, ReturnType<typeof setTimeout>>
   >({});
@@ -257,7 +264,7 @@ export function useChatScreen(): ChatScreenModel {
   );
   const loading = loadingRuntimes || loadingSessions;
   const loadingSession = activeSessionId
-    ? loadingSessionId === activeSessionId
+    ? Boolean(loadingSessionIds[activeSessionId])
     : loadingSessionId === "new";
   const sending = activeSessionId ? Boolean(sendingSessionIds[activeSessionId]) : false;
   const stopping = activeSessionId
@@ -435,7 +442,9 @@ export function useChatScreen(): ChatScreenModel {
     for (const sendingSessionId of Object.keys(sendingSessionIds)) {
       const baseline = promptEventBaselines.current[sendingSessionId] ?? 0;
       const eventsAfterSubmit =
-        eventsBySessionId[sendingSessionId]?.slice(baseline) ?? [];
+        eventsBySessionId[sendingSessionId]?.filter(
+          (event) => (eventSeq(event) ?? 0) > baseline,
+        ) ?? [];
       const session = sessions.find(
         (entry) => entry.sessionId === sendingSessionId,
       );
@@ -565,10 +574,7 @@ export function useChatScreen(): ChatScreenModel {
     if (failedLoadSessionIds[activeSessionId]) {
       return;
     }
-    if (loadingSessionId === activeSessionId) {
-      return;
-    }
-    if (loadingSessionId) {
+    if (loadingSessionIds[activeSessionId]) {
       return;
     }
     if (!sessionIsLoadable(activeSession)) {
@@ -578,13 +584,11 @@ export function useChatScreen(): ChatScreenModel {
     const sessionToLoad = activeSession;
     const token = loadRequestCounter.current + 1;
     loadRequestCounter.current = token;
-    activeLoadRequest.current = { sessionId: sessionToLoad.sessionId, token };
     const runtime = getRuntime();
     const loadPermissionMode = sessionConfigValue(sessionToLoad, "mode");
     const loadModel = sessionConfigValue(sessionToLoad, "model");
-    let loadAccepted = false;
     setError(undefined);
-    beginSessionLoad(sessionToLoad.sessionId);
+    beginSessionLoad(sessionToLoad.sessionId, token);
     void loadAgentChatSession(runtime, {
       sessionId: sessionToLoad.sessionId,
       cwd: sessionToLoad.cwd,
@@ -596,21 +600,33 @@ export function useChatScreen(): ChatScreenModel {
         const currentSession = useChatStore
           .getState()
           .sessions.find((entry) => entry.sessionId === sessionToLoad.sessionId);
-        const requestIsCurrent =
-          activeLoadRequest.current?.sessionId === sessionToLoad.sessionId &&
-          activeLoadRequest.current.token === token;
-        if (!requestIsCurrent) {
+        if (
+          useChatStore.getState().loadingSessionIds[sessionToLoad.sessionId] !==
+          token
+        ) {
           return;
         }
-        loadAccepted = true;
-        mergeLoadedSession({
+        applySessionLoadSnapshot({
           sessionId: sessionToLoad.sessionId,
-          cwd: result.app.cwd,
-          runtime: result.app.runtime,
-          configOptions:
-            result.acp.configOptions ??
-            currentSession?.configOptions ??
-            sessionToLoad.configOptions,
+          loadToken: token,
+          session: {
+            sessionId: result.app.sessionId || sessionToLoad.sessionId,
+            cwd: result.app.cwd,
+            runtime: result.app.runtime,
+            title: result.app.title ?? currentSession?.title ?? sessionToLoad.title,
+            status:
+              result.app.status ?? currentSession?.status ?? sessionToLoad.status,
+            updatedAt:
+              result.app.updatedAt ??
+              currentSession?.updatedAt ??
+              sessionToLoad.updatedAt,
+            configOptions:
+              result.acp.configOptions ??
+              currentSession?.configOptions ??
+              sessionToLoad.configOptions,
+          },
+          replayEvents: result.app.replay.events,
+          complete: result.app.replay.complete,
         });
         setFailedLoadSessionIds((current) => {
           if (!current[sessionToLoad.sessionId]) {
@@ -622,13 +638,13 @@ export function useChatScreen(): ChatScreenModel {
         });
       })
       .catch((errorValue: unknown) => {
-        const requestIsCurrent =
-          activeLoadRequest.current?.sessionId === sessionToLoad.sessionId &&
-          activeLoadRequest.current.token === token;
-        if (!requestIsCurrent) {
+        if (
+          useChatStore.getState().loadingSessionIds[sessionToLoad.sessionId] !==
+          token
+        ) {
           return;
         }
-        failSessionLoad(sessionToLoad.sessionId);
+        failSessionLoad(sessionToLoad.sessionId, token);
         setFailedLoadSessionIds((current) => ({
           ...current,
           [sessionToLoad.sessionId]: true,
@@ -638,33 +654,17 @@ export function useChatScreen(): ChatScreenModel {
             ? errorValue.message
             : "Failed to load chat session",
         );
-      })
-      .finally(() => {
-        const currentRequest = activeLoadRequest.current;
-        if (
-          currentRequest?.sessionId === sessionToLoad.sessionId &&
-          currentRequest.token === token
-        ) {
-          activeLoadRequest.current = undefined;
-          if (
-            !loadAccepted ||
-            useChatStore.getState().loadedSessionIds[sessionToLoad.sessionId]
-          ) {
-            setLoadingSession(undefined);
-          }
-        }
       });
   }, [
     activeSession,
     activeSessionId,
     failedLoadSessionIds,
+    applySessionLoadSnapshot,
     beginSessionLoad,
     failSessionLoad,
     loadedSessionIds,
-    loadingSessionId,
-    mergeLoadedSession,
+    loadingSessionIds,
     setError,
-    setLoadingSession,
   ]);
 
   function setSelectedRuntimeId(runtimeId: string) {
@@ -706,7 +706,9 @@ export function useChatScreen(): ChatScreenModel {
     const promptText = trimmedPrompt;
     const submittedDraftVersion = promptDraftVersion.current;
     setError(undefined);
-    const submitEventBaseline = eventsBySessionId[promptedSessionId]?.length ?? 0;
+    const submitEventBaseline = latestCommittedSeq(
+      eventsBySessionId[promptedSessionId],
+    );
     promptEventBaselines.current[promptedSessionId] = submitEventBaseline;
     setSendingSession(promptedSessionId, true);
     let accepted = false;
@@ -756,12 +758,12 @@ export function useChatScreen(): ChatScreenModel {
         status: result.app.status,
         configOptions: result.acp.configOptions,
       });
-      markSessionLoaded(createdSessionId);
       setActiveSession(createdSessionId);
       navigate(buildChatPath(createdSessionId));
       if (initialPrompt) {
-        const submitEventBaseline =
-          eventsBySessionId[createdSessionId]?.length ?? 0;
+        const submitEventBaseline = latestCommittedSeq(
+          eventsBySessionId[createdSessionId],
+        );
         promptEventBaselines.current[createdSessionId] = submitEventBaseline;
         setSendingSession(createdSessionId, true);
         let promptAccepted = false;

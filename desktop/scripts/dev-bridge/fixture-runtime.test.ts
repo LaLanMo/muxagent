@@ -137,8 +137,13 @@ test("fixture agentchat rpc supports prompt events and scoped load replay", asyn
     [];
   const options = {
     emitNotification: () => {},
-    emitAgentChatEvent: (event: { type?: string; sessionId?: string; seq?: number }) => {
-      emittedEvents.push(event);
+    emitAgentChatStreamItem: (item: {
+      kind?: string;
+      event?: { type?: string; sessionId?: string; seq?: number };
+    }) => {
+      if (item.kind === "event" && item.event) {
+        emittedEvents.push(item.event);
+      }
     },
   };
   const call = <T>(id: number, method: string, params: Record<string, unknown>) =>
@@ -205,41 +210,49 @@ test("fixture agentchat rpc supports prompt events and scoped load replay", asyn
   await flushFixtureEvents();
   assert.deepEqual(
     emittedEvents.map((event) => event.type),
-    ["session.status", "message.delta", "message.delta", "run.finished"],
+    [
+      "session.status",
+      "message.delta",
+      "message.delta",
+      "run.finished",
+      "session.status",
+    ],
   );
   assert.deepEqual(
     emittedEvents.map((event) => (event.seq ?? 0) > 0),
-    [true, true, true, true],
+    [true, true, true, true, true],
   );
 
   emittedEvents.length = 0;
-  const loaded = call<{ app: { ok: boolean }; acp: { configOptions: unknown[] } }>(
-    4,
-    "session.load",
-    {
+  const loaded = call<{
+    app: {
+      ok: boolean;
+      replay: { events: Array<{ type?: string; seq?: number }>; complete: boolean };
+    };
+    acp: { configOptions: unknown[] };
+  }>(4, "session.load", {
       sessionId,
       cwd: "/tmp/workspace",
       runtime: "codex",
       permissionMode: "full-access",
       model: "gpt-5.4-mini",
-    },
-  );
+  });
   assert.equal(loaded.result?.app.ok, true);
   assert.equal(emittedEvents.length, 0);
   await flushFixtureEvents();
-  assert.equal(emittedEvents.length, 5);
+  assert.equal(emittedEvents.length, 0);
+  assert.equal(loaded.result?.app.replay.complete, true);
   assert.deepEqual(
-    emittedEvents.map((event) => event.seq),
-    [0, 0, 0, 0, 0],
+    loaded.result?.app.replay.events.map((event) => event.seq),
+    [0, 0, 0, 0],
   );
   assert.deepEqual(
-    emittedEvents.map((event) => event.type),
+    loaded.result?.app.replay.events.map((event) => event.type),
     [
       "mode.changed",
       "model.changed",
       "message.delta",
       "message.delta",
-      "history.complete",
     ],
   );
 
@@ -270,7 +283,7 @@ test("fixture agentchat create and load require cwd and runtime", () => {
         },
         {
           emitNotification: () => {},
-          emitAgentChatEvent: () => {},
+          emitAgentChatStreamItem: () => {},
         },
       ),
     );
@@ -363,8 +376,13 @@ test("fixture agentchat configChanged values are flat appwire values", async () 
       },
       {
         emitNotification: () => {},
-        emitAgentChatEvent: (event) => {
-          emittedEvents.push(event);
+        emitAgentChatStreamItem: (item: {
+          kind?: string;
+          event?: (typeof emittedEvents)[number];
+        }) => {
+          if (item.kind === "event" && item.event) {
+            emittedEvents.push(item.event);
+          }
         },
       },
     ),
@@ -399,7 +417,7 @@ test("fixture agentchat session list applies runtime and limit params", () => {
       },
       {
         emitNotification: () => {},
-        emitAgentChatEvent: () => {},
+        emitAgentChatStreamItem: () => {},
       },
     ),
   );
@@ -426,7 +444,7 @@ test("fixture agentchat session list treats zero or missing limit as unbounded",
         },
         {
           emitNotification: () => {},
-          emitAgentChatEvent: () => {},
+          emitAgentChatStreamItem: () => {},
         },
       ),
     );
@@ -465,7 +483,7 @@ test("fixture agentchat runtime mode defaults mirror Go runtime options", () => 
       },
       {
         emitNotification: () => {},
-        emitAgentChatEvent: () => {},
+        emitAgentChatStreamItem: () => {},
       },
     ),
   );
@@ -501,13 +519,18 @@ test("fixture agentchat config mutations validate values and emit events", async
   }> = [];
   const options = {
     emitNotification: () => {},
-    emitAgentChatEvent: (event: {
-      type?: string;
-      seq?: number;
-      modeChanged?: { app: { currentModeId: string } };
-      configChanged?: { app: { configId: string; currentValue: string } };
+    emitAgentChatStreamItem: (item: {
+      kind?: string;
+      event?: {
+        type?: string;
+        seq?: number;
+        modeChanged?: { app: { currentModeId: string } };
+        configChanged?: { app: { configId: string; currentValue: string } };
+      };
     }) => {
-      emittedEvents.push(event);
+      if (item.kind === "event" && item.event) {
+        emittedEvents.push(item.event);
+      }
     },
   };
   const call = <T>(id: number, method: string, params: Record<string, unknown>) =>

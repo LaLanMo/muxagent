@@ -3,7 +3,6 @@ import type {
   AgentChatAcceptedResult,
   AgentChatCancelParams,
   AgentChatCreateSessionParams,
-  AgentChatEventDto,
   AgentChatListSessionsParams,
   AgentChatLoadSessionParams,
   AgentChatOkResult,
@@ -14,38 +13,39 @@ import type {
   AgentChatSessionCreateResult,
   AgentChatSessionListResult,
   AgentChatSessionLoadResult,
+  AgentChatStreamItemDto,
 } from "@/rpc/types";
 
-const agentChatEventMethod = "agentchat.event";
+const agentChatStreamItemMethod = "agentchat.streamItem";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-export function isAgentChatEventNotification(
+export function isAgentChatStreamItemNotification(
   notification: RuntimeNotification,
-): notification is RuntimeNotification & AgentChatEventDto {
+): notification is RuntimeNotification & AgentChatStreamItemDto {
+  if (notification.method !== agentChatStreamItemMethod) {
+    return false;
+  }
+  if (notification.kind === "event") {
+    return isRecord(notification.event);
+  }
   return (
-    notification.method === agentChatEventMethod &&
-    typeof notification.type === "string"
+    notification.kind === "replay" &&
+    Array.isArray(notification.events) &&
+    typeof notification.status === "string"
   );
 }
 
-export function agentChatEventFromNotification(
+export function agentChatStreamItemFromNotification(
   notification: RuntimeNotification,
-): AgentChatEventDto | null {
-  if (!isAgentChatEventNotification(notification)) {
+): AgentChatStreamItemDto | null {
+  if (!isAgentChatStreamItemNotification(notification)) {
     return null;
   }
-  const { method: _method, ...event } = notification;
-  return event as AgentChatEventDto;
-}
-
-export function eventSessionId(event: AgentChatEventDto): string | undefined {
-  const sessionStatusId = isRecord(event.sessionStatus?.app)
-    ? event.sessionStatus.app.id
-    : undefined;
-  return event.sessionId || sessionStatusId;
+  const { method: _method, ...streamItem } = notification;
+  return streamItem as AgentChatStreamItemDto;
 }
 
 export function loadAgentChatRuntimes(
