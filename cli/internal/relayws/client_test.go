@@ -131,6 +131,24 @@ func (r *blockingRuntime) ReplyPermission(ctx context.Context, sessionID, reques
 
 func (r *blockingRuntime) PendingApprovals() []domain.ApprovalRequest { return nil }
 
+func TestNewMachineTransportClientDoesNotCreateAgentChatOwner(t *testing.T) {
+	_, priv, err := ed25519.GenerateKey(crand.Reader)
+	require.NoError(t, err)
+
+	client, err := NewMachineTransportClient(
+		"ws://127.0.0.1/ws",
+		"host",
+		&auth.Credentials{MachineID: "machine-1"},
+		priv,
+		keyring.NewManager(auth.KeyringState{}),
+		nil,
+		NewEventBuffer(8),
+		nil,
+	)
+	require.NoError(t, err)
+	require.Nil(t, client.chat)
+}
+
 func TestRunProcessesRPCWhileAnotherRPCIsBlocked(t *testing.T) {
 	upgrader := websocket.Upgrader{}
 	serverConn := make(chan *websocket.Conn, 1)

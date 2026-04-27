@@ -1,6 +1,7 @@
 package agentchat
 
 import (
+	"context"
 	"errors"
 	"sync"
 
@@ -12,12 +13,35 @@ import (
 
 var ErrEventTransportUnavailable = errors.New("event transport unavailable")
 
+type scopedEventSinkKey struct{}
+
+type ScopedEventSink func(appwire.Event)
+
+func WithScopedEventSink(ctx context.Context, sink ScopedEventSink) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if sink == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, scopedEventSinkKey{}, sink)
+}
+
+func scopedEventSinkFromContext(ctx context.Context) ScopedEventSink {
+	if ctx == nil {
+		return nil
+	}
+	sink, _ := ctx.Value(scopedEventSinkKey{}).(ScopedEventSink)
+	return sink
+}
+
 type EventTransport interface {
 	DeliverEvent(event appwire.Event) error
 	DeliverLiveEvent(event appwire.Event) error
 }
 
 type Config struct {
+	Context              context.Context
 	MachineID            string
 	Runtime              Runtime
 	EventBuffer          *EventBuffer
@@ -40,14 +64,28 @@ type Service struct {
 
 	ignoreTransportError func(error) bool
 
+	ctx    context.Context
+	cancel context.CancelFunc
+	bgMu   sync.Mutex
+	closed bool
+	bgWG   sync.WaitGroup
+
 	sessionCWDMu sync.RWMutex
 	sessionCWD   map[string]string
 
 	statusMu      sync.RWMutex
 	sessionStatus map[string]domain.SessionStatus
+
+	mutationMu    sync.Mutex
+	sessionMutate map[string]*sync.Mutex
 }
 
 func New(cfg Config) *Service {
+	baseCtx := cfg.Context
+	if baseCtx == nil {
+		baseCtx = context.Background()
+	}
+	serviceCtx, cancel := context.WithCancel(baseCtx)
 	sessionCWD := cfg.SessionCWD
 	if sessionCWD == nil {
 		sessionCWD = make(map[string]string)
@@ -64,9 +102,90 @@ func New(cfg Config) *Service {
 		wtStore:              cfg.WorktreeStore,
 		attachRegistry:       cfg.AttachRegistry,
 		ignoreTransportError: cfg.IgnoreTransportError,
+		ctx:                  serviceCtx,
+		cancel:               cancel,
 		sessionCWD:           sessionCWD,
 		sessionStatus:        sessionStatus,
+		sessionMutate:        make(map[string]*sync.Mutex),
 	}
+}
+
+func (s *Service) Close(ctx context.Context) error {
+	if s == nil {
+		return nil
+	}
+	s.bgMu.Lock()
+	if !s.closed {
+		s.closed = true
+		if s.cancel != nil {
+			s.cancel()
+		}
+	}
+	s.bgMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		s.bgWG.Wait()
+		close(done)
+	}()
+	if ctx == nil {
+		<-done
+		return nil
+	}
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (s *Service) startBackground(fn func(context.Context)) bool {
+	if s == nil || fn == nil {
+		return false
+	}
+	s.bgMu.Lock()
+	defer s.bgMu.Unlock()
+	if s.closed {
+		return false
+	}
+	ctx := s.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.bgWG.Add(1)
+	go func() {
+		defer s.bgWG.Done()
+		fn(ctx)
+	}()
+	return true
+}
+
+func (s *Service) withSessionMutation(sessionID string, fn func() (any, string)) (any, string) {
+	if s == nil || fn == nil || sessionID == "" {
+		if fn == nil {
+			return nil, "mutation unavailable"
+		}
+		return fn()
+	}
+	lock := s.sessionMutationLock(sessionID)
+	lock.Lock()
+	defer lock.Unlock()
+	return fn()
+}
+
+func (s *Service) sessionMutationLock(sessionID string) *sync.Mutex {
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
+	if s.sessionMutate == nil {
+		s.sessionMutate = make(map[string]*sync.Mutex)
+	}
+	lock := s.sessionMutate[sessionID]
+	if lock == nil {
+		lock = &sync.Mutex{}
+		s.sessionMutate[sessionID] = lock
+	}
+	return lock
 }
 
 func (s *Service) MachineID() string {

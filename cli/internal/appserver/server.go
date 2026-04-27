@@ -14,6 +14,7 @@ import (
 	"time"
 
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/control"
 	"github.com/LaLanMo/muxagent/cli/internal/filelock"
 	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
@@ -35,6 +36,7 @@ type Options struct {
 	WorktreeAvailable         func(string) bool
 	LookPath                  func(string) (string, error)
 	RuntimeFactory            runtimeServiceFactory
+	AgentChatClient           agentChatClient
 	Now                       func() time.Time
 }
 
@@ -49,6 +51,7 @@ type Server struct {
 	loadTaskLaunchPreferences func() appconfig.TaskLaunchPreferences
 	worktreeAvailable         func(string) bool
 	lookPath                  func(string) (string, error)
+	agentChatClient           agentChatClient
 	now                       func() time.Time
 	lockPath                  string
 	registry                  *workspaceRegistry
@@ -125,6 +128,9 @@ func New(opts Options) (*Server, error) {
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+	if opts.AgentChatClient == nil {
+		opts.AgentChatClient = newDaemonAgentChatClient()
+	}
 
 	stateDir, err := resolveStateDir(opts.StateDir)
 	if err != nil {
@@ -155,6 +161,7 @@ func New(opts Options) (*Server, error) {
 		loadTaskLaunchPreferences: opts.LoadTaskLaunchPreferences,
 		worktreeAvailable:         opts.WorktreeAvailable,
 		lookPath:                  opts.LookPath,
+		agentChatClient:           opts.AgentChatClient,
 		now:                       opts.Now,
 		lockPath:                  singletonLockPath(stateDir),
 		registry:                  registry,
@@ -368,12 +375,13 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 		var notifications []notification
 		if session != nil {
 			session.passive = params.Passive
-			if !session.passive {
+			if !session.passive && !session.attached {
 				backlog, err := s.attachClientSession(session.id, session.enqueueNotification)
 				if err != nil {
 					return nil, nil, stopModeContinue, &rpcError{Code: errorCodeBusy, Message: err.Error()}
 				}
 				session.attached = true
+				s.startAgentChatEventProxy(session)
 				notifications = backlog
 			}
 			session.initialized = true
@@ -427,8 +435,9 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 					methodConfigPromptSave,
 					methodRuntimeList,
 					methodRuntimeStatus,
+					methodAgentChatRPC,
 				},
-				Notifications: []string{methodNotification},
+				Notifications: []string{methodNotification, notificationAgentChatEvent},
 			},
 		}, notifications, stopModeContinue, nil
 
@@ -1297,6 +1306,40 @@ func (s *Server) handleSessionRequest(ctx context.Context, session *connectionSe
 
 	case methodRuntimeStatus:
 		return probeAppServerRuntimeStatus(s.lookPath), nil, stopModeContinue, nil
+
+	case methodAgentChatRPC:
+		params, err := decodeParams[agentChatRPCParams](req.Params)
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: err.Error()}
+		}
+		params.Method = strings.TrimSpace(params.Method)
+		if params.Method == "" {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInvalidParams, Message: "method is required"}
+		}
+		resp, err := s.agentChatClient.Call(ctx, control.AgentChatRPCRequest{
+			Method: params.Method,
+			Params: params.Params,
+		})
+		if err != nil {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: err.Error()}
+		}
+		if strings.TrimSpace(resp.Error) != "" {
+			return nil, nil, stopModeContinue, &rpcError{Code: errorCodeInternalError, Message: resp.Error}
+		}
+		notifications := make([]notification, 0, len(resp.Events))
+		if session != nil {
+			for _, event := range resp.Events {
+				notifications = append(notifications, notification{
+					JSONRPC: jsonRPCVersion,
+					Method:  notificationAgentChatEvent,
+					Params:  event,
+				})
+			}
+		}
+		if len(resp.Result) == 0 {
+			return map[string]any{}, notifications, stopModeContinue, nil
+		}
+		return resp.Result, notifications, stopModeContinue, nil
 
 	default:
 		return nil, nil, stopModeContinue, &rpcError{Code: errorCodeMethodNotFound, Message: fmt.Sprintf("method %q not found", req.Method)}

@@ -24,6 +24,7 @@ import (
 	runtimemanager "github.com/LaLanMo/muxagent/cli/internal/runtime/manager"
 	"github.com/LaLanMo/muxagent/cli/internal/sessionattach"
 	"github.com/LaLanMo/muxagent/cli/internal/worktree"
+	"github.com/google/uuid"
 )
 
 const (
@@ -35,21 +36,32 @@ type Daemon struct {
 	control         *control.Server
 	addr            string
 	token           string
+	instanceID      string
 	relay           *relayws.Client
 	relayURL        string
 	rt              *runtimemanager.Manager
 	chat            *agentchat.Service
 	eventBuf        *agentchat.EventBuffer
+	localEvents     *localEventBroker
 	attachResolvers *sessionattach.Registry
 	attachPublisher sessionattach.Publisher
+	cancel          context.CancelFunc
 	stopOnce        sync.Once
 	stopErr         error
 	done            chan struct{}
 }
 
+type relayAdapter struct {
+	client       *relayws.Client
+	keyring      *keyring.Manager
+	relayHTTPURL string
+	accessToken  string
+}
+
 func New(relayURL string) *Daemon {
 	return &Daemon{
 		relayURL:        relayURL,
+		instanceID:      uuid.NewString(),
 		attachResolvers: sessionattach.NewRegistry(),
 		done:            make(chan struct{}),
 	}
@@ -61,10 +73,13 @@ func (d *Daemon) Start() error {
 		return err
 	}
 	d.token = token
+	daemonCtx, cancel := context.WithCancel(context.Background())
+	d.cancel = cancel
 
 	// Initialize runtime manager
 	cfg, err := config.LoadEffective()
 	if err != nil {
+		cancel()
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 	d.rt = runtimemanager.New(cfg)
@@ -72,17 +87,69 @@ func (d *Daemon) Start() error {
 		relayReplayEventLimit,
 		relayReplayByteBudget,
 	)
+	d.localEvents = newLocalEventBroker(d.eventBuf)
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		cancel()
+		return fmt.Errorf("failed to get home dir: %w", err)
+	}
+	wtStore := worktree.NewStore(filepath.Join(home, ".muxagent", "worktrees.json"))
+	if err := wtStore.Load(); err != nil {
+		cancel()
+		return fmt.Errorf("failed to load worktree store: %w", err)
+	}
+
+	hostname, _ := os.Hostname()
+	machineID, relayAdapter := d.configureRelayClient(hostname, wtStore)
+	if machineID == "" {
+		machineID, err = localMachineID()
+		if err != nil {
+			cancel()
+			return fmt.Errorf("failed to resolve local machine id: %w", err)
+		}
+	}
+
+	transport := &localAgentChatTransport{
+		local: d.localEvents,
+	}
+	if relayAdapter != nil {
+		transport.relay = relayAdapter.client
+	}
+	chatService := agentchat.New(agentchat.Config{
+		MachineID:            machineID,
+		Runtime:              d.rt,
+		EventBuffer:          d.eventBuf,
+		WorktreeStore:        wtStore,
+		Transport:            transport,
+		AttachRegistry:       d.attachResolvers,
+		IgnoreTransportError: isExpectedRelayDrop,
+	})
+	if relayAdapter != nil {
+		relayAdapter.client.SetAgentChat(chatService)
+	}
+
+	if relayAdapter != nil {
+		d.relay = relayAdapter.client
+	}
+	d.chat = chatService
+	d.attachPublisher = chatService
 
 	mux := http.NewServeMux()
 
 	// HTTP endpoints for daemon control only
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		control.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		control.WriteJSON(w, http.StatusOK, map[string]string{
+			"status":      "ok",
+			"instance_id": d.instanceID,
+		})
 	})
 	mux.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
 		control.WriteJSON(w, http.StatusOK, map[string]string{"status": "stopping"})
 		go func() {
-			_ = d.Stop(context.Background())
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = d.Stop(shutdownCtx)
 		}()
 	})
 	mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
@@ -111,85 +178,110 @@ func (d *Daemon) Start() error {
 		control.WriteOK(w)
 	})
 	mux.HandleFunc("/remote/attach-session", d.handleAttachSession)
+	mux.HandleFunc("/agentchat/rpc", d.handleAgentChatRPC)
+	mux.HandleFunc("/agentchat/events", d.handleAgentChatEvents)
 
 	server := control.NewServer(token, control.WithAuth(token, mux))
 	addr, err := server.Listen()
 	if err != nil {
+		cancel()
 		return err
 	}
 	d.control = server
 	d.addr = addr
 
-	// Connect to relay server
-	hostname, _ := os.Hostname()
+	// Start event bridge: runtime events -> agentchat -> relay/local subscribers.
+	go d.runEventBridge(daemonCtx, chatService)
+	if relayAdapter != nil {
+		go d.runRelayLoop(daemonCtx, relayAdapter)
+	}
+	return nil
+}
 
+func (d *Daemon) configureRelayClient(
+	hostname string,
+	wtStore *worktree.Store,
+) (string, *relayAdapter) {
 	creds, machineSignPriv, _, err := auth.LoadCredentials()
 	if err != nil {
-		return fmt.Errorf("failed to load credentials (run 'muxagent auth login' first): %w", err)
+		log.Printf("Relay disabled: credentials unavailable: %v", err)
+		return "", nil
 	}
+	machineID := creds.MachineID
 
 	machineSignPub, err := creds.GetMachineSignPublicKey()
 	if err != nil {
-		return fmt.Errorf("failed to decode machine sign public key: %w", err)
+		log.Printf("Relay disabled: failed to decode machine sign public key: %v", err)
+		return machineID, nil
 	}
 	fingerprint := crypto.HashKeyFingerprint(machineSignPub)
 	accessToken := crypto.BuildMachineAccessToken(creds.MasterID, creds.MachineID, fingerprint, machineSignPriv, 5*time.Minute)
 
 	keyringMgr := keyring.NewManager(creds.Keyring)
 	relayHTTPURL := relayws.HTTPURLFromWS(d.relayURL)
-	if err := keyringMgr.Sync(context.Background(), relayHTTPURL, accessToken); err != nil {
-		return fmt.Errorf("failed to sync keyring: %w", err)
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("failed to get home dir: %w", err)
-	}
-	wtStore := worktree.NewStore(filepath.Join(home, ".muxagent", "worktrees.json"))
-	if err := wtStore.Load(); err != nil {
-		return fmt.Errorf("failed to load worktree store: %w", err)
-	}
-
 	relayClient, err := relayws.NewMachineTransportClient(d.relayURL, hostname, creds, machineSignPriv, keyringMgr, d.rt, d.eventBuf, wtStore)
 	if err != nil {
-		return fmt.Errorf("failed to create relay client: %w", err)
+		log.Printf("Relay disabled: failed to create relay client: %v", err)
+		return machineID, nil
 	}
-	chatService := agentchat.New(agentchat.Config{
-		MachineID:            creds.MachineID,
-		Runtime:              d.rt,
-		EventBuffer:          d.eventBuf,
-		WorktreeStore:        wtStore,
-		Transport:            relayClient,
-		AttachRegistry:       d.attachResolvers,
-		IgnoreTransportError: isExpectedRelayDrop,
-	})
-	relayClient.SetAgentChat(chatService)
+	return machineID, &relayAdapter{
+		client:       relayClient,
+		keyring:      keyringMgr,
+		relayHTTPURL: relayHTTPURL,
+		accessToken:  accessToken,
+	}
+}
 
-	// Start event bridge: runtime events → agentchat → relay (to mobile)
-	go d.runEventBridge(context.Background(), chatService)
-
-	go func() {
-		backoff := time.Second
-		const maxBackoff = 30 * time.Second
-		for {
-			if err := relayClient.Connect(context.Background()); err != nil {
-				log.Printf("Relay connect failed: %v (retry in %v)", err, backoff)
-				time.Sleep(backoff)
-				backoff = min(backoff*2, maxBackoff)
-				continue
-			}
-			backoff = time.Second // reset on successful connect
-
-			if err := relayClient.Run(context.Background()); err != nil {
-				log.Printf("Relay connection lost: %v (reconnecting...)", err)
-			}
+func (d *Daemon) runRelayLoop(ctx context.Context, adapter *relayAdapter) {
+	if adapter == nil || adapter.client == nil {
+		return
+	}
+	backoff := time.Second
+	const maxBackoff = 30 * time.Second
+	for {
+		if ctx.Err() != nil {
+			return
 		}
-	}()
+		d.syncRelayKeyring(ctx, adapter)
+		if err := adapter.client.Connect(ctx); err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("Relay connect failed: %v (retry in %v)", err, backoff)
+			if !sleepContext(ctx, backoff) {
+				return
+			}
+			backoff = min(backoff*2, maxBackoff)
+			continue
+		}
+		backoff = time.Second
 
-	d.relay = relayClient
-	d.chat = chatService
-	d.attachPublisher = chatService
-	return nil
+		if err := adapter.client.Run(ctx); err != nil && ctx.Err() == nil {
+			log.Printf("Relay connection lost: %v (reconnecting...)", err)
+		}
+	}
+}
+
+func (d *Daemon) syncRelayKeyring(ctx context.Context, adapter *relayAdapter) {
+	if adapter == nil || adapter.keyring == nil {
+		return
+	}
+	syncCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := adapter.keyring.Sync(syncCtx, adapter.relayHTTPURL, adapter.accessToken); err != nil && ctx.Err() == nil {
+		log.Printf("Relay keyring sync failed: %v", err)
+	}
+}
+
+func sleepContext(ctx context.Context, delay time.Duration) bool {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-timer.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // runEventBridge reads events from the ACP runtime and hands them to agentchat,
@@ -223,6 +315,12 @@ func (d *Daemon) Stop(ctx context.Context) error {
 	}
 
 	d.stopOnce.Do(func() {
+		if d.cancel != nil {
+			d.cancel()
+		}
+		if d.chat != nil {
+			d.stopErr = d.chat.Close(ctx)
+		}
 		if d.rt != nil {
 			d.rt.Stop()
 		}
@@ -232,7 +330,9 @@ func (d *Daemon) Stop(ctx context.Context) error {
 		if d.control != nil {
 			shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			d.stopErr = d.control.Shutdown(shutdownCtx)
+			if err := d.control.Shutdown(shutdownCtx); d.stopErr == nil && err != nil {
+				d.stopErr = err
+			}
 		}
 		close(d.done)
 	})
@@ -314,6 +414,10 @@ func (d *Daemon) Address() string {
 
 func (d *Daemon) Token() string {
 	return d.token
+}
+
+func (d *Daemon) InstanceID() string {
+	return d.instanceID
 }
 
 func (d *Daemon) Done() <-chan struct{} {

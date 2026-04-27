@@ -480,6 +480,33 @@ func TestClient_LoadSessionReplaysHistory(t *testing.T) {
 	assert.Contains(t, messageParts, "replayed message")
 }
 
+func TestClient_LoadSessionScopedCapturesHistoryWithoutGlobalEvents(t *testing.T) {
+	bin := buildMockAgent(t)
+	client := newTestClient(t, bin)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, events, err := client.LoadSessionScoped(ctx, "test-session-001", "/tmp", "", "")
+	require.NoError(t, err)
+
+	typeMap := make(map[appwire.EventType]int)
+	for _, ev := range events {
+		typeMap[ev.Type]++
+	}
+	assert.GreaterOrEqual(t, typeMap[appwire.EventMessageDelta], 2, "expected scoped replayed message chunks")
+	assert.GreaterOrEqual(t, typeMap[appwire.EventToolStarted], 1, "expected scoped replayed tool.started")
+	assert.GreaterOrEqual(t, typeMap[appwire.EventToolCompleted], 1, "expected scoped replayed tool.completed")
+	assert.Equal(t, 1, typeMap[appwire.EventHistoryComplete], "expected exactly one scoped history.complete")
+
+	globalEvents := collectEvents(client.Events(), time.Second)
+	for _, ev := range globalEvents {
+		if ev.SessionID == "test-session-001" {
+			t.Fatalf("scoped load leaked event to global stream: %#v", ev)
+		}
+	}
+}
+
 func TestClient_LoadSessionFailsWithoutHistoryCompleteWhenAgentExitsDuringReplay(t *testing.T) {
 	bin := buildMockAgent(t)
 	client := newTestClientWithEnv(t, bin, map[string]string{

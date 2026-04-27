@@ -10,6 +10,7 @@ func NewCmd() *cobra.Command {
 
 	cmd.AddCommand(newStartCmd())
 	cmd.AddCommand(newStartSyncCmd())
+	cmd.AddCommand(newEnsureCmd())
 	cmd.AddCommand(newStopCmd())
 	cmd.AddCommand(newStatusCmd())
 	cmd.AddCommand(newEchoCmd())

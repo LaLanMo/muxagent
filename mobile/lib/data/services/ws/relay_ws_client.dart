@@ -20,6 +20,16 @@ import '../../repositories/session_manager.dart';
 import 'token_service.dart';
 import 'ws_types.dart';
 
+@visibleForTesting
+Map<String, dynamic> enrichEventPayloadWithMachineId(
+  Map<String, dynamic> payload,
+  String machineId,
+) {
+  final enriched = Map<String, dynamic>.from(payload);
+  enriched.putIfAbsent('machineId', () => machineId);
+  return enriched;
+}
+
 class RelayWsClient {
   final CryptoService _crypto;
   final TokenService _tokens;
@@ -496,7 +506,12 @@ class RelayWsClient {
       return;
     }
     final decoded = jsonDecode(utf8.decode(plaintext)) as Map<String, dynamic>;
-    _events.add(WsEvent(type: WsMessageType.event.value, payload: decoded));
+    _events.add(
+      WsEvent(
+        type: WsMessageType.event.value,
+        payload: enrichEventPayloadWithMachineId(decoded, machineId),
+      ),
+    );
   }
 
   Future<bool> _verifySignature(

@@ -24,6 +24,7 @@ type DaemonState struct {
 	Token                 string `json:"token,omitempty"`           // Deprecated: use EncryptedToken
 	EncryptedToken        string `json:"encrypted_token,omitempty"` // SecretBox sealed
 	PID                   int    `json:"pid"`
+	InstanceID            string `json:"instance_id,omitempty"`
 	StartTime             string `json:"start_time"` // RFC3339
 	StartedWithCLIVersion string `json:"started_with_cli_version"`
 	LastHeartbeat         string `json:"last_heartbeat,omitempty"` // RFC3339

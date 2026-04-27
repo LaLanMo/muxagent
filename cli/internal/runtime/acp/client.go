@@ -57,6 +57,7 @@ type Client struct {
 
 	loadMu         sync.Mutex
 	loadInFlight   bool
+	loadCapture    *loadEventCapture
 	historyDone    chan *historyDrainRequest
 	notifyLoopDone chan struct{}
 }
@@ -64,6 +65,11 @@ type Client struct {
 type historyDrainRequest struct {
 	sessionID string
 	done      chan error
+}
+
+type loadEventCapture struct {
+	sessionID string
+	events    []appwire.Event
 }
 
 type pendingPermission struct {
@@ -233,14 +239,27 @@ func (c *Client) NewSession(ctx context.Context, cwd string, permissionMode stri
 // LoadSession loads an existing session. History is replayed via session/update notifications.
 // If permissionMode is non-default, it calls session/set_mode after loading.
 func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode, model string) (acpprotocol.LoadSessionResponse, error) {
+	resp, _, err := c.loadSession(ctx, sessionID, cwd, permissionMode, model, false)
+	return resp, err
+}
+
+func (c *Client) LoadSessionScoped(ctx context.Context, sessionID, cwd, permissionMode, model string) (acpprotocol.LoadSessionResponse, []appwire.Event, error) {
+	return c.loadSession(ctx, sessionID, cwd, permissionMode, model, true)
+}
+
+func (c *Client) loadSession(ctx context.Context, sessionID, cwd, permissionMode, model string, scoped bool) (acpprotocol.LoadSessionResponse, []appwire.Event, error) {
 	if err := c.beginLoad(); err != nil {
-		return acpprotocol.LoadSessionResponse{}, err
+		return acpprotocol.LoadSessionResponse{}, nil, err
 	}
 	defer c.endLoad()
 
 	resolved, err := expandAndValidateCWD(cwd)
 	if err != nil {
-		return acpprotocol.LoadSessionResponse{}, err
+		return acpprotocol.LoadSessionResponse{}, nil, err
+	}
+	if scoped {
+		c.startLoadCapture(sessionID)
+		defer c.clearLoadCapture()
 	}
 
 	c.msgMu.Lock()
@@ -260,14 +279,14 @@ func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode
 	}
 	loadResult, err := c.transport.Call(ctx, "session/load", params)
 	if err != nil {
-		return acpprotocol.LoadSessionResponse{}, fmt.Errorf("session/load: %w", err)
+		return acpprotocol.LoadSessionResponse{}, nil, fmt.Errorf("session/load: %w", err)
 	}
 	log.Printf("[acp] session/load raw result: %s", string(loadResult))
 
 	var loadResp acpprotocol.LoadSessionResponse
 	if loadResult != nil {
 		if err := json.Unmarshal(loadResult, &loadResp); err != nil {
-			return acpprotocol.LoadSessionResponse{}, fmt.Errorf("parse session/load result: %w", err)
+			return acpprotocol.LoadSessionResponse{}, nil, fmt.Errorf("parse session/load result: %w", err)
 		}
 	}
 
@@ -328,11 +347,11 @@ func (c *Client) LoadSession(ctx context.Context, sessionID, cwd, permissionMode
 	}
 
 	if err := c.awaitHistoryDrain(sessionID); err != nil {
-		return acpprotocol.LoadSessionResponse{}, err
+		return acpprotocol.LoadSessionResponse{}, nil, err
 	}
 
 	clearState = false
-	return loadResp, nil
+	return loadResp, c.finishLoadCapture(), nil
 }
 
 // ListSessions calls session/list on the ACP agent and returns session summaries.
@@ -992,6 +1011,9 @@ func (c *Client) handleUsageUpdate(sessionID string, raw json.RawMessage) {
 }
 
 func (c *Client) emit(ev appwire.Event) {
+	if c.captureLoadEvent(ev) {
+		return
+	}
 	c.eventsMu.RLock()
 	if c.eventsClosed {
 		c.eventsMu.RUnlock()
@@ -1004,6 +1026,39 @@ func (c *Client) emit(ev appwire.Event) {
 	default:
 		log.Printf("[acp] event channel full, dropping event: %s", ev.Type)
 	}
+}
+
+func (c *Client) startLoadCapture(sessionID string) {
+	c.loadMu.Lock()
+	defer c.loadMu.Unlock()
+	c.loadCapture = &loadEventCapture{sessionID: sessionID}
+}
+
+func (c *Client) finishLoadCapture() []appwire.Event {
+	c.loadMu.Lock()
+	defer c.loadMu.Unlock()
+	if c.loadCapture == nil {
+		return nil
+	}
+	events := append([]appwire.Event(nil), c.loadCapture.events...)
+	c.loadCapture = nil
+	return events
+}
+
+func (c *Client) clearLoadCapture() {
+	c.loadMu.Lock()
+	defer c.loadMu.Unlock()
+	c.loadCapture = nil
+}
+
+func (c *Client) captureLoadEvent(ev appwire.Event) bool {
+	c.loadMu.Lock()
+	defer c.loadMu.Unlock()
+	if c.loadCapture == nil || ev.SessionID != c.loadCapture.sessionID {
+		return false
+	}
+	c.loadCapture.events = append(c.loadCapture.events, ev)
+	return true
 }
 
 func (c *Client) closeEvents() {

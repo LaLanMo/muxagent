@@ -237,6 +237,54 @@ func (m *Manager) LoadSession(
 	return string(rid), resp, nil
 }
 
+type scopedLoadClient interface {
+	LoadSessionScoped(ctx context.Context, sessionID, cwd, permissionMode, model string) (acpprotocol.LoadSessionResponse, []appwire.Event, error)
+}
+
+func (m *Manager) LoadSessionScoped(
+	ctx context.Context,
+	runtimeID string,
+	sessionID string,
+	cwd string,
+	permissionMode string,
+	model string,
+) (string, acpprotocol.LoadSessionResponse, []appwire.Event, error) {
+	rid := m.resolveRuntimeID(sessionID, runtimeID)
+	if rid == "" {
+		return "", acpprotocol.LoadSessionResponse{}, nil, fmt.Errorf("missing runtime")
+	}
+	client, rid, err := m.ensureRuntime(ctx, string(rid), cwd)
+	if err != nil {
+		return "", acpprotocol.LoadSessionResponse{}, nil, err
+	}
+
+	var resp acpprotocol.LoadSessionResponse
+	var events []appwire.Event
+	if scoped, ok := client.(scopedLoadClient); ok {
+		resp, events, err = scoped.LoadSessionScoped(ctx, sessionID, cwd, permissionMode, model)
+	} else {
+		resp, err = client.LoadSession(ctx, sessionID, cwd, permissionMode, model)
+	}
+	if err != nil {
+		if shouldRetryRuntimeCall(client, err) {
+			m.retireRuntimeClient(rid, client)
+		}
+		return "", acpprotocol.LoadSessionResponse{}, nil, err
+	}
+	resp.ConfigOptions = m.enrichSessionConfigOptions(
+		rid,
+		sessionID,
+		resp.ConfigOptions,
+		permissionMode,
+	)
+	m.setSessionRuntime(sessionID, rid)
+	m.persistSessionSnapshot(sessionID, rid, cwd, resp.ConfigOptions)
+	for _, ev := range events {
+		m.captureSessionSnapshotFromEvent(ev)
+	}
+	return string(rid), resp, events, nil
+}
+
 // ResolveSessions returns summaries for explicitly requested sessionIDs only.
 func (m *Manager) ResolveSessions(
 	ctx context.Context,
@@ -272,6 +320,100 @@ func (m *Manager) ResolveSessions(
 		}
 	}
 	return list, nil
+}
+
+func (m *Manager) ListSessions(
+	ctx context.Context,
+	runtimeID string,
+	limit int,
+) ([]domain.SessionSummary, error) {
+	if runtimeID != "" {
+		sessions, err := m.listSessionsForRuntime(ctx, config.RuntimeID(runtimeID))
+		if err != nil {
+			return nil, err
+		}
+		return limitSessionSummaries(sessions, limit), nil
+	}
+
+	seen := map[string]struct{}{}
+	list := make([]domain.SessionSummary, 0)
+	for _, rid := range m.configuredRuntimeIDs() {
+		sessions, err := m.listSessionsForRuntime(ctx, rid)
+		if err != nil {
+			log.Printf("[runtime] session list %s failed: %v", rid, err)
+			continue
+		}
+		for _, session := range sessions {
+			if session.SessionID == "" {
+				continue
+			}
+			if _, ok := seen[session.SessionID]; ok {
+				continue
+			}
+			seen[session.SessionID] = struct{}{}
+			list = append(list, session)
+		}
+	}
+	sortSessionSummaries(list)
+	return limitSessionSummaries(list, limit), nil
+}
+
+func (m *Manager) listSessionsForRuntime(
+	ctx context.Context,
+	rid config.RuntimeID,
+) ([]domain.SessionSummary, error) {
+	if rid == "" {
+		return nil, nil
+	}
+	client, _, err := m.ensureRuntime(ctx, string(rid), "")
+	if err != nil {
+		snapshots := m.snapshotRuntimeSessionSummaries(rid)
+		if len(snapshots) > 0 {
+			return snapshots, nil
+		}
+		return nil, err
+	}
+
+	sessions, err := client.ListSessions(ctx, "")
+	if err == nil {
+		return m.mergeListedSessionsWithSnapshots(sessions, rid), nil
+	}
+	if isSessionListUnsupported(err) {
+		return m.snapshotRuntimeSessionSummaries(rid), nil
+	}
+	if !shouldRetryRuntimeCall(client, err) {
+		snapshots := m.snapshotRuntimeSessionSummaries(rid)
+		if len(snapshots) > 0 {
+			return snapshots, nil
+		}
+		return nil, err
+	}
+
+	m.retireRuntimeClient(rid, client)
+	client, _, retryErr := m.ensureRuntime(ctx, string(rid), "")
+	if retryErr != nil {
+		snapshots := m.snapshotRuntimeSessionSummaries(rid)
+		if len(snapshots) > 0 {
+			return snapshots, nil
+		}
+		return nil, fmt.Errorf(
+			"retired stale runtime after %v; restart failed: %w",
+			err,
+			retryErr,
+		)
+	}
+	sessions, err = client.ListSessions(ctx, "")
+	if err != nil {
+		if isSessionListUnsupported(err) {
+			return m.snapshotRuntimeSessionSummaries(rid), nil
+		}
+		snapshots := m.snapshotRuntimeSessionSummaries(rid)
+		if len(snapshots) > 0 {
+			return snapshots, nil
+		}
+		return nil, err
+	}
+	return m.mergeListedSessionsWithSnapshots(sessions, rid), nil
 }
 
 func (m *Manager) resolveSessionsForRuntime(
@@ -743,6 +885,76 @@ func (m *Manager) snapshotSessionSummaries(
 		return summaries[i].SessionID < summaries[j].SessionID
 	})
 	return summaries
+}
+
+func (m *Manager) snapshotRuntimeSessionSummaries(
+	runtimeID config.RuntimeID,
+) []domain.SessionSummary {
+	if m.snapshotStore == nil || runtimeID == "" {
+		return nil
+	}
+	runtimeSnapshots := m.snapshotStore.ListRuntime(string(runtimeID))
+	if len(runtimeSnapshots) == 0 {
+		return nil
+	}
+	summaries := make([]domain.SessionSummary, 0, len(runtimeSnapshots))
+	for sessionID, snapshot := range runtimeSnapshots {
+		if sessionID == "" {
+			continue
+		}
+		summaries = append(summaries, m.sessionSummaryFromSnapshot(runtimeID, sessionID, snapshot))
+	}
+	sortSessionSummaries(summaries)
+	return summaries
+}
+
+func (m *Manager) mergeListedSessionsWithSnapshots(
+	sessions []domain.SessionSummary,
+	rid config.RuntimeID,
+) []domain.SessionSummary {
+	resolved := m.applyStoredSessionSnapshots(sessions, rid)
+	if m.snapshotStore == nil || rid == "" {
+		sortSessionSummaries(resolved)
+		return resolved
+	}
+
+	present := make(map[string]struct{}, len(resolved))
+	for _, session := range resolved {
+		if session.SessionID == "" {
+			continue
+		}
+		present[session.SessionID] = struct{}{}
+	}
+
+	for sessionID, snapshot := range m.snapshotStore.ListRuntime(string(rid)) {
+		if sessionID == "" {
+			continue
+		}
+		if _, ok := present[sessionID]; ok {
+			continue
+		}
+		resolved = append(resolved, m.sessionSummaryFromSnapshot(rid, sessionID, snapshot))
+	}
+	sortSessionSummaries(resolved)
+	return resolved
+}
+
+func sortSessionSummaries(sessions []domain.SessionSummary) {
+	sort.Slice(sessions, func(i, j int) bool {
+		left := sessions[i].UpdatedAt
+		right := sessions[j].UpdatedAt
+		if !left.Equal(right) {
+			return left.After(right)
+		}
+		return sessions[i].SessionID < sessions[j].SessionID
+	})
+}
+
+func limitSessionSummaries(sessions []domain.SessionSummary, limit int) []domain.SessionSummary {
+	if limit <= 0 || len(sessions) <= limit {
+		return sessions
+	}
+	return sessions[:limit]
 }
 
 func (m *Manager) sessionSummaryFromSnapshot(

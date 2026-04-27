@@ -17,7 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/LaLanMo/muxagent/cli/internal/appwire"
 	appconfig "github.com/LaLanMo/muxagent/cli/internal/config"
+	"github.com/LaLanMo/muxagent/cli/internal/control"
 	"github.com/LaLanMo/muxagent/cli/internal/taskconfig"
 	"github.com/LaLanMo/muxagent/cli/internal/taskdomain"
 	"github.com/LaLanMo/muxagent/cli/internal/taskexecutor"
@@ -859,6 +861,281 @@ func TestServerInitializeAdvertisesTaskGetAncestry(t *testing.T) {
 	}
 	if !slices.Contains(result.Capabilities.Methods, methodRuntimeStatus) {
 		t.Fatalf("initialize capabilities missing %q: %#v", methodRuntimeStatus, result.Capabilities.Methods)
+	}
+	if !slices.Contains(result.Capabilities.Methods, methodAgentChatRPC) {
+		t.Fatalf("initialize capabilities missing %q: %#v", methodAgentChatRPC, result.Capabilities.Methods)
+	}
+	if !slices.Contains(result.Capabilities.Notifications, notificationAgentChatEvent) {
+		t.Fatalf("initialize capabilities missing notification %q: %#v", notificationAgentChatEvent, result.Capabilities.Notifications)
+	}
+}
+
+func TestServerAgentChatRPCProxiesToDaemonClient(t *testing.T) {
+	fake := &fakeAgentChatClient{
+		call: func(_ context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+			if req.Method != "runtime.list" {
+				t.Fatalf("method = %q, want runtime.list", req.Method)
+			}
+			return control.AgentChatRPCResponse{
+				Result: json.RawMessage(`{"runtimes":[{"id":"codex","label":"Codex","ready":true}]}`),
+			}, nil
+		},
+	}
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: fake,
+	})
+
+	resultAny, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodAgentChatRPC,
+		Params: mustRawParams(t, agentChatRPCParams{Method: "runtime.list"}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("agentchat.rpc error: %+v", rpcErr)
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resultAny.(json.RawMessage), &result); err != nil {
+		t.Fatalf("unmarshal result: %v", err)
+	}
+	runtimes := result["runtimes"].([]any)
+	runtime := runtimes[0].(map[string]any)
+	if runtime["id"] != "codex" {
+		t.Fatalf("runtime id = %v, want codex", runtime["id"])
+	}
+}
+
+func TestServerAgentChatRPCMapsDaemonErrorToTopLevelJSONRPCError(t *testing.T) {
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{
+			call: func(context.Context, control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+				return control.AgentChatRPCResponse{Error: "missing cwd"}, nil
+			},
+		},
+	})
+
+	_, _, _, rpcErr := server.handleRequest(context.Background(), request{
+		Method: methodAgentChatRPC,
+		Params: mustRawParams(t, agentChatRPCParams{Method: "session.create"}),
+	})
+	if rpcErr == nil || rpcErr.Message != "missing cwd" {
+		t.Fatalf("rpcErr = %+v, want missing cwd", rpcErr)
+	}
+}
+
+func TestServerAgentChatRPCForwardsScopedEventsAsNotifications(t *testing.T) {
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{
+			call: func(context.Context, control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+				return control.AgentChatRPCResponse{
+					Result: json.RawMessage(`{"ok":true}`),
+					Events: []appwire.Event{{
+						Type:      appwire.EventHistoryComplete,
+						SessionID: "sid-scoped",
+					}},
+				}, nil
+			},
+		},
+	})
+	session := &connectionSession{id: "session-agentchat"}
+
+	result, notifications, _, rpcErr := server.handleSessionRequest(context.Background(), session, request{
+		Method: methodAgentChatRPC,
+		Params: mustRawParams(t, agentChatRPCParams{Method: "session.load"}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("agentchat.rpc error: %+v", rpcErr)
+	}
+	raw, ok := result.(json.RawMessage)
+	if !ok || string(raw) != `{"ok":true}` {
+		t.Fatalf("result = %#v, want raw ok", result)
+	}
+	if len(notifications) != 1 {
+		t.Fatalf("notifications = %#v, want one", notifications)
+	}
+	if notifications[0].Method != notificationAgentChatEvent {
+		t.Fatalf("notification method = %q, want %q", notifications[0].Method, notificationAgentChatEvent)
+	}
+	event := notifications[0].Params.(appwire.Event)
+	if event.Type != appwire.EventHistoryComplete || event.SessionID != "sid-scoped" {
+		t.Fatalf("event = %#v, want scoped history.complete", event)
+	}
+}
+
+func TestServerForwardsAgentChatEventsAsRawNotifications(t *testing.T) {
+	events := make(chan appwire.Event, 1)
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{events: events},
+	})
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outgoing := make(chan any, 8)
+	session := &connectionSession{
+		id:       "session-agentchat",
+		outgoing: outgoing,
+		ctx:      sessionCtx,
+		cancel:   cancel,
+	}
+
+	_, _, _, rpcErr := server.handleSessionRequest(context.Background(), session, request{
+		Method: methodInitialize,
+		Params: mustRawParams(t, initializeParams{ProtocolVersion: protocolVersion}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("initialize rpc error: %+v", rpcErr)
+	}
+	events <- appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1", Seq: 4}
+
+	select {
+	case payload := <-outgoing:
+		n := payload.(notification)
+		if n.Method != notificationAgentChatEvent {
+			t.Fatalf("notification method = %q, want %q", n.Method, notificationAgentChatEvent)
+		}
+		event := n.Params.(appwire.Event)
+		if event.SessionID != "sid-1" || event.Seq != 4 {
+			t.Fatalf("event = %+v, want sid-1 seq 4", event)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for agentchat event notification")
+	}
+
+	server.mu.Lock()
+	backlogLen := len(server.notificationBacklog)
+	server.mu.Unlock()
+	if backlogLen != 0 {
+		t.Fatalf("notification backlog len = %d, want 0", backlogLen)
+	}
+}
+
+func TestServerInitializeDoesNotStartDuplicateAgentChatEventProxy(t *testing.T) {
+	subscribeCalls := make(chan struct{}, 2)
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{
+			subscribe: func(ctx context.Context, _, _ uint64) (<-chan appwire.Event, error) {
+				subscribeCalls <- struct{}{}
+				events := make(chan appwire.Event)
+				go func() {
+					<-ctx.Done()
+					close(events)
+				}()
+				return events, nil
+			},
+		},
+	})
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	session := &connectionSession{
+		id:       "session-agentchat",
+		outgoing: make(chan any, 8),
+		ctx:      sessionCtx,
+		cancel:   cancel,
+	}
+
+	for i := 0; i < 2; i++ {
+		_, _, _, rpcErr := server.handleSessionRequest(context.Background(), session, request{
+			Method: methodInitialize,
+			Params: mustRawParams(t, initializeParams{ProtocolVersion: protocolVersion}),
+		})
+		if rpcErr != nil {
+			t.Fatalf("initialize %d rpc error: %+v", i+1, rpcErr)
+		}
+	}
+
+	select {
+	case <-subscribeCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first agentchat subscription")
+	}
+	select {
+	case <-subscribeCalls:
+		t.Fatal("duplicate agentchat subscription started for same session")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestServerAgentChatEventProxyReconnectsFromCursor(t *testing.T) {
+	type subscribeCall struct {
+		streamEpoch uint64
+		afterSeq    uint64
+		events      chan appwire.Event
+		close       func()
+	}
+	headRaw, err := json.Marshal(appwire.ReplayHeadResult{StreamEpoch: 99, ReplayedThroughSeq: 7})
+	if err != nil {
+		t.Fatalf("marshal replay head: %v", err)
+	}
+	subscribeCalls := make(chan subscribeCall, 2)
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{
+			call: func(_ context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+				if req.Method == "events.head" {
+					return control.AgentChatRPCResponse{Result: headRaw}, nil
+				}
+				return control.AgentChatRPCResponse{}, nil
+			},
+			subscribe: func(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.Event, error) {
+				events := make(chan appwire.Event, 1)
+				var closeOnce sync.Once
+				closeEvents := func() {
+					closeOnce.Do(func() { close(events) })
+				}
+				subscribeCalls <- subscribeCall{
+					streamEpoch: streamEpoch,
+					afterSeq:    afterSeq,
+					events:      events,
+					close:       closeEvents,
+				}
+				go func() {
+					<-ctx.Done()
+					closeEvents()
+				}()
+				return events, nil
+			},
+		},
+	})
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outgoing := make(chan any, 8)
+	session := &connectionSession{
+		id:       "session-agentchat",
+		outgoing: outgoing,
+		ctx:      sessionCtx,
+		cancel:   cancel,
+	}
+
+	_, _, _, rpcErr := server.handleSessionRequest(context.Background(), session, request{
+		Method: methodInitialize,
+		Params: mustRawParams(t, initializeParams{ProtocolVersion: protocolVersion}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("initialize rpc error: %+v", rpcErr)
+	}
+
+	var first subscribeCall
+	select {
+	case first = <-subscribeCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first agentchat subscription")
+	}
+	if first.streamEpoch != 99 || first.afterSeq != 0 {
+		t.Fatalf("first subscription = epoch %d after %d, want epoch 99 after 0", first.streamEpoch, first.afterSeq)
+	}
+	first.events <- appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1", Seq: 4}
+	first.close()
+
+	select {
+	case <-outgoing:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first forwarded event")
+	}
+
+	var second subscribeCall
+	select {
+	case second = <-subscribeCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for reconnect subscription")
+	}
+	if second.streamEpoch != 99 || second.afterSeq != 4 {
+		t.Fatalf("second subscription = epoch %d after %d, want epoch 99 after 4", second.streamEpoch, second.afterSeq)
 	}
 }
 
@@ -2873,6 +3150,7 @@ func newTestServerAtPath(t *testing.T, stateDir string) *Server {
 
 type testServerOptions struct {
 	runtimeFactory            runtimeServiceFactory
+	agentChatClient           agentChatClient
 	loadConfig                func() (appconfig.Config, error)
 	loadCatalog               func() (*taskconfig.Catalog, error)
 	loadRegistry              func() (taskconfig.Registry, error)
@@ -2891,12 +3169,41 @@ func newTestServerWithOptions(t *testing.T, stateDir string, opts testServerOpti
 		LoadTaskLaunchPreferences: opts.loadTaskLaunchPreferences,
 		LookPath:                  opts.lookPath,
 		RuntimeFactory:            opts.runtimeFactory,
+		AgentChatClient:           opts.agentChatClient,
 		WorktreeAvailable:         func(string) bool { return true },
 	})
 	if err != nil {
 		t.Fatalf("new server: %v", err)
 	}
 	return server
+}
+
+type fakeAgentChatClient struct {
+	call      func(context.Context, control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error)
+	subscribe func(context.Context, uint64, uint64) (<-chan appwire.Event, error)
+	events    <-chan appwire.Event
+}
+
+func (f *fakeAgentChatClient) Call(ctx context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+	if f != nil && f.call != nil {
+		return f.call(ctx, req)
+	}
+	return control.AgentChatRPCResponse{}, nil
+}
+
+func (f *fakeAgentChatClient) Subscribe(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.Event, error) {
+	if f != nil && f.subscribe != nil {
+		return f.subscribe(ctx, streamEpoch, afterSeq)
+	}
+	if f != nil && f.events != nil {
+		return f.events, nil
+	}
+	ch := make(chan appwire.Event)
+	go func() {
+		<-ctx.Done()
+		close(ch)
+	}()
+	return ch, nil
 }
 
 func coalesceLoadConfig(fn func() (appconfig.Config, error)) func() (appconfig.Config, error) {

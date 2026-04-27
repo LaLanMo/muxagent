@@ -60,6 +60,7 @@ func startDaemonCommon() (*daemonStartResult, error) {
 	state := config.DaemonState{
 		Address:               daemonInstance.Address(),
 		PID:                   pid,
+		InstanceID:            daemonInstance.InstanceID(),
 		StartTime:             time.Now().Format(time.RFC3339),
 		StartedWithCLIVersion: version.Version,
 	}

@@ -43,6 +43,14 @@ type Runtime interface {
 	PendingApprovals() []domain.ApprovalRequest
 }
 
+type sessionListRuntime interface {
+	ListSessions(ctx context.Context, runtimeID string, limit int) ([]domain.SessionSummary, error)
+}
+
+type scopedLoadRuntime interface {
+	LoadSessionScoped(ctx context.Context, runtimeID, sessionID, cwd, permissionMode, model string) (string, acpprotocol.LoadSessionResponse, []appwire.Event, error)
+}
+
 func (s *Service) HandleRPC(ctx context.Context, payload appwire.RPCRequest) (any, string) {
 	switch payload.Method {
 	case "runtime.list":
@@ -71,6 +79,12 @@ func (s *Service) HandleRPC(ctx context.Context, payload appwire.RPCRequest) (an
 			return nil, "invalid resolve params: " + err.Error()
 		}
 		return s.ResolveSessions(ctx, params)
+	case "session.list", "session.recent":
+		params, err := appwire.DecodeListSessionsParams(payload.Params)
+		if err != nil {
+			return nil, "invalid list params: " + err.Error()
+		}
+		return s.ListSessions(ctx, params)
 	case "session.prompt":
 		params, err := appwire.DecodePromptParams(payload.Params)
 		if err != nil {
@@ -272,21 +286,53 @@ func (s *Service) LoadSession(ctx context.Context, params appwire.LoadSessionPar
 	if requestedRuntime == "" {
 		return nil, "missing runtime"
 	}
-	actualRuntime, acpResp, err := s.runtime.LoadSession(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
-	if err != nil {
-		return nil, err.Error()
+	return s.withSessionMutation(sessionID, func() (any, string) {
+		if sink := scopedEventSinkFromContext(ctx); sink != nil {
+			if scoped, ok := s.runtime.(scopedLoadRuntime); ok {
+				actualRuntime, acpResp, events, err := scoped.LoadSessionScoped(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
+				if err != nil {
+					return nil, err.Error()
+				}
+				s.EnsureSessionStatus(sessionID, domain.SessionStatusIdle)
+				s.SetSessionCWD(sessionID, cwd)
+				s.deliverScopedEvents(sink, events)
+				return appwire.SessionLoadResult{
+					App: appwire.SessionLoadResultApp{
+						OK:      true,
+						Runtime: actualRuntime,
+						CWD:     cwd,
+					},
+					ACP: acpResp,
+				}, ""
+			}
+		}
+
+		actualRuntime, acpResp, err := s.runtime.LoadSession(ctx, requestedRuntime, sessionID, cwd, permissionMode, model)
+		if err != nil {
+			return nil, err.Error()
+		}
+		s.EnsureSessionStatus(sessionID, domain.SessionStatusIdle)
+		s.SetSessionCWD(sessionID, cwd)
+		resp := appwire.SessionLoadResult{
+			App: appwire.SessionLoadResultApp{
+				OK:      true,
+				Runtime: actualRuntime,
+				CWD:     cwd,
+			},
+			ACP: acpResp,
+		}
+		return resp, ""
+	})
+}
+
+func (s *Service) deliverScopedEvents(sink ScopedEventSink, events []appwire.Event) {
+	if sink == nil {
+		return
 	}
-	s.EnsureSessionStatus(sessionID, domain.SessionStatusIdle)
-	s.SetSessionCWD(sessionID, cwd)
-	resp := appwire.SessionLoadResult{
-		App: appwire.SessionLoadResultApp{
-			OK:      true,
-			Runtime: actualRuntime,
-			CWD:     cwd,
-		},
-		ACP: acpResp,
+	for _, event := range events {
+		s.applyEventStatus(event)
+		sink(NormalizeEventForTransport(event))
 	}
-	return resp, ""
 }
 
 func (s *Service) AttachSession(ctx context.Context, params appwire.AttachSessionParams) (any, string) {
@@ -351,6 +397,28 @@ func (s *Service) ResolveSessions(ctx context.Context, params appwire.ResolveSes
 	return appwire.SessionResolveResult{Sessions: s.wireResolvedSessions(all)}, ""
 }
 
+func (s *Service) ListSessions(ctx context.Context, params appwire.ListSessionsParams) (any, string) {
+	if s == nil || s.runtime == nil {
+		return nil, "runtime not available"
+	}
+	lister, ok := s.runtime.(sessionListRuntime)
+	if !ok {
+		return nil, "session list not available"
+	}
+	limit := params.Limit
+	if limit < 0 {
+		limit = 0
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	sessions, err := lister.ListSessions(ctx, params.Runtime, limit)
+	if err != nil {
+		return nil, err.Error()
+	}
+	return appwire.SessionResolveResult{Sessions: s.wireResolvedSessions(sessions)}, ""
+}
+
 func (s *Service) wireResolvedSessions(sessions []domain.SessionSummary) []appwire.ResolvedSession {
 	resolved := make([]appwire.ResolvedSession, 0, len(sessions))
 	for _, session := range sessions {
@@ -403,8 +471,8 @@ func (s *Service) Prompt(_ context.Context, params appwire.PromptParams) (any, s
 
 	s.SetSessionStatus(sessionID, domain.SessionStatusRunning)
 
-	go func() {
-		stopReason, usage, err := s.runtime.Prompt(context.Background(), sessionID, content)
+	if !s.startBackground(func(ctx context.Context) {
+		stopReason, usage, err := s.runtime.Prompt(ctx, sessionID, content)
 		now := time.Now()
 		if err != nil {
 			if evErr := s.SendEvent(appwire.Event{
@@ -442,7 +510,9 @@ func (s *Service) Prompt(_ context.Context, params appwire.PromptParams) (any, s
 		}); evErr != nil && !s.shouldIgnoreTransportError(evErr) {
 			log.Printf("send run.finished event: %v", evErr)
 		}
-	}()
+	}) {
+		return nil, "agentchat closed"
+	}
 
 	return appwire.AcceptedResult{Accepted: true}, ""
 }
@@ -454,10 +524,12 @@ func (s *Service) Cancel(ctx context.Context, params appwire.CancelParams) (any,
 	if params.SessionID == "" {
 		return nil, "missing sessionId"
 	}
-	if err := s.runtime.Cancel(ctx, params.SessionID); err != nil {
-		return nil, err.Error()
-	}
-	return appwire.OKResult{OK: true}, ""
+	return s.withSessionMutation(params.SessionID, func() (any, string) {
+		if err := s.runtime.Cancel(ctx, params.SessionID); err != nil {
+			return nil, err.Error()
+		}
+		return appwire.OKResult{OK: true}, ""
+	})
 }
 
 func (s *Service) SetMode(ctx context.Context, params appwire.SetModeParams) (any, string) {
@@ -470,10 +542,12 @@ func (s *Service) SetMode(ctx context.Context, params appwire.SetModeParams) (an
 	if params.PermissionMode == "" {
 		return nil, "missing permissionMode"
 	}
-	if err := s.runtime.SetMode(ctx, params.SessionID, params.PermissionMode); err != nil {
-		return nil, err.Error()
-	}
-	return appwire.OKResult{OK: true}, ""
+	return s.withSessionMutation(params.SessionID, func() (any, string) {
+		if err := s.runtime.SetMode(ctx, params.SessionID, params.PermissionMode); err != nil {
+			return nil, err.Error()
+		}
+		return appwire.OKResult{OK: true}, ""
+	})
 }
 
 func (s *Service) SetConfigOption(ctx context.Context, params appwire.SetConfigOptionParams) (any, string) {
@@ -489,10 +563,12 @@ func (s *Service) SetConfigOption(ctx context.Context, params appwire.SetConfigO
 	if params.Value == "" {
 		return nil, "missing value"
 	}
-	if err := s.runtime.SetConfigOption(ctx, params.SessionID, params.ConfigID, params.Value); err != nil {
-		return nil, err.Error()
-	}
-	return appwire.OKResult{OK: true}, ""
+	return s.withSessionMutation(params.SessionID, func() (any, string) {
+		if err := s.runtime.SetConfigOption(ctx, params.SessionID, params.ConfigID, params.Value); err != nil {
+			return nil, err.Error()
+		}
+		return appwire.OKResult{OK: true}, ""
+	})
 }
 
 func (s *Service) ReplyPermission(ctx context.Context, params appwire.ReplyPermissionParams) (any, string) {
@@ -508,20 +584,22 @@ func (s *Service) ReplyPermission(ctx context.Context, params appwire.ReplyPermi
 	if params.OptionID == "" {
 		return nil, "missing optionId"
 	}
-	if err := s.runtime.ReplyPermission(ctx, params.SessionID, params.RequestID, params.OptionID); err != nil {
-		return nil, err.Error()
-	}
-	if err := s.SendEvent(appwire.Event{
-		Type:      appwire.EventApprovalReplied,
-		SessionID: params.SessionID,
-		At:        time.Now(),
-		Approval: &appwire.ApprovalRequest{
-			App: appwire.ApprovalApp{RequestID: params.RequestID},
-		},
-	}); err != nil && !s.shouldIgnoreTransportError(err) {
-		log.Printf("send approval.replied event: %v", err)
-	}
-	return appwire.OKResult{OK: true}, ""
+	return s.withSessionMutation(params.SessionID, func() (any, string) {
+		if err := s.runtime.ReplyPermission(ctx, params.SessionID, params.RequestID, params.OptionID); err != nil {
+			return nil, err.Error()
+		}
+		if err := s.SendEvent(appwire.Event{
+			Type:      appwire.EventApprovalReplied,
+			SessionID: params.SessionID,
+			At:        time.Now(),
+			Approval: &appwire.ApprovalRequest{
+				App: appwire.ApprovalApp{RequestID: params.RequestID},
+			},
+		}); err != nil && !s.shouldIgnoreTransportError(err) {
+			log.Printf("send approval.replied event: %v", err)
+		}
+		return appwire.OKResult{OK: true}, ""
+	})
 }
 
 func (s *Service) PendingApprovals(_ context.Context) (any, string) {

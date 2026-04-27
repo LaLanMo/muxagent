@@ -51,6 +51,7 @@ func newEnsureCmd(stateDir *string) *cobra.Command {
 			if endpoint, reuse, err := resolveLiveEndpoint(resolvedStateDir, probeDaemonEndpoint, isPIDAlive); err != nil {
 				return fmt.Errorf("existing app-server daemon unavailable: %w", err)
 			} else if reuse {
+				bestEffortEnsureAgentChatDaemon(cmd.Context(), cmd.ErrOrStderr())
 				return json.NewEncoder(cmd.OutOrStdout()).Encode(ensureResult{
 					Address:    endpoint.Address,
 					Token:      mustToken(endpoint),

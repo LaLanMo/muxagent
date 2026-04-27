@@ -58,6 +58,11 @@ type ResolveSessionsParams struct {
 	SessionIDs []string `json:"sessionIds,omitempty"`
 }
 
+type ListSessionsParams struct {
+	Runtime string `json:"runtime,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
 type PromptContentBlock struct {
 	Type     string `json:"type"`
 	Text     string `json:"text,omitempty"`
@@ -143,6 +148,10 @@ func DecodeAttachSessionParams(raw json.RawMessage) (AttachSessionParams, error)
 
 func DecodeResolveSessionsParams(raw json.RawMessage) (ResolveSessionsParams, error) {
 	return decodeRPCParams[ResolveSessionsParams](raw)
+}
+
+func DecodeListSessionsParams(raw json.RawMessage) (ListSessionsParams, error) {
+	return decodeRPCParams[ListSessionsParams](raw)
 }
 
 func DecodePromptParams(raw json.RawMessage) (PromptParams, error) {

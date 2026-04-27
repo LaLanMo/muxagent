@@ -58,12 +58,14 @@ const (
 	methodConfigPromptSave           = "config.prompt.save"
 	methodRuntimeList                = "runtime.list"
 	methodRuntimeStatus              = "runtime.status"
+	methodAgentChatRPC               = "agentchat.rpc"
 )
 
 const (
 	notificationWorkspaceAdded   = "workspace.added"
 	notificationWorkspaceUpdated = "workspace.updated"
 	notificationWorkspaceRemoved = "workspace.removed"
+	notificationAgentChatEvent   = "agentchat.event"
 )
 
 type errorCode int
@@ -156,6 +158,11 @@ type serviceStatusResult struct {
 
 type serviceShutdownResult struct {
 	Accepted bool `json:"accepted"`
+}
+
+type agentChatRPCParams struct {
+	Method string          `json:"method"`
+	Params json.RawMessage `json:"params,omitempty"`
 }
 
 type workspaceListResult struct {

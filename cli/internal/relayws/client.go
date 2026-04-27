@@ -80,6 +80,9 @@ func NewMachineClient(
 	eventBuf *EventBuffer,
 	wtStore *worktree.Store,
 ) (*Client, error) {
+	// Compatibility constructor for relay-only daemon wiring. New daemon-owned
+	// agentchat hosts should create the transport client and inject their service
+	// with SetAgentChat so relayws does not become a second business owner.
 	c, err := NewMachineTransportClient(relayURL, hostname, creds, machineSignPriv, keyringMgr, rt, eventBuf, wtStore)
 	if err != nil {
 		return nil, err

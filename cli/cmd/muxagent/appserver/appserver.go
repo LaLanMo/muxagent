@@ -16,6 +16,7 @@ func NewCmd() *cobra.Command {
 		Use:   "app-server",
 		Short: "Run the local task app-server",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			bestEffortEnsureAgentChatDaemon(cmd.Context(), cmd.ErrOrStderr())
 			server, err := newServer(stateDir)
 			if err != nil {
 				return err

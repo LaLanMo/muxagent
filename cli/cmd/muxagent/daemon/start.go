@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -150,9 +151,13 @@ func waitForDaemonReady(expectedPID int, timeout time.Duration) (config.DaemonSt
 }
 
 func isDaemonHealthy(state config.DaemonState) bool {
+	return probeDaemonState(state) == nil
+}
+
+func probeDaemonState(state config.DaemonState) error {
 	token, err := state.GetToken()
 	if err != nil {
-		return false
+		return err
 	}
 
 	req, err := http.NewRequestWithContext(
@@ -162,7 +167,7 @@ func isDaemonHealthy(state config.DaemonState) bool {
 		nil,
 	)
 	if err != nil {
-		return false
+		return err
 	}
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
@@ -171,11 +176,24 @@ func isDaemonHealthy(state config.DaemonState) bool {
 	client := &http.Client{Timeout: 500 * time.Millisecond}
 	resp, err := client.Do(req)
 	if err != nil {
-		return false
+		return err
 	}
 	defer resp.Body.Close()
 
-	return resp.StatusCode == http.StatusOK
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("health failed: %s", resp.Status)
+	}
+	var health struct {
+		Status     string `json:"status"`
+		InstanceID string `json:"instance_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		return fmt.Errorf("decode health: %w", err)
+	}
+	if state.InstanceID != "" && health.InstanceID != "" && health.InstanceID != state.InstanceID {
+		return fmt.Errorf("daemon instance mismatch")
+	}
+	return nil
 }
 
 func isPIDAlive(pid int) bool {

@@ -24,6 +24,7 @@ func newServeDaemonCmd(stateDir *string) *cobra.Command {
 		Short:  "Run the app-server daemon in the foreground",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			bestEffortEnsureAgentChatDaemon(cmd.Context(), cmd.ErrOrStderr())
 			server, err := newServer(*stateDir)
 			if err != nil {
 				return err
