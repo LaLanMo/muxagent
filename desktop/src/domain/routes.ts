@@ -31,12 +31,18 @@ export type ConfigDetailRouteParams = {
   alias: string;
 };
 
+export type ChatRouteParams = {
+  sessionId: string;
+};
+
+export const chatRoutePath = "/chat";
 export const sourceControlRoutePath = "/source-control";
 export const sourceControlLandingPath = "/source-control-landing";
 export const workbenchZeroTabPath = "/workspace";
 
 export type WorkbenchSidebarViewId =
   | "tasks"
+  | "chat"
   | "source-control"
   | "configs"
   | "settings";
@@ -44,6 +50,7 @@ export type WorkbenchSidebarViewId =
 export type WorkbenchTabKind =
   | "task-board"
   | "task-detail"
+  | "chat"
   | "source-control"
   | "file-diff"
   | "commit-diff"
@@ -54,6 +61,8 @@ export type WorkbenchTabKind =
 export type WorkbenchTabId =
   | "task-board"
   | `task-board:${string}`
+  | "chat"
+  | `chat:${string}`
   | "source-control"
   | "config-list"
   | "settings"
@@ -87,6 +96,7 @@ const fileDiffRoutePattern =
 const commitDiffRoutePattern =
   /^\/workspaces\/([^/]+)\/checkouts\/([^/]+)\/commits\/([^/]+)\/?$/;
 const configDetailRoutePattern = /^\/configs\/([^/]+)\/?$/;
+const chatRoutePattern = /^\/chat\/([^/]+)\/?$/;
 const relativeUrlBase = "http://muxagent.local";
 
 function encodeCheckoutPath(checkoutPath: string): string {
@@ -235,6 +245,22 @@ export function buildConfigDetailPath(alias: string): string {
   return `/configs/${encodeURIComponent(alias)}`;
 }
 
+export function buildChatPath(sessionId?: string): string {
+  return sessionId
+    ? `${chatRoutePath}/${encodeURIComponent(sessionId)}`
+    : chatRoutePath;
+}
+
+export function parseChatPath(pathname: string): ChatRouteParams | null {
+  const match = chatRoutePattern.exec(pathname);
+  if (!match) {
+    return null;
+  }
+  return {
+    sessionId: decodeURIComponent(match[1] ?? ""),
+  };
+}
+
 export function parseCheckoutPath(pathname: string): CheckoutRouteParams | null {
   const match = checkoutRoutePattern.exec(pathname);
   if (!match) {
@@ -297,6 +323,9 @@ export function isSourceControlPath(pathname: string): boolean {
 export function deriveWorkbenchSidebarView(
   pathname: string,
 ): WorkbenchSidebarViewId {
+  if (pathname === chatRoutePath || pathname.startsWith(`${chatRoutePath}/`)) {
+    return "chat";
+  }
   if (pathname.startsWith("/settings")) {
     return "settings";
   }
@@ -315,6 +344,27 @@ export function resolveWorkbenchTab(
 ): WorkbenchTabDescriptor | null {
   if (pathname === workbenchZeroTabPath) {
     return null;
+  }
+
+  if (pathname === chatRoutePath || pathname === `${chatRoutePath}/`) {
+    return {
+      id: "chat",
+      kind: "chat",
+      title: "Chat",
+      href: buildPathWithSearch(chatRoutePath, search),
+      closeable: true,
+    };
+  }
+
+  const chatRoute = parseChatPath(pathname);
+  if (chatRoute) {
+    return {
+      id: `chat:${chatRoute.sessionId}`,
+      kind: "chat",
+      title: "Chat",
+      href: buildPathWithSearch(buildChatPath(chatRoute.sessionId), search),
+      closeable: true,
+    };
   }
 
   const taskDetailRoute = parseTaskDetailPath(pathname);

@@ -11,11 +11,14 @@ import {
 import { buildTaskBoardHref, workbenchZeroTabPath } from "@/domain/routes";
 import { useServerBootstrap } from "@/features/app/model/use-server-bootstrap";
 import { useRuntimeSync } from "@/features/app/model/use-runtime-sync";
+import { connectedPhaseRouteDecision } from "@/features/app/model/connected-route";
 import {
   useTaskBoardRouteSelection,
   useTaskRouteSelection,
 } from "@/features/app/model/use-task-route-selection";
 import { useTaskSurfaceReturnContext } from "@/features/app/model/use-task-surface-return-context";
+import { useAgentChatSync } from "@/features/chat/model/use-agent-chat-sync";
+import { ChatScreen } from "@/features/chat/ui/ChatScreen";
 import { useConfigEditorScreen } from "@/features/configs/model/use-config-editor-screen";
 import { useConfigsScreen } from "@/features/configs/model/use-configs-screen";
 import { ConfigEditorScreen } from "@/features/configs/ui/ConfigEditorScreen";
@@ -48,6 +51,7 @@ import { useWorkspaceStore } from "@/state/workspace-store";
 function RuntimeEffects() {
   useServerBootstrap();
   useRuntimeSync();
+  useAgentChatSync();
   useTaskSurfaceReturnContext();
   return null;
 }
@@ -107,10 +111,27 @@ function OnboardingGate({ children }: { children: ReactNode }) {
 
 function RequireConnectedPhaseRoute({ children }: { children: ReactNode }) {
   const phase = useWorkspaceStore((state) => state.phase);
-  if (phase !== "connected") {
+  const bootstrapPending = useWorkspaceStore((state) => state.bootstrapPending);
+  const decision = connectedPhaseRouteDecision(phase, bootstrapPending);
+  if (decision === "ready") {
+    return <>{children}</>;
+  }
+  if (decision === "pending") {
+    return (
+      <main
+        aria-busy="true"
+        aria-live="polite"
+        className="route-pending"
+        data-testid="connected-route-pending"
+      >
+        <p className="muted-copy">Connecting…</p>
+      </main>
+    );
+  }
+  if (decision === "redirect") {
     return <Navigate replace to="/" />;
   }
-  return <>{children}</>;
+  return null;
 }
 
 function WorkbenchLayout() {
@@ -290,6 +311,10 @@ function SourceControlRedirect() {
   return <Navigate replace to="/source-control-landing" />;
 }
 
+function ChatRoute() {
+  return <ChatScreen />;
+}
+
 function WorkbenchZeroTabRoute() {
   return null;
 }
@@ -341,6 +366,22 @@ export function App() {
                 </RequireConnectedPhaseRoute>
               }
               path="/source-control-landing"
+            />
+            <Route
+              element={
+                <RequireConnectedPhaseRoute>
+                  <ChatRoute />
+                </RequireConnectedPhaseRoute>
+              }
+              path="/chat"
+            />
+            <Route
+              element={
+                <RequireConnectedPhaseRoute>
+                  <ChatRoute />
+                </RequireConnectedPhaseRoute>
+              }
+              path="/chat/:sessionId"
             />
             <Route element={<ConfigsRoute />} path="/configs" />
             <Route element={<ConfigEditorRoute />} path="/configs/:alias" />

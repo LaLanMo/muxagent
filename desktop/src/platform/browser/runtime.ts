@@ -15,7 +15,6 @@ import {
   type ConfigValidateResult,
   type InitializeResult,
   type JsonRpcNotification,
-  type NotificationEnvelopeParams,
   type RuntimeStatusResult,
   type ServiceStatusResult,
   type TaskContinueBlockedParams,
@@ -139,6 +138,13 @@ class BrowserTaskBackendClient implements TaskBackendClient {
 
   runtimeStatus(): Promise<RuntimeStatusResult> {
     return this.request("runtime.status");
+  }
+
+  agentChatRPC<TResult, TParams = unknown>(
+    method: string,
+    params?: TParams,
+  ): Promise<TResult> {
+    return this.request("agentchat.rpc", { method, params });
   }
 
   workspaceList(): Promise<WorkspaceListResult> {
@@ -347,7 +353,7 @@ class BrowserTaskBackendClient implements TaskBackendClient {
   private forwardNotification(notification: JsonRpcNotification): void {
     const payload = {
       method: notification.method,
-      ...(notification.params as NotificationEnvelopeParams | undefined),
+      ...(notification.params as Record<string, unknown> | undefined),
     } as RuntimeNotification;
     for (const listener of this.listeners) {
       listener(payload);

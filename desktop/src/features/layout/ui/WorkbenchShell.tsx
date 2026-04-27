@@ -34,6 +34,7 @@ import {
 import appIcon from "@/assets/app-icon.png";
 import { useShellModel } from "@/features/app/model/use-shell-model";
 import { useWorkspaceSelection } from "@/features/app/model/use-workspace-selection";
+import { ChatPanel } from "@/features/chat/ui/ChatPanel";
 import { useWorkbenchStore } from "@/features/layout/model/use-workbench-store";
 import { ConfigsPanel } from "@/features/layout/ui/ConfigsPanel";
 import { SettingsPanel } from "@/features/layout/ui/SettingsPanel";
@@ -63,6 +64,8 @@ function titlebarActionClass(active: boolean): string {
 
 function iconForWorkbenchTab(kind: WorkbenchTabKind) {
   switch (kind) {
+    case "chat":
+      return <MessageSquare size={13} strokeWidth={1.8} />;
     case "task-detail":
       return <MessageSquare size={13} strokeWidth={1.8} />;
     case "source-control":
@@ -489,7 +492,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
   ]);
 
   const leftPanel =
-    activeSidebarView === "source-control" ? (
+    activeSidebarView === "chat" ? (
+      <ChatPanel />
+    ) : activeSidebarView === "source-control" ? (
       <SourceControlPanel />
     ) : activeSidebarView === "configs" ? (
       <ConfigsPanel />
@@ -575,6 +580,9 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
         if (boardRoute?.scope.kind === "all") {
           clearWorkspaceSelection({ navigateToTaskSurface: false });
         }
+      }
+      if (tab.kind === "chat") {
+        showSidebarView("chat");
       }
       if (tab.href !== currentHref) {
         navigate(tab.href);
@@ -666,6 +674,13 @@ export function WorkbenchShell({ children }: { children: ReactNode }) {
                     onClick={() => selectSidebarView("tasks")}
                   >
                     <ListTodo size={18} strokeWidth={1.9} />
+                  </ActivityBarButton>
+                  <ActivityBarButton
+                    active={activeSidebarView === "chat"}
+                    label="Chat"
+                    onClick={() => selectSidebarView("chat")}
+                  >
+                    <MessageSquare size={18} strokeWidth={1.9} />
                   </ActivityBarButton>
                   <ActivityBarButton
                     active={activeSidebarView === "source-control"}

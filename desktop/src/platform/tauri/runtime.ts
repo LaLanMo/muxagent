@@ -14,7 +14,6 @@ import type {
   ConfigValidateResult,
   InitializeResult,
   JsonRpcNotification,
-  NotificationEnvelopeParams,
   RuntimeStatusResult,
   ServiceStatusResult,
   TaskContinueBlockedParams,
@@ -86,6 +85,13 @@ class TauriTaskBackendClient implements TaskBackendClient {
 
   runtimeStatus(): Promise<RuntimeStatusResult> {
     return this.request("runtime.status");
+  }
+
+  agentChatRPC<TResult, TParams = unknown>(
+    method: string,
+    params?: TParams,
+  ): Promise<TResult> {
+    return this.request("agentchat.rpc", { method, params });
   }
 
   workspaceList(): Promise<WorkspaceListResult> {
@@ -296,7 +302,7 @@ class TauriTaskBackendClient implements TaskBackendClient {
           const notification = event.payload;
           const payload = {
             method: notification.method,
-            ...(notification.params as NotificationEnvelopeParams | undefined),
+            ...(notification.params as Record<string, unknown> | undefined),
           } as RuntimeNotification;
           for (const listener of this.listeners) {
             listener(payload);

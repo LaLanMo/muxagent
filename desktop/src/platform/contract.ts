@@ -49,13 +49,20 @@ import type {
   WorkspaceUpdateResult,
 } from "@/rpc/types";
 
-export type RuntimeNotification = NotificationEnvelopeParams & { method: string };
+export type RuntimeNotification = Partial<NotificationEnvelopeParams> & {
+  method: string;
+  [key: string]: unknown;
+};
 
 export interface TaskBackendClient {
   connect(): Promise<InitializeResult>;
   disconnect(): Promise<void>;
   status(): Promise<ServiceStatusResult>;
   runtimeStatus(): Promise<RuntimeStatusResult>;
+  agentChatRPC<TResult, TParams = unknown>(
+    method: string,
+    params?: TParams,
+  ): Promise<TResult>;
   workspaceList(): Promise<WorkspaceListResult>;
   workspaceAdd(params: WorkspaceAddParams): Promise<WorkspaceAddResult>;
   workspaceGet(workspaceId: string): Promise<WorkspaceGetResult>;

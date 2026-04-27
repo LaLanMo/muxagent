@@ -77,6 +77,198 @@ export interface RuntimeStatusResult {
   runtimes: RuntimeStatusEntryDto[];
 }
 
+export interface AgentChatSessionConfigValueDto {
+  value: string;
+  name: string;
+  description?: string;
+}
+
+export interface AgentChatSessionConfigOptionDto {
+  id: string;
+  name: string;
+  description?: string;
+  category?: string;
+  type?: string;
+  currentValue?: string;
+  options?: AgentChatSessionConfigValueDto[];
+}
+
+export interface AgentChatRuntimeDto {
+  id: string;
+  label: string;
+  ready: boolean;
+  configOptions?: AgentChatSessionConfigOptionDto[];
+}
+
+export interface AgentChatRuntimeListResult {
+  runtimes: AgentChatRuntimeDto[];
+}
+
+export type AgentChatSessionStatusDto =
+  | "idle"
+  | "running"
+  | "waiting_approval"
+  | "error"
+  | "done";
+
+export interface AgentChatSessionDto {
+  sessionId: string;
+  cwd: string;
+  title: string;
+  runtime?: string;
+  updatedAt: string;
+  status: AgentChatSessionStatusDto;
+  configOptions?: AgentChatSessionConfigOptionDto[];
+}
+
+export interface AgentChatSessionListResult {
+  sessions: AgentChatSessionDto[];
+}
+
+export interface AgentChatListSessionsParams {
+  runtime?: string;
+  limit?: number;
+}
+
+export interface AgentChatCreateSessionParams {
+  cwd: string;
+  runtime: string;
+  permissionMode?: string;
+  useWorktree?: boolean;
+}
+
+export interface AgentChatSessionCreateResult {
+  app: {
+    runtime: string;
+    cwd: string;
+  };
+  acp: {
+    sessionId: string;
+    models?: unknown;
+    modes?: unknown;
+    configOptions?: AgentChatSessionConfigOptionDto[];
+  };
+}
+
+export interface AgentChatLoadSessionParams {
+  sessionId: string;
+  cwd: string;
+  runtime: string;
+  permissionMode?: string;
+  model?: string;
+}
+
+export interface AgentChatSessionLoadResult {
+  app: {
+    ok: boolean;
+    runtime: string;
+    cwd: string;
+  };
+  acp: {
+    models?: unknown;
+    modes?: unknown;
+    configOptions?: AgentChatSessionConfigOptionDto[];
+  };
+}
+
+export interface AgentChatPromptParams {
+  sessionId: string;
+  text?: string;
+  content?: Array<{
+    type: string;
+    text?: string;
+    mimeType?: string;
+    data?: string;
+    uri?: string;
+  }>;
+}
+
+export interface AgentChatAcceptedResult {
+  accepted: boolean;
+}
+
+export interface AgentChatReplayHeadResult {
+  streamEpoch: number;
+  replayedThroughSeq: number;
+}
+
+export interface AgentChatMessagePartEventDto {
+  app: {
+    partId: string;
+    messageId: string;
+    role?: "user" | "agent" | string;
+    delta: string;
+    partType: string;
+    fullText: string;
+  };
+  acp?: unknown;
+}
+
+export interface AgentChatToolEventDto {
+  app: {
+    partId: string;
+    messageId: string;
+    callId: string;
+    name: string;
+    kind?: string;
+    title?: string;
+    status: string;
+    output?: string;
+    error?: string;
+  };
+  acp?: unknown;
+}
+
+export interface AgentChatSessionStatusEventDto {
+  app: {
+    id: string;
+    title?: string;
+    status: AgentChatSessionStatusDto;
+    model?: string;
+    machineId?: string;
+    runtime?: string;
+    cwd?: string;
+    mode?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+}
+
+export interface AgentChatRunFailedEventDto {
+  app: {
+    error: {
+      code?: string;
+      message: string;
+    };
+  };
+}
+
+export interface AgentChatRunFinishedEventDto {
+  app: {
+    stopReason?: string;
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+  };
+}
+
+export interface AgentChatEventDto {
+  type: string;
+  sessionId?: string;
+  seq?: number;
+  at?: string;
+  messagePart?: AgentChatMessagePartEventDto;
+  tool?: AgentChatToolEventDto;
+  sessionStatus?: AgentChatSessionStatusEventDto;
+  runFailed?: AgentChatRunFailedEventDto;
+  runFinished?: AgentChatRunFinishedEventDto;
+  approval?: unknown;
+  plan?: unknown;
+  usage?: unknown;
+  modeChanged?: unknown;
+  configChanged?: unknown;
+}
+
 export interface TaskCountsDto {
   running: number;
   awaiting: number;

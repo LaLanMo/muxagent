@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  buildChatPath,
   buildTaskBoardHref,
   buildTaskBoardPath,
+  deriveWorkbenchSidebarView,
+  parseChatPath,
   parseTaskBoardHref,
   parseTaskBoardPath,
   resolveWorkbenchTab,
@@ -53,6 +56,29 @@ test("parseTaskBoardHref canonicalizes board hrefs and strips transient query", 
     },
   );
   assert.equal(parseTaskBoardHref("/workspaces/workspace-a/tasks/task-1"), null);
+});
+
+test("chat helpers build tab routes independent of task boards", () => {
+  assert.equal(buildChatPath(), "/chat");
+  assert.equal(buildChatPath("session:a b/slash"), "/chat/session%3Aa%20b%2Fslash");
+  assert.deepEqual(resolveWorkbenchTab("/chat"), {
+    id: "chat",
+    kind: "chat",
+    title: "Chat",
+    href: "/chat",
+    closeable: true,
+  });
+  assert.deepEqual(parseChatPath("/chat/session%3Aa%20b%2Fslash"), {
+    sessionId: "session:a b/slash",
+  });
+  assert.equal(deriveWorkbenchSidebarView("/chat/session-1"), "chat");
+  assert.deepEqual(resolveWorkbenchTab("/chat/session-1"), {
+    id: "chat:session-1",
+    kind: "chat",
+    title: "Chat",
+    href: "/chat/session-1",
+    closeable: true,
+  });
 });
 
 test("resolveWorkbenchTab keeps board filters out of tab identity", () => {
