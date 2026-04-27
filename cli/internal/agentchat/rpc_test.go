@@ -3,6 +3,7 @@ package agentchat
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,6 +102,61 @@ func rpcRequest(t *testing.T, method string, params any) appwire.RPCRequest {
 		raw = data
 	}
 	return appwire.RPCRequest{Method: method, Params: raw}
+}
+
+func TestCreateSessionReturnsAppOwnedMetadata(t *testing.T) {
+	rt := &createMetadataRuntime{}
+	svc := New(Config{Runtime: rt})
+
+	result, errStr := svc.CreateSession(context.Background(), appwire.CreateSessionParams{
+		CWD:            "/tmp/workspace",
+		Runtime:        "codex",
+		PermissionMode: "read-only",
+	})
+	if errStr != "" {
+		t.Fatalf("CreateSession error = %q", errStr)
+	}
+	create, ok := result.(appwire.SessionCreateResult)
+	if !ok {
+		t.Fatalf("CreateSession result type = %T, want appwire.SessionCreateResult", result)
+	}
+	if create.App.SessionID != "sid" || create.App.Runtime != "codex" || create.App.CWD != "/tmp/workspace" {
+		t.Fatalf("CreateSession app metadata = %#v", create.App)
+	}
+	if create.App.Title != "New chat" {
+		t.Fatalf("CreateSession app title = %q, want New chat", create.App.Title)
+	}
+	if create.App.Status != appwire.SessionStatusIdle {
+		t.Fatalf("CreateSession app status = %q, want idle", create.App.Status)
+	}
+	if create.App.UpdatedAt.IsZero() {
+		t.Fatal("CreateSession app updatedAt is zero")
+	}
+	if got := svc.ResolvedSessionStatus("sid"); got != domain.SessionStatusIdle {
+		t.Fatalf("service status = %q, want idle", got)
+	}
+}
+
+func TestCreateSessionRejectsMismatchedACPSessionID(t *testing.T) {
+	rt := &createMetadataRuntime{
+		sessionID:    "sid-app",
+		acpSessionID: "sid-acp",
+	}
+	svc := New(Config{Runtime: rt})
+
+	result, errStr := svc.CreateSession(context.Background(), appwire.CreateSessionParams{
+		CWD:     "/tmp/workspace",
+		Runtime: "codex",
+	})
+	if result != nil {
+		t.Fatalf("CreateSession result = %#v, want nil", result)
+	}
+	if !strings.Contains(errStr, "mismatched session id") {
+		t.Fatalf("CreateSession error = %q, want mismatched session id", errStr)
+	}
+	if got := svc.ResolvedSessionStatus("sid-app"); got != domain.SessionStatusIdle {
+		t.Fatalf("service status for rejected session = %q, want unchanged idle default", got)
+	}
 }
 
 func TestPromptBackgroundWorkUsesServiceCloseContext(t *testing.T) {
@@ -287,6 +343,24 @@ func (r *blockingPromptRuntime) ReplyPermission(context.Context, string, string,
 
 func (r *blockingPromptRuntime) PendingApprovals() []domain.ApprovalRequest {
 	return nil
+}
+
+type createMetadataRuntime struct {
+	blockingPromptRuntime
+	sessionID    string
+	acpSessionID string
+}
+
+func (r *createMetadataRuntime) NewSession(context.Context, string, string, string) (string, string, acpprotocol.NewSessionResponse, error) {
+	sessionID := r.sessionID
+	if sessionID == "" {
+		sessionID = "sid"
+	}
+	acpSessionID := r.acpSessionID
+	if acpSessionID == "" {
+		acpSessionID = sessionID
+	}
+	return sessionID, "codex", acpprotocol.NewSessionResponse{SessionID: acpSessionID}, nil
 }
 
 type scopedLoadFakeRuntime struct {

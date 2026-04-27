@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 	"time"
 
@@ -116,7 +117,7 @@ func TestLocalEventBrokerSubscribeReplaysWithoutDuplicate(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	initial, live := broker.subscribe(ctx, buf.StreamEpoch(), 0)
-	if len(initial) != 1 || initial[0].Seq != first.Seq {
+	if len(initial.Events) != 1 || initial.Events[0].Seq != first.Seq {
 		t.Fatalf("initial = %+v, want seq %d", initial, first.Seq)
 	}
 
@@ -214,6 +215,52 @@ func TestHandleAgentChatEventsFlushesHeadersBeforeEvents(t *testing.T) {
 	case <-done:
 	case <-time.After(2 * time.Second):
 		t.Fatal("event stream handler did not stop after context cancel")
+	}
+}
+
+func TestHandleAgentChatEventsSendsReplayEnvelope(t *testing.T) {
+	buf := agentchat.NewEventBuffer(8)
+	first := buf.Push(appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1"})
+	d := &Daemon{localEvents: newLocalEventBroker(buf)}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/agentchat/events?streamEpoch="+strconv.FormatUint(buf.StreamEpoch(), 10),
+		nil,
+	).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		d.handleAgentChatEvents(rec, req)
+	}()
+
+	deadline := time.After(2 * time.Second)
+	for rec.Body.Len() == 0 {
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for replay envelope")
+		default:
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	cancel()
+	<-done
+
+	decoder := json.NewDecoder(bytes.NewReader(rec.Body.Bytes()))
+	var item appwire.EventStreamItem
+	if err := decoder.Decode(&item); err != nil {
+		t.Fatalf("Decode replay item: %v\nbody: %s", err, rec.Body.String())
+	}
+	if item.Kind != appwire.EventStreamItemReplay ||
+		item.Status != appwire.ResyncStatusOK ||
+		item.StreamEpoch != buf.StreamEpoch() ||
+		item.ReplayedThroughSeq != first.Seq ||
+		len(item.Events) != 1 ||
+		item.Events[0].Seq != first.Seq {
+		t.Fatalf("replay item = %+v, want replay envelope for seq %d", item, first.Seq)
 	}
 }
 

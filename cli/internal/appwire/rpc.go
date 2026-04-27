@@ -231,8 +231,12 @@ type RuntimeListResult struct {
 }
 
 type SessionCreateResultApp struct {
-	Runtime string `json:"runtime"`
-	CWD     string `json:"cwd"`
+	SessionID string        `json:"sessionId,omitempty"`
+	Runtime   string        `json:"runtime"`
+	CWD       string        `json:"cwd"`
+	Title     string        `json:"title,omitempty"`
+	Status    SessionStatus `json:"status,omitempty"`
+	UpdatedAt time.Time     `json:"updatedAt,omitempty"`
 }
 
 type SessionCreateResult struct {

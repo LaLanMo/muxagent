@@ -232,6 +232,13 @@ func (s *Service) CreateSession(ctx context.Context, params appwire.CreateSessio
 	if err != nil {
 		return nil, err.Error()
 	}
+	if acpResp.SessionID == "" {
+		acpResp.SessionID = sessionID
+	}
+	if acpResp.SessionID != sessionID {
+		return nil, fmt.Sprintf("runtime returned mismatched session id: app=%s acp=%s", sessionID, acpResp.SessionID)
+	}
+	createdAt := time.Now().UTC()
 	s.SetSessionStatus(sessionID, domain.SessionStatusIdle)
 	s.SetSessionCWD(sessionID, actualCWD)
 
@@ -244,8 +251,12 @@ func (s *Service) CreateSession(ctx context.Context, params appwire.CreateSessio
 
 	resp := appwire.SessionCreateResult{
 		App: appwire.SessionCreateResultApp{
-			Runtime: actualRuntime,
-			CWD:     actualCWD,
+			SessionID: sessionID,
+			Runtime:   actualRuntime,
+			CWD:       actualCWD,
+			Title:     "New chat",
+			Status:    appwire.SessionStatusIdle,
+			UpdatedAt: createdAt,
 		},
 		ACP: acpResp,
 	}

@@ -1,6 +1,7 @@
 package appwire
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
 
@@ -187,6 +188,35 @@ func (e ModeChangedEvent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wire)
 }
 
+func (e *ModeChangedEvent) UnmarshalJSON(data []byte) error {
+	var wire modeChangedEventWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	*e = ModeChangedEvent{App: wire.App}
+	if len(bytes.TrimSpace(wire.ACP)) == 0 || bytes.Equal(bytes.TrimSpace(wire.ACP), []byte("null")) {
+		return nil
+	}
+
+	switch {
+	case rawObjectHasField(wire.ACP, "currentModeId"):
+		var update acpprotocol.CurrentModeUpdate
+		if err := json.Unmarshal(wire.ACP, &update); err != nil {
+			return err
+		}
+		e.ACPCurrentMode = &update
+	case rawObjectHasField(wire.ACP, "configOptions"):
+		var update acpprotocol.ConfigOptionUpdate
+		if err := json.Unmarshal(wire.ACP, &update); err != nil {
+			return err
+		}
+		e.ACPConfigOption = &update
+	}
+
+	return nil
+}
+
 type SessionConfigValue struct {
 	Value       string  `json:"value"`
 	Name        string  `json:"name"`
@@ -222,6 +252,28 @@ func (e ConfigChangedEvent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wire)
 }
 
+func (e *ConfigChangedEvent) UnmarshalJSON(data []byte) error {
+	var wire configChangedEventWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	*e = ConfigChangedEvent{App: wire.App}
+	if len(bytes.TrimSpace(wire.ACP)) == 0 || bytes.Equal(bytes.TrimSpace(wire.ACP), []byte("null")) {
+		return nil
+	}
+
+	if rawObjectHasField(wire.ACP, "configOptions") {
+		var update acpprotocol.ConfigOptionUpdate
+		if err := json.Unmarshal(wire.ACP, &update); err != nil {
+			return err
+		}
+		e.ACP = &update
+	}
+
+	return nil
+}
+
 type Event struct {
 	Type      EventType
 	SessionID string
@@ -238,6 +290,22 @@ type Event struct {
 	SessionInfo   *SessionStatusEvent
 	ModeChanged   *ModeChangedEvent
 	ConfigChanged *ConfigChangedEvent
+}
+
+type EventStreamItemKind string
+
+const (
+	EventStreamItemReplay EventStreamItemKind = "replay"
+	EventStreamItemEvent  EventStreamItemKind = "event"
+)
+
+type EventStreamItem struct {
+	Kind               EventStreamItemKind `json:"kind"`
+	Status             ResyncStatus        `json:"status,omitempty"`
+	StreamEpoch        uint64              `json:"streamEpoch,omitempty"`
+	ReplayedThroughSeq uint64              `json:"replayedThroughSeq,omitempty"`
+	Events             []Event             `json:"events,omitempty"`
+	Event              *Event              `json:"event,omitempty"`
 }
 
 type eventEnvelopeWire struct {
@@ -274,4 +342,41 @@ func (e Event) MarshalJSON() ([]byte, error) {
 		ModeChanged:   e.ModeChanged,
 		ConfigChanged: e.ConfigChanged,
 	})
+}
+
+func (e *Event) UnmarshalJSON(data []byte) error {
+	var wire eventEnvelopeWire
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+
+	*e = Event{
+		Type:          wire.Type,
+		SessionID:     wire.SessionID,
+		Seq:           wire.Seq,
+		At:            wire.At,
+		MessagePart:   wire.MessagePart,
+		Tool:          wire.Tool,
+		Approval:      wire.Approval,
+		Plan:          wire.Plan,
+		Usage:         wire.Usage,
+		RunFinished:   wire.RunFinished,
+		RunFailed:     wire.RunFailed,
+		SessionInfo:   wire.SessionInfo,
+		ModeChanged:   wire.ModeChanged,
+		ConfigChanged: wire.ConfigChanged,
+	}
+	return nil
+}
+
+func rawObjectHasField(raw json.RawMessage, field string) bool {
+	if len(bytes.TrimSpace(raw)) == 0 {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return false
+	}
+	_, ok := fields[field]
+	return ok
 }

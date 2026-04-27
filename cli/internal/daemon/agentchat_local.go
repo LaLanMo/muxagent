@@ -117,34 +117,41 @@ func newLocalEventBroker(buffer *agentchat.EventBuffer) *localEventBroker {
 	}
 }
 
-func (b *localEventBroker) subscribe(ctx context.Context, streamEpoch, afterSeq uint64) ([]appwire.Event, <-chan appwire.Event) {
+func (b *localEventBroker) subscribe(ctx context.Context, streamEpoch, afterSeq uint64) (agentchat.ReplaySnapshot, <-chan appwire.Event) {
 	if b == nil {
 		ch := make(chan appwire.Event)
 		close(ch)
-		return nil, ch
+		return agentchat.ReplaySnapshot{
+			Events:             make([]appwire.Event, 0),
+			Status:             appwire.ResyncStatusReset,
+			StreamEpoch:        streamEpoch,
+			ReplayedThroughSeq: afterSeq,
+		}, ch
 	}
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	replayedThroughSeq := afterSeq
-	var initial []appwire.Event
+	snapshot := agentchat.ReplaySnapshot{
+		Events:             make([]appwire.Event, 0),
+		Status:             appwire.ResyncStatusOK,
+		StreamEpoch:        streamEpoch,
+		ReplayedThroughSeq: afterSeq,
+	}
 	if b.buffer != nil {
-		snapshot := b.buffer.ReplaySince(streamEpoch, afterSeq)
-		initial = snapshot.Events
-		replayedThroughSeq = snapshot.ReplayedThroughSeq
+		snapshot = b.buffer.ReplaySince(streamEpoch, afterSeq)
 	}
 
 	sub := &localEventSubscriber{
 		ch:       make(chan appwire.Event, b.resolvedSubscriberBuffer()),
-		afterSeq: replayedThroughSeq,
+		afterSeq: snapshot.ReplayedThroughSeq,
 	}
 	b.subscribers[sub] = struct{}{}
 	go func() {
 		<-ctx.Done()
 		b.remove(sub)
 	}()
-	return initial, sub.ch
+	return snapshot, sub.ch
 }
 
 func (b *localEventBroker) publishBuffered(event appwire.Event) {
@@ -288,17 +295,21 @@ func (d *Daemon) handleAgentChatEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	flusher.Flush()
 	encoder := json.NewEncoder(w)
-	writeEvent := func(event appwire.Event) bool {
-		if err := encoder.Encode(event); err != nil {
+	writeItem := func(item appwire.EventStreamItem) bool {
+		if err := encoder.Encode(item); err != nil {
 			return false
 		}
 		flusher.Flush()
 		return true
 	}
-	for _, event := range initial {
-		if !writeEvent(event) {
-			return
-		}
+	if !writeItem(appwire.EventStreamItem{
+		Kind:               appwire.EventStreamItemReplay,
+		Status:             initial.Status,
+		StreamEpoch:        initial.StreamEpoch,
+		ReplayedThroughSeq: initial.ReplayedThroughSeq,
+		Events:             initial.Events,
+	}) {
+		return
 	}
 	for {
 		select {
@@ -306,7 +317,11 @@ func (d *Daemon) handleAgentChatEvents(w http.ResponseWriter, r *http.Request) {
 			if !ok {
 				return
 			}
-			if !writeEvent(event) {
+			if !writeItem(appwire.EventStreamItem{
+				Kind:        appwire.EventStreamItemEvent,
+				StreamEpoch: initial.StreamEpoch,
+				Event:       &event,
+			}) {
 				return
 			}
 		case <-r.Context().Done():

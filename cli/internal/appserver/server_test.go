@@ -961,7 +961,7 @@ func TestServerAgentChatRPCForwardsScopedEventsAsNotifications(t *testing.T) {
 }
 
 func TestServerForwardsAgentChatEventsAsRawNotifications(t *testing.T) {
-	events := make(chan appwire.Event, 1)
+	events := make(chan appwire.EventStreamItem, 1)
 	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
 		agentChatClient: &fakeAgentChatClient{events: events},
 	})
@@ -982,7 +982,14 @@ func TestServerForwardsAgentChatEventsAsRawNotifications(t *testing.T) {
 	if rpcErr != nil {
 		t.Fatalf("initialize rpc error: %+v", rpcErr)
 	}
-	events <- appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1", Seq: 4}
+	events <- appwire.EventStreamItem{
+		Kind: appwire.EventStreamItemEvent,
+		Event: &appwire.Event{
+			Type:      appwire.EventMessageDelta,
+			SessionID: "sid-1",
+			Seq:       4,
+		},
+	}
 
 	select {
 	case payload := <-outgoing:
@@ -1006,13 +1013,101 @@ func TestServerForwardsAgentChatEventsAsRawNotifications(t *testing.T) {
 	}
 }
 
+func TestServerForwardsAgentChatReplayEnvelopeEvents(t *testing.T) {
+	events := make(chan appwire.EventStreamItem, 1)
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{events: events},
+	})
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	outgoing := make(chan any, 8)
+	session := &connectionSession{
+		id:       "session-agentchat",
+		outgoing: outgoing,
+		ctx:      sessionCtx,
+		cancel:   cancel,
+	}
+
+	_, _, _, rpcErr := server.handleSessionRequest(context.Background(), session, request{
+		Method: methodInitialize,
+		Params: mustRawParams(t, initializeParams{ProtocolVersion: protocolVersion}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("initialize rpc error: %+v", rpcErr)
+	}
+	events <- appwire.EventStreamItem{
+		Kind:               appwire.EventStreamItemReplay,
+		Status:             appwire.ResyncStatusReset,
+		StreamEpoch:        44,
+		ReplayedThroughSeq: 9,
+		Events: []appwire.Event{
+			{Type: appwire.EventMessageDelta, SessionID: "sid-1", Seq: 8},
+			{Type: appwire.EventRunFinished, SessionID: "sid-1", Seq: 9},
+		},
+	}
+
+	for _, wantSeq := range []uint64{8, 9} {
+		select {
+		case payload := <-outgoing:
+			n := payload.(notification)
+			if n.Method != notificationAgentChatEvent {
+				t.Fatalf("notification method = %q, want %q", n.Method, notificationAgentChatEvent)
+			}
+			event := n.Params.(appwire.Event)
+			if event.SessionID != "sid-1" || event.Seq != wantSeq {
+				t.Fatalf("event = %+v, want sid-1 seq %d", event, wantSeq)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("timed out waiting for replay event seq %d", wantSeq)
+		}
+	}
+}
+
+func TestDecodeAgentChatStreamItemSupportsEnvelopeAndLegacyEvent(t *testing.T) {
+	envelopeRaw, err := json.Marshal(appwire.EventStreamItem{
+		Kind:               appwire.EventStreamItemReplay,
+		Status:             appwire.ResyncStatusOK,
+		StreamEpoch:        10,
+		ReplayedThroughSeq: 2,
+		Events: []appwire.Event{{
+			Type:      appwire.EventMessageDelta,
+			SessionID: "sid",
+			Seq:       2,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal envelope: %v", err)
+	}
+	envelope, ok := decodeAgentChatStreamItem(envelopeRaw, 0)
+	if !ok || envelope.Kind != appwire.EventStreamItemReplay || len(envelope.Events) != 1 {
+		t.Fatalf("envelope decode = %+v ok=%v", envelope, ok)
+	}
+
+	legacyRaw, err := json.Marshal(appwire.Event{
+		Type:      appwire.EventRunFinished,
+		SessionID: "sid",
+		Seq:       3,
+	})
+	if err != nil {
+		t.Fatalf("marshal legacy event: %v", err)
+	}
+	legacy, ok := decodeAgentChatStreamItem(legacyRaw, 10)
+	if !ok ||
+		legacy.Kind != appwire.EventStreamItemEvent ||
+		legacy.StreamEpoch != 10 ||
+		legacy.Event == nil ||
+		legacy.Event.Type != appwire.EventRunFinished {
+		t.Fatalf("legacy decode = %+v ok=%v", legacy, ok)
+	}
+}
+
 func TestServerInitializeDoesNotStartDuplicateAgentChatEventProxy(t *testing.T) {
 	subscribeCalls := make(chan struct{}, 2)
 	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
 		agentChatClient: &fakeAgentChatClient{
-			subscribe: func(ctx context.Context, _, _ uint64) (<-chan appwire.Event, error) {
+			subscribe: func(ctx context.Context, _, _ uint64) (<-chan appwire.EventStreamItem, error) {
 				subscribeCalls <- struct{}{}
-				events := make(chan appwire.Event)
+				events := make(chan appwire.EventStreamItem)
 				go func() {
 					<-ctx.Done()
 					close(events)
@@ -1056,7 +1151,7 @@ func TestServerAgentChatEventProxyReconnectsFromCursor(t *testing.T) {
 	type subscribeCall struct {
 		streamEpoch uint64
 		afterSeq    uint64
-		events      chan appwire.Event
+		events      chan appwire.EventStreamItem
 		close       func()
 	}
 	headRaw, err := json.Marshal(appwire.ReplayHeadResult{StreamEpoch: 99, ReplayedThroughSeq: 7})
@@ -1072,8 +1167,8 @@ func TestServerAgentChatEventProxyReconnectsFromCursor(t *testing.T) {
 				}
 				return control.AgentChatRPCResponse{}, nil
 			},
-			subscribe: func(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.Event, error) {
-				events := make(chan appwire.Event, 1)
+			subscribe: func(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.EventStreamItem, error) {
+				events := make(chan appwire.EventStreamItem, 1)
 				var closeOnce sync.Once
 				closeEvents := func() {
 					closeOnce.Do(func() { close(events) })
@@ -1119,7 +1214,14 @@ func TestServerAgentChatEventProxyReconnectsFromCursor(t *testing.T) {
 	if first.streamEpoch != 99 || first.afterSeq != 0 {
 		t.Fatalf("first subscription = epoch %d after %d, want epoch 99 after 0", first.streamEpoch, first.afterSeq)
 	}
-	first.events <- appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1", Seq: 4}
+	first.events <- appwire.EventStreamItem{
+		Kind: appwire.EventStreamItemEvent,
+		Event: &appwire.Event{
+			Type:      appwire.EventMessageDelta,
+			SessionID: "sid-1",
+			Seq:       4,
+		},
+	}
 	first.close()
 
 	select {
@@ -1159,7 +1261,7 @@ func TestServerAgentChatEventProxyRetriesSubscribeErrorsFromCursor(t *testing.T)
 				}
 				return control.AgentChatRPCResponse{}, nil
 			},
-			subscribe: func(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.Event, error) {
+			subscribe: func(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.EventStreamItem, error) {
 				subscribeMu.Lock()
 				subscribeCount++
 				count := subscribeCount
@@ -1168,7 +1270,7 @@ func TestServerAgentChatEventProxyRetriesSubscribeErrorsFromCursor(t *testing.T)
 				if count == 1 {
 					return nil, errors.New("daemon stream unavailable")
 				}
-				events := make(chan appwire.Event, 1)
+				events := make(chan appwire.EventStreamItem, 1)
 				go func() {
 					<-ctx.Done()
 					close(events)
@@ -3255,8 +3357,8 @@ func newTestServerWithOptions(t *testing.T, stateDir string, opts testServerOpti
 
 type fakeAgentChatClient struct {
 	call      func(context.Context, control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error)
-	subscribe func(context.Context, uint64, uint64) (<-chan appwire.Event, error)
-	events    <-chan appwire.Event
+	subscribe func(context.Context, uint64, uint64) (<-chan appwire.EventStreamItem, error)
+	events    <-chan appwire.EventStreamItem
 }
 
 func (f *fakeAgentChatClient) Call(ctx context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
@@ -3266,14 +3368,14 @@ func (f *fakeAgentChatClient) Call(ctx context.Context, req control.AgentChatRPC
 	return control.AgentChatRPCResponse{}, nil
 }
 
-func (f *fakeAgentChatClient) Subscribe(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.Event, error) {
+func (f *fakeAgentChatClient) Subscribe(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.EventStreamItem, error) {
 	if f != nil && f.subscribe != nil {
 		return f.subscribe(ctx, streamEpoch, afterSeq)
 	}
 	if f != nil && f.events != nil {
 		return f.events, nil
 	}
-	ch := make(chan appwire.Event)
+	ch := make(chan appwire.EventStreamItem)
 	go func() {
 		<-ctx.Done()
 		close(ch)
