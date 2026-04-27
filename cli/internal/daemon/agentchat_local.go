@@ -16,6 +16,15 @@ import (
 type localAgentChatTransport struct {
 	relay agentchat.EventTransport
 	local *localEventBroker
+
+	mu    sync.Mutex
+	stats localAgentChatTransportStats
+}
+
+type localAgentChatTransportStats struct {
+	RelayExpectedDrops uint64
+	RelayErrors        uint64
+	LastRelayError     string
 }
 
 func (t *localAgentChatTransport) DeliverEvent(event appwire.Event) error {
@@ -30,7 +39,8 @@ func (t *localAgentChatTransport) DeliverEvent(event appwire.Event) error {
 		return agentchat.ErrEventTransportUnavailable
 	}
 	err := t.relay.DeliverEvent(event)
-	if err != nil && localAvailable && isExpectedRelayDrop(err) {
+	if err != nil && localAvailable {
+		t.recordRelayError(err)
 		return nil
 	}
 	return err
@@ -48,17 +58,50 @@ func (t *localAgentChatTransport) DeliverLiveEvent(event appwire.Event) error {
 		return agentchat.ErrEventTransportUnavailable
 	}
 	err := t.relay.DeliverLiveEvent(event)
-	if err != nil && localAvailable && isExpectedRelayDrop(err) {
+	if err != nil && localAvailable {
+		t.recordRelayError(err)
 		return nil
 	}
 	return err
 }
 
+func (t *localAgentChatTransport) recordRelayError(err error) {
+	if t == nil || err == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if isExpectedRelayDrop(err) {
+		t.stats.RelayExpectedDrops++
+	} else {
+		t.stats.RelayErrors++
+	}
+	t.stats.LastRelayError = err.Error()
+}
+
+func (t *localAgentChatTransport) statsSnapshot() localAgentChatTransportStats {
+	if t == nil {
+		return localAgentChatTransportStats{}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.stats
+}
+
+const localEventSubscriberBuffer = 256
+
 type localEventBroker struct {
 	buffer *agentchat.EventBuffer
 
-	mu          sync.Mutex
-	subscribers map[*localEventSubscriber]struct{}
+	mu               sync.Mutex
+	subscribers      map[*localEventSubscriber]struct{}
+	subscriberBuffer int
+	stats            localEventBrokerStats
+}
+
+type localEventBrokerStats struct {
+	ActiveSubscribers uint64
+	SubscriberDrops   uint64
 }
 
 type localEventSubscriber struct {
@@ -68,8 +111,9 @@ type localEventSubscriber struct {
 
 func newLocalEventBroker(buffer *agentchat.EventBuffer) *localEventBroker {
 	return &localEventBroker{
-		buffer:      buffer,
-		subscribers: make(map[*localEventSubscriber]struct{}),
+		buffer:           buffer,
+		subscribers:      make(map[*localEventSubscriber]struct{}),
+		subscriberBuffer: localEventSubscriberBuffer,
 	}
 }
 
@@ -92,7 +136,7 @@ func (b *localEventBroker) subscribe(ctx context.Context, streamEpoch, afterSeq 
 	}
 
 	sub := &localEventSubscriber{
-		ch:       make(chan appwire.Event, 256),
+		ch:       make(chan appwire.Event, b.resolvedSubscriberBuffer()),
 		afterSeq: replayedThroughSeq,
 	}
 	b.subscribers[sub] = struct{}{}
@@ -117,8 +161,7 @@ func (b *localEventBroker) publishBuffered(event appwire.Event) {
 		case sub.ch <- event:
 			sub.afterSeq = event.Seq
 		default:
-			delete(b.subscribers, sub)
-			close(sub.ch)
+			b.dropSubscriberLocked(sub)
 		}
 	}
 }
@@ -133,8 +176,7 @@ func (b *localEventBroker) publishLive(event appwire.Event) {
 		select {
 		case sub.ch <- event:
 		default:
-			delete(b.subscribers, sub)
-			close(sub.ch)
+			b.dropSubscriberLocked(sub)
 		}
 	}
 }
@@ -147,6 +189,36 @@ func (b *localEventBroker) remove(sub *localEventSubscriber) {
 	}
 	delete(b.subscribers, sub)
 	close(sub.ch)
+}
+
+func (b *localEventBroker) dropSubscriberLocked(sub *localEventSubscriber) {
+	if b == nil || sub == nil {
+		return
+	}
+	if _, ok := b.subscribers[sub]; !ok {
+		return
+	}
+	delete(b.subscribers, sub)
+	close(sub.ch)
+	b.stats.SubscriberDrops++
+}
+
+func (b *localEventBroker) resolvedSubscriberBuffer() int {
+	if b == nil || b.subscriberBuffer <= 0 {
+		return localEventSubscriberBuffer
+	}
+	return b.subscriberBuffer
+}
+
+func (b *localEventBroker) statsSnapshot() localEventBrokerStats {
+	if b == nil {
+		return localEventBrokerStats{}
+	}
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	stats := b.stats
+	stats.ActiveSubscribers = uint64(len(b.subscribers))
+	return stats
 }
 
 func (d *Daemon) handleAgentChatRPC(w http.ResponseWriter, r *http.Request) {

@@ -1139,6 +1139,81 @@ func TestServerAgentChatEventProxyReconnectsFromCursor(t *testing.T) {
 	}
 }
 
+func TestServerAgentChatEventProxyRetriesSubscribeErrorsFromCursor(t *testing.T) {
+	type subscribeCall struct {
+		streamEpoch uint64
+		afterSeq    uint64
+	}
+	headRaw, err := json.Marshal(appwire.ReplayHeadResult{StreamEpoch: 77, ReplayedThroughSeq: 12})
+	if err != nil {
+		t.Fatalf("marshal replay head: %v", err)
+	}
+	subscribeCalls := make(chan subscribeCall, 2)
+	var subscribeMu sync.Mutex
+	subscribeCount := 0
+	server := newTestServerWithOptions(t, filepath.Join(t.TempDir(), "appserver"), testServerOptions{
+		agentChatClient: &fakeAgentChatClient{
+			call: func(_ context.Context, req control.AgentChatRPCRequest) (control.AgentChatRPCResponse, error) {
+				if req.Method == "events.head" {
+					return control.AgentChatRPCResponse{Result: headRaw}, nil
+				}
+				return control.AgentChatRPCResponse{}, nil
+			},
+			subscribe: func(ctx context.Context, streamEpoch, afterSeq uint64) (<-chan appwire.Event, error) {
+				subscribeMu.Lock()
+				subscribeCount++
+				count := subscribeCount
+				subscribeMu.Unlock()
+				subscribeCalls <- subscribeCall{streamEpoch: streamEpoch, afterSeq: afterSeq}
+				if count == 1 {
+					return nil, errors.New("daemon stream unavailable")
+				}
+				events := make(chan appwire.Event, 1)
+				go func() {
+					<-ctx.Done()
+					close(events)
+				}()
+				return events, nil
+			},
+		},
+	})
+	sessionCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	session := &connectionSession{
+		id:       "session-agentchat",
+		outgoing: make(chan any, 8),
+		ctx:      sessionCtx,
+		cancel:   cancel,
+	}
+
+	_, _, _, rpcErr := server.handleSessionRequest(context.Background(), session, request{
+		Method: methodInitialize,
+		Params: mustRawParams(t, initializeParams{ProtocolVersion: protocolVersion}),
+	})
+	if rpcErr != nil {
+		t.Fatalf("initialize rpc error: %+v", rpcErr)
+	}
+
+	var first subscribeCall
+	select {
+	case first = <-subscribeCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first agentchat subscription")
+	}
+	if first.streamEpoch != 77 || first.afterSeq != 0 {
+		t.Fatalf("first subscription = epoch %d after %d, want epoch 77 after 0", first.streamEpoch, first.afterSeq)
+	}
+	var second subscribeCall
+	select {
+	case second = <-subscribeCalls:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for retry agentchat subscription")
+	}
+	if second.streamEpoch != 77 || second.afterSeq != 0 {
+		t.Fatalf("second subscription = epoch %d after %d, want epoch 77 after 0", second.streamEpoch, second.afterSeq)
+	}
+}
+
 func TestServerRuntimeStatusReflectsAppServerTaskRuntimes(t *testing.T) {
 	t.Parallel()
 

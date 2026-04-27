@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -217,11 +218,12 @@ func TestHandleAgentChatEventsFlushesHeadersBeforeEvents(t *testing.T) {
 }
 
 func TestLocalAgentChatTransportDoesNotGateLiveEventsOnExpectedRelayDrop(t *testing.T) {
+	transport := &localAgentChatTransport{
+		relay: fakeEventTransport{err: relayws.ErrNoActiveSession},
+		local: newLocalEventBroker(agentchat.NewEventBuffer(8)),
+	}
 	svc := agentchat.New(agentchat.Config{
-		Transport: &localAgentChatTransport{
-			relay: fakeEventTransport{err: relayws.ErrNoActiveSession},
-			local: newLocalEventBroker(agentchat.NewEventBuffer(8)),
-		},
+		Transport: transport,
 	})
 
 	err := svc.SendLiveEvent(appwire.Event{
@@ -234,16 +236,21 @@ func TestLocalAgentChatTransportDoesNotGateLiveEventsOnExpectedRelayDrop(t *test
 	if got := svc.ResolvedSessionStatus("sid-1"); got != domain.SessionStatusWaitingApproval {
 		t.Fatalf("status = %q, want %q", got, domain.SessionStatusWaitingApproval)
 	}
+	stats := transport.statsSnapshot()
+	if stats.RelayExpectedDrops != 1 || stats.RelayErrors != 0 {
+		t.Fatalf("transport stats = %+v, want one expected relay drop", stats)
+	}
 }
 
 func TestLocalAgentChatTransportDoesNotGateBufferedEventsOnExpectedRelayDrop(t *testing.T) {
 	buf := agentchat.NewEventBuffer(8)
+	transport := &localAgentChatTransport{
+		relay: fakeEventTransport{err: relayws.ErrRelayNotConnected},
+		local: newLocalEventBroker(buf),
+	}
 	svc := agentchat.New(agentchat.Config{
 		EventBuffer: buf,
-		Transport: &localAgentChatTransport{
-			relay: fakeEventTransport{err: relayws.ErrRelayNotConnected},
-			local: newLocalEventBroker(buf),
-		},
+		Transport:   transport,
 	})
 
 	err := svc.SendEvent(appwire.Event{
@@ -258,5 +265,117 @@ func TestLocalAgentChatTransportDoesNotGateBufferedEventsOnExpectedRelayDrop(t *
 	}
 	if got := svc.ResolvedSessionStatus("sid-1"); got != domain.SessionStatusError {
 		t.Fatalf("status = %q, want %q", got, domain.SessionStatusError)
+	}
+	stats := transport.statsSnapshot()
+	if stats.RelayExpectedDrops != 1 || stats.RelayErrors != 0 {
+		t.Fatalf("transport stats = %+v, want one expected relay drop", stats)
+	}
+}
+
+func TestLocalAgentChatTransportDoesNotGateLiveEventsOnRelayErrorWhenLocalAvailable(t *testing.T) {
+	relayErr := errors.New("relay write failed")
+	transport := &localAgentChatTransport{
+		relay: fakeEventTransport{err: relayErr},
+		local: newLocalEventBroker(agentchat.NewEventBuffer(8)),
+	}
+	svc := agentchat.New(agentchat.Config{Transport: transport})
+
+	err := svc.SendLiveEvent(appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: "sid-1",
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{ID: "sid-1", Status: appwire.SessionStatusRunning},
+		},
+	})
+	if err != nil {
+		t.Fatalf("SendLiveEvent error = %v, want nil", err)
+	}
+	if got := svc.ResolvedSessionStatus("sid-1"); got != domain.SessionStatusRunning {
+		t.Fatalf("status = %q, want %q", got, domain.SessionStatusRunning)
+	}
+	stats := transport.statsSnapshot()
+	if stats.RelayErrors != 1 || stats.RelayExpectedDrops != 0 || stats.LastRelayError != relayErr.Error() {
+		t.Fatalf("transport stats = %+v, want one relay error", stats)
+	}
+}
+
+func TestLocalAgentChatTransportDoesNotGateBufferedEventsOnRelayErrorWhenLocalAvailable(t *testing.T) {
+	relayErr := errors.New("relay write failed")
+	buf := agentchat.NewEventBuffer(8)
+	transport := &localAgentChatTransport{
+		relay: fakeEventTransport{err: relayErr},
+		local: newLocalEventBroker(buf),
+	}
+	svc := agentchat.New(agentchat.Config{EventBuffer: buf, Transport: transport})
+
+	err := svc.SendEvent(appwire.Event{
+		Type:      appwire.EventRunFailed,
+		SessionID: "sid-1",
+	})
+	if err != nil {
+		t.Fatalf("SendEvent error = %v, want nil", err)
+	}
+	if got := buf.Seq(); got != 1 {
+		t.Fatalf("buffer seq = %d, want 1", got)
+	}
+	if got := svc.ResolvedSessionStatus("sid-1"); got != domain.SessionStatusError {
+		t.Fatalf("status = %q, want %q", got, domain.SessionStatusError)
+	}
+	stats := transport.statsSnapshot()
+	if stats.RelayErrors != 1 || stats.RelayExpectedDrops != 0 || stats.LastRelayError != relayErr.Error() {
+		t.Fatalf("transport stats = %+v, want one relay error", stats)
+	}
+}
+
+func TestLocalAgentChatTransportReturnsRelayErrorWithoutLocalBroker(t *testing.T) {
+	relayErr := errors.New("relay write failed")
+	svc := agentchat.New(agentchat.Config{
+		Transport: &localAgentChatTransport{relay: fakeEventTransport{err: relayErr}},
+	})
+
+	err := svc.SendLiveEvent(appwire.Event{
+		Type:      appwire.EventSessionStatus,
+		SessionID: "sid-1",
+		SessionInfo: &appwire.SessionStatusEvent{
+			App: appwire.SessionStatusEventApp{ID: "sid-1", Status: appwire.SessionStatusRunning},
+		},
+	})
+	if !errors.Is(err, relayErr) {
+		t.Fatalf("SendLiveEvent error = %v, want %v", err, relayErr)
+	}
+	if got := svc.ResolvedSessionStatus("sid-1"); got != domain.SessionStatusIdle {
+		t.Fatalf("status = %q, want unchanged idle", got)
+	}
+}
+
+func TestLocalEventBrokerDropsFullSubscriberWithStats(t *testing.T) {
+	broker := newLocalEventBroker(nil)
+	broker.subscriberBuffer = 1
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, live := broker.subscribe(ctx, 0, 0)
+
+	broker.publishLive(appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1"})
+	broker.publishLive(appwire.Event{Type: appwire.EventMessageDelta, SessionID: "sid-1"})
+
+	select {
+	case _, ok := <-live:
+		if !ok {
+			t.Fatal("subscriber closed before receiving buffered event")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for first buffered event")
+	}
+	select {
+	case _, ok := <-live:
+		if ok {
+			t.Fatal("subscriber still open after full queue drop")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for subscriber close")
+	}
+	stats := broker.statsSnapshot()
+	if stats.SubscriberDrops != 1 || stats.ActiveSubscribers != 0 {
+		t.Fatalf("broker stats = %+v, want one dropped subscriber and zero active", stats)
 	}
 }
