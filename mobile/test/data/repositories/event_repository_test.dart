@@ -9,7 +9,10 @@ import 'package:muxagent/data/services/ws/relay_ws_client.dart';
 import 'package:muxagent/data/services/ws/models/rpc_transport_models.dart';
 import 'package:muxagent/data/services/ws/token_service.dart';
 import 'package:muxagent/domain/enums.dart';
+import 'package:muxagent/domain/model_info.dart';
+import 'package:muxagent/domain/mode_option.dart';
 import 'package:muxagent/domain/session.dart';
+import 'package:muxagent/domain/session_config_snapshot.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -64,7 +67,7 @@ void main() {
     });
   });
 
-  group('EventRepository acknowledged config persistence', () {
+  group('EventRepository session.load snapshot persistence', () {
     late EventRepository repo;
     late String sessionId;
 
@@ -94,18 +97,41 @@ void main() {
       await SessionDatabase.deleteSession(sessionId);
     });
 
-    test('setSessionModel persists model to memory and sqlite', () async {
-      repo.setSessionModel(sessionId, 'opus');
+    test('applies authoritative load model to memory and sqlite', () async {
+      await repo.applySessionLoadSnapshot(
+        machineId: 'machine-1',
+        sessionId: sessionId,
+        runtime: 'codex',
+        cwd: '/workspace',
+        status: 'running',
+        baselineConfigRevision: repo.sessionConfigRevisionFor(sessionId),
+        configSnapshot: const SessionConfigSnapshot(
+          currentModel: 'opus',
+          availableModels: [ModelInfo(value: 'opus', name: 'Opus')],
+        ),
+      );
 
       expect(repo.sessionById(sessionId)?.model, 'opus');
+      expect(repo.sessionById(sessionId)?.status, SessionStatus.running);
 
       final rows = await SessionDatabase.loadAll();
       final restored = rows.firstWhere((row) => row.id == sessionId);
       expect(restored.model, 'opus');
+      expect(restored.status, SessionStatus.running);
     });
 
-    test('setSessionMode persists mode to memory and sqlite', () async {
-      repo.setSessionMode(sessionId, 'plan');
+    test('applies authoritative load mode to memory and sqlite', () async {
+      await repo.applySessionLoadSnapshot(
+        machineId: 'machine-1',
+        sessionId: sessionId,
+        runtime: 'codex',
+        cwd: '/workspace',
+        baselineConfigRevision: repo.sessionConfigRevisionFor(sessionId),
+        configSnapshot: const SessionConfigSnapshot(
+          currentMode: ModeOption(id: 'plan', label: 'Plan'),
+          availableModes: [ModeOption(id: 'plan', label: 'Plan')],
+        ),
+      );
 
       expect(repo.sessionById(sessionId)?.mode, 'plan');
       expect(repo.transcriptWatermarkFor(sessionId), 0);
@@ -115,20 +141,21 @@ void main() {
       expect(restored.mode, 'plan');
     });
 
-    test(
-      'metadata acknowledgements do not advance transcript watermark',
-      () async {
-        repo.setSessionModel(sessionId, 'opus');
-        repo.setSessionMode(sessionId, 'plan');
-        await repo.persistSessionRuntimeAndCwd(
-          sessionId,
-          runtime: 'codex',
-          cwd: '/workspace',
-        );
+    test('metadata snapshots do not advance transcript watermark', () async {
+      await repo.applySessionLoadSnapshot(
+        machineId: 'machine-1',
+        sessionId: sessionId,
+        runtime: 'codex',
+        cwd: '/workspace',
+        baselineConfigRevision: repo.sessionConfigRevisionFor(sessionId),
+        configSnapshot: const SessionConfigSnapshot(
+          currentMode: ModeOption(id: 'plan', label: 'Plan'),
+          currentModel: 'opus',
+        ),
+      );
 
-        expect(repo.transcriptWatermarkFor(sessionId), 0);
-      },
-    );
+      expect(repo.transcriptWatermarkFor(sessionId), 0);
+    });
   });
 
   group('EventRepository config refresh guard', () {

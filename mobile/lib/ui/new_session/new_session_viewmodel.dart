@@ -594,7 +594,7 @@ class NewSessionViewModel extends GetxController {
         useWorktree: useWorktree.value,
       );
 
-      final sessionId = createResponse.acp.sessionId;
+      final sessionId = createResponse.app.sessionId;
       if (sessionId.isEmpty) {
         throw Exception(Tx.newCreateNoSessionId.tr);
       }

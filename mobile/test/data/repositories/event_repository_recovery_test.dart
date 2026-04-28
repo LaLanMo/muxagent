@@ -46,6 +46,7 @@ class _FakeWsSessionRepository extends WsSessionRepository {
     streamEpoch: 77,
     replayedThroughSeq: 0,
   );
+  Object? resolveError;
   int replayHeadCalls = 0;
   int? lastResyncStreamEpoch;
   int? lastResyncSeq;
@@ -113,6 +114,10 @@ class _FakeWsSessionRepository extends WsSessionRepository {
     final blocker = resolveBlocker;
     if (blocker != null) {
       await blocker.future;
+    }
+    final error = resolveError;
+    if (error != null) {
+      throw error;
     }
     return nextResolvedSessions;
   }
@@ -276,6 +281,61 @@ void main() {
       expect(wsRepo.lastResyncSeq, 6);
       expect(wsRepo.lastResyncStreamEpoch, 77);
     });
+
+    test(
+      'live cursor bootstrap does not skip delayed events already seen by head',
+      () async {
+        wsRepo.nextReplayHead = const ReplayHeadSnapshot(
+          streamEpoch: 77,
+          replayedThroughSeq: 12,
+        );
+        final appliedSeqs = <int>[];
+        final eventSub = repo.events.listen((event) {
+          appliedSeqs.add(event.seq);
+        });
+
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 10,
+            partId: 'part-10',
+            messageId: 'msg-10',
+            text: 'ten',
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(repo.lastSeqFor('machine-1'), 10);
+
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 11,
+            partId: 'part-11',
+            messageId: 'msg-11',
+            text: 'eleven',
+          ),
+        );
+        wsRepo.emitEvent(
+          _messageDeltaWsEvent(
+            machineId: 'machine-1',
+            sessionId: sessionId,
+            seq: 12,
+            partId: 'part-12',
+            messageId: 'msg-12',
+            text: 'twelve',
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        await eventSub.cancel();
+
+        expect(appliedSeqs, [10, 11, 12]);
+        expect(repo.lastSeqFor('machine-1'), 12);
+        expect(repo.transcriptWatermarkFor(sessionId), 12);
+      },
+    );
 
     test(
       'reasoning events advance transcript watermark and stale cache',
@@ -657,6 +717,15 @@ void main() {
       },
     );
 
+    test('syncKnownSessions returns failure when resolve rejects', () async {
+      wsRepo.resolveError = Exception('no active session');
+
+      final result = await repo.syncKnownSessions('machine-1');
+
+      expect(result.ok, isFalse);
+      expect(result.error.toString(), contains('no active session'));
+    });
+
     test(
       'syncKnownSessions does not overwrite a newer live mode update',
       () async {
@@ -726,6 +795,21 @@ void main() {
               .toList(),
           ['full-access', 'read-only'],
         );
+      },
+    );
+
+    test(
+      'backfillMissingTitles returns failure when resolve rejects',
+      () async {
+        wsRepo.resolveError = Exception('no active session');
+
+        final result = await repo.backfillMissingTitles(
+          'machine-1',
+          runtime: 'codex',
+        );
+
+        expect(result.ok, isFalse);
+        expect(result.error.toString(), contains('no active session'));
       },
     );
 
@@ -1093,5 +1177,163 @@ void main() {
         expect(persisted.cwd, '/repo/attached');
       },
     );
+
+    test(
+      'run and approval events do not update session status truth',
+      () async {
+        final baseAt = DateTime.now();
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'session.status',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 7,
+              'at': baseAt.toIso8601String(),
+              'sessionStatus': {
+                'app': {
+                  'id': sessionId,
+                  'title': 'Existing',
+                  'status': 'idle',
+                  'runtime': 'codex',
+                  'cwd': '/tmp',
+                  'createdAt': baseAt.toIso8601String(),
+                  'updatedAt': baseAt.toIso8601String(),
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.sessionById(sessionId)?.status, SessionStatus.idle);
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'approval.requested',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 8,
+              'at': baseAt.add(const Duration(seconds: 1)).toIso8601String(),
+              'approval': {
+                'app': {
+                  'requestId': 'req-status',
+                  'createdAt': baseAt.toIso8601String(),
+                  'runtime': 'codex',
+                  'title': 'Approve',
+                },
+                'acp': {
+                  'sessionId': sessionId,
+                  'toolCall': {'toolCallId': 'call-1'},
+                  'options': [],
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.sessionById(sessionId)?.status, SessionStatus.idle);
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'run.failed',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 9,
+              'at': baseAt.add(const Duration(seconds: 2)).toIso8601String(),
+              'runFailed': {
+                'app': {
+                  'error': {'code': 'runtime', 'message': 'failed'},
+                },
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.sessionById(sessionId)?.status, SessionStatus.idle);
+
+        wsRepo.emitEvent(
+          WsEvent(
+            type: WsMessageType.event.value,
+            payload: {
+              'type': 'run.finished',
+              'machineId': 'machine-1',
+              'sessionId': sessionId,
+              'seq': 10,
+              'at': baseAt.add(const Duration(seconds: 3)).toIso8601String(),
+              'runFinished': {
+                'app': {'stopReason': 'end_turn', 'totalTokens': 12},
+              },
+            },
+          ),
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+        expect(repo.sessionById(sessionId)?.status, SessionStatus.idle);
+        expect(repo.liveUsageFor(sessionId)?.totalTokens, 12);
+      },
+    );
+
+    test('duplicate committed seq is dropped before status mutation', () async {
+      final now = DateTime.now();
+
+      Map<String, dynamic> statusEvent(int seq, String status) => {
+        'type': 'session.status',
+        'machineId': 'machine-1',
+        'sessionId': sessionId,
+        'seq': seq,
+        'at': now.toIso8601String(),
+        'sessionStatus': {
+          'app': {
+            'id': sessionId,
+            'title': 'Existing',
+            'status': status,
+            'runtime': 'codex',
+            'cwd': '/tmp',
+            'createdAt': now.toIso8601String(),
+            'updatedAt': now.toIso8601String(),
+          },
+        },
+      };
+
+      wsRepo.emitEvent(
+        WsEvent(
+          type: WsMessageType.event.value,
+          payload: statusEvent(20, 'running'),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repo.sessionById(sessionId)?.status, SessionStatus.running);
+
+      wsRepo.emitEvent(
+        WsEvent(
+          type: WsMessageType.event.value,
+          payload: statusEvent(20, 'idle'),
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(repo.sessionById(sessionId)?.status, SessionStatus.running);
+    });
+
+    test('live seq zero is dropped before transcript mutation', () async {
+      wsRepo.emitEvent(
+        _messageDeltaWsEvent(
+          machineId: 'machine-1',
+          sessionId: sessionId,
+          seq: 0,
+          partId: 'part-zero',
+          messageId: 'message-zero',
+          text: 'must not apply',
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(repo.transcriptWatermarkFor(sessionId), 0);
+      expect(chatCacheRepo.staleMarked, isEmpty);
+    });
   });
 }

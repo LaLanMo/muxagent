@@ -71,7 +71,11 @@ void main() {
       final relay = FakeRelayWsClient(
         nextPayload: {
           'result': {
-            'app': {'runtime': 'codex', 'cwd': '/workspace'},
+            'app': {
+              'sessionId': 'sid-1',
+              'runtime': 'codex',
+              'cwd': '/workspace',
+            },
             'acp': {'sessionId': 'sid-1'},
           },
         },
@@ -96,7 +100,7 @@ void main() {
         'useWorktree': true,
         'permissionMode': 'read-only',
       });
-      expect(response.acp.sessionId, 'sid-1');
+      expect(response.app.sessionId, 'sid-1');
       expect(response.app.cwd, '/workspace');
     });
 
@@ -104,7 +108,13 @@ void main() {
       final relay = FakeRelayWsClient(
         nextPayload: {
           'result': {
-            'app': {'ok': true, 'runtime': 'claude-code', 'cwd': '/workspace'},
+            'app': {
+              'ok': true,
+              'sessionId': 'sid-1',
+              'runtime': 'claude-code',
+              'cwd': '/workspace',
+              'replay': {'complete': true, 'events': []},
+            },
             'acp': {},
           },
         },

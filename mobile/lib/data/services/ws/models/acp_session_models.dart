@@ -44,6 +44,22 @@ List<Map<String, dynamic>> _objectList(Map<String, dynamic> json, String key) {
   }).toList();
 }
 
+List<Map<String, dynamic>> _requireObjectList(
+  Map<String, dynamic> json,
+  String key,
+) {
+  final value = json[key];
+  if (value is! List) {
+    throw FormatException('Expected "$key" to be a list');
+  }
+  return value.map((item) {
+    if (item is! Map) {
+      throw FormatException('Expected "$key" items to be objects');
+    }
+    return Map<String, dynamic>.from(item);
+  }).toList();
+}
+
 Map<String, dynamic> _withMeta(
   Map<String, dynamic> json,
   Map<String, dynamic>? meta,
@@ -530,15 +546,36 @@ class AcpUsageUpdateDto {
 }
 
 class AppSessionCreateDto {
+  final String sessionId;
   final String runtime;
   final String cwd;
+  final String title;
+  final String? status;
+  final DateTime? updatedAt;
 
-  const AppSessionCreateDto({required this.runtime, required this.cwd});
+  const AppSessionCreateDto({
+    required this.sessionId,
+    required this.runtime,
+    required this.cwd,
+    this.title = '',
+    this.status,
+    this.updatedAt,
+  });
 
   factory AppSessionCreateDto.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(String key) {
+      final value = _nullableString(json, key);
+      if (value == null || value.isEmpty) return null;
+      return DateTime.parse(value);
+    }
+
     return AppSessionCreateDto(
+      sessionId: _requireString(json, 'sessionId'),
       runtime: _requireString(json, 'runtime'),
       cwd: _requireString(json, 'cwd'),
+      title: _nullableString(json, 'title') ?? '',
+      status: _nullableString(json, 'status'),
+      updatedAt: parseDate('updatedAt'),
     );
   }
 }
@@ -550,33 +587,78 @@ class AppSessionCreateResponseDto {
   const AppSessionCreateResponseDto({required this.app, required this.acp});
 
   factory AppSessionCreateResponseDto.fromJson(Map<String, dynamic> json) {
-    return AppSessionCreateResponseDto(
-      app: AppSessionCreateDto.fromJson(
-        Map<String, dynamic>.from(json['app'] as Map),
-      ),
-      acp: AcpNewSessionResponseDto.fromJson(
-        Map<String, dynamic>.from(json['acp'] as Map),
-      ),
+    final app = AppSessionCreateDto.fromJson(
+      Map<String, dynamic>.from(json['app'] as Map),
+    );
+    final acp = AcpNewSessionResponseDto.fromJson(
+      Map<String, dynamic>.from(json['acp'] as Map),
+    );
+    if (acp.sessionId.isNotEmpty && acp.sessionId != app.sessionId) {
+      throw FormatException(
+        'Expected acp.sessionId to be empty or equal to app.sessionId',
+      );
+    }
+    return AppSessionCreateResponseDto(app: app, acp: acp);
+  }
+}
+
+class AppSessionLoadReplayDto {
+  final List<Map<String, dynamic>> events;
+  final bool complete;
+
+  const AppSessionLoadReplayDto({required this.events, required this.complete});
+
+  factory AppSessionLoadReplayDto.fromJson(Map<String, dynamic> json) {
+    return AppSessionLoadReplayDto(
+      events: _requireObjectList(json, 'events'),
+      complete: _requireBool(json, 'complete'),
     );
   }
 }
 
 class AppSessionLoadDto {
   final bool ok;
+  final String sessionId;
   final String runtime;
   final String cwd;
+  final String title;
+  final String? status;
+  final DateTime? updatedAt;
+  final AppSessionLoadReplayDto replay;
 
   const AppSessionLoadDto({
     required this.ok,
+    required this.sessionId,
     required this.runtime,
     required this.cwd,
+    required this.replay,
+    this.title = '',
+    this.status,
+    this.updatedAt,
   });
 
   factory AppSessionLoadDto.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(String key) {
+      final value = _nullableString(json, key);
+      if (value == null || value.isEmpty) return null;
+      return DateTime.parse(value);
+    }
+
+    final replay = json['replay'];
+    if (replay is! Map) {
+      throw FormatException('Expected "replay" to be an object');
+    }
     return AppSessionLoadDto(
       ok: _requireBool(json, 'ok'),
+      sessionId: _requireString(json, 'sessionId'),
       runtime: _requireString(json, 'runtime'),
       cwd: _requireString(json, 'cwd'),
+      title: _nullableString(json, 'title') ?? '',
+      status: _nullableString(json, 'status'),
+      updatedAt: parseDate('updatedAt'),
+      replay: AppSessionLoadReplayDto.fromJson(
+        Map<String, dynamic>.from(replay),
+      ),
     );
   }
 }

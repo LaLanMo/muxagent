@@ -77,7 +77,6 @@ bool eventAffectsTranscript(EventType? type) {
     case EventType.runFinished:
     case EventType.modeChanged:
     case EventType.modelChanged:
-    case EventType.historyComplete:
     case null:
       return false;
   }
@@ -382,6 +381,7 @@ class EventRepository {
 
     final event = _parseWsEvent(wsEvent);
     if (event == null || event.type == null) return;
+    if (!_shouldApplyCommittedEvent(event)) return;
 
     final fence = _resyncFenceByMachine[event.machineId];
     if (fence != null) {
@@ -392,6 +392,18 @@ class EventRepository {
     _trackLiveReplayCursor(event);
 
     _processEvent(event);
+  }
+
+  bool _shouldApplyCommittedEvent(AgentEvent event) {
+    if (event.machineId.isEmpty || event.seq <= 0) {
+      return false;
+    }
+    final existing = _replayCursorByMachine[event.machineId];
+    if (existing != null) {
+      return event.seq > existing.lastSeq;
+    }
+    final observedSeq = _bootstrapObservedSeqByMachine[event.machineId] ?? 0;
+    return event.seq > observedSeq;
   }
 
   void _trackLiveReplayCursor(AgentEvent event) {
@@ -441,10 +453,7 @@ class EventRepository {
         return;
       }
 
-      final observedSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
-      final targetSeq = observedSeq > head.replayedThroughSeq
-          ? observedSeq
-          : head.replayedThroughSeq;
+      final targetSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
       final existing = _replayCursorByMachine[machineId];
       if (existing != null) {
         if (existing.streamEpoch != responseEpoch ||
@@ -617,9 +626,6 @@ class EventRepository {
         final existing = sessions[sessionId];
         if (existing != null) {
           existing.updatedAt = event.at;
-          existing.status = event.type == EventType.runFinished
-              ? SessionStatus.idle
-              : SessionStatus.error;
 
           // Mark unread if user is not currently viewing this session
           if (!_viewingSessions.contains(sessionId) && existing.isRead) {
@@ -640,7 +646,6 @@ class EventRepository {
           // Persist status + cost
           final dbFields = <String, dynamic>{
             'updated_at': event.at.toIso8601String(),
-            'status': existing.status.value,
             'is_read': existing.isRead ? 1 : 0,
           };
           final usage = _liveUsage[sessionId];
@@ -675,10 +680,8 @@ class EventRepository {
       case EventType.approvalRequested:
         final existing = sessions[sessionId];
         if (existing != null) {
-          existing.status = SessionStatus.waitingApproval;
           existing.updatedAt = event.at;
           SessionDatabase.updateFields(sessionId, {
-            'status': SessionStatus.waitingApproval.value,
             'updated_at': event.at.toIso8601String(),
           });
           _sessionsChangedController.add(null);
@@ -686,10 +689,8 @@ class EventRepository {
       case EventType.approvalReplied:
         final existing = sessions[sessionId];
         if (existing != null) {
-          existing.status = SessionStatus.running;
           existing.updatedAt = event.at;
           SessionDatabase.updateFields(sessionId, {
-            'status': SessionStatus.running.value,
             'updated_at': event.at.toIso8601String(),
           });
           _sessionsChangedController.add(null);
@@ -755,10 +756,7 @@ class EventRepository {
       );
       if (cursor == null) {
         final head = await _wsRepo.fetchReplayHead(machineId: machineId);
-        final observedSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
-        final targetSeq = observedSeq > head.replayedThroughSeq
-            ? observedSeq
-            : head.replayedThroughSeq;
+        final targetSeq = _bootstrapObservedSeqByMachine[machineId] ?? 0;
         highestSeqAccountedFor = targetSeq;
         _setReplayCursor(
           machineId,
@@ -908,7 +906,13 @@ class EventRepository {
     }
     _resyncFenceByMachine.remove(machineId);
     for (final event in fence.bufferedEvents) {
+      if (event.seq <= 0) {
+        continue;
+      }
       if (event.seq > 0 && event.seq <= replayedThroughSeq) {
+        continue;
+      }
+      if (!_shouldApplyCommittedEvent(event)) {
         continue;
       }
       _trackLiveReplayCursor(event);
@@ -936,6 +940,9 @@ class EventRepository {
     for (final wsEvent in events) {
       final event = _parseWsEvent(wsEvent);
       if (event == null || event.type == null) {
+        continue;
+      }
+      if (event.seq <= 0 || event.seq <= nextHighest) {
         continue;
       }
       _processEvent(event);
@@ -1044,7 +1051,7 @@ class EventRepository {
       if (knownSessionIds.isEmpty) {
         return const RepairStepResult.success();
       }
-      return _resolveAndMergeSessions(
+      return await _resolveAndMergeSessions(
         machineId,
         knownSessionIds,
         baselineRevisions: baselineRevisions,
@@ -1256,16 +1263,6 @@ class EventRepository {
           changed = true;
         }
         pendingApprovals[approval.id] = approval;
-        // Also update session status
-        final session = sessions[approval.sessionId];
-        if (session != null &&
-            session.status != SessionStatus.waitingApproval) {
-          session.status = SessionStatus.waitingApproval;
-          SessionDatabase.updateFields(approval.sessionId, {
-            'status': 'waiting_approval',
-          });
-          changed = true;
-        }
       }
       if (changed) {
         _sessionsChangedController.add(null);
@@ -1304,7 +1301,7 @@ class EventRepository {
       if (targetIds.isEmpty) {
         return const RepairStepResult.success();
       }
-      return _resolveAndMergeSessions(
+      return await _resolveAndMergeSessions(
         machineId,
         targetIds,
         runtime: runtime,
@@ -1358,69 +1355,121 @@ class EventRepository {
         .toList();
   }
 
-  /// Update a session's status from the UI (e.g. optimistic "running" on send).
-  void setSessionStatus(String sessionId, SessionStatus status) {
+  Future<void> applySessionLoadSnapshot({
+    required String machineId,
+    required String sessionId,
+    required String runtime,
+    required String cwd,
+    required int baselineConfigRevision,
+    required SessionConfigSnapshot configSnapshot,
+    String title = '',
+    String? status,
+    DateTime? updatedAt,
+  }) async {
     final existing = sessions[sessionId];
-    if (existing != null && existing.status != status) {
-      existing.status = status;
-      SessionDatabase.updateFields(sessionId, {'status': status.value});
+    final snapshotHasConfig = _hasConfigSnapshotData(configSnapshot);
+    final canApplyConfig =
+        snapshotHasConfig &&
+        _configRevision(sessionId) == baselineConfigRevision;
+    final nextUpdatedAt = updatedAt ?? existing?.updatedAt ?? DateTime.now();
+
+    if (existing == null) {
+      final session = AgentSession(
+        id: sessionId,
+        title: title,
+        status: status == null || status.isEmpty
+            ? SessionStatus.idle
+            : SessionStatus.fromValue(status),
+        machineId: machineId,
+        runtime: runtime,
+        cwd: cwd,
+        configSnapshot: canApplyConfig
+            ? configSnapshot
+            : const SessionConfigSnapshot(),
+        createdAt: nextUpdatedAt,
+        updatedAt: nextUpdatedAt,
+      );
+      session.mode = session.configSnapshot.currentMode?.id;
+      session.model = session.configSnapshot.currentModel;
+      sessions[session.id] = session;
+      if (canApplyConfig) {
+        _bumpConfigRevision(session.id);
+      }
+      await SessionDatabase.insertSession(session);
       _sessionsChangedController.add(null);
-    }
-  }
-
-  /// Persist a session mode acknowledged by the daemon, even if the async
-  /// config-change event arrives later or not at all.
-  void setSessionMode(String sessionId, String? modeId) {
-    final existing = sessions[sessionId];
-    if (existing == null) return;
-
-    final normalized = (modeId ?? '').trim();
-    final nextMode = normalized.isEmpty ? null : normalized;
-    if (existing.mode == nextMode &&
-        existing.configSnapshot.currentMode?.id == nextMode) {
       return;
     }
 
-    final availableModes = existing.configSnapshot.availableModes;
-    final nextSnapshot = existing.configSnapshot.copyWith(
-      currentMode: _resolveModeOption(
-        modeId: nextMode,
-        availableModes: availableModes,
-        fallback: existing.configSnapshot.currentMode,
-      ),
-      clearCurrentMode: nextMode == null,
-      availableModes: availableModes,
-    );
-    _applySessionConfigSnapshotToSession(
-      existing,
-      nextSnapshot,
-      updatedAt: DateTime.now(),
-    );
-  }
+    var changed = false;
+    if (existing.machineId != machineId) {
+      existing.machineId = machineId;
+      changed = true;
+    }
+    if (runtime.isNotEmpty && existing.runtime != runtime) {
+      existing.runtime = runtime;
+      changed = true;
+    }
+    if (cwd.isNotEmpty && existing.cwd != cwd) {
+      existing.cwd = cwd;
+      changed = true;
+    }
+    if (title.isNotEmpty && existing.title != title) {
+      existing.title = title;
+      changed = true;
+    }
+    if (status != null && status.isNotEmpty) {
+      final nextStatus = SessionStatus.fromValue(status);
+      if (existing.status != nextStatus) {
+        existing.status = nextStatus;
+        changed = true;
+      }
+    }
+    if (nextUpdatedAt.isAfter(existing.updatedAt)) {
+      existing.updatedAt = nextUpdatedAt;
+      changed = true;
+    }
 
-  /// Persist a session model acknowledged by the daemon, even if the async
-  /// config-change event arrives later or not at all.
-  void setSessionModel(String sessionId, String? model) {
-    final existing = sessions[sessionId];
-    if (existing == null) return;
+    String? configSnapshotJson;
+    if (canApplyConfig) {
+      final currentJson = jsonEncode(
+        serializeSessionConfigSnapshot(existing.configSnapshot),
+      );
+      final nextJson = jsonEncode(
+        serializeSessionConfigSnapshot(configSnapshot),
+      );
+      if (currentJson != nextJson) {
+        existing.configSnapshot = configSnapshot;
+        existing.mode = configSnapshot.currentMode?.id;
+        existing.model = configSnapshot.currentModel;
+        configSnapshotJson = nextJson;
+        _bumpConfigRevision(existing.id);
+        changed = true;
+      }
+    }
 
-    final normalized = (model ?? '').trim();
-    final nextModel = normalized.isEmpty ? null : normalized;
-    if (existing.model == nextModel &&
-        existing.configSnapshot.currentModel == nextModel) {
+    if (!changed) {
       return;
     }
 
-    final nextSnapshot = existing.configSnapshot.copyWith(
-      currentModel: nextModel,
-      clearCurrentModel: nextModel == null,
-      availableModels: existing.configSnapshot.availableModels,
-    );
-    _applySessionConfigSnapshotToSession(
-      existing,
-      nextSnapshot,
-      updatedAt: DateTime.now(),
-    );
+    final fields = <String, Object?>{
+      'machine_id': existing.machineId,
+      'runtime': existing.runtime,
+      'cwd': existing.cwd,
+      'status': existing.status.value,
+      'updated_at': existing.updatedAt.toIso8601String(),
+      'model': existing.model,
+    };
+    if (existing.title.isNotEmpty) {
+      fields['title'] = existing.title;
+    }
+    if (existing.mode != null) {
+      fields['mode'] = existing.mode;
+    }
+    if (configSnapshotJson != null) {
+      fields['config_snapshot_json'] = configSnapshotJson;
+    }
+    await SessionDatabase.updateFields(sessionId, fields);
+    _sessionsChangedController.add(null);
   }
 
   Future<void> applySessionConfigSnapshot(

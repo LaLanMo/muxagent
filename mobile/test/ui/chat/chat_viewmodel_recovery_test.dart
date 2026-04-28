@@ -220,6 +220,54 @@ void main() {
     });
   });
 
+  group('ChatViewModel pending truth gates', () {
+    test('does not clear prompt pending without authoritative truth', () {
+      expect(
+        ChatViewModel.shouldClearPromptPendingFromSessionSnapshot(
+          applyPendingTruth: false,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldClearPromptPendingFromSessionSnapshot(
+          applyPendingTruth: true,
+        ),
+        isTrue,
+      );
+    });
+
+    test('clears cancel pending only from terminal authoritative truth', () {
+      expect(
+        ChatViewModel.shouldClearCancelPendingFromSessionSnapshot(
+          applyPendingTruth: false,
+          sessionStatus: SessionStatus.idle,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldClearCancelPendingFromSessionSnapshot(
+          applyPendingTruth: true,
+          sessionStatus: SessionStatus.running,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldClearCancelPendingFromSessionSnapshot(
+          applyPendingTruth: true,
+          sessionStatus: SessionStatus.waitingApproval,
+        ),
+        isFalse,
+      );
+      expect(
+        ChatViewModel.shouldClearCancelPendingFromSessionSnapshot(
+          applyPendingTruth: true,
+          sessionStatus: SessionStatus.idle,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('ChatViewModel cache repair contract', () {
     test('requires repair for stale cache rows', () {
       final entry = SessionChatCacheEntry(

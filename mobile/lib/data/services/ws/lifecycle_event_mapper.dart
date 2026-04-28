@@ -42,19 +42,6 @@ class LifecycleEventMapper {
     );
   }
 
-  static AgentEvent mapHistoryCompleteEnvelope(
-    HistoryCompleteEventEnvelopeDto dto,
-    String machineId,
-  ) {
-    return AgentEvent(
-      type: EventType.fromValue(dto.type),
-      sessionId: dto.sessionId,
-      seq: dto.seq,
-      at: dto.at ?? DateTime.now(),
-      machineId: machineId,
-    );
-  }
-
   static AgentEvent mapRunFailedEnvelope(
     RunFailedEventEnvelopeDto dto,
     String machineId,

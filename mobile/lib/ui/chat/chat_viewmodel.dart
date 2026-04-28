@@ -14,6 +14,7 @@ import '../../data/repositories/reconnect_recovery_coordinator.dart';
 import '../../data/repositories/session_chat_cache_dto.dart';
 import '../../data/repositories/session_chat_cache_repository.dart';
 import '../../data/repositories/ws_session_repository.dart';
+import '../../data/services/ws/event_envelope_parser.dart';
 import '../../data/services/ws/session_config_mapper.dart';
 import '../../data/services/ws/transport_error_classifier.dart';
 import '../../domain/approval.dart';
@@ -110,6 +111,23 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     return !didAttemptInitialPrompt &&
         initialPrompt.trim().isNotEmpty &&
         canPrompt;
+  }
+
+  @visibleForTesting
+  static bool shouldClearPromptPendingFromSessionSnapshot({
+    required bool applyPendingTruth,
+  }) {
+    return applyPendingTruth;
+  }
+
+  @visibleForTesting
+  static bool shouldClearCancelPendingFromSessionSnapshot({
+    required bool applyPendingTruth,
+    required SessionStatus sessionStatus,
+  }) {
+    return applyPendingTruth &&
+        sessionStatus != SessionStatus.running &&
+        sessionStatus != SessionStatus.waitingApproval;
   }
 
   @visibleForTesting
@@ -290,15 +308,30 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   String get cwd => effectiveCwd.value;
   Rx<ConnState> get transportState => _wsRepo.connectionState;
   ConnState get currentTransportState => _wsRepo.connectionState.value;
-  bool get canPrompt => shouldEnableComposer(
-    uiMode: uiMode.value,
-    transportState: currentTransportState,
-    isRecoveringAfterReconnect: isRecoveringAfterReconnect.value,
-  );
-  bool get canMutateSession => uiMode.value == ChatUiMode.normal;
+  bool get canPrompt =>
+      shouldEnableComposer(
+        uiMode: uiMode.value,
+        transportState: currentTransportState,
+        isRecoveringAfterReconnect: isRecoveringAfterReconnect.value,
+      ) &&
+      !isPromptPending.value &&
+      !isCancelingRun.value &&
+      sessionStatus.value != SessionStatus.running &&
+      sessionStatus.value != SessionStatus.waitingApproval;
+  bool get canMutateSession =>
+      uiMode.value == ChatUiMode.normal &&
+      currentTransportState == ConnState.connected &&
+      !isCancelingRun.value;
   bool get _shouldPromoteCache => uiMode.value == ChatUiMode.normal;
-  bool get canReplyApprovals => uiMode.value == ChatUiMode.normal;
-  bool get canCancelRun => uiMode.value == ChatUiMode.normal;
+  bool get canReplyApprovals =>
+      uiMode.value == ChatUiMode.normal &&
+      currentTransportState == ConnState.connected;
+  bool get canCancelRun =>
+      uiMode.value == ChatUiMode.normal &&
+      currentTransportState == ConnState.connected &&
+      !isCancelingRun.value &&
+      (sessionStatus.value == SessionStatus.running ||
+          sessionStatus.value == SessionStatus.waitingApproval);
   bool get inputReadOnly => !canPrompt;
 
   /// Live usage info for this session (cost, tokens, context window).
@@ -343,8 +376,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   bool _userIsScrolling = false;
   bool _isAnimatingToBottom = false;
   bool _hasOptimisticUserMsg = false;
-  Completer<bool>? _historyCompleter;
-  Timer? _historyTimeout;
+  final isPromptPending = false.obs;
+  final isCancelingRun = false.obs;
+  final pendingModelValue = ''.obs;
   bool _hasSeenDisconnect = false;
   bool _foregroundRecoveryInFlight = false;
   int _recoveryEpoch = 0;
@@ -356,7 +390,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   bool _queuedForceFlush = false;
   Completer<void>? _cacheFlushCompleter;
   bool _isRebuilding = false;
-  ChatState? _rebuildChatState;
   final _rebuildBacklog = <AgentEvent>[];
   SessionChatCacheEntry? _lastCacheEntry;
   Future<void>? _sessionLoadFuture;
@@ -615,10 +648,23 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     unawaited(sendMessage(prompt));
   }
 
-  void _syncSessionSnapshotFromRepository() {
+  void _syncSessionSnapshotFromRepository({bool applyPendingTruth = false}) {
     final session = _eventRepo.sessionById(sessionId);
     if (session != null) {
       sessionStatus.value = session.status;
+      if (isPromptPending.value &&
+          shouldClearPromptPendingFromSessionSnapshot(
+            applyPendingTruth: applyPendingTruth,
+          )) {
+        isPromptPending.value = false;
+      }
+      if (isCancelingRun.value &&
+          shouldClearCancelPendingFromSessionSnapshot(
+            applyPendingTruth: applyPendingTruth,
+            sessionStatus: session.status,
+          )) {
+        isCancelingRun.value = false;
+      }
       if (session.title.isNotEmpty) {
         sessionTitle.value = session.title;
       }
@@ -709,7 +755,9 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       'hasSession=${_wsRepo.hasSession(machineId)} '
       'sessionReady=${result.sessionReady}',
     );
-    _syncSessionSnapshotFromRepository();
+    _syncSessionSnapshotFromRepository(
+      applyPendingTruth: result.knownSessionsOk || result.statusesOk,
+    );
     if (!_hasSeenDisconnect) return;
 
     if (result.transcript == TranscriptRecoveryState.skipped) {
@@ -797,6 +845,15 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     availableModels.value = snapshot.availableModels;
     availableModes.value = snapshot.availableModes;
     currentMode.value = snapshot.currentMode;
+    if (pendingModeId.value.isNotEmpty &&
+        currentMode.value?.id == pendingModeId.value) {
+      pendingModeId.value = '';
+      isChangingMode.value = false;
+    }
+    if (pendingModelValue.value.isNotEmpty &&
+        currentModel.value == pendingModelValue.value) {
+      pendingModelValue.value = '';
+    }
     if (!canOpenModeDropdown) {
       showModeDropdown.value = false;
     }
@@ -848,6 +905,53 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _reconcileSessionTruthAfterAck() async {
+    try {
+      if (isClosed ||
+          machineId.isEmpty ||
+          currentTransportState != ConnState.connected) {
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      if (isClosed || currentTransportState != ConnState.connected) {
+        return;
+      }
+      final result = await _eventRepo.syncKnownSessions(machineId);
+      if (!result.ok) {
+        debugPrint('[ChatVM] session truth reconcile failed: ${result.error}');
+        return;
+      }
+      _syncSessionSnapshotFromRepository(applyPendingTruth: true);
+    } catch (e) {
+      debugPrint('[ChatVM] session truth reconcile threw: $e');
+    }
+  }
+
+  Future<void> _clearModePendingAfterTimeout(String requestedModeId) async {
+    await Future<void>.delayed(const Duration(seconds: 5));
+    if (isClosed || pendingModeId.value != requestedModeId) {
+      return;
+    }
+    isChangingMode.value = false;
+    pendingModeId.value = '';
+  }
+
+  Future<void> _clearModelPendingAfterTimeout(String requestedModel) async {
+    await Future<void>.delayed(const Duration(seconds: 5));
+    if (isClosed || pendingModelValue.value != requestedModel) {
+      return;
+    }
+    pendingModelValue.value = '';
+  }
+
+  Future<void> _clearCancelPendingAfterTimeout() async {
+    await Future<void>.delayed(const Duration(seconds: 10));
+    if (isClosed) {
+      return;
+    }
+    isCancelingRun.value = false;
+  }
+
   Future<void> _performSessionLoad({required bool preserveVisible}) async {
     final inFlight = _sessionLoadFuture;
     if (inFlight != null) {
@@ -865,7 +969,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> _runSessionLoad({required bool preserveVisible}) async {
-    _historyCompleter = Completer<bool>();
     final loadToken = ++_recoveryEpoch;
     final loadRuntime = runtimeId.value.trim();
     final loadCwd = effectiveCwd.value.trim();
@@ -874,14 +977,12 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     isRecoveringAfterReconnect.value = preserveVisible;
     if (preserveVisible) {
       _isRebuilding = true;
-      _rebuildChatState = ChatState(sessionId: sessionId);
       _rebuildTranscriptWatermark = 0;
       _rebuildBacklog.clear();
       uiMode.value = ChatUiMode.rebuildingReadonly;
       isLoading.value = false;
     } else {
-      _isRebuilding = false;
-      _rebuildChatState = null;
+      _isRebuilding = true;
       _rebuildTranscriptWatermark = 0;
       _rebuildBacklog.clear();
       _resetTranscriptState();
@@ -909,6 +1010,14 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         permissionMode: mode.isNotEmpty && mode != 'default' ? mode : null,
         model: model,
       );
+      if (!response.app.ok) {
+        throw Exception('session.load failed');
+      }
+      if (response.app.sessionId != sessionId) {
+        throw FormatException(
+          'session.load returned sessionId ${response.app.sessionId} for $sessionId',
+        );
+      }
 
       final loadedRuntime = response.app.runtime;
       final loadedCwd = response.app.cwd.isNotEmpty
@@ -920,33 +1029,35 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         configOptions: response.acp.configOptions ?? const [],
         modes: response.acp.modes,
       );
-      await _eventRepo.persistSessionRuntimeAndCwd(
-        sessionId,
+      await _eventRepo.applySessionLoadSnapshot(
+        machineId: machineId,
+        sessionId: sessionId,
         runtime: loadedRuntime.isNotEmpty ? loadedRuntime : loadRuntime,
         cwd: loadedCwd,
+        title: response.app.title,
+        status: response.app.status,
+        updatedAt: response.app.updatedAt,
+        baselineConfigRevision: baselineConfigRevision,
+        configSnapshot: snapshot,
       );
-      _syncSessionSnapshotFromRepository();
+      _syncSessionSnapshotFromRepository(applyPendingTruth: true);
 
-      _historyTimeout = Timer(const Duration(seconds: 30), () {
-        if (!isClosed &&
-            _historyCompleter != null &&
-            !_historyCompleter!.isCompleted) {
-          _historyCompleter!.complete(false);
-        }
-      });
-
-      final historyCompleted = await _historyCompleter!.future;
-      if (!historyCompleted) {
-        throw TimeoutException(Tx.chatRestoreHistoryTimeout.tr);
+      if (!response.app.replay.complete) {
+        throw StateError('session.load replay incomplete');
       }
-      if (_hasConfigSnapshotData(snapshot)) {
-        await _eventRepo.applySessionConfigSnapshotIfUnchanged(
-          sessionId,
-          baselineRevision: baselineConfigRevision,
-          snapshot: snapshot,
-          updatedAt: DateTime.now(),
+
+      final replayState = _buildChatStateFromScopedReplay(
+        response.app.replay.events,
+      );
+      for (final event in _rebuildBacklog) {
+        _applyTranscriptEventToState(
+          event,
+          replayState,
+          updateVisibleCollections: false,
+          allowOptimisticAdoption: false,
         );
       }
+
       final refreshedSession = _eventRepo.sessionById(sessionId);
       if (refreshedSession != null && refreshedSession.cwd.isNotEmpty) {
         effectiveCwd.value = refreshedSession.cwd;
@@ -954,10 +1065,8 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         effectiveCwd.value = loadedCwd;
       }
 
-      if (preserveVisible && _rebuildChatState != null) {
-        chatState.replaceWith(_rebuildChatState!);
-        _visibleTranscriptWatermark = _rebuildTranscriptWatermark;
-      }
+      chatState.replaceWith(replayState);
+      _visibleTranscriptWatermark = _rebuildTranscriptWatermark;
       _syncVisibleStateFromChatState();
       _syncSessionSnapshotFromRepository();
       await _flushVisibleSnapshot(promoteReady: true, force: true);
@@ -997,11 +1106,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         uiMode.value = ChatUiMode.unsupported;
       }
     } finally {
-      _historyTimeout?.cancel();
-      _historyTimeout = null;
-      _historyCompleter = null;
       _isRebuilding = false;
-      _rebuildChatState = null;
       _rebuildTranscriptWatermark = 0;
       _rebuildBacklog.clear();
       isRecoveringAfterReconnect.value = false;
@@ -1032,38 +1137,39 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       chatState.approvals.isNotEmpty ||
       chatState.planEntries.isNotEmpty;
 
-  bool _hasConfigSnapshotData(SessionConfigSnapshot snapshot) {
-    return snapshot.modeConfigId != null ||
-        snapshot.currentMode != null ||
-        snapshot.availableModes.isNotEmpty ||
-        snapshot.modelConfigId != null ||
-        snapshot.currentModel != null ||
-        snapshot.availableModels.isNotEmpty;
-  }
-
   bool get _hasPersistableVisibleTranscript => hasPersistableVisibleTranscript(
     messages: chatState.orderedMessages,
     approvals: chatState.approvals,
     planEntries: chatState.planEntries,
   );
 
+  ChatState _buildChatStateFromScopedReplay(
+    List<Map<String, dynamic>> replayEvents,
+  ) {
+    final target = ChatState(sessionId: sessionId);
+    for (final payload in replayEvents) {
+      final event = EventEnvelopeParser.parseScopedReplayEvent(
+        payload,
+        machineId: machineId,
+      );
+      _applyTranscriptEventToState(
+        event,
+        target,
+        updateVisibleCollections: false,
+        allowOptimisticAdoption: false,
+      );
+    }
+    return target;
+  }
+
   void _handleEvent(AgentEvent event) {
-    if (_isRebuilding && _rebuildChatState != null) {
+    _observeCommittedEventEvidence(event);
+    if (_isRebuilding) {
       _rebuildBacklog.add(event);
       _rebuildTranscriptWatermark = _advanceTranscriptWatermark(
         _rebuildTranscriptWatermark,
         event,
       );
-      _applyEventToState(
-        event,
-        _rebuildChatState!,
-        updateVisibleCollections: false,
-      );
-      if (event.type == EventType.historyComplete &&
-          _historyCompleter != null &&
-          !_historyCompleter!.isCompleted) {
-        _historyCompleter!.complete(true);
-      }
       return;
     }
     _visibleTranscriptWatermark = _advanceTranscriptWatermark(
@@ -1071,6 +1177,26 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       event,
     );
     _applyEventToState(event, chatState, updateVisibleCollections: true);
+  }
+
+  void _observeCommittedEventEvidence(AgentEvent event) {
+    if (event.seq <= 0) return;
+    if (isPromptPending.value) {
+      final messagePart = event.messagePart;
+      if (messagePart?.role == MessageRole.user ||
+          event.type == EventType.sessionStatus ||
+          event.type == EventType.runFinished ||
+          event.type == EventType.runFailed) {
+        isPromptPending.value = false;
+      }
+    }
+    if (isCancelingRun.value && event.type == EventType.sessionStatus) {
+      final status = event.session?.status;
+      if (status != SessionStatus.running &&
+          status != SessionStatus.waitingApproval) {
+        isCancelingRun.value = false;
+      }
+    }
   }
 
   int _advanceTranscriptWatermark(int current, AgentEvent event) {
@@ -1087,19 +1213,21 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         : _visibleTranscriptWatermark;
   }
 
-  void _applyEventToState(
+  void _applyTranscriptEventToState(
     AgentEvent event,
     ChatState target, {
     required bool updateVisibleCollections,
+    bool allowOptimisticAdoption = true,
   }) {
     switch (event.type) {
       case EventType.reasoning:
       case EventType.messageDelta:
         if (event.messagePart != null) {
-          if (shouldReplaceOptimisticUserMessage(
-            hasOptimisticUserMessage: _hasOptimisticUserMsg,
-            part: event.messagePart,
-          )) {
+          if (allowOptimisticAdoption &&
+              shouldReplaceOptimisticUserMessage(
+                hasOptimisticUserMessage: _hasOptimisticUserMsg,
+                part: event.messagePart,
+              )) {
             target.adoptLocalOptimisticUserMessage(
               event.messagePart!.messageId,
             );
@@ -1127,7 +1255,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
           target.addApproval(event.approval!);
           if (updateVisibleCollections) {
             _refreshApprovals();
-            sessionStatus.value = SessionStatus.waitingApproval;
           }
         }
 
@@ -1139,28 +1266,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
           }
         }
 
-      case EventType.sessionStatus:
-        if (event.session != null && updateVisibleCollections) {
-          sessionStatus.value = event.session!.status;
-          if (event.session!.title.isNotEmpty) {
-            sessionTitle.value = event.session!.title;
-          }
-        }
-
-      case EventType.usageUpdate:
-        if (updateVisibleCollections) {
-          usageVersion.value++;
-        }
-
-      case EventType.runFinished:
-        _hasOptimisticUserMsg = false;
-        if (updateVisibleCollections) {
-          sessionStatus.value = SessionStatus.idle;
-          usageVersion.value++;
-        }
-
       case EventType.runFailed:
-        _hasOptimisticUserMsg = false;
         if (event.error != null && event.error!.message.isNotEmpty) {
           final errorMsg = Message(
             id: 'error-${event.at.millisecondsSinceEpoch}',
@@ -1176,9 +1282,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
             _refreshMessages();
           }
         }
-        if (updateVisibleCollections) {
-          sessionStatus.value = SessionStatus.error;
-        }
 
       case EventType.planUpdated:
         final entries = event.planUpdate?.entries;
@@ -1190,6 +1293,58 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
           }
         }
 
+      case EventType.runFinished:
+      case EventType.sessionStatus:
+      case EventType.usageUpdate:
+      case EventType.modeChanged:
+      case EventType.modelChanged:
+      case null:
+        break;
+    }
+  }
+
+  void _applyEventToState(
+    AgentEvent event,
+    ChatState target, {
+    required bool updateVisibleCollections,
+  }) {
+    _applyTranscriptEventToState(
+      event,
+      target,
+      updateVisibleCollections: updateVisibleCollections,
+    );
+
+    switch (event.type) {
+      case EventType.reasoning:
+      case EventType.messageDelta:
+      case EventType.toolStarted:
+      case EventType.toolUpdated:
+      case EventType.toolCompleted:
+      case EventType.toolFailed:
+      case EventType.approvalRequested:
+      case EventType.approvalReplied:
+      case EventType.runFailed:
+      case EventType.planUpdated:
+        break;
+
+      case EventType.sessionStatus:
+        if (event.session != null && updateVisibleCollections) {
+          sessionStatus.value = event.session!.status;
+          if (event.session!.title.isNotEmpty) {
+            sessionTitle.value = event.session!.title;
+          }
+        }
+
+      case EventType.usageUpdate:
+        if (updateVisibleCollections) {
+          usageVersion.value++;
+        }
+
+      case EventType.runFinished:
+        if (updateVisibleCollections) {
+          usageVersion.value++;
+        }
+
       case EventType.modeChanged:
         if (updateVisibleCollections) {
           _syncSessionSnapshotFromRepository();
@@ -1198,11 +1353,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       case EventType.modelChanged:
         if (event.configChange != null && updateVisibleCollections) {
           _syncSessionSnapshotFromRepository();
-        }
-
-      case EventType.historyComplete:
-        if (_historyCompleter != null && !_historyCompleter!.isCompleted) {
-          _historyCompleter!.complete(true);
         }
 
       case null:
@@ -1239,10 +1389,10 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         sessionId: sessionId,
         permissionMode: mode.id,
       );
-      _eventRepo.setSessionMode(sessionId, mode.id);
+      unawaited(_refreshSessionConfigInBackground());
+      unawaited(_clearModePendingAfterTimeout(mode.id));
     } catch (e) {
       debugPrint('[ChatVM] changeMode failed: $e');
-    } finally {
       isChangingMode.value = false;
       pendingModeId.value = '';
     }
@@ -1258,6 +1408,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
       '[ChatVM] changeModel: $currentModel → $value (configId=$configId)',
     );
 
+    pendingModelValue.value = value;
     try {
       await _wsRepo.setConfigOption(
         machineId: machineId,
@@ -1265,9 +1416,11 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         configId: configId,
         value: value,
       );
-      _eventRepo.setSessionModel(sessionId, value);
+      unawaited(_refreshSessionConfigInBackground());
+      unawaited(_clearModelPendingAfterTimeout(value));
     } catch (e) {
       debugPrint('[ChatVM] changeModel failed: $e');
+      pendingModelValue.value = '';
     }
   }
 
@@ -1711,6 +1864,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     inputController.clear();
 
     // Snapshot pending images and clear state
+    final imagesToSend = List<XFile>.from(pendingImages);
     final previewsToSend = List<Uint8List>.from(pendingPreviews);
     final mimeTypesToSend = List<String>.from(pendingMimeTypes);
     pendingImages.clear();
@@ -1746,8 +1900,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
     _refreshMessages();
     _setFollowBottom(false);
     _scrollToBottom();
-    sessionStatus.value = SessionStatus.running;
-    _eventRepo.setSessionStatus(sessionId, SessionStatus.running);
+    isPromptPending.value = true;
 
     // Build content blocks for the RPC
     final content = <PromptContentBlock>[];
@@ -1771,11 +1924,21 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         sessionId: sessionId,
         content: content,
       );
+      unawaited(_reconcileSessionTruthAfterAck());
     } catch (e) {
       debugPrint('Prompt rejected: $e');
-      // ACK failure = daemon didn't start the prompt = no events coming
-      sessionStatus.value = SessionStatus.error;
-      _eventRepo.setSessionStatus(sessionId, SessionStatus.error);
+      isPromptPending.value = false;
+      _hasOptimisticUserMsg = false;
+      chatState.messages.remove(userMsg.id);
+      chatState.messageOrder.remove(userMsg.id);
+      _refreshMessages();
+      pendingImages.assignAll(imagesToSend);
+      pendingPreviews.assignAll(previewsToSend);
+      pendingMimeTypes.assignAll(mimeTypesToSend);
+      inputController.text = text;
+      inputController.selection = TextSelection.collapsed(
+        offset: inputController.text.length,
+      );
     }
   }
 
@@ -1804,10 +1967,7 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
         requestId: requestId,
         optionId: optionId,
       );
-      chatState.resolveApproval(requestId);
-      _refreshApprovals();
-      sessionStatus.value = SessionStatus.running;
-      _eventRepo.setSessionStatus(sessionId, SessionStatus.running);
+      unawaited(_reconcileSessionTruthAfterAck());
     } catch (e) {
       debugPrint('[ChatVM] replyApproval FAILED: $e');
     }
@@ -1815,33 +1975,15 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
   Future<void> cancelSession() async {
     if (!canCancelRun) return;
-    // Fast path: WS disconnected, skip RPC
-    if (!_wsRepo.isConnected) {
-      _resetSessionLocally();
-      return;
-    }
+    isCancelingRun.value = true;
     try {
       await _wsRepo.cancelSession(machineId: machineId, sessionId: sessionId);
+      unawaited(_reconcileSessionTruthAfterAck());
+      unawaited(_clearCancelPendingAfterTimeout());
     } catch (e) {
       debugPrint('Failed to cancel session: $e');
-      _resetSessionLocally();
+      isCancelingRun.value = false;
     }
-  }
-
-  void _resetSessionLocally() {
-    // Guard: only reset non-terminal status to avoid overwriting done/error
-    if (sessionStatus.value == SessionStatus.running ||
-        sessionStatus.value == SessionStatus.waitingApproval) {
-      sessionStatus.value = SessionStatus.idle;
-      _eventRepo.setSessionStatus(sessionId, SessionStatus.idle);
-    }
-    // Clear stale approvals to avoid badge count and ghost approval cards
-    _eventRepo.pendingApprovals.removeWhere(
-      (_, approval) => approval.sessionId == sessionId,
-    );
-    chatState.approvals.clear();
-    _refreshApprovals();
-    AppToast.show(Tx.chatStoppedLocally.tr);
   }
 
   Future<bool> prepareForClose() async {
@@ -1853,10 +1995,6 @@ class ChatViewModel extends GetxController with WidgetsBindingObserver {
 
   @override
   void onClose() {
-    if (_historyCompleter != null && !_historyCompleter!.isCompleted) {
-      _historyCompleter!.complete(false);
-    }
-    _historyTimeout?.cancel();
     _recoveryEpoch++;
     _cacheWriteDebounce?.cancel();
     WidgetsBinding.instance.removeObserver(this);

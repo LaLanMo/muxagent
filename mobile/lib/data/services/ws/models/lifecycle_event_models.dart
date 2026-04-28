@@ -140,35 +140,6 @@ class SessionStatusEventEnvelopeDto {
   }
 }
 
-/// Sentinel event with no payload — signals all history replay events have
-/// been delivered. Custom app-level event, not part of ACP.
-class HistoryCompleteEventEnvelopeDto {
-  final String type;
-  final String? sessionId;
-  final int seq;
-  final DateTime? at;
-
-  const HistoryCompleteEventEnvelopeDto({
-    required this.type,
-    this.sessionId,
-    this.seq = 0,
-    this.at,
-  });
-
-  factory HistoryCompleteEventEnvelopeDto.fromJson(Map<String, dynamic> json) {
-    return HistoryCompleteEventEnvelopeDto(
-      type: _requireString(json, 'type'),
-      sessionId: _nullableString(json, 'sessionId'),
-      seq: (json['seq'] as num?)?.toInt() ?? 0,
-      at: switch (json['at']) {
-        null => null,
-        final String value => DateTime.parse(value),
-        _ => throw FormatException('Expected "at" to be a string or null'),
-      },
-    );
-  }
-}
-
 class AppSessionErrorDto {
   final String code;
   final String message;

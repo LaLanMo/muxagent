@@ -17,11 +17,70 @@ import 'run_event_mapper.dart';
 import 'session_config_event_mapper.dart';
 import 'tool_event_mapper.dart';
 import 'usage_event_mapper.dart';
+import 'ws_types.dart';
 
 class EventEnvelopeParser {
+  static const Set<EventType> _scopedReplayAllowedTypes = {
+    EventType.messageDelta,
+    EventType.reasoning,
+    EventType.toolStarted,
+    EventType.toolUpdated,
+    EventType.toolCompleted,
+    EventType.toolFailed,
+    EventType.approvalRequested,
+    EventType.approvalReplied,
+    EventType.runFinished,
+    EventType.runFailed,
+    EventType.planUpdated,
+  };
+
   static String? rawEventType(WsEvent wsEvent) {
     final value = wsEvent.payload['type'];
     return value is String ? value : null;
+  }
+
+  static AgentEvent parseCommitted(WsEvent wsEvent) {
+    final event = parse(wsEvent);
+    if (event == null || event.type == null) {
+      throw FormatException('Unsupported event type: ${rawEventType(wsEvent)}');
+    }
+    if (event.seq <= 0) {
+      throw FormatException('Committed event seq must be > 0');
+    }
+    return event;
+  }
+
+  static AgentEvent parseScopedReplayEvent(
+    Map<String, dynamic> payload, {
+    required String machineId,
+  }) {
+    final rawType = payload['type'];
+    final eventType = EventType.fromValue(rawType as String?);
+    if (eventType == null) {
+      throw FormatException('Unsupported replay event type: $rawType');
+    }
+    if (!_scopedReplayAllowedTypes.contains(eventType)) {
+      throw FormatException(
+        'Event type ${eventType.value} is not allowed in session.load replay',
+      );
+    }
+    if (!payload.containsKey('seq')) {
+      throw FormatException('Scoped replay event must include seq: 0');
+    }
+    final rawSeq = payload['seq'];
+    if (rawSeq is! int || rawSeq != 0) {
+      throw FormatException('Scoped replay event seq must be 0');
+    }
+    final event = parse(
+      WsEvent(
+        type: WsMessageType.event.value,
+        payload: {...payload, 'machineId': machineId},
+      ),
+    );
+    if (event == null || event.type == null) {
+      throw FormatException('Unsupported replay event type: $rawType');
+    }
+    return event;
   }
 
   static AgentEvent? parse(WsEvent wsEvent) {
@@ -80,11 +139,6 @@ class EventEnvelopeParser {
       EventType.modelChanged =>
         SessionConfigEventMapper.mapConfigChangedEnvelope(
           ConfigChangedEventEnvelopeDto.fromJson(payload),
-          machineId,
-        ),
-      EventType.historyComplete =>
-        LifecycleEventMapper.mapHistoryCompleteEnvelope(
-          HistoryCompleteEventEnvelopeDto.fromJson(payload),
           machineId,
         ),
     };
