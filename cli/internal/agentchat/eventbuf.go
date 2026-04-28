@@ -42,6 +42,8 @@ type ReplayPageSnapshot struct {
 
 var fallbackStreamEpoch uint64
 
+const maxJSONSafeInteger = uint64(1<<53 - 1)
+
 func NewEventBuffer(size int) *EventBuffer {
 	return NewEventBufferWithByteBudget(size, DefaultEventBufferByteBudget)
 }
@@ -255,10 +257,18 @@ func (b *EventBuffer) dropOldestLocked() {
 func nextStreamEpoch() uint64 {
 	var raw [8]byte
 	if _, err := rand.Read(raw[:]); err == nil {
-		if epoch := binary.LittleEndian.Uint64(raw[:]); epoch != 0 {
+		if epoch := jsonSafeEpoch(binary.LittleEndian.Uint64(raw[:])); epoch != 0 {
 			return epoch
 		}
 	}
 
-	return atomic.AddUint64(&fallbackStreamEpoch, 1)
+	return jsonSafeEpoch(atomic.AddUint64(&fallbackStreamEpoch, 1))
+}
+
+func jsonSafeEpoch(value uint64) uint64 {
+	epoch := value & maxJSONSafeInteger
+	if epoch == 0 {
+		return 1
+	}
+	return epoch
 }

@@ -20,6 +20,7 @@ func TestEventBuffer_PushAssignsSequenceAndKeepsEpoch(t *testing.T) {
 	buf := NewEventBuffer(10)
 	epoch := buf.StreamEpoch()
 	require.NotZero(t, epoch)
+	require.LessOrEqual(t, epoch, maxJSONSafeInteger)
 
 	e1 := buf.Push(makeEvent(appwire.EventMessageDelta))
 	e2 := buf.Push(makeEvent(appwire.EventReasoning))

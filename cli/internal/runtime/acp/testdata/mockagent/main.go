@@ -138,6 +138,12 @@ func waitForFile(path string) {
 	}
 }
 
+func sleepEnvMillis(name string) {
+	if delayMs, err := strconv.Atoi(os.Getenv(name)); err == nil && delayMs > 0 {
+		time.Sleep(time.Duration(delayMs) * time.Millisecond)
+	}
+}
+
 func modeConfigOption(mode string) map[string]any {
 	return map[string]any{
 		"id":           "mode",
@@ -183,6 +189,7 @@ func handlePrompt(id int64, params json.RawMessage) {
 	// Check if prompt text contains "permission" to trigger permission flow
 	promptBytes, _ := json.Marshal(p.Prompt)
 	needsPermission := contains(string(promptBytes), "permission")
+	sleepEnvMillis("MOCKAGENT_PROMPT_START_DELAY_MS")
 
 	// Send agent message chunks
 	sessionUpdate(sid, map[string]any{
@@ -241,6 +248,7 @@ func handlePrompt(id int64, params json.RawMessage) {
 
 		// Wait for permission response (read loop will deliver it)
 		<-permResponses
+		sleepEnvMillis("MOCKAGENT_AFTER_PERMISSION_DELAY_MS")
 	}
 
 	// Complete the tool call
